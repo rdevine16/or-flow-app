@@ -32,6 +32,8 @@ interface AnalyticsSettings {
   non_op_bad_minutes: number
   // Operational
   operating_days_per_year: number
+  // Case Financials
+  financial_benchmark_case_count: number
   // ORbit Score v2
   start_time_milestone: 'patient_in' | 'incision'
   start_time_grace_minutes: number
@@ -65,6 +67,8 @@ const DEFAULT_SETTINGS: Omit<AnalyticsSettings, 'id' | 'facility_id'> = {
   non_op_bad_minutes: 30,
   // Operational
   operating_days_per_year: 250,
+  // Case Financials
+  financial_benchmark_case_count: 10,
   // ORbit Score v2
   start_time_milestone: 'patient_in',
   start_time_grace_minutes: 3,
@@ -167,6 +171,8 @@ export default function AnalyticsSettingsPage() {
     non_op_bad_minutes: '30',
     // Operational
     operating_days_per_year: '250',
+    // Case Financials
+    financial_benchmark_case_count: '10',
     // ORbit Score v2
     start_time_milestone: 'patient_in' as 'patient_in' | 'incision',
     start_time_grace_minutes: '3',
@@ -204,6 +210,8 @@ export default function AnalyticsSettingsPage() {
       non_op_bad_minutes: String(settings.non_op_bad_minutes ?? 30),
       // Operational
       operating_days_per_year: String(settings.operating_days_per_year ?? 250),
+      // Case Financials
+      financial_benchmark_case_count: String(settings.financial_benchmark_case_count ?? 10),
       // ORbit Score v2
       start_time_milestone: settings.start_time_milestone || settings.fcots_milestone || 'patient_in',
       start_time_grace_minutes: String(settings.start_time_grace_minutes ?? settings.fcots_grace_minutes ?? 3),
@@ -248,6 +256,8 @@ export default function AnalyticsSettingsPage() {
       non_op_bad_minutes: parseFloat(form.non_op_bad_minutes) || 30,
       // Operational
       operating_days_per_year: parseInt(form.operating_days_per_year) || 250,
+      // Case Financials
+      financial_benchmark_case_count: parseInt(form.financial_benchmark_case_count) || 10,
       // ORbit Score v2
       start_time_milestone: form.start_time_milestone,
       start_time_grace_minutes: parseInt(form.start_time_grace_minutes) || 3,
@@ -306,6 +316,8 @@ export default function AnalyticsSettingsPage() {
       non_op_bad_minutes: String(DEFAULT_SETTINGS.non_op_bad_minutes),
       // Operational
       operating_days_per_year: String(DEFAULT_SETTINGS.operating_days_per_year),
+      // Case Financials
+      financial_benchmark_case_count: String(DEFAULT_SETTINGS.financial_benchmark_case_count),
       // ORbit Score v2
       start_time_milestone: DEFAULT_SETTINGS.start_time_milestone,
       start_time_grace_minutes: String(DEFAULT_SETTINGS.start_time_grace_minutes),
@@ -606,7 +618,27 @@ export default function AnalyticsSettingsPage() {
               </div>
             </div>
 
-            {/* Section 8: ORbit Score Configuration */}
+            {/* Section 8: Case Financials */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <SectionHeader
+                title="Case Financials"
+                description="Configure how profit margins and benchmarks are calculated in the case drawer"
+              />
+              <div className="p-6">
+                <div className="max-w-xs">
+                  <SettingsNumberField
+                    label="Benchmark Case Count"
+                    value={form.financial_benchmark_case_count}
+                    onChange={(v) => setForm({ ...form, financial_benchmark_case_count: v })}
+                    min="5"
+                    max="100"
+                    helpText="Number of recent validated cases used to calculate surgeon and facility median margins"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 9: ORbit Score Configuration */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
                 <div className="flex items-center gap-2">

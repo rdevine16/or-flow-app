@@ -146,23 +146,27 @@ function HeroRow({
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
       <div className="flex flex-wrap items-center gap-6">
-        {/* Two margin gauges */}
+        {/* Two margin gauges: surgeon median vs facility median */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <MarginGauge
-            percentage={hero.margin_percentage}
+            percentage={hero.surgeon_median_margin}
             size="lg"
             rating={hero.surgeon_margin_rating}
+            label="Surgeon"
           />
           <MarginGauge
-            percentage={hero.margin_percentage}
+            percentage={hero.facility_median_margin}
             size="lg"
             rating={hero.facility_margin_rating}
+            label="Facility"
           />
         </div>
 
         {/* Profit + badge */}
         <div className="flex-1 min-w-[140px]">
-          <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">Profit Forecast</p>
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">
+            Profit {isProjected ? 'Forecast' : 'Actual'}
+          </p>
           <div className="flex items-center gap-2">
             <span className={`text-[22px] font-bold ${
               (hero.profit ?? 0) >= 0 ? 'text-slate-900' : 'text-red-700'
@@ -170,9 +174,13 @@ function HeroRow({
               {formatCurrency(hero.profit)}
             </span>
             <ProfitBadge rating={hero.surgeon_margin_rating} />
-            {isProjected && (
-              <span className="text-[10px] text-slate-400 italic">(projected)</span>
-            )}
+            <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${
+              isProjected
+                ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+            }`}>
+              {isProjected ? 'Projected' : 'Actual'}
+            </span>
           </div>
           {surgeonMedianProfit != null && surgeonName && (
             <p className="text-[11px] text-slate-400 mt-0.5">

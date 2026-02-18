@@ -58,11 +58,27 @@ type BenchmarkData = {
  * from `case_completion_stats` to compute median margin.
  * Two sequential queries within one async function.
  */
+const DEFAULT_BENCHMARK_CASE_COUNT = 10
+
+async function fetchBenchmarkLimit(
+  supabase: SupabaseClient,
+  facilityId: string,
+): Promise<number> {
+  const { data } = await supabase
+    .from('facility_analytics_settings')
+    .select('financial_benchmark_case_count')
+    .eq('facility_id', facilityId)
+    .maybeSingle()
+  return (data as { financial_benchmark_case_count?: number } | null)
+    ?.financial_benchmark_case_count ?? DEFAULT_BENCHMARK_CASE_COUNT
+}
+
 async function fetchMarginBenchmark(
   supabase: SupabaseClient,
   facilityId: string,
   procedureTypeId: string,
   surgeonId?: string,
+  benchmarkLimit: number = DEFAULT_BENCHMARK_CASE_COUNT,
 ): Promise<MarginBenchmark | null> {
   // Step 1: Get case IDs of recent validated cases
   let query = supabase
@@ -72,7 +88,7 @@ async function fetchMarginBenchmark(
     .eq('facility_id', facilityId)
     .eq('data_validated', true)
     .order('scheduled_date', { ascending: false })
-    .limit(50)
+    .limit(benchmarkLimit)
 
   if (surgeonId) {
     query = query.eq('surgeon_id', surgeonId)
@@ -149,16 +165,18 @@ export function useFinancialComparison(
     errors: benchErrors,
   } = useSupabaseQueries<BenchmarkData>(
     {
-      // Surgeon margin benchmark: median margin from last 50 validated cases
+      // Surgeon margin benchmark: median margin from recent validated cases
       surgeonBenchmark: async (supabase) => {
         if (!surgeonId || !procedureTypeId || !facilityId) return null
-        return fetchMarginBenchmark(supabase, facilityId, procedureTypeId, surgeonId)
+        const limit = await fetchBenchmarkLimit(supabase, facilityId)
+        return fetchMarginBenchmark(supabase, facilityId, procedureTypeId, surgeonId, limit)
       },
 
       // Facility margin benchmark: same but across all surgeons
       facilityBenchmark: async (supabase) => {
         if (!procedureTypeId || !facilityId) return null
-        return fetchMarginBenchmark(supabase, facilityId, procedureTypeId)
+        const limit = await fetchBenchmarkLimit(supabase, facilityId)
+        return fetchMarginBenchmark(supabase, facilityId, procedureTypeId, undefined, limit)
       },
 
       // Full day forecast via RPC
