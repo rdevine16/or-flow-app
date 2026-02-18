@@ -23,7 +23,8 @@ import {
 } from '@/lib/analyticsV2'
 import { useAnalyticsConfig } from '@/lib/hooks/useAnalyticsConfig'
 
-import { ArrowRight, BarChart3, ChevronRight } from 'lucide-react'
+import { ArrowRight, BarChart3, ChevronRight, Download, Check } from 'lucide-react'
+import { exportInsightPanel } from '@/lib/insightExports'
 
 // ============================================
 // HELPERS
@@ -109,6 +110,35 @@ function Section({ title, subtitle, badge, children }: {
       </div>
       {children}
     </section>
+  )
+}
+
+// ============================================
+// INLINE EXPORT BUTTON
+// ============================================
+
+function InlineExportButton({ onClick }: { onClick: (e: React.MouseEvent) => void }) {
+  const [done, setDone] = useState(false)
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onClick(e)
+    setDone(true)
+    setTimeout(() => setDone(false), 2000)
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className={`p-1.5 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+        done
+          ? 'text-emerald-600 bg-emerald-50'
+          : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'
+      }`}
+      aria-label="Export to XLSX"
+    >
+      {done ? <Check className="w-4 h-4" /> : <Download className="w-4 h-4" />}
+    </button>
   )
 }
 
@@ -855,7 +885,10 @@ export default function AnalyticsOverviewPage() {
                               </div>
                             </div>
                             {hasPanel && (
-                              <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0 mt-1" />
+                              <div className="flex items-center gap-1 flex-shrink-0 mt-1">
+                                <InlineExportButton onClick={() => exportInsightPanel(insight.drillThroughType!, analytics, config)} />
+                                <ChevronRight className="w-5 h-5 text-slate-300" />
+                              </div>
                             )}
                           </div>
                         </div>

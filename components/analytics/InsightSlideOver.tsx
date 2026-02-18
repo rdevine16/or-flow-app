@@ -5,10 +5,12 @@
 
 'use client'
 
+import { useState, useCallback } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X } from 'lucide-react'
+import { X, Download, Check } from 'lucide-react'
 import type { Insight, InsightSeverity } from '@/lib/insightsEngine'
 import type { AnalyticsOverview, FacilityAnalyticsConfig } from '@/lib/analyticsV2'
+import { exportInsightPanel } from '@/lib/insightExports'
 import InsightPanelCallback from '@/components/analytics/InsightPanelCallback'
 import InsightPanelFCOTS from '@/components/analytics/InsightPanelFCOTS'
 import InsightPanelUtilization from '@/components/analytics/InsightPanelUtilization'
@@ -54,12 +56,20 @@ interface InsightSlideOverProps {
 }
 
 export default function InsightSlideOver({ insight, onClose, analytics, config }: InsightSlideOverProps) {
+  const [exported, setExported] = useState(false)
   const isOpen = insight !== null && insight.drillThroughType !== null
   const severity = insight?.severity ?? 'info'
   const styles = SEVERITY_STYLES[severity]
   const panelTitle = insight?.drillThroughType
     ? PANEL_TITLES[insight.drillThroughType] ?? insight.title
     : insight?.title ?? ''
+
+  const handleExport = useCallback(() => {
+    if (!insight?.drillThroughType) return
+    exportInsightPanel(insight.drillThroughType, analytics, config)
+    setExported(true)
+    setTimeout(() => setExported(false), 2000)
+  }, [insight, analytics, config])
 
   return (
     <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
@@ -84,14 +94,27 @@ export default function InsightSlideOver({ insight, onClose, analytics, config }
                 Supporting data for this insight
               </p>
             </div>
-            <Dialog.Close asChild>
+            <div className="flex items-center gap-1 flex-shrink-0">
               <button
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                aria-label="Close panel"
+                onClick={handleExport}
+                className={`p-2 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  exported
+                    ? 'text-emerald-600 bg-emerald-50'
+                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200'
+                }`}
+                aria-label="Export to XLSX"
               >
-                <X className="w-5 h-5" />
+                {exported ? <Check className="w-5 h-5" /> : <Download className="w-5 h-5" />}
               </button>
-            </Dialog.Close>
+              <Dialog.Close asChild>
+                <button
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  aria-label="Close panel"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </Dialog.Close>
+            </div>
           </div>
 
           {/* Scrollable content */}

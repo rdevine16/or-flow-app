@@ -12,9 +12,10 @@
  * 6. onClose called when close button is clicked
  * 7. Placeholder content rendered for each non-callback panel type
  * 8. Callback panel renders actual content (not placeholder)
+ * 9. Export button renders and calls exportInsightPanel on click
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import InsightSlideOver from '../InsightSlideOver'
 import type { Insight } from '@/lib/insightsEngine'
@@ -253,5 +254,45 @@ describe('InsightSlideOver — placeholder content', () => {
     expect(screen.getByText('No Scheduling Data')).toBeDefined()
     // Should NOT show placeholder
     expect(screen.queryByText(/panel content coming in/i)).toBeNull()
+  })
+})
+
+// ============================================
+// EXPORT BUTTON
+// ============================================
+
+// Mock the export module
+vi.mock('@/lib/insightExports', () => ({
+  exportInsightPanel: vi.fn(),
+}))
+
+import { exportInsightPanel } from '@/lib/insightExports'
+
+describe('InsightSlideOver — export button', () => {
+  beforeEach(() => {
+    vi.mocked(exportInsightPanel).mockClear()
+  })
+
+  it('renders an export button when panel is open', () => {
+    const insight = makeInsight({ drillThroughType: 'fcots' })
+    render(<InsightSlideOver insight={insight} onClose={() => {}} {...baseProps} />)
+    const exportBtn = screen.getByRole('button', { name: /export to xlsx/i })
+    expect(exportBtn).toBeDefined()
+  })
+
+  it('calls exportInsightPanel with correct args when export button is clicked', () => {
+    const insight = makeInsight({ drillThroughType: 'callback' })
+    render(<InsightSlideOver insight={insight} onClose={() => {}} {...baseProps} />)
+    const exportBtn = screen.getByRole('button', { name: /export to xlsx/i })
+    fireEvent.click(exportBtn)
+    expect(exportInsightPanel).toHaveBeenCalledWith('callback', mockAnalytics, mockConfig)
+  })
+
+  it('calls exportInsightPanel with utilization type', () => {
+    const insight = makeInsight({ drillThroughType: 'utilization' })
+    render(<InsightSlideOver insight={insight} onClose={() => {}} {...baseProps} />)
+    const exportBtn = screen.getByRole('button', { name: /export to xlsx/i })
+    fireEvent.click(exportBtn)
+    expect(exportInsightPanel).toHaveBeenCalledWith('utilization', mockAnalytics, mockConfig)
   })
 })
