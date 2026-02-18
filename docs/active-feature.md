@@ -1,125 +1,168 @@
-# Feature: 4-Metric Turnover Restructure
+# Feature: Dashboard Revamp
 
 ## Goal
 
-Restructure turnover metrics from 3 to 4, organized as two parallel pairs: **Room Turnovers** (facility perspective — how quickly the room is prepared) and **Surgical Turnovers** (surgeon perspective — how quickly the surgeon transitions between patients). Each pair has a same-room and flip-room variant. Also fix the data quality Impact Analysis which incorrectly references a `room_cleaned` milestone that no turnover calculation actually uses.
+Revamp the facility admin dashboard from a static KPI overview into a real-time operational command center. Add a live status banner, schedule adherence Gantt chart, AI-generated insights, KPI sparklines with target bars, and restructure the layout for better information hierarchy.
 
 ## Background
 
-Currently there are 3 turnover metrics with inconsistent naming:
-- `turnoverTime` (Room Turnover) — `patient_out (Case A) → patient_in (Case B)`, same room
-- `standardSurgicalTurnover` — `surgeonDone (Case A) → incision (Case B)`, same surgeon, same room
-- `flipRoomTime` — `surgeonDone (Case A) → incision (Case B)`, same surgeon, different room
+The current dashboard shows 5 KPI cards, an alerts list, room status, surgeon list, trend chart, and quick-access nav. It's informative but passive — the admin has to mentally connect dots between KPIs, alerts, and room status.
 
-Missing: **Flip-Room Room Turnover** — when a surgeon flips from Room X to Room Y, how quickly did the facility prepare Room Y? Measured as `patient_out (previous case in Room Y) → patient_in (surgeon's flip case in Room Y)`.
-
-## Target: 4 Metrics
-
-| | Room Turnover (facility) | Surgical Turnover (surgeon) |
-|---|---|---|
-| **Same-Room** | `patient_out (A) → patient_in (B)`, same room | `surgeonDone (A) → incision (B)`, same room |
-| **Flip-Room** | `patient_out (prev in Room Y) → patient_in (flip case in Room Y)` | `surgeonDone (A) → incision (B)`, different room |
-
-### Naming Convention (new)
-
-| Old field name | New field name |
-|---|---|
-| `turnoverTime` | `sameRoomTurnover` |
-| `standardSurgicalTurnover` | `sameRoomSurgicalTurnover` |
-| `flipRoomTime` | `flipRoomSurgicalTurnover` |
-| _(new)_ | `flipRoomTurnover` |
+The new design (mockup: `docs/dashboard-improved.jsx`) transforms the dashboard into a "control tower" view:
+1. **Live Pulse Banner** — instant situational awareness (how many rooms active, cases completed)
+2. **Schedule Adherence Timeline** — the visual gut-punch that makes schedule drift undeniable
+3. **AI Insights** — "What should we fix?" ranked by recoverable OR time
+4. **KPI sparklines + target bars** — trend context without leaving the card
+5. **Layout restructure** — better information grouping (alerts ↔ insights, rooms ↔ surgeons)
 
 ## Requirements
 
-### 1. New Calculation: Flip-Room Room Turnover
+### 1. Database: Procedure Duration Config
 
-**Algorithm:**
-1. Build room timeline: Map<`date|room_id`, cases sorted by start_time>
-2. Build surgeon timeline: Map<`surgeon_id|date`, cases sorted by incision>
-3. For each surgeon day, find flip transitions (consecutive cases where `or_room_id` differs)
-4. For each flip into Room Y: find the predecessor case in Room Y's timeline
-5. Compute: `patient_out (predecessor) → patient_in (flip case)`
-6. Filter: > 0 and < 180 minutes
+Add expected duration per procedure type with surgeon override capability.
 
-**Config:** Shares existing `turnoverThresholdMinutes` (30 min) with same-room room turnover. No new DB columns needed.
+**New column on `procedure_types`:**
+- `expected_duration_minutes` (integer, nullable) — base expected OR time for this procedure
 
-### 2. Rename Existing Fields
+**New table: `surgeon_procedure_duration`**
+- `id` (uuid PK)
+- `facility_id` (uuid FK → facilities)
+- `surgeon_id` (uuid FK → users)
+- `procedure_type_id` (uuid FK → procedure_types)
+- `expected_duration_minutes` (integer NOT NULL)
+- UNIQUE(facility_id, surgeon_id, procedure_type_id)
+- RLS: facility admins only (+ global admin view)
 
-All 3 existing turnover fields get renamed for consistency (see naming table above). TypeScript strict mode will catch every missed consumer.
+**Duration resolution order for Gantt:**
+1. `cases.scheduled_duration_minutes` (if set by scheduler)
+2. `surgeon_procedure_duration.expected_duration_minutes` (surgeon-specific override)
+3. `procedure_types.expected_duration_minutes` (procedure base)
+4. No bar shown (case has no estimable duration)
 
-### 3. Update All Display Consumers
+### 2. Procedure Duration Settings UI
 
-Every page/component that shows turnover data must:
-- Update field references to new names
-- Add the 4th metric (flip-room room turnover) where appropriate
+Add duration configuration to the existing Procedures settings page (`app/settings/procedures/`):
+- Add "Expected Duration" column/field to the procedure list/detail
+- Add surgeon override capability (button or inline per procedure → shows surgeon list with override durations)
 
-### 4. Fix Data Quality Page
+### 3. Live Pulse Banner
 
-- Remove `room_turnover` from `METRIC_REQUIREMENTS` — room turnover is a cross-case metric, not a single-case milestone metric. It does NOT use `room_cleaned`.
-- Remove the debug `showToast` that dumps facility_milestones objects (already done on current branch)
+Full-width banner below the header showing:
+- Pulsing green "Live" indicator
+- Status chips: `X In Surgery · Y Turnover · Z Pre-Op · W Available`
+- Case progress: `N / M cases completed · Next: OR X @ HH:MM`
+- Data source: existing `useTodayStatus()` hook — no new queries needed
+
+### 4. KPI Card Enhancement
+
+Modify existing `MetricCard` component to support:
+- Optional sparkline mini-chart (recharts `AreaChart`, ~72×28px)
+- Optional target progress bar with label (e.g., `71%` bar with `80%` target marker)
+- Status dot color derived from target achievement
+- Data source: `useDashboardKPIs().dailyData[].numericValue` for sparklines, existing target values from `facility_analytics_settings`
+
+### 5. Schedule Adherence Timeline (Gantt)
+
+Full-width horizontal Gantt chart below KPI row:
+- Each OR room = one swim lane, time axis 7a–5p (configurable from OR hours)
+- Per case: faded gray ghost bar (scheduled) + solid overlay (actual: green=on-time, rose=late)
+- Upcoming cases: dashed outline
+- Blue vertical "now" marker
+- Summary badges: "X on time · Y late · avg drift Z min · W upcoming"
+- 60-second polling for live updates
+- New hook: `useScheduleTimeline()` — fetches today's cases with milestone data + procedure durations
+
+### 6. AI Insights Section ("What should we fix?")
+
+Side-by-side with Needs Attention (50/50 split):
+- Ranked insight cards with priority badges and pillar tags
+- Click to expand: full analysis, projected impact callout, recommended action
+- Lazy-loaded on scroll (IntersectionObserver)
+- New hook: `useDashboardInsights()` — wraps `calculateAnalyticsOverview()` → `generateInsights()`
+- Data source: existing `insightsEngine.ts` (7 insight categories already implemented)
+
+### 7. Layout Restructure
+
+| Current | New |
+|---|---|
+| Needs Attention (3/5 cols) + Room Status & Surgeons (2/5) | Needs Attention (1/2) + AI Insights (1/2) |
+| — | Room Status (1/2) + Today's Surgeons (1/2) |
+| LineChart trend | AreaChart trend with gradient fill |
+| 5-col quick access | 5-col quick access (restyled) |
+
+### 8. Trend Chart Restyle
+
+Convert existing `TrendChart` from recharts `LineChart` to `AreaChart` with gradient fill. Replace dropdown metric selector with inline button toggle. Match mockup styling.
 
 ## Database Context
 
-No new tables or migrations. All calculations use existing `case_milestones` data.
+### New Migration Required
+- Add `expected_duration_minutes` column to `procedure_types`
+- Create `surgeon_procedure_duration` table with RLS policies
+- No changes to existing tables or triggers
 
-### Existing Config (facility_analytics_settings)
-
-| Column | Default | Used by |
-|---|---|---|
-| `turnover_threshold_minutes` | 30 min | Room turnover compliance (same + flip) |
-| `turnover_compliance_target_percent` | 80% | Room turnover compliance target |
-| `turnover_target_same_surgeon` | 45 min | Same-room surgical target |
-| `turnover_target_flip_room` | 15 min | Flip-room surgical target |
+### Existing Tables Used
+- `cases` — `start_time`, `scheduled_duration_minutes`, `or_room_id`
+- `case_milestones` — `recorded_at` for actual start/end times
+- `facility_milestones` — milestone name lookups (`patient_in`, `patient_out`)
+- `or_rooms` — room names, display order
+- `procedure_types` — procedure names + new `expected_duration_minutes`
+- `facility_analytics_settings` — KPI targets for target bars
 
 ## Files Likely Involved
 
-### Analytics Engine (core)
-- `lib/analyticsV2.ts` — Types (`TurnoverBreakdown`, `AnalyticsOverview`), new `calculateFlipRoomTurnover`, rename fields in `calculateSurgicalTurnovers` return, update `calculateAnalyticsOverview`
+### Database
+- New migration: `supabase/migrations/YYYYMMDD_procedure_duration.sql`
 
-### Display Consumers
-- `app/analytics/kpi/page.tsx` — KPI drill-down turnover rows
-- `app/analytics/flags/page.tsx` — KPI cards in turnover section
-- `app/analytics/page.tsx` — Quick stats
-- `components/analytics/InsightSlideOver.tsx` — Passes turnover data to panel
-- `components/analytics/InsightPanelTurnover.tsx` — Drill-through detail panel
-- `lib/insightsEngine.ts` — AI insight generation
-- `lib/insightExports.ts` — Excel export
+### Settings
+- `app/settings/procedures/page.tsx` — add duration field + surgeon override
 
-### Hooks
-- `lib/hooks/useDashboardKPIs.ts` — Dashboard KPI computation
-- `lib/hooks/useTrendData.ts` — 30-day trend chart
+### Dashboard Page
+- `app/dashboard/page.tsx` — layout restructure, new component imports
 
-### Data Quality
-- `app/dashboard/data-quality/page.tsx` — Remove phantom `room_turnover` from `METRIC_REQUIREMENTS`
+### New Components
+- `components/dashboard/LivePulseBanner.tsx`
+- `components/dashboard/ScheduleAdherenceTimeline.tsx`
+- `components/dashboard/InsightsSection.tsx`
+- `components/dashboard/InsightCard.tsx`
 
-### Test Files (mock fixture updates)
-- `lib/__tests__/insightsEngine.test.ts`
-- `lib/__tests__/insightExports.test.ts`
-- `lib/__tests__/analyticsV2-phase2.test.ts`
-- `app/analytics/kpi/__tests__/page-phase4.test.ts`
-- `app/analytics/kpi/__tests__/page-phase5.test.tsx`
-- `components/analytics/__tests__/InsightSlideOver.test.tsx`
-- `components/analytics/__tests__/InsightPanelTurnover.test.tsx`
+### Modified Components
+- `components/ui/MetricCard.tsx` — add sparkline + target bar props
+- `components/dashboard/TrendChart.tsx` — LineChart → AreaChart
+- `components/dashboard/QuickAccessCards.tsx` — visual restyle
+
+### New Hooks
+- `lib/hooks/useScheduleTimeline.ts`
+- `lib/hooks/useDashboardInsights.ts`
+
+### Existing Hooks (consumed, not modified)
+- `lib/hooks/useDashboardKPIs.ts` — sparkline data from `dailyData`
+- `lib/hooks/useTodayStatus.ts` — Live Pulse data
+- `lib/hooks/useDashboardAlerts.ts` — Needs Attention (unchanged)
+
+### Analytics (consumed)
+- `lib/analyticsV2.ts` — `calculateAnalyticsOverview()`
+- `lib/insightsEngine.ts` — `generateInsights()`
 
 ## iOS Parity
-- [x] iOS can wait — iOS doesn't have KPI analytics yet
-
-## Known Issues / Constraints
-- Flip-room room turnover can only be calculated when the destination room had a prior case that same day. If it's the first case in the room, no value is recorded.
-- The `METRIC_REQUIREMENTS` procedure-awareness fix (filtering against `procedure_milestone_config`) is deferred to a follow-up — it requires an additional DB round-trip per modal open.
+- [ ] iOS can wait — iOS doesn't have a dashboard yet
 
 ## Out of Scope
-- New DB migrations or config columns
-- Redesigning the turnover insight panel layout
-- Procedure-aware filtering in data quality METRIC_REQUIREMENTS
-- Dashboard page turnover card redesign
+- Real-time WebSocket/Supabase Realtime subscriptions (using polling instead)
+- Block schedule visualization (separate from case-level Gantt)
+- Surgeon-level dashboard views
+- Mobile-specific responsive breakpoints beyond basic sm/lg grid
+- Drag-and-drop case reordering on the Gantt
 
 ## Acceptance Criteria
-- [ ] `calculateFlipRoomTurnover` correctly measures destination room prep time for flip transitions
-- [ ] All 4 turnover metrics appear on KPI page, flags page, and insight exports
-- [ ] Field names are consistent: `sameRoomTurnover`, `flipRoomTurnover`, `sameRoomSurgicalTurnover`, `flipRoomSurgicalTurnover`
-- [ ] Data quality Impact Analysis no longer shows "Room Turnover Time" as uncomputable
-- [ ] Debug toast removed from data quality page
+- [ ] Procedure types have configurable expected duration with surgeon override
+- [ ] Live Pulse Banner shows real-time room status counts and case progress
+- [ ] KPI cards show sparkline trends and target progress bars
+- [ ] Schedule Adherence Timeline renders scheduled vs actual per room with 60s polling
+- [ ] AI Insights section lazy-loads and shows ranked, expandable insight cards
+- [ ] Layout uses 50/50 splits for Alerts+Insights and Rooms+Surgeons
+- [ ] Trend chart uses AreaChart with gradient fill
+- [ ] Quick access cards are visually restyled
 - [ ] `npx tsc --noEmit` passes
-- [ ] All tests pass (`npm run typecheck && npm run test`)
-- [ ] No TypeScript `any` types introduced
+- [ ] All existing tests pass
+- [ ] New components have test coverage
