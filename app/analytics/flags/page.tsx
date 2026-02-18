@@ -937,7 +937,11 @@ export default function AnalyticsOverviewPage() {
 
   // Calculate all analytics
   const analytics = useMemo(() => {
-    return calculateAnalyticsOverview(cases, previousPeriodCases, fcotsConfig, roomHoursMap)
+    return calculateAnalyticsOverview(cases, previousPeriodCases, {
+      fcotsMilestone: fcotsConfig.milestone,
+      fcotsGraceMinutes: fcotsConfig.graceMinutes,
+      fcotsTargetPercent: fcotsConfig.targetPercent,
+    }, roomHoursMap)
   }, [cases, previousPeriodCases, fcotsConfig, roomHoursMap])
 
   // Chart data

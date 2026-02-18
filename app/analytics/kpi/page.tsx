@@ -494,7 +494,11 @@ export default function AnalyticsOverviewPage() {
   // ============================================
 
   const analytics = useMemo(() => {
-    return calculateAnalyticsOverview(cases, previousPeriodCases, fcotsConfig, roomHoursMap)
+    return calculateAnalyticsOverview(cases, previousPeriodCases, {
+      fcotsMilestone: fcotsConfig.milestone,
+      fcotsGraceMinutes: fcotsConfig.graceMinutes,
+      fcotsTargetPercent: fcotsConfig.targetPercent,
+    }, roomHoursMap)
   }, [cases, previousPeriodCases, fcotsConfig, roomHoursMap])
 
   // AI Insights from insightsEngine
