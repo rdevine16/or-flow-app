@@ -619,6 +619,95 @@ export function getMilestoneDuration(
   return getTimeDiffSeconds(milestones[startMilestone], milestones[endMilestone])
 }
 
+// ============================================
+// DYNAMIC PHASE DURATION ENGINE
+// ============================================
+
+/** Minimal phase definition shape needed by computePhaseDurations. */
+export interface PhaseDefInput {
+  id: string
+  name: string
+  display_name: string
+  display_order: number
+  color_key: string | null
+  parent_phase_id: string | null
+  start_milestone_id: string
+  end_milestone_id: string
+}
+
+/** Output of computePhaseDurations for a single phase. */
+export interface PhaseDurationResult {
+  phaseId: string
+  name: string
+  displayName: string
+  displayOrder: number
+  colorKey: string | null
+  parentPhaseId: string | null
+  /** Duration in seconds, or null if boundary milestones are missing */
+  durationSeconds: number | null
+}
+
+/** Map of facility_milestone_id → recorded_at ISO timestamp */
+export type MilestoneTimestampMap = Map<string, string>
+
+/**
+ * Build a MilestoneTimestampMap from a case's raw case_milestones array.
+ * This is the bridge between the DB shape and the duration engine.
+ */
+export function buildMilestoneTimestampMap(
+  caseMilestones: Array<{ facility_milestone_id: string; recorded_at: string }>
+): MilestoneTimestampMap {
+  const map = new Map<string, string>()
+  for (const cm of caseMilestones) {
+    if (cm.recorded_at) {
+      map.set(cm.facility_milestone_id, cm.recorded_at)
+    }
+  }
+  return map
+}
+
+/**
+ * Compute durations for each phase definition from actual milestone timestamps.
+ *
+ * Takes phase definitions (from DB) and a milestone timestamp map (from case_milestones),
+ * returns a PhaseDurationResult per phase. Phases where either boundary milestone is
+ * missing get durationSeconds = null (rendered as hatched/missing indicator in Phase 2).
+ *
+ * Results are sorted by display_order. Works for both parent phases and subphases —
+ * subphases have a non-null parentPhaseId.
+ */
+export function computePhaseDurations(
+  phaseDefinitions: PhaseDefInput[],
+  milestoneTimestamps: MilestoneTimestampMap,
+): PhaseDurationResult[] {
+  return phaseDefinitions
+    .slice()
+    .sort((a, b) => a.display_order - b.display_order)
+    .map((phase) => {
+      const startTs = milestoneTimestamps.get(phase.start_milestone_id)
+      const endTs = milestoneTimestamps.get(phase.end_milestone_id)
+
+      let durationSeconds: number | null = null
+      if (startTs && endTs) {
+        const startMs = new Date(startTs).getTime()
+        const endMs = new Date(endTs).getTime()
+        if (endMs > startMs) {
+          durationSeconds = (endMs - startMs) / 1000
+        }
+      }
+
+      return {
+        phaseId: phase.id,
+        name: phase.name,
+        displayName: phase.display_name,
+        displayOrder: phase.display_order,
+        colorKey: phase.color_key,
+        parentPhaseId: phase.parent_phase_id,
+        durationSeconds,
+      }
+    })
+}
+
 /**
  * Parse scheduled start time and date into a Date object
  * FIXED: Creates date in local time to avoid timezone issues

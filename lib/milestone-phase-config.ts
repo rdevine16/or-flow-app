@@ -100,17 +100,19 @@ export interface ColorKeyConfig {
   borderColor: string
   /** Hex color for SVG rendering and boundary dot gradients */
   hex: string
+  /** Lighter hex shade for subphase insets (Tailwind -300 level) */
+  lightHex: string
 }
 
 export const COLOR_KEY_PALETTE: ColorKeyConfig[] = [
-  { key: 'blue',   label: 'Blue',   swatch: 'bg-blue-500',   accentBg: 'bg-blue-500',   accentText: 'text-blue-700',   headerBg: 'bg-blue-50',   borderColor: 'border-blue-500',   hex: '#3B82F6' },
-  { key: 'green',  label: 'Green',  swatch: 'bg-green-500',  accentBg: 'bg-green-500',  accentText: 'text-green-700',  headerBg: 'bg-green-50',  borderColor: 'border-green-500',  hex: '#22C55E' },
-  { key: 'amber',  label: 'Amber',  swatch: 'bg-amber-500',  accentBg: 'bg-amber-500',  accentText: 'text-amber-700',  headerBg: 'bg-amber-50',  borderColor: 'border-amber-500',  hex: '#F59E0B' },
-  { key: 'purple', label: 'Purple', swatch: 'bg-purple-500', accentBg: 'bg-purple-500', accentText: 'text-purple-700', headerBg: 'bg-purple-50', borderColor: 'border-purple-500', hex: '#8B5CF6' },
-  { key: 'teal',   label: 'Teal',   swatch: 'bg-teal-500',   accentBg: 'bg-teal-500',   accentText: 'text-teal-700',   headerBg: 'bg-teal-50',   borderColor: 'border-teal-500',   hex: '#14B8A6' },
-  { key: 'indigo', label: 'Indigo', swatch: 'bg-indigo-500', accentBg: 'bg-indigo-500', accentText: 'text-indigo-700', headerBg: 'bg-indigo-50', borderColor: 'border-indigo-500', hex: '#6366F1' },
-  { key: 'rose',   label: 'Rose',   swatch: 'bg-rose-500',   accentBg: 'bg-rose-500',   accentText: 'text-rose-700',   headerBg: 'bg-rose-50',   borderColor: 'border-rose-500',   hex: '#F43F5E' },
-  { key: 'slate',  label: 'Slate',  swatch: 'bg-slate-500',  accentBg: 'bg-slate-500',  accentText: 'text-slate-700',  headerBg: 'bg-slate-50',  borderColor: 'border-slate-500',  hex: '#64748B' },
+  { key: 'blue',   label: 'Blue',   swatch: 'bg-blue-500',   accentBg: 'bg-blue-500',   accentText: 'text-blue-700',   headerBg: 'bg-blue-50',   borderColor: 'border-blue-500',   hex: '#3B82F6', lightHex: '#93C5FD' },
+  { key: 'green',  label: 'Green',  swatch: 'bg-green-500',  accentBg: 'bg-green-500',  accentText: 'text-green-700',  headerBg: 'bg-green-50',  borderColor: 'border-green-500',  hex: '#22C55E', lightHex: '#86EFAC' },
+  { key: 'amber',  label: 'Amber',  swatch: 'bg-amber-500',  accentBg: 'bg-amber-500',  accentText: 'text-amber-700',  headerBg: 'bg-amber-50',  borderColor: 'border-amber-500',  hex: '#F59E0B', lightHex: '#FCD34D' },
+  { key: 'purple', label: 'Purple', swatch: 'bg-purple-500', accentBg: 'bg-purple-500', accentText: 'text-purple-700', headerBg: 'bg-purple-50', borderColor: 'border-purple-500', hex: '#8B5CF6', lightHex: '#C4B5FD' },
+  { key: 'teal',   label: 'Teal',   swatch: 'bg-teal-500',   accentBg: 'bg-teal-500',   accentText: 'text-teal-700',   headerBg: 'bg-teal-50',   borderColor: 'border-teal-500',   hex: '#14B8A6', lightHex: '#5EEAD4' },
+  { key: 'indigo', label: 'Indigo', swatch: 'bg-indigo-500', accentBg: 'bg-indigo-500', accentText: 'text-indigo-700', headerBg: 'bg-indigo-50', borderColor: 'border-indigo-500', hex: '#6366F1', lightHex: '#A5B4FC' },
+  { key: 'rose',   label: 'Rose',   swatch: 'bg-rose-500',   accentBg: 'bg-rose-500',   accentText: 'text-rose-700',   headerBg: 'bg-rose-50',   borderColor: 'border-rose-500',   hex: '#F43F5E', lightHex: '#FDA4AF' },
+  { key: 'slate',  label: 'Slate',  swatch: 'bg-slate-500',  accentBg: 'bg-slate-500',  accentText: 'text-slate-700',  headerBg: 'bg-slate-50',  borderColor: 'border-slate-500',  hex: '#64748B', lightHex: '#CBD5E1' },
 ]
 
 export const COLOR_KEY_MAP: Record<string, ColorKeyConfig> = Object.fromEntries(
@@ -121,6 +123,16 @@ export const COLOR_KEY_MAP: Record<string, ColorKeyConfig> = Object.fromEntries(
 export function resolveColorKey(colorKey: string | null): ColorKeyConfig {
   if (!colorKey) return COLOR_KEY_PALETTE[7] // slate
   return COLOR_KEY_MAP[colorKey] ?? COLOR_KEY_PALETTE[7]
+}
+
+/** Resolve a color_key to its primary hex color (for parent phases). */
+export function resolvePhaseHex(colorKey: string | null): string {
+  return resolveColorKey(colorKey).hex
+}
+
+/** Resolve a color_key to its lighter hex shade (for subphase insets). */
+export function resolveSubphaseHex(colorKey: string | null): string {
+  return resolveColorKey(colorKey).lightHex
 }
 
 // ─── Phase Tree Types & Builder ──────────────────────────────────
