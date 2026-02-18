@@ -2,23 +2,36 @@
 
 ## Summary
 
-Transform the facility admin dashboard from a static KPI overview into a real-time operational command center. Adds Live Pulse Banner, Schedule Adherence Gantt, AI Insights, KPI sparklines with target bars, AreaChart trend, and a restructured layout. Includes a new database migration for procedure type expected durations with surgeon overrides.
+Transform the facility admin dashboard from a static KPI overview into a real-time operational command center. Adds Live Pulse Banner, Schedule Adherence Gantt (recharts), AI Insights (informational), new DashboardKpiCard with recharts sparklines and target bars, AreaChart trend, FacilityScoreMini with extracted ScoreRing, and a restructured 50/50 layout. Also includes a database migration for procedure durations with surgeon overrides, and a full redesign of the Procedures settings page into a master-detail view.
 
-## Interview Notes
+## Key Decisions (from /review on 2026-02-18)
 
-| Decision | Answer |
-|---|---|
-| Missing case duration handling | Add `expected_duration_minutes` to `procedure_types` with surgeon override table |
-| Duration inheritance | 2-level: procedure type base → surgeon override (no facility-wide default) |
-| Duration settings UI | Add to existing Procedures settings page as inline field + surgeon override |
-| Duration permissions | Facility admins manage, global admins view |
-| AI Insights loading | Lazy load on scroll (IntersectionObserver) |
-| Live Pulse scope | Status chips + counts only (existing `useTodayStatus` data) |
-| Gantt refresh | Poll every 60 seconds |
-| Trend chart style | Restyle existing LineChart → AreaChart with gradient |
-| KPI card approach | Modify existing MetricCard (add optional sparkData + target props) |
-| Quick Actions | Keep current 5 cards, restyle visually |
-| Scope | Full mockup (all 7 changes) — ~7 phases |
+| # | Decision | Answer |
+|---|---|---|
+| 1 | Sparkline approach | Recharts `AreaChart` (not existing SVG Sparkline) for gradient fill |
+| 2 | KPI card component | New `DashboardKpiCard` — leave existing `MetricCard` untouched |
+| 3 | Gantt rendering | Recharts custom chart with horizontal BarChart + custom bar shapes |
+| 4 | Gantt data source | New `useScheduleTimeline` hook (not extending useTodayStatus) |
+| 5 | Polling scope | `useScheduleTimeline` only (60s). Live Pulse uses useTodayStatus without polling |
+| 6 | Duration data | `scheduled_duration_minutes` likely unpopulated. Full fallback chain needed |
+| 7 | Procedures settings UI | **Full redesign** of `/settings/procedures` into master-detail view |
+| 8 | Duration page location | Replace current procedures page entirely (same URL, new UX) |
+| 9 | Insights loading | Lazy-load on scroll via IntersectionObserver |
+| 10 | Insight cards | Informational only — no action items or impact callout boxes |
+| 11 | Time range toggle | Affects KPI cards + Trend chart only. Everything else = always "today" |
+| 12 | Facility Score card | Extract `ScoreRing` to shared component. Compact 52px ring + grade + trend |
+| 13 | TrendChart | Convert in-place: LineChart → AreaChart, dropdown → segmented toggle |
+| 14 | QuickAccessCards | Minimal restyle only (hover effects, icon colors) |
+| 15 | NeedsAttention | Minor tweaks: urgent badge, "View all" link, row styling |
+| 16 | Gantt time axis | Derive from `or_rooms.available_hours` (7am + hours) |
+| 17 | Gantt milestones | `patient_in` → `patient_out` for actual bars |
+| 18 | Late determination | Facility-configured FCOTS milestone + grace minutes |
+| 19 | Gantt bar labels | Tooltip on hover only — no inline text |
+| 20 | Empty states | Show component frame with "No cases scheduled today" message |
+| 21 | Target progress bar | Current value as % of target. Green ≥80%, amber ≥50%, red <50% |
+| 22 | Pulse effect | Pure CSS `@keyframes` animation |
+| 23 | Phase 2 scope | Split into 2a (DB migration) + 2b (procedures page redesign) |
+| 24 | Score data source | Same `facilityScoreStub.ts` via `useDashboardKPIs` |
 
 ## Codebase Scan Results
 
@@ -28,28 +41,19 @@ Transform the facility admin dashboard from a static KPI overview into a real-ti
 |---|---|---|
 | KPI sparklines | `useDashboardKPIs` → `KPIResult.dailyData[].numericValue` | None — wire directly |
 | Live Pulse | `useTodayStatus` → room status + case counts | None — data exists |
-| Schedule Gantt | No hook exists | Need `useScheduleTimeline` hook: cases + milestones + durations |
-| AI Insights | `insightsEngine.generateInsights()` exists | Need `useDashboardInsights` hook wrapping `calculateAnalyticsOverview` |
+| Schedule Gantt | No hook exists | Need `useScheduleTimeline` — cases + milestones + durations |
+| AI Insights | `insightsEngine.generateInsights()` exists | Need `useDashboardInsights` wrapping `calculateAnalyticsOverview` |
 | Trend chart | `useTrendData` → 30-day data | None — restyle only |
+| Facility Score | `facilityScoreStub.computeFacilityScore()` in `useDashboardKPIs` | Extract `ScoreRing` from orbit-score page |
 
-### Key Files
+### Key Patterns
 
-- Dashboard page: `app/dashboard/page.tsx`
-- KPI hook: `lib/hooks/useDashboardKPIs.ts` (returns `DashboardKPIs` with `dailyData` arrays)
-- Today status: `lib/hooks/useTodayStatus.ts` (returns `RoomStatusData[]` + `TodaySurgeonData[]`)
-- Insights engine: `lib/insightsEngine.ts` (7 categories, takes `AnalyticsOverview`)
-- Analytics engine: `lib/analyticsV2.ts` (`calculateAnalyticsOverview()`)
-- MetricCard: `components/ui/MetricCard.tsx` (gradient text, trend arrows, count-up animation)
-- Procedures page: `app/settings/procedures/page.tsx`
-- `procedure_types` table: has `name`, `facility_id`, `procedure_category_id`, etc. — NO `expected_duration_minutes` yet
-- `cases` table: has `scheduled_duration_minutes` (nullable), `start_time` (TIME)
-
-### Test Infrastructure
-
-- Vitest + jsdom, `@testing-library/react`
-- Recharts already installed (`^3.6.0`)
-- Supabase not mocked directly — tests use extracted pure functions or `vi.mock()` on hooks
-- Existing dashboard test files: FacilityScoreCard, NeedsAttention, QuickAccessCards, RoomStatusCard, TodaysSurgeons, TrendChart
+- **All hooks use `useSupabaseQuery`** — facility-scoped, enabled-gated
+- **No polling exists anywhere** — `useScheduleTimeline` will be the first
+- **Recharts `^3.6.0` installed**, used only in TrendChart currently. Tremor used on analytics pages
+- **Tailwind v4** with CSS-first config in `globals.css`. No `tailwind.config.ts`
+- **No Tabs/Progress components** in `components/ui/` — will need custom implementations
+- **Procedure milestones page** pattern: master-detail (280px left panel + flex-1 right panel) is the reference for the procedures redesign
 
 ---
 
@@ -57,148 +61,153 @@ Transform the facility admin dashboard from a static KPI overview into a real-ti
 
 **Status:** Pending
 
-**What:** Add `expected_duration_minutes` to `procedure_types` and create `surgeon_procedure_duration` table for surgeon-level overrides.
+**What:** Add `expected_duration_minutes` to `procedure_types` and create `surgeon_procedure_duration` table with RLS policies.
 
 **Files touched:**
-- `supabase/migrations/YYYYMMDD_procedure_duration_config.sql` (new)
+- `supabase/migrations/20260219000011_procedure_duration_config.sql` (new)
 
 **Details:**
 1. `ALTER TABLE procedure_types ADD COLUMN expected_duration_minutes integer;`
 2. Create `surgeon_procedure_duration` table:
-   ```sql
-   CREATE TABLE surgeon_procedure_duration (
-     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-     facility_id uuid NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
-     surgeon_id uuid NOT NULL REFERENCES users(id),
-     procedure_type_id uuid NOT NULL REFERENCES procedure_types(id) ON DELETE CASCADE,
-     expected_duration_minutes integer NOT NULL,
-     created_at timestamptz DEFAULT now(),
-     updated_at timestamptz DEFAULT now(),
-     UNIQUE(facility_id, surgeon_id, procedure_type_id)
-   );
-   ```
-3. Add RLS policies: facility admins can SELECT/INSERT/UPDATE/DELETE on their facility, global admins can SELECT all
-4. Add index on `(facility_id, surgeon_id)` and `(facility_id, procedure_type_id)`
-5. Apply migration via `supabase db push`
+   - `id` uuid PK, `facility_id` FK → facilities, `surgeon_id` FK → users, `procedure_type_id` FK → procedure_types
+   - `expected_duration_minutes` integer NOT NULL
+   - `created_at`, `updated_at` timestamps
+   - UNIQUE(facility_id, surgeon_id, procedure_type_id)
+3. RLS policies following established pattern:
+   - `get_my_facility_id()` for SELECT (all facility users)
+   - `get_my_access_level() = 'facility_admin'` for INSERT/UPDATE/DELETE
+   - `get_my_access_level() = 'global_admin'` for full access
+4. Indexes on `(facility_id, surgeon_id)` and `(facility_id, procedure_type_id)`
+5. Soft-delete trigger: `sync_soft_delete_columns()` — add `is_active`, `deleted_at`, `deleted_by` columns
+6. Apply via `supabase db push`
 
 **Commit:** `feat(db): phase 1 - add procedure duration config with surgeon override`
 
 **Test gate:**
 - Unit: Migration SQL is syntactically valid
-- Integration: Column exists on `procedure_types`, table exists with correct constraints
-- Workflow: Verify via Supabase REST API that the new column/table are accessible
+- Integration: Column exists on `procedure_types`, table created with correct constraints
+- Workflow: Verify via Supabase REST API that column/table are accessible and RLS works
 
 **Complexity:** Small
 
 ---
 
-## Phase 2: Procedure Duration Settings UI
+## Phase 2: Procedures Settings Page Redesign (Master-Detail + Durations)
 
 **Status:** Pending
+**Depends on:** Phase 1
 
-**What:** Add expected duration configuration to the Procedures settings page with surgeon override support.
+**What:** Replace the current `/settings/procedures` page (list + modal) with a master-detail view matching the procedure milestones pattern. Left panel: searchable procedure list. Right panel: all procedure settings including the new expected duration field and surgeon override management.
 
 **Files touched:**
-- `app/settings/procedures/page.tsx` — add duration field + surgeon override button
-- `lib/dal/procedures.ts` or inline — update/insert duration values
+- `app/settings/procedures/page.tsx` — full rewrite to master-detail layout
+- `components/settings/procedures/ProcedureDetailPanel.tsx` (new) — right panel with all fields
+- `components/settings/procedures/SurgeonOverrideList.tsx` (new) — surgeon duration overrides section
 
 **Details:**
-1. Add "Expected Duration" column to the procedure list/table
-2. Each procedure row gets an editable duration field (minutes, integer input)
-3. Add "Surgeon Overrides" button per procedure → opens inline section or modal
-4. Surgeon override section: list of surgeons with override duration inputs
-5. Save handler: update `procedure_types.expected_duration_minutes` and upsert `surgeon_procedure_duration` rows
-6. Show inheritance indicator: "No override" when surgeon row doesn't exist
+1. **Left panel (280px fixed, matches milestones):**
+   - Search input at top (same styling as procedure-milestones page)
+   - Filter tabs: "All", "Has Duration", "Has Overrides"
+   - Procedure rows: name, sub-text showing override count or "Default"
+   - Purple dot indicator for procedures with surgeon overrides
+   - Selected state: `bg-blue-50 border border-blue-200`
+   - "Add Procedure" button at bottom
 
-**Commit:** `feat(settings): phase 2 - procedure duration config with surgeon override UI`
+2. **Right panel (flex-1):**
+   - Header bar: procedure name + status badge + archive button
+   - Editable form with existing fields: name, body region, category, technique, implant category
+   - **New section: "Expected Duration"** — integer input (minutes), nullable
+   - **New section: "Surgeon Overrides"** — list of surgeon overrides with:
+     - Each row: surgeon name + override duration + edit/delete buttons
+     - "Add Override" button → surgeon dropdown + duration input
+     - Count badge showing total overrides
+   - Empty state when no procedure selected
+
+3. **Data flow:**
+   - Fetch procedures via existing query pattern
+   - Fetch surgeon overrides for selected procedure from `surgeon_procedure_duration`
+   - Mutations: update `procedure_types.expected_duration_minutes`, upsert/delete `surgeon_procedure_duration` rows
+   - Optimistic updates via `setData`
+
+4. **Preserve existing functionality:**
+   - Add/edit/archive procedures (from existing modal → inline form in right panel)
+   - Search and filter
+   - Dependency warnings before archiving
+
+**Commit:** `feat(settings): phase 2 - redesign procedures page with master-detail + duration config`
 
 **Test gate:**
-- Unit: Duration input renders, saves correct value, surgeon override creates/updates rows
-- Integration: Changing duration persists to DB and reloads correctly
-- Workflow: Settings → Procedures → set duration → set surgeon override → verify both saved
+- Unit: Left panel renders procedure list, right panel renders all fields, surgeon override CRUD works
+- Integration: Selecting a procedure loads its details + overrides, saving persists to DB
+- Workflow: Settings → Procedures → select procedure → edit duration → add surgeon override → verify saved → search/filter → archive procedure
 
-**Complexity:** Medium
+**Complexity:** Large
 
 ---
 
-## Phase 3: Live Pulse Banner + Layout Restructure
+## Phase 3: Live Pulse Banner + DashboardKpiCard + FacilityScoreMini
 
 **Status:** Pending
 
-**What:** Create the Live Pulse Banner and restructure the dashboard layout to the new 50/50 grid pattern. Add an empty placeholder where AI Insights will go in Phase 6.
+**What:** Create the Live Pulse Banner, new DashboardKpiCard component with recharts sparklines and target bars, and FacilityScoreMini with extracted ScoreRing. Wire all three into the dashboard.
 
 **Files touched:**
 - `components/dashboard/LivePulseBanner.tsx` (new)
-- `app/dashboard/page.tsx` — add banner, restructure grid layout
+- `components/dashboard/DashboardKpiCard.tsx` (new)
+- `components/dashboard/FacilityScoreMini.tsx` (new)
+- `components/ui/ScoreRing.tsx` (new — extracted from orbit-score page)
+- `app/dashboard/page.tsx` — replace MetricCard usage with DashboardKpiCard, add LivePulseBanner
 
 **Details:**
-1. **LivePulseBanner component:**
-   - Pulsing green dot with "Live" label (CSS animation)
-   - Status chips from `useTodayStatus`: count rooms by status (`in_case`, `turning_over`, `idle`, `done`)
-   - Case progress: `completedCases / totalCases` aggregated across all rooms
-   - "Next: OR X @ HH:MM" from first room with a `nextCase`
-   - Styling: `bg-white rounded-xl shadow-sm border border-slate-100` (matches card pattern)
+1. **LivePulseBanner:**
+   - Consumes `useTodayStatus()` (no polling)
+   - Pulsing green dot via CSS `@keyframes` animation
+   - Status pills: count rooms by status (`in_case`=In Surgery, `turning_over`=Turnover, etc.)
+   - Case progress: sum completed/total across all rooms + next scheduled case info
+   - Empty state: "No cases scheduled today" with muted icon
+   - Styling: `bg-white rounded-xl shadow-sm border border-slate-200`
 
-2. **Layout restructure in `page.tsx`:**
-   - Insert `<LivePulseBanner>` between header and KPI row
-   - Change Needs Attention from `lg:col-span-3` in 5-col grid → `lg:col-span-1` in 2-col grid
-   - Add Insights placeholder (`lg:col-span-1`) — empty card with "Insights coming soon" or just the section wrapper
-   - Move Room Status and Surgeons to their own `grid-cols-2` row below
-   - Maintain responsive: single column on mobile, 2-col on `lg:`
+2. **DashboardKpiCard:**
+   - Props: `title`, `value`, `trendPct`, `trendDir`, `subtitle`, `sparkData?`, `sparkColor?`, `target?: { pct, label }`
+   - Layout: status dot + title (top-left), recharts AreaChart sparkline (72×28px, top-right), large value + trend (middle), target progress bar (bottom)
+   - Sparkline: recharts `AreaChart` with `<linearGradient>` fill, `isAnimationActive={false}`
+   - Target bar: thin 48px bar, fill color green/amber/red based on % of target
+   - Status dot color: derived from target achievement (green ≥80%, amber ≥50%, red <50%)
 
-**Commit:** `feat(dashboard): phase 3 - live pulse banner and layout restructure`
+3. **ScoreRing extraction:**
+   - Move `ScoreRing` from `app/analytics/orbit-score/page.tsx` to `components/ui/ScoreRing.tsx`
+   - Props: `score: number`, `size?: number`, `ringWidth?: number`
+   - Update orbit-score page to import from new location
+
+4. **FacilityScoreMini:**
+   - Compact card matching KPI row height
+   - ScoreRing at size=52, ringWidth=4
+   - Grade letter badge + trend value
+   - Consumes `useDashboardKPIs().facilityScore`
+
+5. **Dashboard wiring:**
+   - Replace 4 `MetricCard` instances with `DashboardKpiCard`
+   - Replace `FacilityScoreCard` with `FacilityScoreMini`
+   - Sparkline data from `kpi.dailyData.map(d => ({ v: d.numericValue }))`
+   - Targets from `facility_analytics_settings` (utilization=75%, turnover=30min, FCOTS=80%)
+
+**Commit:** `feat(dashboard): phase 3 - live pulse banner, KPI cards with sparklines, facility score mini`
 
 **Test gate:**
-- Unit: LivePulseBanner renders status chips with correct counts from mock data
-- Integration: Dashboard page renders new layout with all sections in correct positions
-- Workflow: Load dashboard → see Live Pulse at top → Needs Attention and placeholder side by side → Rooms and Surgeons below
+- Unit: LivePulseBanner renders status pills, DashboardKpiCard renders sparkline + target bar, ScoreRing renders SVG ring
+- Integration: Dashboard shows LivePulseBanner consuming real useTodayStatus data, KPI cards show sparklines from dailyData
+- Workflow: Load dashboard → Live Pulse shows room counts → KPI cards show trends + targets → toggle time range → sparklines update
 
-**Complexity:** Medium
+**Complexity:** Large
 
 ---
 
-## Phase 4: KPI Card Enhancement (Sparklines + Target Bars)
+## Phase 4: Schedule Adherence Timeline (Gantt)
 
 **Status:** Pending
+**Depends on:** Phase 1 (for duration resolution chain)
 
-**What:** Add optional sparkline mini-charts and target progress bars to the existing MetricCard component. Wire sparkline data from the dashboard KPIs hook.
-
-**Files touched:**
-- `components/ui/MetricCard.tsx` — add `sparkData`, `target` props
-- `app/dashboard/page.tsx` — pass sparkline data and targets to MetricCard instances
-
-**Details:**
-1. **MetricCard enhancements:**
-   - Add optional `sparkData?: { value: number }[]` prop — renders a tiny recharts `AreaChart` (72×28px) in the top-right corner with gradient fill
-   - Add optional `target?: { value: number; label: string }` prop — renders a thin progress bar below the value showing current vs target
-   - Status dot: colored based on target achievement (green ≥80%, amber ≥50%, rose <50%)
-   - All new props are optional — existing MetricCard usage is unaffected
-
-2. **Dashboard wiring:**
-   - OR Utilization sparkline: `kpis.utilization.dailyData.map(d => ({ value: d.numericValue }))`
-   - Cases sparkline: derive from daily completed counts (may need small computation)
-   - Median Turnover sparkline: `kpis.medianTurnover.dailyData`
-   - On-Time Starts sparkline: `kpis.onTimeStartPct.dailyData`
-   - Targets from `facility_analytics_settings`: utilization → 80%, turnover → 25m, FCOTS → 85%
-
-3. **FacilityScoreCard:** Add sparkline showing daily facility score (from `useTrendData('facilityScore')` or compute inline)
-
-**Commit:** `feat(dashboard): phase 4 - KPI sparklines and target progress bars`
-
-**Test gate:**
-- Unit: MetricCard renders sparkline when `sparkData` provided, renders target bar when `target` provided, renders normally without either
-- Integration: All 5 KPI cards on dashboard show sparklines and targets with real data
-- Workflow: Toggle time range → sparklines update with period data → target bars reflect current values
-
-**Complexity:** Medium
-
----
-
-## Phase 5: Schedule Adherence Timeline (Gantt)
-
-**Status:** Pending
-
-**What:** Create the Schedule Adherence Timeline — a full-width Gantt chart showing scheduled vs actual case times per OR room with 60-second polling.
+**What:** Create the Schedule Adherence Gantt chart using recharts with custom bar shapes, and the `useScheduleTimeline` hook with 60-second polling.
 
 **Files touched:**
 - `lib/hooks/useScheduleTimeline.ts` (new)
@@ -207,129 +216,174 @@ Transform the facility admin dashboard from a static KPI overview into a real-ti
 
 **Details:**
 1. **`useScheduleTimeline()` hook:**
-   - Fetch today's cases with: `start_time`, `scheduled_duration_minutes`, `or_room_id`, `surgeon_id`, `procedure_type_id`, `status_id`
-   - Join `case_milestones` for actual times: `patient_in` (actual start), `patient_out` (actual end)
-   - Fetch `procedure_types.expected_duration_minutes` for duration fallback
-   - Fetch `surgeon_procedure_duration` for surgeon-specific override
-   - Duration resolution: `scheduled_duration_minutes` → surgeon override → procedure base → null
-   - Group by room, sort by scheduled start time
-   - Compute per-case: `{ scheduledStart, scheduledEnd, actualStart?, actualEnd?, status: 'ontime'|'late'|'upcoming', label }`
-   - Summary stats: on-time count, late count, avg drift (minutes), upcoming count
-   - Polling: `useSupabaseQuery` with `refetchInterval: 60000`
+   - Fetches today's cases with: `start_time`, `scheduled_duration_minutes`, `or_room_id`, `surgeon_id`, `procedure_type_id`, `case_milestones`, `status_id`
+   - Fetches `procedure_types.expected_duration_minutes` for duration fallback
+   - Fetches `surgeon_procedure_duration` for surgeon-specific overrides
+   - Fetches `or_rooms` (name, display_order, `available_hours`) for room list + time axis
+   - Fetches `facility_analytics_settings` for `fcots_milestone` + `fcots_grace_minutes`
+   - **Duration resolution:** `cases.scheduled_duration_minutes` → surgeon override → procedure base → null (no bar)
+   - **Actual times:** `patient_in.recorded_at` → `patient_out.recorded_at` via `getMilestoneMap()`
+   - **Late determination:** configured `fcots_milestone` recorded_at > `cases.start_time + fcots_grace_minutes`
+   - **Time axis:** 7am + max(`or_rooms.available_hours`) across all rooms
+   - Groups by room (sorted by `display_order`), cases sorted by `start_time`
+   - Per-case output: `{ scheduledStart, scheduledEnd, actualStart?, actualEnd?, status, procedureName, surgeonName }`
+   - Summary stats: on-time count, late count, avg drift minutes, upcoming count
+   - **Polling:** `setInterval` + `refetch()` every 60 seconds
 
-2. **`ScheduleAdherenceTimeline` component:**
-   - Header: "Schedule Adherence" title + subtitle + legend (Scheduled/On time/Late/Upcoming)
-   - Summary badges: on-time (green), late + avg drift (rose), upcoming (slate)
-   - Time axis: configurable start/end hours (default 7a–5p from OR hours config)
-   - Per-room row: room label (48px) + timeline bar with:
-     - Grid lines at each hour
-     - Per-case: gray ghost bar (scheduled) + solid overlay (green=on-time, rose=late) + dashed outline (upcoming)
-     - Case label text inside bar if wide enough
-   - Blue vertical "now" marker at current time (updates via `setInterval` every 60s)
-   - Pure div/CSS rendering (no recharts — custom positioning with percentages)
+2. **`ScheduleAdherenceTimeline` component (recharts-based):**
+   - Horizontal `BarChart` layout with rooms on Y-axis, time (hours) on X-axis
+   - Custom `<Bar shape>` components for:
+     - Scheduled (ghost): gray/slate-200, 50% opacity
+     - Actual on-time: emerald/green, 75% opacity, overlays ghost
+     - Actual late: rose/red, 75% opacity, overlays ghost
+     - Upcoming: dashed outline (custom shape with strokeDasharray)
+   - `ReferenceLine` at current time (blue, vertical)
+   - Custom `Tooltip` showing: procedure name, surgeon, scheduled vs actual times, status
+   - Header: title + subtitle + legend badges
+   - Summary badges row: "X on time" (green) · "Y late · avg drift Z min" (rose) · "W upcoming" (slate)
+   - Empty state: "No cases scheduled today"
 
-3. **On-time vs late logic:**
-   - Compare `actualStart` vs `scheduledStart`: if actual > scheduled + grace (e.g., 5 min) → late
-   - Or simply: if any actual bar extends past scheduled bar → late
+3. **Dashboard placement:** Full-width below KPI row, above Alerts+Insights
 
-**Commit:** `feat(dashboard): phase 5 - schedule adherence timeline with 60s polling`
+**Commit:** `feat(dashboard): phase 4 - schedule adherence timeline with 60s polling`
 
 **Test gate:**
-- Unit: `useScheduleTimeline` correctly groups cases by room, resolves durations, computes summary stats
-- Integration: Timeline component renders correct number of room rows, bars positioned correctly
-- Workflow: Dashboard loads → Gantt shows rooms with scheduled/actual bars → "now" marker visible → wait 60s → data refreshes
+- Unit: `useScheduleTimeline` correctly resolves durations via fallback chain, computes late status using FCOTS config, groups by room
+- Integration: Timeline renders correct room lanes, bars at correct positions, ReferenceLine at current time
+- Workflow: Dashboard → Gantt shows rooms with scheduled/actual bars → tooltip on hover → wait 60s → data refreshes
 
 **Complexity:** Large
 
 ---
 
-## Phase 6: AI Insights Section
+## Phase 5: AI Insights Section
 
 **Status:** Pending
 
-**What:** Create the "What should we fix?" insights section with expandable cards, lazy-loaded on scroll.
+**What:** Create the "What should we fix?" insights section with expandable informational cards, lazy-loaded on scroll.
 
 **Files touched:**
 - `lib/hooks/useDashboardInsights.ts` (new)
 - `components/dashboard/InsightsSection.tsx` (new)
 - `components/dashboard/InsightCard.tsx` (new)
-- `app/dashboard/page.tsx` — replace insights placeholder from Phase 3
+- `app/dashboard/page.tsx` — add InsightsSection to layout
 
 **Details:**
-1. **`useDashboardInsights()` hook:**
-   - Uses `IntersectionObserver` pattern: only fetches when `enabled` is true
-   - Fetches cases for the selected time range (same query pattern as analytics page)
+1. **`useDashboardInsights(enabled: boolean)` hook:**
+   - Only fetches when `enabled` is true (triggered by IntersectionObserver)
+   - Fetches cases for selected time range (same query pattern as analytics)
    - Calls `calculateAnalyticsOverview()` → `generateInsights()`
    - Returns `{ insights: Insight[], loading, error }`
-   - Caches results for the session (don't re-compute on every scroll in/out)
+   - Caches results — don't re-compute on scroll in/out
 
 2. **`InsightsSection` component:**
-   - Header: sparkle icon + "What should we fix?" + "AI-generated insights ranked by recoverable OR time"
-   - Badge: "N insights" count
-   - Renders up to 3–5 `InsightCard` components
-   - Manages expanded state (one card expanded at a time)
-   - Skeleton loading state while insights compute
+   - Header: sparkle icon + "What should we fix?" + subtitle
+   - Badge: "N insights" count in purple
+   - Renders `InsightCard` components (one expanded at a time)
+   - Skeleton loading state
+   - Lazy-load trigger: `useRef` + `IntersectionObserver` on container
 
-3. **`InsightCard` component:**
-   - Collapsed: priority badge (numbered), title, pillar tag, one-line headline, expand chevron
-   - Expanded: full detail text + "Projected Impact" callout (green) + "Recommended Action" callout (blue)
-   - Priority colors: high=rose, medium=amber
-   - Pillar tags mapped from `insight.category` to pillar names and colors
-   - Click to toggle expand/collapse
+3. **`InsightCard` component (informational only):**
+   - Collapsed: priority rank badge (numbered, rose/amber), title, category tag (colored pill), one-line summary, expand chevron
+   - Expanded: full `summary` text from insight engine + `financialImpact` as formatted text (no callout boxes, no action items)
+   - Category → pillar mapping: `first_case_delays` → "Schedule Adherence" (amber), `turnover` → "Turnover Efficiency" (rose), etc.
+   - Hover: `bg-slate-50` subtle highlight
+   - Click: toggle expand/collapse
 
 4. **Dashboard wiring:**
-   - `useRef` + `IntersectionObserver` on the insights section container
-   - When visible, set `enabled: true` to trigger the hook
-   - Replace Phase 3 placeholder with actual `<InsightsSection>`
+   - 50/50 grid: NeedsAttention (left) + InsightsSection (right)
+   - IntersectionObserver triggers `useDashboardInsights(enabled=true)` when section enters viewport
 
-**Commit:** `feat(dashboard): phase 6 - AI insights section with lazy loading`
+**Commit:** `feat(dashboard): phase 5 - AI insights section with lazy loading`
 
 **Test gate:**
-- Unit: InsightCard renders collapsed/expanded states, InsightsSection renders multiple cards
-- Integration: `useDashboardInsights` calls insightsEngine and returns typed insights
-- Workflow: Load dashboard → scroll to insights section → loading skeleton appears → insights populate with expandable cards
+- Unit: InsightCard renders collapsed/expanded, category maps to correct pillar tag
+- Integration: `useDashboardInsights` calls insightsEngine, returns typed Insight[]
+- Workflow: Load dashboard → scroll to insights → loading skeleton → insights populate → click to expand
 
-**Complexity:** Large
+**Complexity:** Medium
 
 ---
 
-## Phase 7: Trend Chart Restyle + Quick Actions Restyle + Polish
+## Phase 6: Layout Restructure + NeedsAttention Tweaks + TrendChart Conversion
 
 **Status:** Pending
 
-**What:** Restyle the TrendChart from LineChart to AreaChart, update QuickAccessCards visuals, and final polish across all new components.
+**What:** Restructure the dashboard grid layout, add minor tweaks to NeedsAttention, convert TrendChart from LineChart to AreaChart.
 
 **Files touched:**
-- `components/dashboard/TrendChart.tsx` — LineChart → AreaChart
-- `components/dashboard/QuickAccessCards.tsx` — visual restyle
-- `app/dashboard/page.tsx` — any final layout tweaks
-- Various component files — responsive polish
+- `app/dashboard/page.tsx` — full layout restructure
+- `components/dashboard/NeedsAttention.tsx` — add urgent badge + "View all"
+- `components/dashboard/TrendChart.tsx` — LineChart → AreaChart + segmented toggle
 
 **Details:**
-1. **TrendChart restyle:**
-   - Replace `LineChart` with `AreaChart` + `<Area>` with gradient fill (`<linearGradient>` defs)
-   - Replace dropdown metric selector with inline button toggle (segmented control style, matching mockup)
+1. **Layout restructure in `page.tsx`:**
+   - New order: Live Pulse → KPI Row (5 cards) → Gantt → Alerts+Insights (50/50) → Rooms+Surgeons (50/50) → Trend Chart → Quick Access
+   - Time range toggle: affects KPIs + Trend only
+   - Room Status + Surgeons: keep existing components, just change grid to `grid-cols-2`
+   - All live/today sections (Pulse, Gantt, Rooms, Surgeons, Alerts) ignore time range
+
+2. **NeedsAttention tweaks:**
+   - Add urgent count badge in header: red pill showing count of `severity === 'high'` alerts
+   - Add "View all" link at top-right (links to `/cases`)
+   - Adjust row styling: lighter bg, time stamp aligned right
+
+3. **TrendChart conversion (in-place):**
+   - Replace `LineChart` + `Line` with `AreaChart` + `Area`
+   - Add `<defs><linearGradient>` for gradient fill (12% → 0% opacity)
+   - Replace dropdown metric selector with inline segmented button toggle
+   - Toggle styling: `border border-slate-200 rounded-md`, active = `bg-slate-800 text-white`
    - Keep existing `useTrendData` hook — no data changes
-   - Update tooltip styling to match dashboard design tokens
-   - Maintain all 4 metrics: utilization, turnover, caseVolume, facilityScore
+   - Keep all 4 metrics: utilization, turnover, caseVolume, facilityScore
 
-2. **QuickAccessCards restyle:**
-   - Update card styling to match mockup: icon in colored rounded-square, hover border color change, subtle translateY on hover
-   - Keep existing 5 navigation links (Surgeon Scorecards, Block Utilization, Financial Summary, KPI Analytics, Case Analytics)
-   - Add description subtitles matching the mockup pattern
-
-3. **Final polish:**
-   - Verify responsive breakpoints: single-column mobile → 2-col tablet → full layout desktop
-   - Verify skeleton/loading states for all new components
-   - Ensure error states don't break layout
-   - Run full typecheck + test suite
-
-**Commit:** `style(dashboard): phase 7 - trend chart restyle, quick actions polish, final cleanup`
+**Commit:** `feat(dashboard): phase 6 - layout restructure, needs attention tweaks, trend chart restyle`
 
 **Test gate:**
-- Unit: TrendChart renders AreaChart (not LineChart), QuickAccessCards render updated styles
-- Integration: Full dashboard renders all 7 sections correctly with loading → loaded states
-- Workflow: Load dashboard → verify all sections → toggle time range → resize window → all sections responsive
+- Unit: TrendChart renders AreaChart (not LineChart), NeedsAttention shows urgent badge
+- Integration: Full dashboard renders all sections in correct order with correct grid
+- Workflow: Load dashboard → verify section order → toggle time range → KPIs + Trend update, Gantt/Pulse/Rooms stay at "today"
+
+**Complexity:** Medium
+
+---
+
+## Phase 7: QuickAccess Restyle + Polish + Integration Testing
+
+**Status:** Pending
+
+**What:** Minimal QuickAccessCards restyle, final polish across all components, comprehensive integration testing.
+
+**Files touched:**
+- `components/dashboard/QuickAccessCards.tsx` — hover effects + icon colors
+- Various component files — polish and bug fixes
+- Test files for all new components
+
+**Details:**
+1. **QuickAccessCards minimal restyle:**
+   - Update hover: `hover:shadow-md hover:border-slate-200 transition-all duration-200` (already close)
+   - Add subtle `hover:-translate-y-0.5` lift effect
+   - Keep all 5 existing navigation links unchanged
+
+2. **Polish pass:**
+   - Verify all loading/skeleton states render correctly
+   - Verify all empty states render correctly (no cases, no alerts, no insights)
+   - Verify all error states don't break layout (failed queries degrade gracefully)
+   - Ensure `npx tsc --noEmit` passes
+   - Run full existing test suite — no regressions
+
+3. **New component test coverage:**
+   - `LivePulseBanner.test.tsx` — renders status pills, handles empty data
+   - `DashboardKpiCard.test.tsx` — renders sparkline, target bar, handles missing optional props
+   - `ScheduleAdherenceTimeline.test.tsx` — renders room lanes, bar positioning
+   - `InsightsSection.test.tsx` — lazy loading, expand/collapse
+   - `FacilityScoreMini.test.tsx` — renders ScoreRing, grade badge
+
+**Commit:** `feat(dashboard): phase 7 - quick access restyle, polish, integration tests`
+
+**Test gate:**
+- Unit: All new component tests pass
+- Integration: Full dashboard end-to-end render with mock data
+- Workflow: Full walkthrough: load dashboard → Live Pulse → KPIs with sparklines → scroll to Gantt → scroll to Insights (lazy loads) → Rooms + Surgeons → Trend chart toggle → Quick Access links work
 
 **Complexity:** Medium
 
@@ -337,12 +391,15 @@ Transform the facility admin dashboard from a static KPI overview into a real-ti
 
 ## Phase Summary
 
-| Phase | Description | Complexity | Key Files |
+| Phase | Description | Complexity | Key New Files |
 |---|---|---|---|
-| 1 | Database migration — procedure duration config | Small | 1 migration |
-| 2 | Procedure duration settings UI | Medium | ~2 files |
-| 3 | Live Pulse Banner + layout restructure | Medium | ~2 files |
-| 4 | KPI sparklines + target bars | Medium | ~2 files |
-| 5 | Schedule Adherence Timeline (Gantt) | Large | ~3 files |
-| 6 | AI Insights section | Large | ~4 files |
-| 7 | Trend chart restyle + quick actions + polish | Medium | ~3 files |
+| 1 | DB migration — procedure duration config | Small | 1 migration file |
+| 2 | Procedures page redesign (master-detail + durations) | Large | ~3 new components |
+| 3 | Live Pulse + DashboardKpiCard + FacilityScoreMini | Large | ~4 new components |
+| 4 | Schedule Adherence Timeline (Gantt) | Large | 1 hook + 1 component |
+| 5 | AI Insights section | Medium | 1 hook + 2 components |
+| 6 | Layout restructure + NeedsAttention + TrendChart | Medium | Modified existing files |
+| 7 | QuickAccess restyle + polish + tests | Medium | Test files |
+
+**Total estimated phases:** 7
+**High-risk phases:** 2 (procedures redesign), 4 (Gantt with recharts custom bars)
