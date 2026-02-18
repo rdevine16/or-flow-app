@@ -26,7 +26,9 @@ import type {
   ORUtilizationResult,
   CaseVolumeResult,
   CancellationResult,
+  FacilityAnalyticsConfig,
 } from '@/lib/analyticsV2'
+import { ANALYTICS_CONFIG_DEFAULTS } from '@/lib/analyticsV2'
 
 // ============================================
 // HELPERS
@@ -93,6 +95,13 @@ function makeInsight(overrides: Partial<Insight> = {}): Insight {
     metadata: {},
     ...overrides,
   }
+}
+
+const mockConfig: FacilityAnalyticsConfig = ANALYTICS_CONFIG_DEFAULTS
+
+/** Helper to get baseProps for InsightSlideOver with given analytics */
+function slideOverProps(analytics?: AnalyticsOverview) {
+  return { analytics: analytics ?? makeAnalytics(), config: mockConfig }
 }
 
 // ============================================
@@ -207,7 +216,7 @@ describe('InsightSlideOver integration — rendering real insights', () => {
     const fcotsInsight = insights.find(i => i.id === 'fcots-delays')
     expect(fcotsInsight).toBeDefined()
 
-    render(<InsightSlideOver insight={fcotsInsight!} onClose={() => {}} />)
+    render(<InsightSlideOver insight={fcotsInsight!} onClose={() => {}} {...slideOverProps(analytics)} />)
 
     // Panel should be open and show the FCOTS panel title
     expect(screen.getByRole('dialog')).toBeDefined()
@@ -230,7 +239,7 @@ describe('InsightSlideOver integration — rendering real insights', () => {
     const turnoverInsight = insights.find(i => i.id === 'turnover-room')
     expect(turnoverInsight).toBeDefined()
 
-    render(<InsightSlideOver insight={turnoverInsight!} onClose={() => {}} />)
+    render(<InsightSlideOver insight={turnoverInsight!} onClose={() => {}} {...slideOverProps(analytics)} />)
 
     expect(screen.getByRole('dialog')).toBeDefined()
     // Title appears in both Dialog.Title (h2) and PanelPlaceholder (h3)
@@ -241,7 +250,7 @@ describe('InsightSlideOver integration — rendering real insights', () => {
   it('close button calls onClose handler', () => {
     const onClose = vi.fn()
     const insight = makeInsight({ drillThroughType: 'utilization', severity: 'critical' })
-    render(<InsightSlideOver insight={insight} onClose={onClose} />)
+    render(<InsightSlideOver insight={insight} onClose={onClose} {...slideOverProps()} />)
 
     const closeBtn = screen.getByRole('button', { name: /close panel/i })
     fireEvent.click(closeBtn)
@@ -250,25 +259,26 @@ describe('InsightSlideOver integration — rendering real insights', () => {
   })
 
   it('slide-over is hidden when activeInsight is null (panel closed)', () => {
-    render(<InsightSlideOver insight={null} onClose={() => {}} />)
+    render(<InsightSlideOver insight={null} onClose={() => {}} {...slideOverProps()} />)
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('slide-over is hidden when drillThroughType = null (positive/info insight, no panel)', () => {
     const positiveInsight = makeInsight({ drillThroughType: null, severity: 'positive' })
-    render(<InsightSlideOver insight={positiveInsight} onClose={() => {}} />)
+    render(<InsightSlideOver insight={positiveInsight} onClose={() => {}} {...slideOverProps()} />)
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('panel shows correct title when switching insight types', () => {
+    const props = slideOverProps()
     const { rerender } = render(
-      <InsightSlideOver insight={makeInsight({ drillThroughType: 'fcots' })} onClose={() => {}} />
+      <InsightSlideOver insight={makeInsight({ drillThroughType: 'fcots' })} onClose={() => {}} {...props} />
     )
     // Title appears in both Dialog.Title (h2) and PanelPlaceholder (h3) — use getAllByText
     expect(screen.getAllByText('First Case On-Time Detail').length).toBeGreaterThanOrEqual(1)
 
     rerender(
-      <InsightSlideOver insight={makeInsight({ drillThroughType: 'callback' })} onClose={() => {}} />
+      <InsightSlideOver insight={makeInsight({ drillThroughType: 'callback' })} onClose={() => {}} {...props} />
     )
     expect(screen.getAllByText('Callback / Idle Time Detail').length).toBeGreaterThanOrEqual(1)
   })

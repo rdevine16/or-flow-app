@@ -1008,6 +1008,8 @@ export default function AnalyticsOverviewPage() {
               <InsightSlideOver
                 insight={activeInsight}
                 onClose={() => setActiveInsight(null)}
+                analytics={analytics}
+                config={config}
               />
             </div>
           )}

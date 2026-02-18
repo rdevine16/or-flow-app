@@ -8,6 +8,8 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import type { Insight, InsightSeverity } from '@/lib/insightsEngine'
+import type { AnalyticsOverview, FacilityAnalyticsConfig } from '@/lib/analyticsV2'
+import InsightPanelCallback from '@/components/analytics/InsightPanelCallback'
 
 // ============================================
 // SEVERITY CONFIG
@@ -41,9 +43,11 @@ const PANEL_TITLES: Record<string, string> = {
 interface InsightSlideOverProps {
   insight: Insight | null
   onClose: () => void
+  analytics: AnalyticsOverview
+  config: FacilityAnalyticsConfig
 }
 
-export default function InsightSlideOver({ insight, onClose }: InsightSlideOverProps) {
+export default function InsightSlideOver({ insight, onClose, analytics, config }: InsightSlideOverProps) {
   const isOpen = insight !== null && insight.drillThroughType !== null
   const severity = insight?.severity ?? 'info'
   const styles = SEVERITY_STYLES[severity]
@@ -86,9 +90,17 @@ export default function InsightSlideOver({ insight, onClose }: InsightSlideOverP
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto p-6">
-            {insight?.drillThroughType && (
+            {insight?.drillThroughType === 'callback' ? (
+              <InsightPanelCallback
+                surgeonSummaries={analytics.surgeonIdleSummaries}
+                flipRoomAnalysis={analytics.flipRoomAnalysis}
+                insight={insight}
+                revenuePerMinute={config.orHourlyRate ? config.orHourlyRate / 60 : 36}
+                operatingDaysPerYear={config.operatingDaysPerYear}
+              />
+            ) : insight?.drillThroughType ? (
               <PanelPlaceholder type={insight.drillThroughType} />
-            )}
+            ) : null}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
@@ -102,7 +114,6 @@ export default function InsightSlideOver({ insight, onClose }: InsightSlideOverP
 
 function PanelPlaceholder({ type }: { type: string }) {
   const phaseMap: Record<string, string> = {
-    callback: 'Phase 2',
     fcots: 'Phase 3',
     utilization: 'Phase 4',
     non_op_time: 'Phase 5',
