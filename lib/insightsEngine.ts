@@ -47,6 +47,7 @@ export interface Insight {
 
 export interface InsightsConfig {
   // Revenue assumptions (configurable per facility)
+  orHourlyRate?: number | null    // $/hr from facilities.or_hourly_rate — takes precedence over revenuePerORMinute
   revenuePerORMinute?: number     // Default $36/min (~$2,160/hr, conservative ASC avg)
   revenuePerCase?: number         // Default $5,800 (average ASC case revenue)
   operatingDaysPerYear?: number   // Default 250
@@ -56,8 +57,13 @@ export interface InsightsConfig {
   minSeverityToShow?: InsightSeverity // Default 'info' (show everything)
 }
 
-const DEFAULT_CONFIG: Required<InsightsConfig> = {
-  revenuePerORMinute: 36,
+/** Resolved config with orHourlyRate converted to revenuePerORMinute */
+type ResolvedInsightsConfig = Required<Omit<InsightsConfig, 'orHourlyRate'>>
+
+const DEFAULT_REVENUE_PER_OR_MINUTE = 36 // ~$2,160/hr, conservative ASC avg
+
+const DEFAULT_CONFIG: ResolvedInsightsConfig = {
+  revenuePerORMinute: DEFAULT_REVENUE_PER_OR_MINUTE,
   revenuePerCase: 5800,
   operatingDaysPerYear: 250,
   maxInsights: 6,
@@ -90,7 +96,12 @@ export function generateInsights(
   analytics: AnalyticsOverview,
   config?: InsightsConfig
 ): Insight[] {
-  const cfg = { ...DEFAULT_CONFIG, ...config }
+  // Resolve orHourlyRate → revenuePerORMinute (hourly rate takes precedence)
+  const { orHourlyRate, ...rest } = config ?? {}
+  const resolvedRevenue = orHourlyRate
+    ? orHourlyRate / 60
+    : rest.revenuePerORMinute ?? DEFAULT_REVENUE_PER_OR_MINUTE
+  const cfg: ResolvedInsightsConfig = { ...DEFAULT_CONFIG, ...rest, revenuePerORMinute: resolvedRevenue }
   const insights: Insight[] = []
 
   // Run all insight generators
@@ -135,7 +146,7 @@ export function generateInsights(
  */
 function analyzeFirstCaseDelays(
   analytics: AnalyticsOverview,
-  cfg: Required<InsightsConfig>
+  cfg: ResolvedInsightsConfig
 ): Insight[] {
   const { fcots } = analytics
   const insights: Insight[] = []
@@ -216,7 +227,7 @@ function analyzeFirstCaseDelays(
  */
 function analyzeTurnoverEfficiency(
   analytics: AnalyticsOverview,
-  cfg: Required<InsightsConfig>
+  cfg: ResolvedInsightsConfig
 ): Insight[] {
   const insights: Insight[] = []
   const { turnoverTime, standardSurgicalTurnover, flipRoomTime } = analytics
@@ -232,8 +243,11 @@ function analyzeTurnoverEfficiency(
   const flipCount = flipCountMatch ? parseInt(flipCountMatch[1]) : 0
 
   // Room turnover (patient out → patient in)
+  // Note: turnoverTime.target is the compliance target % (e.g., 80%), not threshold minutes.
+  // The threshold minutes are in the subtitle: "X% under Y min target"
   if (!turnoverTime.targetMet && turnoverTime.value > 0) {
-    const targetMinutes = 30
+    const thresholdMatch = turnoverTime.subtitle.match(/under\s+(\d+)\s+min/)
+    const targetMinutes = thresholdMatch ? parseInt(thresholdMatch[1]) : 30
     const excessPerTurnover = Math.max(0, turnoverTime.value - targetMinutes)
     // Estimate turnovers per day from subtitle
     const complianceMatch = turnoverTime.subtitle.match(/(\d+)%/)
@@ -248,7 +262,7 @@ function analyzeTurnoverEfficiency(
       category: 'turnover_efficiency',
       severity: complianceRate < 50 ? 'critical' : 'warning',
       title: 'Room Turnover Above Target',
-      body: `Median room turnover is ${turnoverTime.displayValue} against a 30 min target, with only ${complianceRate}% of turnovers meeting the goal. ${excessPerTurnover > 10 ? 'This suggests systemic process delays beyond normal room cleaning.' : 'Tightening handoff communication between teams could close the remaining gap.'}`,
+      body: `Median room turnover is ${turnoverTime.displayValue} against a ${targetMinutes} min target, with only ${complianceRate}% of turnovers meeting the goal. ${excessPerTurnover > 10 ? 'This suggests systemic process delays beyond normal room cleaning.' : 'Tightening handoff communication between teams could close the remaining gap.'}`,
       action: 'View turnover trends →',
       actionRoute: '/analytics/turnover',
       financialImpact: annualImpact > 10000 ? `~$${formatCompactNumber(annualImpact)}/year recoverable` : undefined,
@@ -258,6 +272,8 @@ function analyzeTurnoverEfficiency(
 
   // Surgical turnover comparison: which is the bigger problem?
   if (sameRoomGap > 0 && flipRoomGap > 0 && sameRoomCount > 0 && flipCount > 0) {
+    const sameRoomTarget = standardSurgicalTurnover.target ?? 45
+    const flipRoomTarget = flipRoomTime.target ?? 15
     const biggerProblem = sameRoomGap * sameRoomCount > flipRoomGap * flipCount ? 'same-room' : 'flip-room'
     const totalExcessMinutes = (sameRoomGap * sameRoomCount) + (flipRoomGap * flipCount)
 
@@ -266,7 +282,7 @@ function analyzeTurnoverEfficiency(
       category: 'turnover_efficiency',
       severity: 'info',
       title: 'Surgical Turnover Breakdown',
-      body: `Same-room surgical turnover is ${standardSurgicalTurnover.displayValue} (target ≤45 min, ${sameRoomCount} transitions) while flip-room is ${flipRoomTime.displayValue} (target ≤15 min, ${flipCount} flips). The ${biggerProblem} pathway accounts for more total excess minutes — focus process improvements there first.`,
+      body: `Same-room surgical turnover is ${standardSurgicalTurnover.displayValue} (target ≤${sameRoomTarget} min, ${sameRoomCount} transitions) while flip-room is ${flipRoomTime.displayValue} (target ≤${flipRoomTarget} min, ${flipCount} flips). The ${biggerProblem} pathway accounts for more total excess minutes — focus process improvements there first.`,
       action: 'Compare turnover types →',
       actionRoute: '/analytics/turnover',
       metadata: { sameRoomGap, flipRoomGap, biggerProblem, totalExcessMinutes },
@@ -286,7 +302,7 @@ function analyzeTurnoverEfficiency(
  */
 function analyzeCallbackOptimization(
   analytics: AnalyticsOverview,
-  cfg: Required<InsightsConfig>
+  cfg: ResolvedInsightsConfig
 ): Insight[] {
   const insights: Insight[] = []
   const { surgeonIdleSummaries } = analytics
@@ -409,7 +425,7 @@ function analyzeCallbackOptimization(
  */
 function analyzeUtilizationGaps(
   analytics: AnalyticsOverview,
-  cfg: Required<InsightsConfig>
+  cfg: ResolvedInsightsConfig
 ): Insight[] {
   const insights: Insight[] = []
   const { orUtilization } = analytics
@@ -418,9 +434,9 @@ function analyzeUtilizationGaps(
   if (roomBreakdown.length === 0) return insights
 
   // Overall utilization insight
+  const utilTarget = orUtilization.target ?? 75
   if (!orUtilization.targetMet && orUtilization.value > 0) {
-    const roomsBelowTarget = roomBreakdown.filter(r => r.utilization < 75)
-    const roomsAboveTarget = roomBreakdown.filter(r => r.utilization >= 75)
+    const roomsBelowTarget = roomBreakdown.filter(r => r.utilization < utilTarget)
     const defaultHoursRooms = roomBreakdown.filter(r => !r.usingRealHours)
 
     // Estimate unused OR hours
@@ -432,7 +448,7 @@ function analyzeUtilizationGaps(
     const annualUnusedHours = Math.round(unusedHours * (cfg.operatingDaysPerYear / Math.max(roomBreakdown[0]?.daysActive || 1, 1)))
     const annualImpact = annualUnusedHours * cfg.revenuePerORMinute * 60
 
-    let body = `Overall OR utilization is ${orUtilization.displayValue} against a 75% target. ${roomsBelowTarget.length} of ${roomBreakdown.length} rooms are underperforming.`
+    let body = `Overall OR utilization is ${orUtilization.displayValue} against a ${utilTarget}% target. ${roomsBelowTarget.length} of ${roomBreakdown.length} rooms are underperforming.`
 
     if (defaultHoursRooms.length > 0) {
       body += ` Note: ${defaultHoursRooms.length} room${defaultHoursRooms.length > 1 ? 's are' : ' is'} using default 10h availability — configuring actual hours in Settings may change these numbers significantly.`
@@ -472,7 +488,7 @@ function analyzeUtilizationGaps(
       category: 'utilization_gap',
       severity: 'positive',
       title: 'OR Utilization Meeting Target',
-      body: `${orUtilization.displayValue} utilization across ${roomBreakdown.length} rooms meets the 75% goal. ${roomBreakdown.filter(r => r.utilization >= 75).length} rooms are individually above target.`,
+      body: `${orUtilization.displayValue} utilization across ${roomBreakdown.length} rooms meets the ${utilTarget}% goal. ${roomBreakdown.filter(r => r.utilization >= utilTarget).length} rooms are individually above target.`,
       action: 'View room details →',
       actionRoute: '/analytics/utilization',
       metadata: { utilization: orUtilization.value },
@@ -492,7 +508,7 @@ function analyzeUtilizationGaps(
  */
 function analyzeCancellationTrends(
   analytics: AnalyticsOverview,
-  cfg: Required<InsightsConfig>
+  cfg: ResolvedInsightsConfig
 ): Insight[] {
   const insights: Insight[] = []
   const { cancellationRate } = analytics
@@ -527,6 +543,7 @@ function analyzeCancellationTrends(
       metadata: { streak: currentStreak, sameDayCount: 0 },
     })
   } else if (cancellationRate.sameDayCount > 0) {
+    const cancelTarget = cancellationRate.target ?? 5
     const annualProjectedCancellations = Math.round(
       cancellationRate.sameDayRate / 100 * (analytics.totalCases / Math.max(dailyData.length, 1)) * cfg.operatingDaysPerYear
     )
@@ -535,9 +552,9 @@ function analyzeCancellationTrends(
     insights.push({
       id: 'cancellation-rate',
       category: 'cancellation_trend',
-      severity: cancellationRate.sameDayRate > 5 ? 'warning' : 'info',
+      severity: cancellationRate.sameDayRate > cancelTarget ? 'warning' : 'info',
       title: 'Same-Day Cancellations',
-      body: `${cancellationRate.sameDayCount} same-day cancellation${cancellationRate.sameDayCount > 1 ? 's' : ''} this period (${cancellationRate.displayValue} rate). ${cancellationRate.targetMet ? 'Still within the <5% target.' : `Above the <5% target — review pre-op clearance workflows.`}`,
+      body: `${cancellationRate.sameDayCount} same-day cancellation${cancellationRate.sameDayCount > 1 ? 's' : ''} this period (${cancellationRate.displayValue} rate). ${cancellationRate.targetMet ? `Still within the <${cancelTarget}% target.` : `Above the <${cancelTarget}% target — review pre-op clearance workflows.`}`,
       action: 'View cancellation details →',
       actionRoute: '/analytics/cancellations',
       financialImpact: annualImpact > 10000 ? `~$${formatCompactNumber(annualImpact)}/year at risk` : undefined,
@@ -562,7 +579,7 @@ function analyzeCancellationTrends(
  */
 function analyzeNonOperativeTime(
   analytics: AnalyticsOverview,
-  cfg: Required<InsightsConfig>
+  cfg: ResolvedInsightsConfig
 ): Insight[] {
   const insights: Insight[] = []
   const { nonOperativeTime, avgPreOpTime, avgClosingTime, avgEmergenceTime, avgSurgicalTime, completedCases } = analytics
@@ -637,7 +654,7 @@ function analyzeNonOperativeTime(
  */
 function analyzeSchedulingPatterns(
   analytics: AnalyticsOverview,
-  cfg: Required<InsightsConfig>
+  cfg: ResolvedInsightsConfig
 ): Insight[] {
   const insights: Insight[] = []
   const { caseVolume, orUtilization } = analytics

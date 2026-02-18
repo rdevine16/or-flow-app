@@ -483,13 +483,13 @@ export default function AnalyticsOverviewPage() {
     return calculateAnalyticsOverview(cases, previousPeriodCases, config, roomHoursMap)
   }, [cases, previousPeriodCases, config, roomHoursMap])
 
-  // AI Insights from insightsEngine
+  // AI Insights from insightsEngine — uses facility config for revenue + operating days
   const insights = useMemo(() => {
     return generateInsights(analytics, {
-      revenuePerORMinute: config.orHourlyRate ? config.orHourlyRate / 60 : 36,
-      revenuePerCase: 5800,
+      orHourlyRate: config.orHourlyRate,
+      operatingDaysPerYear: config.operatingDaysPerYear,
     })
-  }, [analytics, config.orHourlyRate])
+  }, [analytics, config.orHourlyRate, config.operatingDaysPerYear])
 
   // Action items for health overview
   const actionItems = useMemo(() => {
