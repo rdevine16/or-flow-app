@@ -1051,6 +1051,7 @@ export interface TimelineCasePhase {
 }
 
 export interface TimelineCaseSubphase {
+  phaseId?: string
   label: string
   color: string
   durationSeconds: number
@@ -1708,6 +1709,18 @@ export function PhaseMedianComparison({
   phaseTree,
   resolveHex,
 }: PhaseMedianComparisonProps) {
+  // Flatten tree: parent phases and child phases each get their own row
+  // Children appear right after their parent in display order
+  const flatPhases: { phase: PhaseDefLike & { color_key?: string | null }; isChild: boolean }[] = []
+  for (const node of phaseTree) {
+    const phase = node.phase as PhaseDefLike & { color_key?: string | null }
+    flatPhases.push({ phase, isChild: false })
+    for (const child of node.children) {
+      const childPhase = child.phase as PhaseDefLike & { color_key?: string | null }
+      flatPhases.push({ phase: childPhase, isChild: true })
+    }
+  }
+
   // Find max value for scaling bars
   const allValues = [
     ...Object.values(dayMedians),
@@ -1715,13 +1728,15 @@ export function PhaseMedianComparison({
   ]
   const maxVal = Math.max(...allValues, 1)
 
-  const fmtMin = (seconds: number) => `${Math.round(seconds / 60)}m`
+  const fmtDur = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+    const s = Math.round(seconds % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
 
   return (
     <div>
-      {phaseTree.map(node => {
-        const phase = node.phase as PhaseDefLike & { color_key?: string | null }
-        const hasChildren = node.children.length > 0
+      {flatPhases.map(({ phase, isChild }) => {
         const hex = resolveHex(phase.color_key ?? null)
         const today = dayMedians[phase.id] ?? 0
         const historical = historicalMedians[phase.id] ?? 0
@@ -1734,32 +1749,32 @@ export function PhaseMedianComparison({
         }
 
         return (
-          <div key={phase.id} className={`mb-2 ${hasChildren ? 'bg-slate-50/80 rounded-lg p-2' : ''}`}>
-            {/* Parent label row */}
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-1.5">
+          <div key={phase.id} className={`mb-2 ${isChild ? 'ml-3' : ''}`}>
+            {/* Label row */}
+            <div className="flex items-center mb-1">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
                 <span
                   className="rounded-sm flex-shrink-0"
-                  style={{ width: 8, height: 8, background: hex }}
+                  style={{ width: isChild ? 7 : 8, height: isChild ? 7 : 8, background: hex }}
                 />
-                <span className="font-medium text-slate-700" style={{ fontSize: 12 }}>
+                <span className={`font-medium truncate ${isChild ? 'text-slate-500' : 'text-slate-700'}`} style={{ fontSize: isChild ? 11 : 12 }}>
                   {phase.display_name}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-slate-900 tabular-nums">{today > 0 ? fmtMin(today) : '—'}</span>
-                {delta !== null && (
+              <span className={`font-mono tabular-nums text-right flex-shrink-0 ${isChild ? 'text-[11px] text-slate-700' : 'text-xs text-slate-900'}`} style={{ width: 36 }}>{today > 0 ? fmtDur(today) : '—'}</span>
+              <span className="flex-shrink-0 text-right" style={{ width: 52 }}>
+                {delta !== null ? (
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                     delta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
                   }`}>
                     {delta <= 0 ? '↓' : '↑'} {Math.abs(delta)}%
                   </span>
-                )}
-              </div>
+                ) : null}
+              </span>
             </div>
 
-            {/* Parent bar with sub-phase insets */}
-            <div className="relative rounded overflow-hidden bg-slate-100" style={{ height: 14 }}>
+            {/* Bar */}
+            <div className="relative rounded overflow-hidden bg-slate-100" style={{ height: isChild ? 10 : 14 }}>
               {/* Historical (top half, faded) */}
               <div
                 className="absolute top-0 rounded-t"
@@ -1770,32 +1785,6 @@ export function PhaseMedianComparison({
                 className="absolute bottom-0 rounded-b"
                 style={{ width: `${todayPct}%`, height: '50%', background: hex, opacity: 0.85, transition: 'width 0.4s ease' }}
               />
-
-              {/* Sub-phase overlays — full height, own color */}
-              {node.children.map(child => {
-                const childPhase = child.phase as PhaseDefLike & { color_key?: string | null }
-                const childToday = dayMedians[childPhase.id] ?? 0
-                const childHex = resolveHex(childPhase.color_key ?? null)
-                // Sub-phase width as proportion of parent's today bar
-                const subBarPct = today > 0 ? (childToday / maxVal) * 100 : 0
-                if (subBarPct < 0.5) return null
-                return (
-                  <div
-                    key={childPhase.id}
-                    className="absolute"
-                    style={{
-                      top: 2,
-                      bottom: 2,
-                      width: `${subBarPct}%`,
-                      background: childHex,
-                      opacity: 0.6,
-                      borderRadius: 2,
-                      transition: 'width 0.4s ease',
-                    }}
-                    title={`${childPhase.display_name}: ${childToday > 0 ? fmtMin(childToday) : '—'}`}
-                  />
-                )
-              })}
 
               {/* Historical median tick */}
               {histPct > 2 && (
@@ -1808,43 +1797,8 @@ export function PhaseMedianComparison({
 
             {/* Historical reference text */}
             {historical > 0 && (
-              <div className="text-[10px] text-slate-400 mt-0.5">hist: {fmtMin(historical)}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">median: {fmtDur(historical)}</div>
             )}
-
-            {/* Sub-phase info rows (text details, no separate bars) */}
-            {node.children.map(child => {
-              const childPhase = child.phase as PhaseDefLike & { color_key?: string | null }
-              const childHex = resolveHex(childPhase.color_key ?? null)
-              const childToday = dayMedians[childPhase.id] ?? 0
-              const childHist = historicalMedians[childPhase.id] ?? 0
-              let childDelta: number | null = null
-              if (childHist > 0 && childToday > 0) {
-                childDelta = Math.round(((childToday - childHist) / childHist) * 100)
-              }
-              return (
-                <div key={childPhase.id} className="flex items-center justify-between mt-1.5 ml-3">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className="rounded-sm flex-shrink-0"
-                      style={{ width: 7, height: 7, background: childHex }}
-                    />
-                    <span className="font-medium text-slate-500" style={{ fontSize: 11 }}>
-                      {childPhase.display_name}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-mono text-slate-700 tabular-nums">{childToday > 0 ? fmtMin(childToday) : '—'}</span>
-                    {childDelta !== null && (
-                      <span className={`text-[10px] font-semibold px-1 py-0.5 rounded-full ${
-                        childDelta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
-                      }`}>
-                        {childDelta <= 0 ? '↓' : '↑'} {Math.abs(childDelta)}%
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
           </div>
         )
       })}
@@ -1890,6 +1844,23 @@ export function CaseDetailPanel({
 
   const totalSeconds = caseData.phases.reduce((sum, p) => sum + p.durationSeconds, 0)
 
+  // Max value for bar scaling (across all phase durations + medians + subphases)
+  const allBarValues: number[] = []
+  for (const phase of caseData.phases) {
+    allBarValues.push(phase.durationSeconds)
+    const med = procedureMedians[phase.phaseId]
+    if (med && med > 0) allBarValues.push(med)
+    for (const sub of phase.subphases) {
+      allBarValues.push(sub.durationSeconds)
+      const subMed = procedureMedians[sub.phaseId ?? '']
+      if (subMed && subMed > 0) allBarValues.push(subMed)
+    }
+  }
+  const totalMed = procedureMedians['total']
+  if (totalMed && totalMed > 0) allBarValues.push(totalMed)
+  allBarValues.push(totalSeconds)
+  const maxVal = Math.max(...allBarValues, 1)
+
   return (
     <div className="space-y-3">
       {/* Header */}
@@ -1913,99 +1884,187 @@ export function CaseDetailPanel({
         </div>
       )}
 
-      {/* Phase rows */}
-      <div className="space-y-1.5">
-        {caseData.phases.map(phase => {
+      {/* Phase rows — flattened: subphases appear as separate rows after their parent */}
+      <div>
+        {caseData.phases.flatMap(phase => {
           const median = procedureMedians[phase.phaseId]
           const delta = median && median > 0
             ? Math.round(((phase.durationSeconds - median) / median) * 100)
             : null
+          const casePct = (phase.durationSeconds / maxVal) * 100
+          const medPct = median && median > 0 ? (median / maxVal) * 100 : 0
 
-          const hasSubphases = phase.subphases.length > 0
-
-          return (
-            <div key={phase.phaseId} className={hasSubphases ? 'bg-slate-50/80 rounded-lg p-2' : ''}>
-              {/* Parent phase row */}
-              <div className="flex items-center justify-between py-1">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: phase.color }} />
-                  <span className="text-xs font-medium text-slate-700">{phase.label}</span>
+          const parentRow = (
+            <div key={phase.phaseId} className="mb-2">
+              {/* Label row */}
+              <div className="flex items-center mb-1">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: phase.color }} />
+                  <span className="text-xs font-medium text-slate-700 truncate">{phase.label}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-slate-900 tabular-nums">{fmtDuration(phase.durationSeconds)}</span>
-                  {delta !== null && (
-                    <span className={`text-[10px] font-semibold px-1 py-0.5 rounded ${
+                <span className="text-xs font-mono text-slate-900 tabular-nums text-right flex-shrink-0" style={{ width: 36 }}>{fmtDuration(phase.durationSeconds)}</span>
+                <span className="flex-shrink-0 text-right" style={{ width: 52 }}>
+                  {delta !== null ? (
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                       delta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
                     }`}>
-                      {delta <= 0 ? '↓' : '↑'}{Math.abs(delta)}%
+                      {delta <= 0 ? '↓' : '↑'} {Math.abs(delta)}%
                     </span>
-                  )}
-                </div>
+                  ) : null}
+                </span>
               </div>
-              {median != null && median > 0 && (
-                <div className="ml-[14px] text-[10px] text-slate-400 -mt-0.5 mb-0.5">med: {fmtDuration(median)}</div>
-              )}
 
-              {/* Sub-phase rows */}
-              {phase.subphases.map((sub, sIdx) => {
-                const subMedian = procedureMedians[`${phase.phaseId}:sub:${sIdx}`]
-                const subDelta = subMedian && subMedian > 0
-                  ? Math.round(((sub.durationSeconds - subMedian) / subMedian) * 100)
-                  : null
-
-                return (
+              {/* Bar */}
+              <div className="relative rounded overflow-hidden bg-slate-100" style={{ height: 14 }}>
+                {/* Median (top half, faded) */}
+                <div
+                  className="absolute top-0 rounded-t"
+                  style={{ width: `${medPct}%`, height: '50%', background: phase.color, opacity: 0.2 }}
+                />
+                {/* Case (bottom half, solid) */}
+                <div
+                  className="absolute bottom-0 rounded-b"
+                  style={{ width: `${casePct}%`, height: '50%', background: phase.color, opacity: 0.85, transition: 'width 0.4s ease' }}
+                />
+                {/* Median tick */}
+                {medPct > 2 && (
                   <div
-                    key={sIdx}
-                    className="py-0.5 ml-4"
-                    style={{ borderLeft: `2px solid ${sub.color}` }}
-                  >
-                    <div className="flex items-center justify-between pl-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-slate-500">{sub.label}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-mono text-slate-700 tabular-nums">{fmtDuration(sub.durationSeconds)}</span>
-                        {subDelta !== null && (
-                          <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${
-                            subDelta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
-                          }`}>
-                            {subDelta <= 0 ? '↓' : '↑'}{Math.abs(subDelta)}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {subMedian != null && subMedian > 0 && (
-                      <div className="ml-[17px] text-[10px] text-slate-400 -mt-0.5">med: {fmtDuration(subMedian)}</div>
-                    )}
-                  </div>
-                )
-              })}
+                    className="absolute top-0 bottom-0"
+                    style={{ left: `${medPct}%`, width: 1.5, background: '#64748b', opacity: 0.35 }}
+                  />
+                )}
+              </div>
+
+              {/* Median reference text */}
+              {median != null && median > 0 && (
+                <div className="text-[10px] text-slate-400 mt-0.5">median: {fmtDuration(median)}</div>
+              )}
             </div>
           )
+
+          const subRows = phase.subphases.map((sub, sIdx) => {
+            const subMedianKey = sub.phaseId ?? `${phase.phaseId}:sub:${sIdx}`
+            const subMedian = procedureMedians[subMedianKey]
+            const subDelta = subMedian && subMedian > 0
+              ? Math.round(((sub.durationSeconds - subMedian) / subMedian) * 100)
+              : null
+            const subCasePct = (sub.durationSeconds / maxVal) * 100
+            const subMedPct = subMedian && subMedian > 0 ? (subMedian / maxVal) * 100 : 0
+
+            return (
+              <div key={sub.phaseId ?? `${phase.phaseId}:sub:${sIdx}`} className="ml-3 mb-2">
+                {/* Label row */}
+                <div className="flex items-center mb-1">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <div className="w-[7px] h-[7px] rounded-sm flex-shrink-0" style={{ backgroundColor: sub.color }} />
+                    <span className="text-[11px] font-medium text-slate-500 truncate">{sub.label}</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-slate-700 tabular-nums text-right flex-shrink-0" style={{ width: 36 }}>{fmtDuration(sub.durationSeconds)}</span>
+                  <span className="flex-shrink-0 text-right" style={{ width: 52 }}>
+                    {subDelta !== null ? (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                        subDelta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
+                      }`}>
+                        {subDelta <= 0 ? '↓' : '↑'} {Math.abs(subDelta)}%
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
+
+                {/* Bar */}
+                <div className="relative rounded overflow-hidden bg-slate-100" style={{ height: 10 }}>
+                  {/* Median (top half, faded) */}
+                  <div
+                    className="absolute top-0 rounded-t"
+                    style={{ width: `${subMedPct}%`, height: '50%', background: sub.color, opacity: 0.2 }}
+                  />
+                  {/* Case (bottom half, solid) */}
+                  <div
+                    className="absolute bottom-0 rounded-b"
+                    style={{ width: `${subCasePct}%`, height: '50%', background: sub.color, opacity: 0.85, transition: 'width 0.4s ease' }}
+                  />
+                  {/* Median tick */}
+                  {subMedPct > 2 && (
+                    <div
+                      className="absolute top-0 bottom-0"
+                      style={{ left: `${subMedPct}%`, width: 1.5, background: '#64748b', opacity: 0.35 }}
+                    />
+                  )}
+                </div>
+
+                {/* Median reference text */}
+                {subMedian != null && subMedian > 0 && (
+                  <div className="text-[10px] text-slate-400 mt-0.5">median: {fmtDuration(subMedian)}</div>
+                )}
+              </div>
+            )
+          })
+
+          return [parentRow, ...subRows]
         })}
       </div>
 
       {/* Total */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-        <span className="text-xs font-semibold text-slate-700">Total</span>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-mono font-semibold text-slate-900 tabular-nums">{fmtDuration(totalSeconds)}</span>
-          {procedureMedians['total'] != null && procedureMedians['total'] > 0 && (() => {
-            const totalMedian = procedureMedians['total']
-            const totalDelta = Math.round(((totalSeconds - totalMedian) / totalMedian) * 100)
-            return (
-              <span className={`text-[10px] font-semibold px-1 py-0.5 rounded ${
-                totalDelta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
-              }`}>
-                {totalDelta <= 0 ? '↓' : '↑'}{Math.abs(totalDelta)}%
+      {(() => {
+        const totalMedian = procedureMedians['total']
+        const totalDelta = totalMedian && totalMedian > 0
+          ? Math.round(((totalSeconds - totalMedian) / totalMedian) * 100)
+          : null
+        const totalCasePct = (totalSeconds / maxVal) * 100
+        const totalMedPct = totalMedian && totalMedian > 0 ? (totalMedian / maxVal) * 100 : 0
+
+        return (
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex items-center mb-1">
+              <span className="text-xs font-semibold text-slate-700 flex-1">Total</span>
+              <span className="text-xs font-mono font-semibold text-slate-900 tabular-nums text-right flex-shrink-0" style={{ width: 36 }}>{fmtDuration(totalSeconds)}</span>
+              <span className="flex-shrink-0 text-right" style={{ width: 52 }}>
+                {totalDelta !== null ? (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                    totalDelta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
+                  }`}>
+                    {totalDelta <= 0 ? '↓' : '↑'} {Math.abs(totalDelta)}%
+                  </span>
+                ) : null}
               </span>
-            )
-          })()}
+            </div>
+
+            {/* Bar */}
+            <div className="relative rounded overflow-hidden bg-slate-100" style={{ height: 14 }}>
+              <div
+                className="absolute top-0 rounded-t"
+                style={{ width: `${totalMedPct}%`, height: '50%', background: '#475569', opacity: 0.2 }}
+              />
+              <div
+                className="absolute bottom-0 rounded-b"
+                style={{ width: `${totalCasePct}%`, height: '50%', background: '#475569', opacity: 0.85, transition: 'width 0.4s ease' }}
+              />
+              {totalMedPct > 2 && (
+                <div
+                  className="absolute top-0 bottom-0"
+                  style={{ left: `${totalMedPct}%`, width: 1.5, background: '#64748b', opacity: 0.35 }}
+                />
+              )}
+            </div>
+
+            {totalMedian != null && totalMedian > 0 && (
+              <div className="text-[10px] text-slate-400 mt-0.5">median: {fmtDuration(totalMedian)}</div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 mt-3 pt-2 border-t border-slate-100">
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-2 bg-blue-500 rounded-sm" />
+          <span className="text-[10px] text-slate-500 font-medium">Case</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-2 bg-blue-500/25 rounded-sm" />
+          <span className="text-[10px] text-slate-500 font-medium">Median</span>
         </div>
       </div>
-      {procedureMedians['total'] != null && procedureMedians['total'] > 0 && (
-        <div className="text-[10px] text-slate-400 text-right -mt-2">med: {fmtDuration(procedureMedians['total'])}</div>
-      )}
     </div>
   )
 }

@@ -727,6 +727,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       const allPhases: TimelineCasePhase[] = phaseTree.map(node => {
         const dur = durations.find(d => d.phaseId === node.phase.id)
         const subs = (subphaseByParent.get(node.phase.id) || []).map(sub => ({
+          phaseId: sub.phaseId,
           label: sub.label,
           color: sub.color,
           durationSeconds: sub.durationSeconds,
@@ -762,6 +763,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
             const offsetSeconds = (timingA.startMs - timingB.startMs) / 1000
             const existing = mergedSubs.get(phaseB.phaseId) || []
             existing.push({
+              phaseId: phaseA.phaseId,
               label: phaseA.label,
               color: phaseA.color,
               durationSeconds: phaseA.durationSeconds,
