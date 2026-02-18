@@ -11,7 +11,8 @@ import AccessDenied from '@/components/ui/AccessDenied'
 import DateFilter from '@/components/ui/DateFilter'
 import Sparkline, { dailyDataToSparkline } from '@/components/ui/Sparkline'
 import { DeltaBadge } from '@/components/ui/DeltaBadge'
-import { generateInsights } from '@/lib/insightsEngine'
+import { generateInsights, type Insight } from '@/lib/insightsEngine'
+import InsightSlideOver from '@/components/analytics/InsightSlideOver'
 
 import {
   calculateAnalyticsOverview,
@@ -24,7 +25,7 @@ import {
 } from '@/lib/analyticsV2'
 import { useAnalyticsConfig } from '@/lib/hooks/useAnalyticsConfig'
 
-import { ArrowRight, BarChart3, X } from 'lucide-react'
+import { ArrowRight, BarChart3, ChevronRight, X } from 'lucide-react'
 
 // ============================================
 // HELPERS
@@ -295,6 +296,7 @@ export default function AnalyticsOverviewPage() {
   const [dateFilter, setDateFilter] = useState('month')
 
   const [showORUtilModal, setShowORUtilModal] = useState(false)
+  const [activeInsight, setActiveInsight] = useState<Insight | null>(null)
   const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
   const { config } = useAnalyticsConfig()
 
@@ -947,24 +949,39 @@ export default function AnalyticsOverviewPage() {
                   <div className="flex flex-col gap-2.5">
                     {insights.map((insight) => {
                       const cfg = SEVERITY_CONFIG[insight.severity] ?? SEVERITY_CONFIG.info
+                      const hasPanel = insight.drillThroughType !== null
                       return (
                         <div
                           key={insight.id}
-                          className={`bg-white border border-slate-200 rounded-xl p-3 sm:p-4 pr-4 sm:pr-5 border-l-[3px] ${cfg.border} transition-all duration-150 hover:border-slate-300 hover:shadow-sm`}
+                          role={hasPanel ? 'button' : undefined}
+                          tabIndex={hasPanel ? 0 : undefined}
+                          aria-label={hasPanel ? `${insight.title} — click for details` : undefined}
+                          onClick={hasPanel ? () => setActiveInsight(insight) : undefined}
+                          onKeyDown={hasPanel ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveInsight(insight) } } : undefined}
+                          className={`bg-white border border-slate-200 rounded-xl p-3 sm:p-4 pr-4 sm:pr-5 border-l-[3px] ${cfg.border} transition-all duration-150 hover:border-slate-300 hover:shadow-sm ${
+                            hasPanel ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1' : ''
+                          }`}
                         >
-                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${cfg.labelBg} ${cfg.labelText}`}>
-                              {insight.severity}
-                            </span>
-                            <span className="text-sm font-semibold text-slate-900">{insight.title}</span>
-                          </div>
-                          <p className="text-[13px] text-slate-600 leading-relaxed mb-2.5">{insight.body}</p>
-                          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                            <span className="text-xs font-semibold text-indigo-600">{insight.action}</span>
-                            {insight.financialImpact && (
-                              <span className="text-[11px] font-semibold font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                                {insight.financialImpact}
-                              </span>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${cfg.labelBg} ${cfg.labelText}`}>
+                                  {insight.severity}
+                                </span>
+                                <span className="text-sm font-semibold text-slate-900">{insight.title}</span>
+                              </div>
+                              <p className="text-[13px] text-slate-600 leading-relaxed mb-2.5">{insight.body}</p>
+                              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                                <span className="text-xs font-semibold text-indigo-600">{insight.action}</span>
+                                {insight.financialImpact && (
+                                  <span className="text-[11px] font-semibold font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                    {insight.financialImpact}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {hasPanel && (
+                              <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0 mt-1" />
                             )}
                           </div>
                         </div>
@@ -985,6 +1002,12 @@ export default function AnalyticsOverviewPage() {
                 onClose={() => setShowORUtilModal(false)}
                 data={analytics.orUtilization}
                 config={config}
+              />
+
+              {/* INSIGHT DRILL-THROUGH SLIDE-OVER */}
+              <InsightSlideOver
+                insight={activeInsight}
+                onClose={() => setActiveInsight(null)}
               />
             </div>
           )}

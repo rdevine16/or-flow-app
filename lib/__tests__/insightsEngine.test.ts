@@ -525,6 +525,314 @@ describe('generateInsights: config defaults and merging', () => {
 })
 
 // ============================================
+// Phase 1: drillThroughType field on every insight
+// ============================================
+
+describe('Insight.drillThroughType field', () => {
+  it('fcots-delays insight has drillThroughType = "fcots"', () => {
+    const analytics = makeAnalytics({
+      fcots: {
+        ...makeKPI({ value: 31, displayValue: '31%', target: 85, targetMet: false, subtitle: '11 late of 16 first cases' }),
+        firstCaseDetails: [],
+      } as FCOTSResult,
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'fcots-delays')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBe('fcots')
+  })
+
+  it('fcots-on-target insight has drillThroughType = null (no panel)', () => {
+    const analytics = makeAnalytics({
+      fcots: {
+        ...makeKPI({ value: 90, displayValue: '90%', target: 85, targetMet: true }),
+        firstCaseDetails: [],
+      } as FCOTSResult,
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'fcots-on-target')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBeNull()
+  })
+
+  it('turnover-room insight has drillThroughType = "turnover"', () => {
+    const analytics = makeAnalytics({
+      turnoverTime: makeKPI({
+        value: 40,
+        displayValue: '40 min',
+        target: 80,
+        targetMet: false,
+        subtitle: '60% under 30 min target',
+      }),
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'turnover-room')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBe('turnover')
+  })
+
+  it('turnover-surgical-comparison insight has drillThroughType = "turnover"', () => {
+    const analytics = makeAnalytics({
+      standardSurgicalTurnover: makeKPI({
+        value: 55,
+        displayValue: '55 min',
+        target: 40,
+        targetMet: false,
+        subtitle: '30 turnovers',
+      }),
+      flipRoomTime: makeKPI({
+        value: 22,
+        displayValue: '22 min',
+        target: 12,
+        targetMet: false,
+        subtitle: '10 flips',
+      }),
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'turnover-surgical-comparison')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBe('turnover')
+  })
+
+  it('callback-call-sooner insight has drillThroughType = "callback"', () => {
+    const analytics = makeAnalytics({
+      surgeonIdleSummaries: [
+        {
+          surgeonId: 'surg-1',
+          surgeonName: 'Dr. A',
+          caseCount: 10,
+          gapCount: 5,
+          medianIdleTime: 20,
+          hasFlipData: true,
+          flipGapCount: 5,
+          sameRoomGapCount: 0,
+          medianFlipIdle: 20,
+          medianSameRoomIdle: 0,
+          medianCallbackDelta: 15,
+          status: 'call_sooner',
+          statusLabel: 'Call Sooner',
+        },
+      ],
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'callback-call-sooner')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBe('callback')
+  })
+
+  it('callback-call-later insight has drillThroughType = "callback"', () => {
+    const analytics = makeAnalytics({
+      surgeonIdleSummaries: [
+        {
+          surgeonId: 'surg-2',
+          surgeonName: 'Dr. B',
+          caseCount: 8,
+          gapCount: 4,
+          medianIdleTime: 2,
+          hasFlipData: true,
+          flipGapCount: 4,
+          sameRoomGapCount: 0,
+          medianFlipIdle: 2,
+          medianSameRoomIdle: 0,
+          medianCallbackDelta: -5,
+          status: 'call_later',
+          statusLabel: 'Call Later',
+        },
+      ],
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'callback-call-later')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBe('callback')
+  })
+
+  it('callback-all-on-track insight has drillThroughType = null', () => {
+    const analytics = makeAnalytics({
+      surgeonIdleSummaries: [
+        {
+          surgeonId: 'surg-3',
+          surgeonName: 'Dr. C',
+          caseCount: 12,
+          gapCount: 6,
+          medianIdleTime: 4,
+          hasFlipData: true,
+          flipGapCount: 6,
+          sameRoomGapCount: 0,
+          medianFlipIdle: 4,
+          medianSameRoomIdle: 0,
+          medianCallbackDelta: 0,
+          status: 'on_track',
+          statusLabel: 'On Track',
+        },
+      ],
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'callback-all-on-track')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBeNull()
+  })
+
+  it('utilization-below-target insight has drillThroughType = "utilization"', () => {
+    const analytics = makeAnalytics({
+      orUtilization: {
+        ...makeKPI({ value: 42, displayValue: '42%', target: 75, targetMet: false }),
+        roomBreakdown: [
+          {
+            roomId: 'r1',
+            roomName: 'OR-1',
+            utilization: 42,
+            usedMinutes: 2520,
+            availableHours: 10,
+            caseCount: 20,
+            daysActive: 21,
+            usingRealHours: true,
+          },
+        ],
+        roomsWithRealHours: 1,
+        roomsWithDefaultHours: 0,
+      } as ORUtilizationResult,
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'utilization-below-target')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBe('utilization')
+  })
+
+  it('utilization-on-target insight has drillThroughType = null', () => {
+    const analytics = makeAnalytics({
+      orUtilization: {
+        ...makeKPI({ value: 80, displayValue: '80%', target: 75, targetMet: true }),
+        roomBreakdown: [
+          {
+            roomId: 'r1',
+            roomName: 'OR-1',
+            utilization: 80,
+            usedMinutes: 4800,
+            availableHours: 10,
+            caseCount: 25,
+            daysActive: 21,
+            usingRealHours: true,
+          },
+        ],
+        roomsWithRealHours: 1,
+        roomsWithDefaultHours: 0,
+      } as ORUtilizationResult,
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'utilization-on-target')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBeNull()
+  })
+
+  it('cancellation-rate insight has drillThroughType = "cancellation"', () => {
+    const analytics = makeAnalytics({
+      cancellationRate: {
+        ...makeKPI({ value: 8, displayValue: '8%', target: 5, targetMet: false }),
+        sameDayCount: 4,
+        sameDayRate: 8,
+        totalCancelledCount: 4,
+      } as CancellationResult,
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'cancellation-rate')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBe('cancellation')
+  })
+
+  it('cancellation-streak insight has drillThroughType = null', () => {
+    // Need 6+ consecutive green days in dailyData
+    const greenDays = Array.from({ length: 10 }, (_, i) => ({
+      date: `2025-02-${String(i + 1).padStart(2, '0')}`,
+      color: 'green' as const,
+      tooltip: '',
+      numericValue: 0,
+    }))
+    const analytics = makeAnalytics({
+      cancellationRate: {
+        ...makeKPI({ value: 0, displayValue: '0%', target: 5, targetMet: true, dailyData: greenDays }),
+        sameDayCount: 0,
+        sameDayRate: 0,
+        totalCancelledCount: 0,
+      } as CancellationResult,
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'cancellation-streak')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBeNull()
+  })
+
+  it('non-op-time-high insight has drillThroughType = "non_op_time"', () => {
+    const analytics = makeAnalytics({
+      nonOperativeTime: makeKPI({
+        value: 45,
+        displayValue: '45 min',
+        subtitle: '38% of total case time · 30 cases',
+      }),
+      completedCases: 30,
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'non-op-time-high')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBe('non_op_time')
+  })
+
+  it('scheduling-divergence insight has drillThroughType = "scheduling"', () => {
+    const analytics = makeAnalytics({
+      caseVolume: {
+        ...makeKPI({ value: 120, displayValue: '120', delta: 15, deltaType: 'increase' }),
+        weeklyVolume: [],
+      } as CaseVolumeResult,
+      orUtilization: {
+        ...makeKPI({ value: 60, displayValue: '60%', target: 75, targetMet: false, delta: 10, deltaType: 'decrease' }),
+        roomBreakdown: [],
+        roomsWithRealHours: 0,
+        roomsWithDefaultHours: 0,
+      } as ORUtilizationResult,
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'scheduling-divergence')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBe('scheduling')
+  })
+
+  it('volume-declining insight has drillThroughType = "scheduling"', () => {
+    const analytics = makeAnalytics({
+      caseVolume: {
+        ...makeKPI({ value: 70, displayValue: '70', delta: 30, deltaType: 'decrease' }),
+        weeklyVolume: [],
+      } as CaseVolumeResult,
+    })
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'volume-declining')
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBe('scheduling')
+  })
+
+  it('every generated insight has drillThroughType defined (not undefined)', () => {
+    // Run with multiple issues active so many insights generate
+    const analytics = makeAnalytics({
+      fcots: {
+        ...makeKPI({ value: 31, displayValue: '31%', target: 85, targetMet: false, subtitle: '11 late of 16 first cases' }),
+        firstCaseDetails: [],
+      } as FCOTSResult,
+      turnoverTime: makeKPI({ value: 40, displayValue: '40 min', target: 80, targetMet: false, subtitle: '60% under 30 min target' }),
+      orUtilization: {
+        ...makeKPI({ value: 42, displayValue: '42%', target: 75, targetMet: false }),
+        roomBreakdown: [{ roomId: 'r1', roomName: 'OR-1', utilization: 42, usedMinutes: 2520, availableHours: 10, caseCount: 20, daysActive: 21, usingRealHours: true }],
+        roomsWithRealHours: 1,
+        roomsWithDefaultHours: 0,
+      } as ORUtilizationResult,
+    })
+    const insights = generateInsights(analytics)
+    // drillThroughType must be explicitly set (either a string or null — never undefined)
+    for (const insight of insights) {
+      expect(Object.prototype.hasOwnProperty.call(insight, 'drillThroughType')).toBe(true)
+      expect(insight.drillThroughType === null || typeof insight.drillThroughType === 'string').toBe(true)
+    }
+  })
+})
+
+// ============================================
 // KPI page integration: orHourlyRate + operatingDaysPerYear
 // (Tests the exact call pattern used by app/analytics/kpi/page.tsx)
 // ============================================

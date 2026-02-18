@@ -33,6 +33,15 @@ export type InsightCategory =
   | 'non_operative_time'
   | 'scheduling_pattern'
 
+export type DrillThroughType =
+  | 'callback'
+  | 'fcots'
+  | 'utilization'
+  | 'turnover'
+  | 'cancellation'
+  | 'non_op_time'
+  | 'scheduling'
+
 export interface Insight {
   id: string
   category: InsightCategory
@@ -42,6 +51,7 @@ export interface Insight {
   action: string                  // Clickable CTA label
   actionRoute?: string            // Optional route to navigate to
   financialImpact?: string        // e.g. "~$180K/year estimated impact"
+  drillThroughType: DrillThroughType | null // Panel type for slide-over drill-through
   metadata: Record<string, unknown> // Raw values for programmatic use
 }
 
@@ -162,6 +172,7 @@ function analyzeFirstCaseDelays(
         body: `${fcots.displayValue} of first cases started within the grace period — meeting the ${fcots.target}% target. Consistent on-time starts protect downstream scheduling for the entire day.`,
         action: 'View FCOTS details →',
         actionRoute: '/analytics/fcots',
+        drillThroughType: null,
         metadata: { rate: fcots.value, target: fcots.target },
       })
     }
@@ -204,6 +215,7 @@ function analyzeFirstCaseDelays(
     action: 'View delay breakdown →',
     actionRoute: '/analytics/fcots',
     financialImpact: annualImpact > 0 ? `~$${formatCompactNumber(annualImpact)}/year estimated impact` : undefined,
+    drillThroughType: 'fcots',
     metadata: {
       rate: fcots.value,
       target: fcots.target,
@@ -266,6 +278,7 @@ function analyzeTurnoverEfficiency(
       action: 'View turnover trends →',
       actionRoute: '/analytics/turnover',
       financialImpact: annualImpact > 10000 ? `~$${formatCompactNumber(annualImpact)}/year recoverable` : undefined,
+      drillThroughType: 'turnover',
       metadata: { median: turnoverTime.value, target: targetMinutes, complianceRate, excessPerTurnover },
     })
   }
@@ -285,6 +298,7 @@ function analyzeTurnoverEfficiency(
       body: `Same-room surgical turnover is ${standardSurgicalTurnover.displayValue} (target ≤${sameRoomTarget} min, ${sameRoomCount} transitions) while flip-room is ${flipRoomTime.displayValue} (target ≤${flipRoomTarget} min, ${flipCount} flips). The ${biggerProblem} pathway accounts for more total excess minutes — focus process improvements there first.`,
       action: 'Compare turnover types →',
       actionRoute: '/analytics/turnover',
+      drillThroughType: 'turnover',
       metadata: { sameRoomGap, flipRoomGap, biggerProblem, totalExcessMinutes },
     })
   }
@@ -350,6 +364,7 @@ function analyzeCallbackOptimization(
       action: 'View surgeon callback details →',
       actionRoute: '/analytics/callback',
       financialImpact: annualImpact > 5000 ? `~$${formatCompactNumber(annualImpact)}/year if optimized` : undefined,
+      drillThroughType: 'callback',
       metadata: {
         callSoonerCount: callSoonerSurgeons.length,
         totalRecoverableMinutes,
@@ -372,6 +387,7 @@ function analyzeCallbackOptimization(
       body: `${callLaterSurgeons.length} surgeon${callLaterSurgeons.length > 1 ? 's are' : ' is'} arriving before flip rooms are ready (median idle ≤2 min suggests overlap with room prep). Consider delaying callbacks by 3-5 minutes to avoid surgeon waiting in hallways — this doesn't impact schedule but improves surgeon satisfaction.`,
       action: 'View affected surgeons →',
       actionRoute: '/analytics/callback',
+      drillThroughType: 'callback',
       metadata: {
         callLaterSurgeons: callLaterSurgeons.map(s => s.surgeonName),
       },
@@ -388,6 +404,7 @@ function analyzeCallbackOptimization(
       body: `All ${onTrackSurgeons.length} flip room surgeon${onTrackSurgeons.length !== 1 ? 's have' : ' has'} well-timed callbacks with median idle ≤5 min. This means patients are arriving in flip rooms close to when surgeons are ready — minimal wasted OR time.`,
       action: 'View callback performance →',
       actionRoute: '/analytics/callback',
+      drillThroughType: null,
       metadata: { onTrackCount: onTrackSurgeons.length },
     })
   }
@@ -406,6 +423,7 @@ function analyzeCallbackOptimization(
       body: `${highSameRoom.length} same-room surgeon${highSameRoom.length > 1 ? 's have' : ' has'} elevated idle time between cases. ${worstSameRoom.surgeonName} averages ${Math.round(worstSameRoom.medianSameRoomIdle)} min between cases in the same room — this is turnover-driven, so focus on room cleaning speed and next-patient prep workflow rather than callback timing.`,
       action: 'View same-room turnovers →',
       actionRoute: '/analytics/turnover',
+      drillThroughType: 'callback',
       metadata: {
         highSameRoomSurgeons: highSameRoom.map(s => ({ name: s.surgeonName, idle: s.medianSameRoomIdle })),
       },
@@ -472,6 +490,7 @@ function analyzeUtilizationGaps(
       action: 'View room breakdown →',
       actionRoute: '/analytics/utilization',
       financialImpact: annualImpact > 50000 ? `~$${formatCompactNumber(annualImpact)}/year in unused capacity` : undefined,
+      drillThroughType: 'utilization',
       metadata: {
         utilization: orUtilization.value,
         roomsBelowTarget: roomsBelowTarget.length,
@@ -491,6 +510,7 @@ function analyzeUtilizationGaps(
       body: `${orUtilization.displayValue} utilization across ${roomBreakdown.length} rooms meets the ${utilTarget}% goal. ${roomBreakdown.filter(r => r.utilization >= utilTarget).length} rooms are individually above target.`,
       action: 'View room details →',
       actionRoute: '/analytics/utilization',
+      drillThroughType: null,
       metadata: { utilization: orUtilization.value },
     })
   }
@@ -540,6 +560,7 @@ function analyzeCancellationTrends(
       body: `No same-day cancellations for ${currentStreak} consecutive operating days${currentStreak > 15 ? ' — an exceptional streak' : ''}. This reflects strong pre-operative screening and patient preparation processes. Each avoided same-day cancellation protects approximately $${formatCompactNumber(cfg.revenuePerCase)} in scheduled revenue.`,
       action: 'View cancellation history →',
       actionRoute: '/analytics/cancellations',
+      drillThroughType: null,
       metadata: { streak: currentStreak, sameDayCount: 0 },
     })
   } else if (cancellationRate.sameDayCount > 0) {
@@ -558,6 +579,7 @@ function analyzeCancellationTrends(
       action: 'View cancellation details →',
       actionRoute: '/analytics/cancellations',
       financialImpact: annualImpact > 10000 ? `~$${formatCompactNumber(annualImpact)}/year at risk` : undefined,
+      drillThroughType: 'cancellation',
       metadata: {
         sameDayCount: cancellationRate.sameDayCount,
         rate: cancellationRate.sameDayRate,
@@ -613,6 +635,7 @@ function analyzeNonOperativeTime(
       action: 'View time breakdown →',
       actionRoute: '/analytics/time-breakdown',
       financialImpact: annualImpact > 20000 ? `~$${formatCompactNumber(annualImpact)}/year if ${dominant} reduced 20%` : undefined,
+      drillThroughType: 'non_op_time',
       metadata: {
         nonOpPercent,
         dominant,
@@ -634,6 +657,7 @@ function analyzeNonOperativeTime(
       body: `Average pre-op time (${Math.round(preOpTotal)} min) is ${Math.round(preOpTotal / avgSurgicalTime * 100)}% of average surgical time (${Math.round(avgSurgicalTime)} min). For short procedures, this ratio suggests room setup and anesthesia induction are proportionally significant — parallel prep workflows could help.`,
       action: 'View phase analysis →',
       actionRoute: '/analytics/time-breakdown',
+      drillThroughType: 'non_op_time',
       metadata: {
         preOpTime: Math.round(preOpTotal),
         surgicalTime: Math.round(avgSurgicalTime),
@@ -674,6 +698,7 @@ function analyzeSchedulingPatterns(
       body: `Case volume increased ${caseVolume.delta}% while OR utilization dropped ${orUtilization.delta}%. More cases are being scheduled but rooms are being used less efficiently — this often indicates scheduling gaps between cases, room assignment imbalances, or block time not matching actual demand.`,
       action: 'Review block utilization →',
       actionRoute: '/analytics/utilization',
+      drillThroughType: 'scheduling',
       metadata: {
         volumeDelta: caseVolume.delta,
         utilDelta: orUtilization.delta,
@@ -700,6 +725,7 @@ function analyzeSchedulingPatterns(
       action: 'View volume trends →',
       actionRoute: '/analytics/volume',
       financialImpact: estimatedRevenueLoss > 20000 ? `~$${formatCompactNumber(estimatedRevenueLoss)} revenue impact` : undefined,
+      drillThroughType: 'scheduling',
       metadata: { volumeDelta: caseVolume.delta, totalCases: caseVolume.value },
     })
   }
