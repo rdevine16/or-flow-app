@@ -4,10 +4,12 @@
 
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { InfoTooltip } from '@/components/ui/Tooltip'
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Clock, Phone, X, Zap } from 'lucide-react'
 import { chartHex } from '@/lib/design-tokens'
+import type { CaseFlag } from '@/lib/flag-detection'
+import type { PhaseTreeNode, PhaseDefLike } from '@/lib/milestone-phase-config'
 
 // ============================================
 // SECTION HEADER — Accented section dividers
@@ -1001,6 +1003,859 @@ function BulletBar({
     </div>
   )
 }
+
+// ============================================
+// SHARED TYPES — Day Analysis Components
+// ============================================
+
+/** Data shape for a single case in the DayTimeline and CasePhaseBarNested components. */
+export interface TimelineCaseData {
+  id: string
+  caseNumber: string
+  procedure: string
+  room: string
+  startTime: Date
+  endTime: Date
+  phases: TimelineCasePhase[]
+}
+
+export interface TimelineCasePhase {
+  phaseId: string
+  label: string
+  color: string
+  durationSeconds: number
+  subphases: TimelineCaseSubphase[]
+}
+
+export interface TimelineCaseSubphase {
+  label: string
+  color: string
+  durationSeconds: number
+  offsetSeconds: number
+}
+
+
+// ============================================
+// FLAG BADGE — Reusable flag badge (compact or full)
+// ============================================
+
+interface FlagBadgeProps {
+  flag: CaseFlag
+  compact?: boolean
+}
+
+export function FlagBadge({ flag, compact = false }: FlagBadgeProps) {
+  const severityStyles: Record<string, string> = {
+    warning: 'bg-orange-50 text-orange-700 border-orange-200',
+    caution: 'bg-amber-50 text-amber-700 border-amber-200',
+    info: 'bg-blue-50 text-blue-700 border-blue-200',
+    positive: 'bg-green-50 text-green-700 border-green-200',
+  }
+  const style = severityStyles[flag.severity] || severityStyles.info
+
+  if (compact) {
+    return (
+      <span className={`inline-flex items-center text-xs rounded border px-1 py-0.5 ${style}`} title={`${flag.label}: ${flag.detail}`}>
+        {flag.icon}
+      </span>
+    )
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium rounded border px-1.5 py-0.5 ${style}`}>
+      {flag.icon} {flag.label}
+    </span>
+  )
+}
+
+
+// ============================================
+// FLAG COUNT PILLS — Inline summary pills
+// ============================================
+
+interface FlagCountPillsProps {
+  warningCount: number
+  positiveCount: number
+}
+
+export function FlagCountPills({ warningCount, positiveCount }: FlagCountPillsProps) {
+  if (warningCount === 0 && positiveCount === 0) return null
+  return (
+    <div className="flex items-center gap-2">
+      {warningCount > 0 && (
+        <span className="inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5 bg-orange-50 text-orange-700">
+          ● {warningCount} flag{warningCount !== 1 ? 's' : ''}
+        </span>
+      )}
+      {positiveCount > 0 && (
+        <span className="inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5 bg-green-50 text-green-700">
+          ⚡ {positiveCount} fast
+        </span>
+      )}
+    </div>
+  )
+}
+
+
+// ============================================
+// METRIC PILL STRIP — Horizontal flex row of metric pills
+// ============================================
+
+export interface MetricPillItem {
+  label: string
+  value: string
+  sub?: string
+  accent?: boolean
+}
+
+interface MetricPillStripProps {
+  items: MetricPillItem[]
+}
+
+export function MetricPillStrip({ items }: MetricPillStripProps) {
+  return (
+    <div className="flex items-center gap-0 flex-wrap">
+      {items.map((item, idx) => (
+        <div key={idx} className="flex items-center">
+          {idx > 0 && <div className="w-px h-10 bg-slate-100 mx-4 hidden md:block" />}
+          <div className="py-1 px-1">
+            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">{item.label}</p>
+            <p className={`text-lg font-semibold tabular-nums ${item.accent ? 'text-blue-600' : 'text-slate-900'}`}>
+              {item.value}
+            </p>
+            {item.sub && <p className="text-xs text-slate-400">{item.sub}</p>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+
+// ============================================
+// UPTIME RING — SVG donut chart (64×64)
+// ============================================
+
+interface UptimeRingProps {
+  percent: number
+}
+
+export function UptimeRing({ percent }: UptimeRingProps) {
+  const size = 64
+  const strokeWidth = 6
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const clamped = Math.min(Math.max(percent, 0), 100)
+  const offset = circumference - (clamped / 100) * circumference
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="relative">
+        <svg width={size} height={size} className="flex-shrink-0 -rotate-90">
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#f1f5f9"
+            strokeWidth={strokeWidth}
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#3B82F6"
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            className="transition-all duration-800 ease-out"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-xs font-bold text-slate-900">{Math.round(clamped)}%</span>
+        </div>
+      </div>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-blue-500" />
+          <span className="text-[10px] text-slate-500">Surgical</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-slate-200" />
+          <span className="text-[10px] text-slate-500">Other</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================
+// PHASE TREE LEGEND — Legend showing parent + sub-phases
+// ============================================
+
+interface PhaseTreeLegendProps {
+  phaseTree: PhaseTreeNode[]
+  resolveHex: (colorKey: string | null) => string
+  resolveSubHex: (colorKey: string | null) => string
+}
+
+export function PhaseTreeLegend({ phaseTree, resolveHex, resolveSubHex }: PhaseTreeLegendProps) {
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      {phaseTree.map(node => {
+        const phase = node.phase as PhaseDefLike & { color_key?: string | null }
+        const colorKey = phase.color_key ?? null
+        return (
+          <div key={phase.id} className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: resolveHex(colorKey) }} />
+              <span className="text-xs text-slate-600">{phase.display_name}</span>
+            </div>
+            {node.children.map(child => {
+              const childPhase = child.phase as PhaseDefLike & { color_key?: string | null }
+              const childColorKey = childPhase.color_key ?? null
+              return (
+                <div key={childPhase.id} className="flex items-center gap-1 ml-0.5">
+                  <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: resolveSubHex(childColorKey) }} />
+                  <span className="text-[10px] text-slate-400">{childPhase.display_name}</span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+
+// ============================================
+// DAY TIMELINE — Gantt-style OR timeline
+// ============================================
+
+interface DayTimelineProps {
+  cases: TimelineCaseData[]
+  caseFlags: Record<string, CaseFlag[]>
+  onHoverCase?: (id: string | null) => void
+}
+
+export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps) {
+  // Group cases by room
+  const roomGroups = useMemo(() => {
+    const groups = new Map<string, TimelineCaseData[]>()
+    for (const c of cases) {
+      const existing = groups.get(c.room) || []
+      existing.push(c)
+      groups.set(c.room, existing)
+    }
+    // Sort cases within each room by start time
+    for (const [, roomCases] of groups) {
+      roomCases.sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
+    }
+    return groups
+  }, [cases])
+
+  // Compute time axis bounds
+  const { minTime, totalMs, hourMarkers } = useMemo(() => {
+    if (cases.length === 0) {
+      const now = new Date()
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 7, 0, 0)
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 0, 0)
+      return { minTime: start, maxTime: end, totalMs: end.getTime() - start.getTime(), hourMarkers: [] as Date[] }
+    }
+
+    const allStarts = cases.map(c => c.startTime.getTime())
+    const allEnds = cases.map(c => c.endTime.getTime())
+    const earliestMs = Math.min(...allStarts)
+    const latestMs = Math.max(...allEnds)
+
+    // Round down to hour for min, round up for max
+    const min = new Date(earliestMs)
+    min.setMinutes(0, 0, 0)
+    const max = new Date(latestMs)
+    max.setMinutes(0, 0, 0)
+    max.setHours(max.getHours() + 1)
+
+    const total = max.getTime() - min.getTime()
+
+    // Hour markers
+    const markers: Date[] = []
+    const cursor = new Date(min)
+    while (cursor.getTime() <= max.getTime()) {
+      markers.push(new Date(cursor))
+      cursor.setHours(cursor.getHours() + 1)
+    }
+
+    return { minTime: min, maxTime: max, totalMs: total, hourMarkers: markers }
+  }, [cases])
+
+  const getPositionPct = (time: Date) => {
+    if (totalMs === 0) return 0
+    return ((time.getTime() - minTime.getTime()) / totalMs) * 100
+  }
+
+  const getDurationPct = (durationMs: number) => {
+    if (totalMs === 0) return 0
+    return (durationMs / totalMs) * 100
+  }
+
+  if (cases.length === 0) {
+    return (
+      <div className="py-8 text-center text-sm text-slate-400">
+        No cases to display on timeline
+      </div>
+    )
+  }
+
+  const roomEntries = Array.from(roomGroups.entries())
+
+  return (
+    <div className="overflow-x-auto">
+      <div style={{ minWidth: 600 }}>
+        {/* Time axis */}
+        <div className="relative h-6 mb-2 ml-20">
+          {hourMarkers.map((marker, idx) => (
+            <div
+              key={idx}
+              className="absolute text-[10px] text-slate-400 font-medium -translate-x-1/2"
+              style={{ left: `${getPositionPct(marker)}%` }}
+            >
+              {marker.getHours().toString().padStart(2, '0')}:00
+            </div>
+          ))}
+        </div>
+
+        {/* Room rows */}
+        {roomEntries.map(([room, roomCases]) => (
+          <div key={room} className="flex items-stretch mb-2">
+            {/* Room label */}
+            <div className="w-20 flex-shrink-0 flex items-center">
+              <span className="text-xs font-medium text-slate-500 truncate">{room}</span>
+            </div>
+
+            {/* Timeline track */}
+            <div className="flex-1 relative h-10 bg-slate-50 rounded">
+              {/* Half-hour grid lines */}
+              {hourMarkers.map((marker, idx) => (
+                <div
+                  key={idx}
+                  className="absolute top-0 bottom-0 w-px bg-slate-100"
+                  style={{ left: `${getPositionPct(marker)}%` }}
+                />
+              ))}
+
+              {/* Turnover gaps between consecutive cases */}
+              {roomCases.map((c, idx) => {
+                if (idx === 0) return null
+                const prevCase = roomCases[idx - 1]
+                const gapMs = c.startTime.getTime() - prevCase.endTime.getTime()
+                if (gapMs <= 0) return null
+                const gapMinutes = Math.round(gapMs / 60000)
+                const leftPct = getPositionPct(prevCase.endTime)
+                const widthPct = getDurationPct(gapMs)
+                return (
+                  <div
+                    key={`gap-${idx}`}
+                    className="absolute top-0 bottom-0 border border-dashed border-slate-300 flex items-center justify-center"
+                    style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                  >
+                    {widthPct > 3 && (
+                      <span className="text-[9px] text-slate-400 font-medium">{gapMinutes}m</span>
+                    )}
+                  </div>
+                )
+              })}
+
+              {/* Case blocks */}
+              {roomCases.map(c => {
+                const leftPct = getPositionPct(c.startTime)
+                const widthPct = getDurationPct(c.endTime.getTime() - c.startTime.getTime())
+                const flags = caseFlags[c.id] || []
+                const hasWarningFlags = flags.some(f => f.severity === 'warning' || f.severity === 'caution')
+                const hasPositiveFlags = flags.some(f => f.severity === 'positive')
+                const totalPhaseSeconds = c.phases.reduce((sum, p) => sum + p.durationSeconds, 0)
+
+                return (
+                  <div
+                    key={c.id}
+                    className="absolute top-0.5 bottom-0.5 rounded overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                    style={{ left: `${leftPct}%`, width: `${Math.max(widthPct, 0.5)}%` }}
+                    onMouseEnter={() => onHoverCase?.(c.id)}
+                    onMouseLeave={() => onHoverCase?.(null)}
+                  >
+                    {/* Phase segments */}
+                    <div className="flex h-full">
+                      {c.phases.map((phase, pIdx) => {
+                        const phasePct = totalPhaseSeconds > 0 ? (phase.durationSeconds / totalPhaseSeconds) * 100 : 0
+                        if (phasePct < 0.5) return null
+                        return (
+                          <div
+                            key={pIdx}
+                            className="h-full relative"
+                            style={{ width: `${phasePct}%`, backgroundColor: phase.color }}
+                          >
+                            {/* Sub-phase inset pills at bottom 25% */}
+                            {phase.subphases.length > 0 && phase.durationSeconds > 0 && (
+                              <div className="absolute inset-x-0 bottom-0 h-[25%]">
+                                {phase.subphases.map((sub, sIdx) => {
+                                  const subLeftPct = phase.durationSeconds > 0
+                                    ? (sub.offsetSeconds / phase.durationSeconds) * 100
+                                    : 0
+                                  const subWidthPct = phase.durationSeconds > 0
+                                    ? (sub.durationSeconds / phase.durationSeconds) * 100
+                                    : 0
+                                  if (subWidthPct < 1) return null
+                                  return (
+                                    <div
+                                      key={sIdx}
+                                      className="absolute top-0 bottom-0 rounded-sm"
+                                      style={{
+                                        left: `${subLeftPct}%`,
+                                        width: `${subWidthPct}%`,
+                                        backgroundColor: sub.color,
+                                      }}
+                                    />
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Flag indicator dots */}
+                    {(hasWarningFlags || hasPositiveFlags) && (
+                      <div className="absolute top-0.5 right-0.5 flex gap-0.5">
+                        {hasWarningFlags && <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
+                        {hasPositiveFlags && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================
+// CASE PHASE BAR NESTED — Single case row with nested sub-phases
+// ============================================
+
+interface CasePhaseBarNestedProps {
+  caseNumber: string
+  procedureName: string
+  phases: TimelineCasePhase[]
+  totalSeconds: number
+  maxTotalSeconds: number
+  isSelected: boolean
+  onSelect: () => void
+  flags: CaseFlag[]
+}
+
+export function CasePhaseBarNested({
+  caseNumber,
+  procedureName,
+  phases,
+  totalSeconds,
+  maxTotalSeconds,
+  isSelected,
+  onSelect,
+  flags,
+}: CasePhaseBarNestedProps) {
+  const barWidthPct = maxTotalSeconds > 0 ? (totalSeconds / maxTotalSeconds) * 100 : 0
+
+  const fmtSec = (sec: number) => {
+    const m = Math.floor(sec / 60)
+    const s = Math.round(sec % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
+  return (
+    <div
+      className={`group py-2.5 px-3 -mx-3 rounded-lg transition-colors cursor-pointer ${
+        isSelected
+          ? 'bg-blue-50 ring-2 ring-blue-400'
+          : 'hover:bg-slate-50'
+      }`}
+      onClick={onSelect}
+    >
+      {/* Case info row */}
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-mono text-blue-600 font-semibold">{caseNumber}</span>
+          <span className="text-xs text-slate-400">·</span>
+          <span className="text-xs text-slate-600 truncate max-w-[200px]">{procedureName}</span>
+          {flags.length > 0 && (
+            <div className="flex items-center gap-1">
+              {flags.map((f, i) => (
+                <FlagBadge key={i} flag={f} compact />
+              ))}
+            </div>
+          )}
+        </div>
+        <span className="text-xs font-mono text-slate-900 font-semibold tabular-nums">{fmtSec(totalSeconds)}</span>
+      </div>
+
+      {/* Stacked bar */}
+      <div className="relative" style={{ width: `${Math.max(barWidthPct, 8)}%` }}>
+        <div className="h-7 rounded-md overflow-hidden flex">
+          {phases.map((phase, idx) => {
+            const phasePct = totalSeconds > 0 ? (phase.durationSeconds / totalSeconds) * 100 : 0
+            if (phasePct < 1) return null
+            const phaseMinutes = Math.round(phase.durationSeconds / 60)
+            return (
+              <div
+                key={idx}
+                className="h-full relative"
+                style={{ width: `${phasePct}%`, backgroundColor: phase.color }}
+                title={`${phase.label}: ${fmtSec(phase.durationSeconds)}`}
+              >
+                {/* Phase duration label (≥8 minutes) */}
+                {phaseMinutes >= 8 && phasePct > 12 && (
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white/90 truncate px-1">
+                    {fmtSec(phase.durationSeconds)}
+                  </span>
+                )}
+
+                {/* Sub-phase inset pills at bottom 25% */}
+                {phase.subphases.length > 0 && phase.durationSeconds > 0 && (
+                  <div className="absolute inset-x-0 bottom-0 h-[25%]">
+                    {phase.subphases.map((sub, sIdx) => {
+                      const subLeftPct = phase.durationSeconds > 0
+                        ? (sub.offsetSeconds / phase.durationSeconds) * 100
+                        : 0
+                      const subWidthPct = phase.durationSeconds > 0
+                        ? (sub.durationSeconds / phase.durationSeconds) * 100
+                        : 0
+                      if (subWidthPct < 1) return null
+                      return (
+                        <div
+                          key={sIdx}
+                          className="absolute top-0 bottom-0 rounded-sm"
+                          style={{
+                            left: `${subLeftPct}%`,
+                            width: `${subWidthPct}%`,
+                            backgroundColor: sub.color,
+                          }}
+                          title={`${sub.label}: ${fmtSec(sub.durationSeconds)}`}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================
+// PHASE MEDIAN COMPARISON — Today vs historical bars
+// ============================================
+
+interface PhaseMedianComparisonProps {
+  dayMedians: Record<string, number>
+  historicalMedians: Record<string, number>
+  phaseTree: PhaseTreeNode[]
+  resolveHex: (colorKey: string | null) => string
+}
+
+export function PhaseMedianComparison({
+  dayMedians,
+  historicalMedians,
+  phaseTree,
+  resolveHex,
+}: PhaseMedianComparisonProps) {
+  // Find max value for scaling bars
+  const allValues = [
+    ...Object.values(dayMedians),
+    ...Object.values(historicalMedians),
+  ]
+  const maxVal = Math.max(...allValues, 1)
+
+  const fmtMin = (seconds: number) => `${Math.round(seconds / 60)}m`
+
+  const renderRow = (
+    phaseId: string,
+    displayName: string,
+    colorKey: string | null,
+    isSubphase: boolean,
+  ) => {
+    const today = dayMedians[phaseId] ?? 0
+    const historical = historicalMedians[phaseId] ?? 0
+    const todayPct = maxVal > 0 ? (today / maxVal) * 100 : 0
+    const histPct = maxVal > 0 ? (historical / maxVal) * 100 : 0
+
+    let delta: number | null = null
+    if (historical > 0 && today > 0) {
+      delta = Math.round(((today - historical) / historical) * 100)
+    }
+
+    const hex = resolveHex(colorKey)
+
+    return (
+      <div key={phaseId} className={`${isSubphase ? 'ml-4' : ''} mb-2`}>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-1.5">
+            {isSubphase && <span className="text-slate-300 text-xs">└</span>}
+            <span className={`text-xs font-medium ${isSubphase ? 'text-slate-500' : 'text-slate-700'}`}>
+              {displayName}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-slate-900 tabular-nums">{today > 0 ? fmtMin(today) : '—'}</span>
+            {delta !== null && (
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                delta <= 0
+                  ? 'text-green-600 bg-green-50'
+                  : 'text-red-600 bg-red-50'
+              }`}>
+                {delta <= 0 ? '↓' : '↑'} {Math.abs(delta)}%
+              </span>
+            )}
+          </div>
+        </div>
+        {/* Dual bars */}
+        <div className="relative h-3 bg-slate-50 rounded overflow-hidden">
+          {/* Historical bar (faded) */}
+          {histPct > 0 && (
+            <div
+              className="absolute inset-y-0 left-0 rounded opacity-25"
+              style={{ width: `${histPct}%`, backgroundColor: hex }}
+            />
+          )}
+          {/* Today bar (solid) */}
+          {todayPct > 0 && (
+            <div
+              className="absolute inset-y-0 left-0 rounded"
+              style={{ width: `${todayPct}%`, backgroundColor: hex }}
+            />
+          )}
+          {/* Historical median tick */}
+          {histPct > 2 && (
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-slate-900/30"
+              style={{ left: `${histPct}%` }}
+            />
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {phaseTree.map(node => {
+        const phase = node.phase as PhaseDefLike & { color_key?: string | null }
+        return (
+          <div key={phase.id}>
+            {renderRow(phase.id, phase.display_name, phase.color_key ?? null, false)}
+            {node.children.map(child => {
+              const childPhase = child.phase as PhaseDefLike & { color_key?: string | null }
+              return renderRow(childPhase.id, childPhase.display_name, childPhase.color_key ?? null, true)
+            })}
+          </div>
+        )
+      })}
+      {/* Legend */}
+      <div className="flex items-center gap-4 mt-3 pt-2 border-t border-slate-100">
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-2 bg-blue-500 rounded-sm" />
+          <span className="text-[10px] text-slate-500 font-medium">Today</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-2 bg-blue-500/25 rounded-sm" />
+          <span className="text-[10px] text-slate-500 font-medium">30-Day Med</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================
+// CASE DETAIL PANEL — Expanded detail for a selected case
+// ============================================
+
+interface CaseDetailPanelProps {
+  caseData: TimelineCaseData
+  flags: CaseFlag[]
+  procedureMedians: Record<string, number>
+}
+
+export function CaseDetailPanel({
+  caseData,
+  flags,
+  procedureMedians,
+}: CaseDetailPanelProps) {
+  const fmtTime = (d: Date) =>
+    d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+
+  const fmtDuration = (sec: number) => {
+    const m = Math.floor(sec / 60)
+    const s = Math.round(sec % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
+  const totalSeconds = caseData.phases.reduce((sum, p) => sum + p.durationSeconds, 0)
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-sm font-semibold text-blue-600">{caseData.caseNumber}</span>
+          <span className="text-xs text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{caseData.room}</span>
+        </div>
+        <p className="text-xs text-slate-600">{caseData.procedure}</p>
+        <p className="text-xs text-slate-400 mt-0.5">
+          {fmtTime(caseData.startTime)} – {fmtTime(caseData.endTime)}
+        </p>
+      </div>
+
+      {/* Flags */}
+      {flags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {flags.map((f, i) => (
+            <FlagBadge key={i} flag={f} />
+          ))}
+        </div>
+      )}
+
+      {/* Phase rows */}
+      <div className="space-y-1.5">
+        {caseData.phases.map(phase => {
+          const median = procedureMedians[phase.phaseId]
+          const delta = median && median > 0
+            ? Math.round(((phase.durationSeconds - median) / median) * 100)
+            : null
+
+          return (
+            <div key={phase.phaseId}>
+              {/* Parent phase row */}
+              <div className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: phase.color }} />
+                  <span className="text-xs font-medium text-slate-700">{phase.label}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-slate-900 tabular-nums">{fmtDuration(phase.durationSeconds)}</span>
+                  {delta !== null && (
+                    <span className={`text-[10px] font-semibold px-1 py-0.5 rounded ${
+                      delta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
+                    }`}>
+                      {delta <= 0 ? '↓' : '↑'}{Math.abs(delta)}%
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Sub-phase rows */}
+              {phase.subphases.map((sub, sIdx) => {
+                const subMedian = procedureMedians[`${phase.phaseId}:sub:${sIdx}`]
+                const subDelta = subMedian && subMedian > 0
+                  ? Math.round(((sub.durationSeconds - subMedian) / subMedian) * 100)
+                  : null
+
+                return (
+                  <div
+                    key={sIdx}
+                    className="flex items-center justify-between py-0.5 ml-4"
+                    style={{ borderLeft: `2px solid ${sub.color}` }}
+                  >
+                    <div className="flex items-center gap-1.5 pl-2">
+                      <span className="text-[11px] text-slate-500">{sub.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono text-slate-700 tabular-nums">{fmtDuration(sub.durationSeconds)}</span>
+                      {subDelta !== null && (
+                        <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${
+                          subDelta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
+                        }`}>
+                          {subDelta <= 0 ? '↓' : '↑'}{Math.abs(subDelta)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Total */}
+      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+        <span className="text-xs font-semibold text-slate-700">Total</span>
+        <span className="text-xs font-mono font-semibold text-slate-900 tabular-nums">{fmtDuration(totalSeconds)}</span>
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================
+// SIDEBAR FLAG LIST — Day flags list (no case selected)
+// ============================================
+
+interface SidebarFlagListProps {
+  flags: { caseNumber: string; flag: CaseFlag }[]
+}
+
+export function SidebarFlagList({ flags }: SidebarFlagListProps) {
+  if (flags.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-6 text-center">
+        <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center mb-2">
+          <Check className="w-4 h-4 text-green-600" />
+        </div>
+        <p className="text-sm font-medium text-slate-600">No flags</p>
+        <p className="text-xs text-slate-400 mt-0.5">All cases running normally</p>
+      </div>
+    )
+  }
+
+  const severityBgStyles: Record<string, string> = {
+    warning: 'bg-orange-50',
+    caution: 'bg-amber-50',
+    info: 'bg-blue-50',
+    positive: 'bg-green-50',
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {flags.map((item, idx) => (
+        <div
+          key={idx}
+          className={`flex items-start gap-2 rounded-lg px-2.5 py-2 ${severityBgStyles[item.flag.severity] || 'bg-slate-50'}`}
+        >
+          <span className="text-sm flex-shrink-0 mt-0.5">{item.flag.icon}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-slate-700">{item.flag.label}</span>
+              <span className="text-xs text-slate-400">Case {item.caseNumber}</span>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-0.5">{item.flag.detail}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 
 export function ProcedureComparisonChart({ data, formatValue: formatValueProp }: ProcedureComparisonChartProps) {
   const fmt = formatValueProp || ((sec: number) => {
