@@ -10,29 +10,20 @@ interface AnalyticsPageHeaderProps {
   actions?: React.ReactNode
 }
 
-export function AnalyticsPageHeader({ title, description, icon: Icon, actions }: AnalyticsPageHeaderProps) {
+export function AnalyticsPageHeader({ title, description, actions }: AnalyticsPageHeaderProps) {
   return (
-    <div className="mb-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          {Icon && (
-            <div className="p-2.5 rounded-xl bg-slate-100">
-              <Icon className="w-6 h-6 text-slate-600" />
-            </div>
-          )}
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
-            {description && (
-              <p className="text-slate-500 mt-1">{description}</p>
-            )}
-          </div>
-        </div>
-        {actions && (
-          <div className="flex items-center gap-3">
-            {actions}
-          </div>
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
+        {description && (
+          <p className="text-slate-500 text-sm mt-1">{description}</p>
         )}
       </div>
+      {actions && (
+        <div className="flex items-center gap-3">
+          {actions}
+        </div>
+      )}
     </div>
   )
 }

@@ -838,19 +838,17 @@ export default function AnalyticsOverviewPage() {
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-slate-50/50">
-        <Container className="py-8">
           {/* Error Banner */}
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
           {/* Page Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-semibold text-slate-900">Analytics Overview</h1>
-              <p className="text-slate-500 mt-1">
-                {analytics.completedCases} completed cases analyzed
-                {analytics.totalCases > analytics.completedCases && (
-                  <span className="text-slate-400"> · {analytics.totalCases} total</span>
+              <h1 className="text-2xl font-semibold text-slate-900">Case Flags</h1>
+              <p className="text-slate-500 text-sm mt-1">
+                Auto-detected anomalies and reported delays
+                {analytics.completedCases > 0 && (
+                  <span className="text-slate-400"> · {analytics.completedCases} cases analyzed</span>
                 )}
               </p>
             </div>
@@ -1098,8 +1096,6 @@ export default function AnalyticsOverviewPage() {
 
             </div>
           )}
-        </Container>
-      </div>
     </DashboardLayout>
   )
 }

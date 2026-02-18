@@ -10,7 +10,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import AccessDenied from '@/components/ui/AccessDenied'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
+
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 
 import { useSurgeons } from '@/hooks'
@@ -1644,11 +1644,9 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
 
   return (
     <DashboardLayout>
-      <Container>
         <AnalyticsPageHeader
           title="Block & Room Utilization"
           description="Track how effectively surgeons use block time and how rooms are utilized"
-          icon={CalendarDays}
         />
 
         <div className="space-y-8 pb-12">
@@ -2076,7 +2074,6 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
           )}
 
         </div>
-      </Container>
     </DashboardLayout>
   )
 }

@@ -42,13 +42,13 @@ export default function SettingsLanding() {
   return (
     <div className="animate-fade-in">
       {/* Header */}
-      <div className="px-6 pb-6">
+      <div className="mb-6">
         <h1 className="text-2xl font-semibold text-slate-900">Settings</h1>
-        <p className="text-slate-500 mt-1">Manage your facility configuration and preferences</p>
+        <p className="text-slate-500 text-sm mt-1">Manage your facility configuration and preferences</p>
       </div>
 
       {/* Category Cards Grid */}
-      <div className="px-6 pb-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {visibleCategories.map(category => (
           <Card key={category.id} variant="default" padding="none">
             <Card.Header>

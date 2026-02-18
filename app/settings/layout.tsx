@@ -2,7 +2,6 @@
 
 import { usePathname } from 'next/navigation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
 import SettingsTabLayout from '@/components/settings/SettingsTabLayout'
 
 export default function SettingsRootLayout({
@@ -15,7 +14,6 @@ export default function SettingsRootLayout({
 
   return (
     <DashboardLayout>
-      <Container>
         {isLandingPage ? (
           // Landing page: full-width card grid, no tab bar
           children
@@ -25,7 +23,6 @@ export default function SettingsRootLayout({
             {children}
           </SettingsTabLayout>
         )}
-      </Container>
     </DashboardLayout>
   )
 }

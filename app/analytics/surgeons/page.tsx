@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { getImpersonationState } from '@/lib/impersonation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
+
 import AccessDenied from '@/components/ui/AccessDenied'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { formatTimeInTimezone } from '@/lib/date-utils'
@@ -902,14 +902,10 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
   if (userLoading || initialLoading) {
     return (
       <DashboardLayout>
-        <div className="min-h-screen bg-slate-50/50">
-          <Container className="py-8">
             <SkeletonMetricCards count={4} />
             <div className="mt-6">
               <SkeletonChart height={200} />
             </div>
-          </Container>
-        </div>
       </DashboardLayout>
     )
   }
@@ -917,9 +913,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
   if (!effectiveFacilityId) {
     return (
       <DashboardLayout>
-        <div className="min-h-screen bg-slate-50/50">
-          <Container className="py-8">
-            <AnalyticsPageHeader title="Surgeon Performance" icon={UserIcon} />
+            <AnalyticsPageHeader title="Surgeon Performance" />
             <EmptyState
               icon={
                 <Building2 className="w-8 h-8 text-slate-400" />
@@ -927,17 +921,21 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
               title={isGlobalAdmin ? 'Select a Facility' : 'No Facility Assigned'}
               description={isGlobalAdmin ? 'Choose a facility from the top bar to view surgeon analytics.' : 'Contact your administrator to be assigned to a facility.'}
             />
-          </Container>
-        </div>
       </DashboardLayout>
     )
   }
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-slate-50/50">
-        <Container className="py-8">
-          {/* Condensed Header */}
+          {/* Page Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900">Surgeon Performance</h1>
+              <p className="text-slate-500 text-sm mt-1">Compare surgeon metrics, case times, and efficiency</p>
+            </div>
+          </div>
+
+          {/* Controls Bar */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
             {/* Row 1: Surgeon selector + View toggle + Date nav */}
             <div className="flex items-center px-4 py-2.5 gap-3 border-b border-slate-100">
@@ -1361,8 +1359,6 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
               )}
             </div>
           )}
-        </Container>
-      </div>
     </DashboardLayout>
   )
 }

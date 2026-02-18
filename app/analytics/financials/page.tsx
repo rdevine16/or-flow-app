@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
+
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -252,11 +252,9 @@ if (facilityStatsRes.error) {
   if (!effectiveFacilityId && isGlobalAdmin) {
     return (
       <DashboardLayout>
-        <Container className="py-8">
           <AnalyticsPageHeader
             title="Financial Analytics"
             description="Profitability metrics and insights"
-            icon={DollarSign}
           />
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
             <div className="p-12 text-center">
@@ -275,7 +273,6 @@ if (facilityStatsRes.error) {
               </Link>
             </div>
           </div>
-        </Container>
       </DashboardLayout>
     )
   }
@@ -284,11 +281,9 @@ if (facilityStatsRes.error) {
   if (!facilitySettings?.or_hourly_rate) {
     return (
       <DashboardLayout>
-        <Container className="py-8">
           <AnalyticsPageHeader
             title="Financial Analytics"
             description="Profitability metrics and insights"
-            icon={DollarSignIcon}
           />
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
             <div className="p-12 text-center">
@@ -307,18 +302,15 @@ if (facilityStatsRes.error) {
               </Link>
             </div>
           </div>
-        </Container>
       </DashboardLayout>
     )
   }
 
   return (
     <DashboardLayout>
-      <Container className="py-8">
         <AnalyticsPageHeader
           title="Financial Analytics"
           description={`${metrics.totalCases} cases analyzed`}
-          icon={DollarSign}
           actions={
             <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
           }
@@ -377,7 +369,6 @@ if (facilityStatsRes.error) {
 
           </>
         )}
-      </Container>
     </DashboardLayout>
   )
 }

@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
+
 import DateRangeSelector, { getPresetDates } from '@/components/ui/DateRangeSelector'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ArrowRight, ChevronDown } from 'lucide-react'
@@ -677,13 +677,11 @@ export default function ORbitScorePage() {
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-slate-50/50">
-        <Container className="py-8">
-          {/* Page Header — matches analytics page pattern */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          {/* Page Header */}
+          <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-semibold text-slate-900">ORbit Score</h1>
-              <p className="text-slate-500 mt-1">
+              <p className="text-slate-500 text-sm mt-1">
                 Composite surgeon performance based on controllable operational metrics
               </p>
             </div>
@@ -773,8 +771,6 @@ export default function ORbitScorePage() {
               </p>
             </div>
           )}
-        </Container>
-      </div>
     </DashboardLayout>
   )
 }

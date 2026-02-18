@@ -69,7 +69,7 @@ export default function Sidebar({
           className="flex items-center text-white h-10 rounded-xl hover:bg-slate-800 transition-colors"
         >
           <div className="w-12 flex items-center justify-center flex-shrink-0">
-            <OrbitLogoFull className="w-8 h-8" />
+            <OrbitLogoFull className="w-12 h-12" />
           </div>
         </Link>
       </div>
