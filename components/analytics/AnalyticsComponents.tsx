@@ -746,14 +746,25 @@ export function SkeletonDayAnalysis() {
 // STACKED CASE BAR — Enhanced phase bars for day analysis
 // ============================================
 
+/** Subphase rendered as 60%-height inset band within a parent phase segment. */
+export interface CasePhaseBarSubphase {
+  label: string
+  value: number   // duration in seconds
+  color: string   // lighter shade hex from resolveSubphaseHex()
+}
+
+export interface CasePhaseBarPhase {
+  label: string
+  value: number   // duration in seconds (use 0 for missing phases)
+  color: string   // hex color for parent
+  isMissing?: boolean  // true → show hatched pattern instead of solid color
+  subphases?: CasePhaseBarSubphase[]
+}
+
 interface CasePhaseBarProps {
   caseNumber: string
   procedureName: string
-  phases: {
-    label: string
-    value: number
-    color: string
-  }[]
+  phases: CasePhaseBarPhase[]
   totalValue: number
   maxValue: number
   caseId: string
@@ -761,9 +772,18 @@ interface CasePhaseBarProps {
   formatValue?: (val: number) => string
 }
 
+/** CSS background for the hatched/striped missing-data indicator. */
+const HATCHED_BG = `repeating-linear-gradient(
+  45deg,
+  transparent,
+  transparent 3px,
+  rgba(0,0,0,0.08) 3px,
+  rgba(0,0,0,0.08) 6px
+)`
+
 export function CasePhaseBar({ caseNumber, procedureName, phases, totalValue, maxValue, caseId, onCaseClick, formatValue }: CasePhaseBarProps) {
   const barWidthPct = maxValue > 0 ? (totalValue / maxValue) * 100 : 0
-  
+
   // Default formatter: treat as seconds → mm:ss
   const fmt = formatValue || ((sec: number) => {
     const m = Math.floor(sec / 60)
@@ -772,7 +792,7 @@ export function CasePhaseBar({ caseNumber, procedureName, phases, totalValue, ma
   })
 
   return (
-    <div 
+    <div
       className="group py-2.5 px-3 -mx-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
       onClick={() => onCaseClick?.(caseId)}
     >
@@ -785,25 +805,55 @@ export function CasePhaseBar({ caseNumber, procedureName, phases, totalValue, ma
         </div>
         <span className="text-xs font-mono text-slate-900 font-semibold tabular-nums">{fmt(totalValue)}</span>
       </div>
-      
+
       {/* Stacked bar */}
       <div className="relative" style={{ width: `${Math.max(barWidthPct, 8)}%` }}>
         <div className="h-7 rounded-md overflow-hidden flex">
           {phases.map((phase, idx) => {
             const phasePct = totalValue > 0 ? (phase.value / totalValue) * 100 : 0
-            if (phasePct < 1) return null
+            if (phasePct < 1 && !phase.isMissing) return null
             return (
               <div
                 key={idx}
                 className="h-full relative group/phase"
-                style={{ width: `${phasePct}%`, backgroundColor: phase.color }}
-                title={`${phase.label}: ${fmt(phase.value)}`}
+                style={{
+                  width: phase.isMissing ? '4%' : `${phasePct}%`,
+                  minWidth: phase.isMissing ? '6px' : undefined,
+                  backgroundColor: phase.color,
+                  backgroundImage: phase.isMissing ? HATCHED_BG : undefined,
+                }}
+                title={
+                  phase.isMissing
+                    ? `${phase.label}: missing milestone data`
+                    : `${phase.label}: ${fmt(phase.value)}`
+                }
               >
-                {/* Show label if wide enough */}
-                {phasePct > 18 && (
+                {/* Show label if wide enough and not missing */}
+                {!phase.isMissing && phasePct > 18 && (
                   <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white/90 truncate px-1">
                     {fmt(phase.value)}
                   </span>
+                )}
+
+                {/* Subphase inset bands — 60% height, centered vertically */}
+                {phase.subphases && phase.subphases.length > 0 && phase.value > 0 && (
+                  <div className="absolute inset-x-0 top-[20%] h-[60%] flex pointer-events-none">
+                    {phase.subphases.map((sub, subIdx) => {
+                      const subPct = phase.value > 0 ? (sub.value / phase.value) * 100 : 0
+                      if (subPct < 1) return null
+                      return (
+                        <div
+                          key={subIdx}
+                          className="h-full rounded-sm pointer-events-auto"
+                          style={{
+                            width: `${subPct}%`,
+                            backgroundColor: sub.color,
+                          }}
+                          title={`${sub.label}: ${fmt(sub.value)}`}
+                        />
+                      )
+                    })}
+                  </div>
                 )}
               </div>
             )
@@ -819,18 +869,24 @@ export function CasePhaseBar({ caseNumber, procedureName, phases, totalValue, ma
 // PHASE LEGEND — Color legend for stacked bars
 // ============================================
 
-interface PhaseLegendItem {
+export interface PhaseLegendItem {
   label: string
   color: string
+  isSubphase?: boolean  // renders indented with smaller swatch
 }
 
 export function PhaseLegend({ items }: { items: PhaseLegendItem[] }) {
   return (
     <div className="flex items-center gap-4 flex-wrap">
       {items.map((item, idx) => (
-        <div key={idx} className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: item.color }} />
-          <span className="text-xs text-slate-500">{item.label}</span>
+        <div key={idx} className={`flex items-center gap-1.5 ${item.isSubphase ? 'ml-2' : ''}`}>
+          <div
+            className={`rounded-sm flex-shrink-0 ${item.isSubphase ? 'w-2 h-2' : 'w-2.5 h-2.5'}`}
+            style={{ backgroundColor: item.color }}
+          />
+          <span className={`text-xs ${item.isSubphase ? 'text-slate-400' : 'text-slate-500'}`}>
+            {item.label}
+          </span>
         </div>
       ))}
     </div>
