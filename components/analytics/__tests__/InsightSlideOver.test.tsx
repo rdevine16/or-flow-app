@@ -235,4 +235,22 @@ describe('InsightSlideOver — placeholder content', () => {
     // Should NOT show placeholder
     expect(screen.queryByText(/panel content coming in/i)).toBeNull()
   })
+
+  it('renders non-op time panel content (not placeholder) for non_op_time type', () => {
+    const insight = makeInsight({ drillThroughType: 'non_op_time', category: 'non_operative_time' })
+    render(<InsightSlideOver insight={insight} onClose={() => {}} {...baseProps} />)
+    // With the mock analytics data, should show time breakdown content
+    expect(screen.getByText('Case Time Breakdown')).toBeDefined()
+    // Should NOT show placeholder
+    expect(screen.queryByText(/panel content coming in/i)).toBeNull()
+  })
+
+  it('renders scheduling panel content (not placeholder) for scheduling type', () => {
+    const insight = makeInsight({ drillThroughType: 'scheduling', category: 'scheduling_pattern' })
+    render(<InsightSlideOver insight={insight} onClose={() => {}} {...baseProps} />)
+    // With empty weeklyVolume, shows empty state
+    expect(screen.getByText('No Scheduling Data')).toBeDefined()
+    // Should NOT show placeholder
+    expect(screen.queryByText(/panel content coming in/i)).toBeNull()
+  })
 })
