@@ -1,6 +1,6 @@
 // components/cases/MilestoneTimeline.tsx
 // Horizontal swimlane timeline showing proportional milestone segments.
-// Each milestone is a node; segments between them are proportional to interval duration.
+// Each milestone is a node; segments between them are proportional to milestone duration.
 // Includes surgeon/facility median overlay as dashed line markers.
 
 'use client'
@@ -70,7 +70,7 @@ export default function MilestoneTimeline({
     return positions
   }, [sections])
 
-  // Calculate median node positions (cumulative median intervals as % of total median)
+  // Calculate median node positions (cumulative median durations as % of total median)
   const medianPositions = useMemo(() => {
     const getMedian = (iv: MilestoneInterval) =>
       comparisonSource === 'surgeon' ? iv.surgeon_median_minutes : iv.facility_median_minutes
@@ -78,7 +78,8 @@ export default function MilestoneTimeline({
     if (totalMedian <= 0) return null
 
     let cumulative = 0
-    return intervals.slice(1).map((iv) => {
+    // Each position marks the boundary after a milestone's median duration
+    return intervals.slice(0, -1).map((iv) => {
       cumulative += getMedian(iv) ?? 0
       return (cumulative / totalMedian) * 100
     })
@@ -93,11 +94,11 @@ export default function MilestoneTimeline({
         {/* Segments container */}
         <div className="flex items-center w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
           {sections.map((section, idx) => {
-            if (idx === 0) return null // First node has no preceding segment
-            const prevState = nodeStates[idx - 1]
+            if (idx === sections.length - 1) return null // Last node has no following segment
             const currState = nodeStates[idx]
-            const isRecordedSegment = prevState === 'recorded' && currState === 'recorded'
-            const isMissing = prevState === 'missing' || currState === 'missing'
+            const nextState = nodeStates[idx + 1]
+            const isRecordedSegment = currState === 'recorded' && nextState === 'recorded'
+            const isMissing = currState === 'missing' || nextState === 'missing'
 
             return (
               <div
@@ -127,10 +128,10 @@ export default function MilestoneTimeline({
               const timeStr = iv.recorded_at
                 ? `recorded at ${new Date(iv.recorded_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
                 : state === 'missing' ? 'not recorded' : 'pending'
-              const intervalStr = idx > 0 && iv.interval_minutes != null
-                ? `, ${Math.round(iv.interval_minutes)} minutes from previous`
+              const durationStr = idx < sections.length - 1 && iv.interval_minutes != null
+                ? `, ${Math.round(iv.interval_minutes)} minutes duration`
                 : ''
-              return `${section.milestone_name} milestone, ${timeStr}${intervalStr}`
+              return `${section.milestone_name} milestone, ${timeStr}${durationStr}`
             })()
 
             const isFirst = idx === 0
@@ -183,12 +184,12 @@ export default function MilestoneTimeline({
                 )}
 
                 {/* Tooltip on hover */}
-                {hoveredIndex === idx && idx > 0 && (
+                {hoveredIndex === idx && idx < sections.length - 1 && (
                   <div className={`absolute top-full mt-2 z-10 whitespace-nowrap bg-slate-800 text-white text-[11px] px-2.5 py-1.5 rounded-md shadow-lg ${
                     isLast ? 'right-0' : 'left-1/2 -translate-x-1/2'
                   }`}>
                     <div className="font-medium">
-                      {intervals[idx - 1]?.milestone_name} → {section.milestone_name}
+                      {section.milestone_name} → {intervals[idx + 1]?.milestone_name}
                     </div>
                     <div className="text-slate-300 mt-0.5">
                       {formatMinutes(intervals[idx].interval_minutes)}

@@ -14,7 +14,7 @@ export interface MilestoneInterval {
   display_order: number
   phase_group: string | null
   recorded_at: string | null
-  /** Minutes since previous milestone (null for first milestone or unrecorded) */
+  /** Minutes from this milestone to next recorded milestone (null for last milestone or unrecorded) */
   interval_minutes: number | null
   surgeon_median_minutes: number | null
   facility_median_minutes: number | null
@@ -167,21 +167,22 @@ export function calculateIntervals(
   // Build median lookup by facility_milestone_id
   const medianMap = new Map(medians.map((m) => [m.facility_milestone_id, m]))
 
-  let prevRecordedAt: Date | null = null
-
-  return sorted.map((cm) => {
+  return sorted.map((cm, idx) => {
     const median = medianMap.get(cm.facility_milestone_id)
     const name = cm.facility_milestone?.display_name || cm.facility_milestone?.name || 'Unknown'
     const displayOrder = cm.facility_milestone?.display_order ?? 0
     const phaseGroup = median?.phase_group ?? cm.facility_milestone?.phase_group ?? null
 
+    // Duration = time from this milestone to the next recorded milestone
     let intervalMinutes: number | null = null
-    if (cm.recorded_at && prevRecordedAt) {
-      const diff = new Date(cm.recorded_at).getTime() - prevRecordedAt.getTime()
-      intervalMinutes = diff > 0 ? diff / 60000 : null
-    }
     if (cm.recorded_at) {
-      prevRecordedAt = new Date(cm.recorded_at)
+      for (let j = idx + 1; j < sorted.length; j++) {
+        if (sorted[j].recorded_at) {
+          const diff = new Date(sorted[j].recorded_at!).getTime() - new Date(cm.recorded_at).getTime()
+          intervalMinutes = diff > 0 ? diff / 60000 : null
+          break
+        }
+      }
     }
 
     const surgeonMedian = median?.surgeon_median_minutes ?? null
@@ -444,7 +445,7 @@ export interface SwimlaneSectionData {
 
 /**
  * Calculate proportional widths for horizontal swimlane timeline segments.
- * Each segment width = its interval / total case time.
+ * Each segment width = its duration / total case time.
  */
 export function calculateSwimlaneSections(
   intervals: MilestoneInterval[],

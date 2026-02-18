@@ -1,7 +1,7 @@
 // components/cases/MilestoneDetailRow.tsx
 // Structured 6-column milestone data table with collapsible phase headers.
 // Phase headers show colored left border, phase name, duration, median, delta.
-// Columns: [Status Icon] [Milestone Name] [Time] [Interval] [Median] [Delta]
+// Columns: [Status Icon] [Milestone Name] [Time] [Duration] [Median] [Delta]
 
 'use client'
 
@@ -55,14 +55,14 @@ function formatTimestamp(isoString: string | null): string {
 
 function MilestoneRow({
   iv,
-  isFirst,
+  isLast,
   isMissing,
   medianKey,
   deltaKey,
   isLowN,
 }: {
   iv: MilestoneInterval
-  isFirst: boolean
+  isLast: boolean
   isMissing: boolean
   medianKey: 'surgeon_median_minutes' | 'facility_median_minutes'
   deltaKey: 'delta_from_surgeon' | 'delta_from_facility'
@@ -113,23 +113,23 @@ function MilestoneRow({
         )}
       </span>
 
-      {/* Interval */}
+      {/* Duration */}
       <span className="text-xs text-center text-slate-700">
-        {!isFirst && iv.interval_minutes != null
+        {!isLast && iv.interval_minutes != null
           ? `${Math.round(iv.interval_minutes)}m`
           : '—'}
       </span>
 
       {/* Median — grey out when below threshold */}
       <span className={`text-xs text-center ${isLowN ? 'text-slate-300' : 'text-slate-500'}`}>
-        {!isFirst && activeMedian != null
+        {!isLast && activeMedian != null
           ? `${Math.round(activeMedian)}m`
           : '—'}
       </span>
 
       {/* Delta */}
       <div className="flex justify-end">
-        {!isFirst && activeDelta != null && iv.delta_severity && !isLowN ? (
+        {!isLast && activeDelta != null && iv.delta_severity && !isLowN ? (
           <DeltaBadge
             delta={activeDelta}
             format="time"
@@ -275,12 +275,11 @@ export function MilestoneTable({
     return map
   }, [intervals, missingFlags])
 
-  // Find the first milestone in each phase for "isFirst" logic (first milestone shows no interval)
-  const firstMilestoneIds = useMemo(() => {
+  // Find the last milestone for "isLast" logic (last milestone shows no duration)
+  const lastMilestoneIds = useMemo(() => {
     const set = new Set<string>()
-    // The very first milestone in the entire list is always "first"
     if (intervals.length > 0) {
-      set.add(intervals[0].facility_milestone_id)
+      set.add(intervals[intervals.length - 1].facility_milestone_id)
     }
     return set
   }, [intervals])
@@ -315,7 +314,7 @@ export function MilestoneTable({
           Time
         </span>
         <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center">
-          Interval
+          Duration
         </span>
         <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center">
           {medianLabel}
@@ -344,7 +343,7 @@ export function MilestoneTable({
                   <MilestoneRow
                     key={iv.facility_milestone_id}
                     iv={iv}
-                    isFirst={firstMilestoneIds.has(iv.facility_milestone_id)}
+                    isLast={lastMilestoneIds.has(iv.facility_milestone_id)}
                     isMissing={missingFlagMap.get(iv.facility_milestone_id) ?? false}
                     medianKey={medianKey}
                     deltaKey={deltaKey}
@@ -361,7 +360,7 @@ export function MilestoneTable({
           <MilestoneRow
             key={iv.facility_milestone_id}
             iv={iv}
-            isFirst={idx === 0}
+            isLast={idx === intervals.length - 1}
             isMissing={missingFlags[idx] ?? false}
             medianKey={medianKey}
             deltaKey={deltaKey}

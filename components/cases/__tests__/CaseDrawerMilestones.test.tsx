@@ -30,6 +30,7 @@ vi.mock('@/lib/hooks/useMilestoneComparison', () => ({
 // FIXTURES
 // ============================================
 
+// Forward-looking intervals: each milestone's duration = time until next milestone
 const INTERVALS: MilestoneInterval[] = [
   {
     milestone_name: 'Patient In',
@@ -37,19 +38,6 @@ const INTERVALS: MilestoneInterval[] = [
     display_order: 1,
     phase_group: 'pre_op',
     recorded_at: '2024-06-15T08:00:00Z',
-    interval_minutes: null,
-    surgeon_median_minutes: null,
-    facility_median_minutes: null,
-    delta_from_surgeon: null,
-    delta_from_facility: null,
-    delta_severity: null,
-  },
-  {
-    milestone_name: 'Incision',
-    facility_milestone_id: 'fm-2',
-    display_order: 3,
-    phase_group: 'surgical',
-    recorded_at: '2024-06-15T08:20:00Z',
     interval_minutes: 20,
     surgeon_median_minutes: 18,
     facility_median_minutes: 22,
@@ -58,11 +46,11 @@ const INTERVALS: MilestoneInterval[] = [
     delta_severity: 'on-pace',
   },
   {
-    milestone_name: 'Closing',
-    facility_milestone_id: 'fm-3',
-    display_order: 5,
-    phase_group: 'closing',
-    recorded_at: '2024-06-15T09:15:00Z',
+    milestone_name: 'Incision',
+    facility_milestone_id: 'fm-2',
+    display_order: 3,
+    phase_group: 'surgical',
+    recorded_at: '2024-06-15T08:20:00Z',
     interval_minutes: 55,
     surgeon_median_minutes: 50,
     facility_median_minutes: 52,
@@ -71,17 +59,30 @@ const INTERVALS: MilestoneInterval[] = [
     delta_severity: 'on-pace',
   },
   {
-    milestone_name: 'Patient Out',
-    facility_milestone_id: 'fm-4',
-    display_order: 7,
-    phase_group: 'post_op',
-    recorded_at: '2024-06-15T09:30:00Z',
+    milestone_name: 'Closing',
+    facility_milestone_id: 'fm-3',
+    display_order: 5,
+    phase_group: 'closing',
+    recorded_at: '2024-06-15T09:15:00Z',
     interval_minutes: 15,
     surgeon_median_minutes: 12,
     facility_median_minutes: 14,
     delta_from_surgeon: 3,
     delta_from_facility: 1,
     delta_severity: 'slower',
+  },
+  {
+    milestone_name: 'Patient Out',
+    facility_milestone_id: 'fm-4',
+    display_order: 7,
+    phase_group: 'post_op',
+    recorded_at: '2024-06-15T09:30:00Z',
+    interval_minutes: null,
+    surgeon_median_minutes: null,
+    facility_median_minutes: null,
+    delta_from_surgeon: null,
+    delta_from_facility: null,
+    delta_severity: null,
   },
 ]
 
