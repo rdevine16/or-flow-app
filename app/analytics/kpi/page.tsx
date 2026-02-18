@@ -472,23 +472,23 @@ export default function AnalyticsOverviewPage() {
   const turnoverRows = [
     {
       label: 'Same Room Turnover',
-      kpi: analytics.turnoverTime,
-      status: getKPIStatus(analytics.turnoverTime.value, analytics.turnoverTime.target ?? config.turnoverThresholdMinutes, true),
-      sparkline: dailyDataToSparkline(analytics.turnoverTime.dailyData),
+      kpi: analytics.sameRoomTurnover,
+      status: getKPIStatus(analytics.sameRoomTurnover.value, analytics.sameRoomTurnover.target ?? config.turnoverThresholdMinutes, true),
+      sparkline: dailyDataToSparkline(analytics.sameRoomTurnover.dailyData),
       unit: 'min',
     },
     {
       label: 'Same-Room Surgical',
-      kpi: analytics.standardSurgicalTurnover,
-      status: getKPIStatus(analytics.standardSurgicalTurnover.value, analytics.standardSurgicalTurnover.target ?? config.sameRoomTurnoverTarget, true),
-      sparkline: dailyDataToSparkline(analytics.standardSurgicalTurnover.dailyData),
+      kpi: analytics.sameRoomSurgicalTurnover,
+      status: getKPIStatus(analytics.sameRoomSurgicalTurnover.value, analytics.sameRoomSurgicalTurnover.target ?? config.sameRoomTurnoverTarget, true),
+      sparkline: dailyDataToSparkline(analytics.sameRoomSurgicalTurnover.dailyData),
       unit: 'min',
     },
     {
       label: 'Flip-Room Surgical',
-      kpi: analytics.flipRoomTime,
-      status: getKPIStatus(analytics.flipRoomTime.value, analytics.flipRoomTime.target ?? config.flipRoomTurnoverTarget, true),
-      sparkline: dailyDataToSparkline(analytics.flipRoomTime.dailyData),
+      kpi: analytics.flipRoomSurgicalTurnover,
+      status: getKPIStatus(analytics.flipRoomSurgicalTurnover.value, analytics.flipRoomSurgicalTurnover.target ?? config.flipRoomTurnoverTarget, true),
+      sparkline: dailyDataToSparkline(analytics.flipRoomSurgicalTurnover.dailyData),
       unit: 'min',
     },
     {

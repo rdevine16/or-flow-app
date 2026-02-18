@@ -445,33 +445,33 @@ describe('calculateSurgicalTurnovers config', () => {
 
   it('uses default same-room target (45 min) when no config', () => {
     const result = calculateSurgicalTurnovers(cases)
-    expect(result.standardTurnover.target).toBe(45)
+    expect(result.sameRoomSurgicalTurnover.target).toBe(45)
     // 30 min ≤ 45 → target met
-    expect(result.standardTurnover.targetMet).toBe(true)
+    expect(result.sameRoomSurgicalTurnover.targetMet).toBe(true)
   })
 
   it('uses custom same-room target from config', () => {
     const result = calculateSurgicalTurnovers(cases, undefined, {
       sameRoomTurnoverTarget: 20,
     })
-    expect(result.standardTurnover.target).toBe(20)
+    expect(result.sameRoomSurgicalTurnover.target).toBe(20)
     // 30 min > 20 → target not met
-    expect(result.standardTurnover.targetMet).toBe(false)
+    expect(result.sameRoomSurgicalTurnover.targetMet).toBe(false)
   })
 
   it('daily colors are target-relative for same-room turnovers', () => {
     // Default target 45: 30 min ≤ 45 → green
     const defaultResult = calculateSurgicalTurnovers(cases)
-    if (defaultResult.standardTurnover.dailyData!.length > 0) {
-      expect(defaultResult.standardTurnover.dailyData![0].color).toBe('green')
+    if (defaultResult.sameRoomSurgicalTurnover.dailyData!.length > 0) {
+      expect(defaultResult.sameRoomSurgicalTurnover.dailyData![0].color).toBe('green')
     }
 
     // Custom target 20: 30 min > 20 * 1.2 = 24 → red
     const customResult = calculateSurgicalTurnovers(cases, undefined, {
       sameRoomTurnoverTarget: 20,
     })
-    if (customResult.standardTurnover.dailyData!.length > 0) {
-      expect(customResult.standardTurnover.dailyData![0].color).toBe('red')
+    if (customResult.sameRoomSurgicalTurnover.dailyData!.length > 0) {
+      expect(customResult.sameRoomSurgicalTurnover.dailyData![0].color).toBe('red')
     }
   })
 })
@@ -588,8 +588,8 @@ describe('calculateAnalyticsOverview config forwarding', () => {
       turnoverThresholdMinutes: 40,
       turnoverComplianceTarget: 95,
     })
-    expect(result.turnoverTime.target).toBe(95)
-    expect(result.turnoverTime.subtitle).toContain('40 min')
+    expect(result.sameRoomTurnover.target).toBe(95)
+    expect(result.sameRoomTurnover.subtitle).toContain('40 min')
   })
 
   it('forwards FCOTS config from unified config', () => {
@@ -624,7 +624,7 @@ describe('calculateAnalyticsOverview config forwarding', () => {
     expect(result.orUtilization.target).toBe(ANALYTICS_CONFIG_DEFAULTS.utilizationTargetPercent)
     expect(result.cancellationRate.target).toBe(ANALYTICS_CONFIG_DEFAULTS.cancellationTargetPercent)
     expect(result.cumulativeTardiness.target).toBe(ANALYTICS_CONFIG_DEFAULTS.tardinessTargetMinutes)
-    expect(result.turnoverTime.target).toBe(ANALYTICS_CONFIG_DEFAULTS.turnoverComplianceTarget)
+    expect(result.sameRoomTurnover.target).toBe(ANALYTICS_CONFIG_DEFAULTS.turnoverComplianceTarget)
     expect(result.fcots.target).toBe(ANALYTICS_CONFIG_DEFAULTS.fcotsTargetPercent)
     expect(result.surgeonIdleTime.target).toBe(ANALYTICS_CONFIG_DEFAULTS.idleCombinedTargetMinutes)
     expect(result.nonOperativeTime.target).toBe(ANALYTICS_CONFIG_DEFAULTS.nonOpWarnMinutes)

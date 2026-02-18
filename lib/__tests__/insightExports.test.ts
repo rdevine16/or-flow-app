@@ -80,7 +80,7 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       ...makeKPI({ value: 85, displayValue: '85%', target: 85, targetMet: true, subtitle: '3 late of 16' }),
       firstCaseDetails: [],
     } as FCOTSResult,
-    turnoverTime: {
+    sameRoomTurnover: {
       ...makeKPI({ value: 25, displayValue: '25 min', target: 80, targetMet: true }),
       details: [],
       compliantCount: 10,
@@ -121,8 +121,8 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
     surgeonIdleTime: makeKPI(),
     surgeonIdleFlip: makeKPI(),
     surgeonIdleSameRoom: makeKPI(),
-    standardSurgicalTurnover: makeKPI({ value: 42, displayValue: '42 min', target: 45, targetMet: true }),
-    flipRoomTime: makeKPI({ value: 18, displayValue: '18 min', target: 15, targetMet: false }),
+    sameRoomSurgicalTurnover: makeKPI({ value: 42, displayValue: '42 min', target: 45, targetMet: true }),
+    flipRoomSurgicalTurnover: makeKPI({ value: 18, displayValue: '18 min', target: 15, targetMet: false }),
     flipRoomAnalysis: [],
     surgeonIdleSummaries: [],
     avgTotalCaseTime: 120,

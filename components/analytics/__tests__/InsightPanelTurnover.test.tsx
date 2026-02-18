@@ -63,7 +63,7 @@ describe('InsightPanelTurnover', () => {
       makeDetail({ fromCaseNumber: 'C003', toCaseNumber: 'C004', turnoverMinutes: 38, isCompliant: false }),
     ]
 
-    render(<InsightPanelTurnover turnoverTime={makeTurnoverResult(details)} config={defaultConfig} />)
+    render(<InsightPanelTurnover sameRoomTurnover={makeTurnoverResult(details)} config={defaultConfig} />)
 
     // Should show compliance rate
     expect(screen.getByText('50%')).toBeDefined()
@@ -81,7 +81,7 @@ describe('InsightPanelTurnover', () => {
       makeDetail({ fromCaseNumber: 'C003', toCaseNumber: 'C004', turnoverMinutes: 38, isCompliant: false, roomName: 'OR-2' }),
     ]
 
-    render(<InsightPanelTurnover turnoverTime={makeTurnoverResult(details)} config={defaultConfig} />)
+    render(<InsightPanelTurnover sameRoomTurnover={makeTurnoverResult(details)} config={defaultConfig} />)
 
     expect(screen.getByText('Turnover Detail')).toBeDefined()
     expect(screen.getByText('22m')).toBeDefined()
@@ -90,7 +90,7 @@ describe('InsightPanelTurnover', () => {
   })
 
   it('renders empty state when no details', () => {
-    render(<InsightPanelTurnover turnoverTime={makeTurnoverResult([])} config={defaultConfig} />)
+    render(<InsightPanelTurnover sameRoomTurnover={makeTurnoverResult([])} config={defaultConfig} />)
 
     expect(screen.getByText('No Turnover Data')).toBeDefined()
   })
@@ -102,7 +102,7 @@ describe('InsightPanelTurnover', () => {
       makeDetail({ fromCaseNumber: 'C005', toCaseNumber: 'C006', fromSurgeonName: 'Sarah Williams', turnoverMinutes: 40, isCompliant: false }),
     ]
 
-    render(<InsightPanelTurnover turnoverTime={makeTurnoverResult(details)} config={defaultConfig} />)
+    render(<InsightPanelTurnover sameRoomTurnover={makeTurnoverResult(details)} config={defaultConfig} />)
 
     expect(screen.getByText('Surgeon Turnover Comparison')).toBeDefined()
     // Williams has higher median, should appear (name appears in both table and comparison)
@@ -116,7 +116,7 @@ describe('InsightPanelTurnover', () => {
       makeDetail({ fromCaseNumber: 'C003', toCaseNumber: 'C004', turnoverMinutes: 38, isCompliant: false }),
     ]
 
-    render(<InsightPanelTurnover turnoverTime={makeTurnoverResult(details)} config={defaultConfig} />)
+    render(<InsightPanelTurnover sameRoomTurnover={makeTurnoverResult(details)} config={defaultConfig} />)
 
     expect(screen.getByText('OK')).toBeDefined()
     expect(screen.getByText('Over')).toBeDefined()

@@ -42,7 +42,7 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       ...makeKPI({ value: 85, displayValue: '85%', target: 85, targetMet: true }),
       firstCaseDetails: [],
     } as FCOTSResult,
-    turnoverTime: { ...makeKPI({ value: 25, displayValue: '25 min', target: 30, targetMet: true }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
+    sameRoomTurnover: { ...makeKPI({ value: 25, displayValue: '25 min', target: 30, targetMet: true }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
     flipRoomTurnover: {
       value: 0,
       displayValue: '--',
@@ -74,8 +74,8 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
     surgeonIdleTime: makeKPI(),
     surgeonIdleFlip: makeKPI(),
     surgeonIdleSameRoom: makeKPI(),
-    standardSurgicalTurnover: makeKPI({ value: 40, displayValue: '40 min', target: 45, targetMet: true }),
-    flipRoomTime: makeKPI({ value: 12, displayValue: '12 min', target: 15, targetMet: true }),
+    sameRoomSurgicalTurnover: makeKPI({ value: 40, displayValue: '40 min', target: 45, targetMet: true }),
+    flipRoomSurgicalTurnover: makeKPI({ value: 12, displayValue: '12 min', target: 15, targetMet: true }),
     flipRoomAnalysis: [],
     surgeonIdleSummaries: [],
     avgTotalCaseTime: 120,
@@ -328,7 +328,7 @@ describe('Target-relative insight body text', () => {
     // Target compliance is 80%, threshold is 20 min (custom tight target)
     // Subtitle format matches calculateTurnoverTime: "X% under Y min target"
     const analytics = makeAnalytics({
-      turnoverTime: { ...makeKPI({
+      sameRoomTurnover: { ...makeKPI({
         value: 40,
         displayValue: '40 min',
         target: 80,
@@ -403,14 +403,14 @@ describe('Target-relative insight body text', () => {
   it('surgical turnover comparison body references actual same-room target', () => {
     // Both same-room and flip-room above their targets
     const analytics = makeAnalytics({
-      standardSurgicalTurnover: makeKPI({
+      sameRoomSurgicalTurnover: makeKPI({
         value: 55,
         displayValue: '55 min',
         target: 40,
         targetMet: false,
         subtitle: '30 turnovers',
       }),
-      flipRoomTime: makeKPI({
+      flipRoomSurgicalTurnover: makeKPI({
         value: 22,
         displayValue: '22 min',
         target: 12,
@@ -568,7 +568,7 @@ describe('Insight.drillThroughType field', () => {
 
   it('turnover-room insight has drillThroughType = "turnover"', () => {
     const analytics = makeAnalytics({
-      turnoverTime: { ...makeKPI({
+      sameRoomTurnover: { ...makeKPI({
         value: 40,
         displayValue: '40 min',
         target: 80,
@@ -584,14 +584,14 @@ describe('Insight.drillThroughType field', () => {
 
   it('turnover-surgical-comparison insight has drillThroughType = "turnover"', () => {
     const analytics = makeAnalytics({
-      standardSurgicalTurnover: makeKPI({
+      sameRoomSurgicalTurnover: makeKPI({
         value: 55,
         displayValue: '55 min',
         target: 40,
         targetMet: false,
         subtitle: '30 turnovers',
       }),
-      flipRoomTime: makeKPI({
+      flipRoomSurgicalTurnover: makeKPI({
         value: 22,
         displayValue: '22 min',
         target: 12,
@@ -828,7 +828,7 @@ describe('Insight.drillThroughType field', () => {
         ...makeKPI({ value: 31, displayValue: '31%', target: 85, targetMet: false, subtitle: '11 late of 16 first cases' }),
         firstCaseDetails: [],
       } as FCOTSResult,
-      turnoverTime: { ...makeKPI({ value: 40, displayValue: '40 min', target: 80, targetMet: false, subtitle: '60% under 30 min target' }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
+      sameRoomTurnover: { ...makeKPI({ value: 40, displayValue: '40 min', target: 80, targetMet: false, subtitle: '60% under 30 min target' }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
       orUtilization: {
         ...makeKPI({ value: 42, displayValue: '42%', target: 75, targetMet: false }),
         roomBreakdown: [{ roomId: 'r1', roomName: 'OR-1', utilization: 42, usedMinutes: 2520, availableHours: 10, caseCount: 20, daysActive: 21, usingRealHours: true }],

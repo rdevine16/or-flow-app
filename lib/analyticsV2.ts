@@ -36,8 +36,8 @@ export interface CaseWithMilestones {
 
 }
 export interface TurnoverBreakdown {
-  standardTurnover: KPIResult    // Same room: Surgeon Done → Incision
-  flipRoomTime: KPIResult        // Different room: Surgeon Done → Incision
+  sameRoomSurgicalTurnover: KPIResult    // Same room: Surgeon Done → Incision
+  flipRoomSurgicalTurnover: KPIResult    // Different room: Surgeon Done → Incision
   totalTransitions: number
   sameRoomCount: number
   flipRoomCount: number
@@ -267,7 +267,7 @@ export interface AnalyticsOverview {
   
   // KPIs
   fcots: FCOTSResult
-  turnoverTime: TurnoverResult
+  sameRoomTurnover: TurnoverResult
   flipRoomTurnover: TurnoverResult   // Flip-room room turnover (facility perspective)
   orUtilization: ORUtilizationResult
   caseVolume: CaseVolumeResult
@@ -279,8 +279,8 @@ export interface AnalyticsOverview {
   surgeonIdleSameRoom: KPIResult   // Same room idle only
   
   // Flip room details
-  standardSurgicalTurnover: KPIResult   // Same room turnover
-  flipRoomTime: KPIResult               // Different room turnover
+  sameRoomSurgicalTurnover: KPIResult   // Same room surgical turnover
+  flipRoomSurgicalTurnover: KPIResult   // Different room surgical turnover
   flipRoomAnalysis: FlipRoomAnalysis[]  // Detailed idle data for modal
   surgeonIdleSummaries: SurgeonIdleSummary[]  // Per-surgeon aggregated summaries
 
@@ -1128,7 +1128,7 @@ export function calculateSurgicalTurnovers(
     })
 
   return {
-    standardTurnover: {
+    sameRoomSurgicalTurnover: {
       value: Math.round(medianSameRoom),
       displayValue: sameRoomTurnovers.length > 0 ? `${Math.round(medianSameRoom)} min` : '--',
       subtitle: sameRoomTurnovers.length > 0
@@ -1139,7 +1139,7 @@ export function calculateSurgicalTurnovers(
       ...sameRoomDelta,
       dailyData: sameRoomDailyData
     },
-    flipRoomTime: {
+    flipRoomSurgicalTurnover: {
       value: Math.round(medianFlipRoom),
       displayValue: flipRoomTurnovers.length > 0 ? `${Math.round(medianFlipRoom)} min` : '--',
       subtitle: flipRoomTurnovers.length > 0
@@ -2558,7 +2558,7 @@ export function calculateAnalyticsOverview(
 
     // KPIs
     fcots: calculateFCOTS(activeCases, activePrevCases, fcotsConfig),
-    turnoverTime: calculateTurnoverTime(activeCases, activePrevCases, {
+    sameRoomTurnover: calculateTurnoverTime(activeCases, activePrevCases, {
       turnoverThresholdMinutes: config?.turnoverThresholdMinutes,
       turnoverComplianceTarget: config?.turnoverComplianceTarget,
     }),
@@ -2585,8 +2585,8 @@ export function calculateAnalyticsOverview(
     surgeonIdleSameRoom: surgeonIdleResult.sameRoomKpi,
 
     // Split surgical turnovers
-    standardSurgicalTurnover: turnoverBreakdown.standardTurnover,
-    flipRoomTime: turnoverBreakdown.flipRoomTime,
+    sameRoomSurgicalTurnover: turnoverBreakdown.sameRoomSurgicalTurnover,
+    flipRoomSurgicalTurnover: turnoverBreakdown.flipRoomSurgicalTurnover,
     flipRoomAnalysis: surgeonIdleResult.details,
     surgeonIdleSummaries,
 
@@ -2610,7 +2610,7 @@ export function calculateAnalyticsOverview(
  * Room Turnover = patient_out (Case A) → patient_in (Case B) in same room
  * Returns array of turnover durations in SECONDS
  */
-export function getAllTurnovers(cases: CaseWithMilestones[]): number[] {
+export function getAllSameRoomTurnovers(cases: CaseWithMilestones[]): number[] {
   const turnovers: number[] = []
   
   // Group cases by room and date
@@ -2647,18 +2647,11 @@ export function getAllTurnovers(cases: CaseWithMilestones[]): number[] {
 }
 
 /**
- * Alias for getAllTurnovers (v1 compatibility)
- */
-export function calculateRoomTurnovers(cases: CaseWithMilestones[]): number[] {
-  return getAllTurnovers(cases)
-}
-
-/**
  * Get all surgical turnovers for a set of cases
  * Surgical Turnover = closing_complete (Case A) → incision (Case B) in same room
  * Returns array of turnover durations in SECONDS
  */
-export function getAllSurgicalTurnovers(cases: CaseWithMilestones[]): number[] {
+export function getAllSameRoomSurgicalTurnovers(cases: CaseWithMilestones[]): number[] {
   const turnovers: number[] = []
   
   // Group cases by room and date

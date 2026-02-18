@@ -47,7 +47,7 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       ...makeKPI({ value: 85, displayValue: '85%', target: 85, targetMet: true }),
       firstCaseDetails: [],
     } as FCOTSResult,
-    turnoverTime: { ...makeKPI({ value: 25, displayValue: '25 min', target: 30, targetMet: true }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
+    sameRoomTurnover: { ...makeKPI({ value: 25, displayValue: '25 min', target: 30, targetMet: true }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
     flipRoomTurnover: {
       value: 0,
       displayValue: '--',
@@ -79,8 +79,8 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
     surgeonIdleTime: makeKPI(),
     surgeonIdleFlip: makeKPI(),
     surgeonIdleSameRoom: makeKPI(),
-    standardSurgicalTurnover: makeKPI({ value: 40, displayValue: '40 min', target: 45, targetMet: true }),
-    flipRoomTime: makeKPI({ value: 12, displayValue: '12 min', target: 15, targetMet: true }),
+    sameRoomSurgicalTurnover: makeKPI({ value: 40, displayValue: '40 min', target: 45, targetMet: true }),
+    flipRoomSurgicalTurnover: makeKPI({ value: 12, displayValue: '12 min', target: 15, targetMet: true }),
     flipRoomAnalysis: [],
     surgeonIdleSummaries: [],
     avgTotalCaseTime: 120,
@@ -237,7 +237,7 @@ describe('InsightSlideOver integration — rendering real insights', () => {
 
   it('opens with a warning turnover insight from generateInsights', () => {
     const analytics = makeAnalytics({
-      turnoverTime: { ...makeKPI({
+      sameRoomTurnover: { ...makeKPI({
         value: 40,
         displayValue: '40 min',
         target: 80,

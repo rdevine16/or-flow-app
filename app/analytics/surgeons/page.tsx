@@ -34,8 +34,8 @@ import {
   calculateSum,
   formatMinutesToHHMMSS,
   formatSecondsToHHMMSS,
-  getAllTurnovers,
-  getAllSurgicalTurnovers,
+  getAllSameRoomTurnovers,
+  getAllSameRoomSurgicalTurnovers,
   computePhaseDurations,
   buildMilestoneTimestampMap,
   computeSubphaseOffsets,
@@ -594,8 +594,8 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
     const firstCaseTime = firstCase ? getMilestoneMap(firstCase).patient_in : null
     const firstCaseScheduledTime = firstCase?.start_time || null
 
-    const roomTurnovers = getAllTurnovers(completed)
-    const surgicalTurnovers = getAllSurgicalTurnovers(completed)
+    const roomTurnovers = getAllSameRoomTurnovers(completed)
+    const surgicalTurnovers = getAllSameRoomSurgicalTurnovers(completed)
 
     const totalORTime = calculateSum(orTimes) || 0
     const totalSurgicalTime = calculateSum(incisionToClosingTimes) || 0
@@ -628,10 +628,10 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
     
     const orTimes = completed.map(c => getTotalORTime(getMilestoneMap(c)))
     const surgicalTimes = completed.map(c => getIncisionToClosing(getMilestoneMap(c)))
-    const turnovers = getAllSurgicalTurnovers(completed)
+    const turnovers = getAllSameRoomSurgicalTurnovers(completed)
     
     const prevOrTimes = prevCompleted.map(c => getTotalORTime(getMilestoneMap(c)))
-    const prevTurnovers = getAllSurgicalTurnovers(prevCompleted)
+    const prevTurnovers = getAllSameRoomSurgicalTurnovers(prevCompleted)
 
     return {
       totalCases: completed.length,

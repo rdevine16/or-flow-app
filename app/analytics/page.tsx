@@ -840,10 +840,10 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
     />
     <QuickStatCard
       title="Avg Turnover"
-      value={analytics.turnoverTime.displayValue}
+      value={analytics.sameRoomTurnover.displayValue}
       icon={RefreshCw}
-      trend={analytics.turnoverTime.delta}
-      trendType={analytics.turnoverTime.deltaType === 'increase' ? 'up' : analytics.turnoverTime.deltaType === 'decrease' ? 'down' : undefined}
+      trend={analytics.sameRoomTurnover.delta}
+      trendType={analytics.sameRoomTurnover.deltaType === 'increase' ? 'up' : analytics.sameRoomTurnover.deltaType === 'decrease' ? 'down' : undefined}
     />
     <QuickStatCard
       title="OR Utilization"

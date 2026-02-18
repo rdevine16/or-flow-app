@@ -958,14 +958,14 @@ describe('calculateAnalyticsOverview — includes flipRoomTurnover', () => {
     expect(overview.flipRoomTurnover.subtitle).toBe('No flip-room turnovers')
   })
 
-  it('other turnover metrics (turnoverTime) are unaffected by the new field', () => {
+  it('other turnover metrics (sameRoomTurnover) are unaffected by the new field', () => {
     const cases = buildBasicFlipScenario()
     const overview = calculateAnalyticsOverview(cases)
 
-    // turnoverTime should still exist and be a valid KPI result
-    expect(overview).toHaveProperty('turnoverTime')
-    expect(overview.turnoverTime).toBeDefined()
-    expect(typeof overview.turnoverTime.displayValue).toBe('string')
+    // sameRoomTurnover should still exist and be a valid KPI result
+    expect(overview).toHaveProperty('sameRoomTurnover')
+    expect(overview.sameRoomTurnover).toBeDefined()
+    expect(typeof overview.sameRoomTurnover.displayValue).toBe('string')
   })
 })
 

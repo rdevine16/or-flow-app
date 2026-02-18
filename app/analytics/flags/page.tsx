@@ -910,21 +910,21 @@ export default function AnalyticsOverviewPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <KPICard 
                     title="Median Same Room Turnover" 
-                    kpi={analytics.turnoverTime}
+                    kpi={analytics.sameRoomTurnover}
                     icon={Clock}
                     accentColor="green"
                     tooltip="Time from Patient Out (Case A) to Patient In (Case B) in the same room. Measures room cleaning and prep efficiency."
                   />
                   <KPICard 
                     title="Median Same-Room Surgical Turnover" 
-                    kpi={analytics.standardSurgicalTurnover}
+                    kpi={analytics.sameRoomSurgicalTurnover}
                     icon={Clock}
                     accentColor="blue"
                     tooltip="Time from Surgeon Done (Case A) to Incision (Case B) for the same surgeon in the same room. Measures how long the surgeon waits between cuts."
                   />
                   <KPICard 
                     title="Median Flip-Room Surgical Turnover" 
-                    kpi={analytics.flipRoomTime}
+                    kpi={analytics.flipRoomSurgicalTurnover}
                     icon={ArrowRight}
                     accentColor="violet"
                     tooltip="Time from Surgeon Done (Case A) to Incision (Case B) when the surgeon moves to a different room. Measures flip room transition efficiency."

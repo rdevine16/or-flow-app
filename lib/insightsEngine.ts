@@ -242,27 +242,27 @@ function analyzeTurnoverEfficiency(
   cfg: ResolvedInsightsConfig
 ): Insight[] {
   const insights: Insight[] = []
-  const { turnoverTime, standardSurgicalTurnover, flipRoomTime } = analytics
+  const { sameRoomTurnover, sameRoomSurgicalTurnover, flipRoomSurgicalTurnover } = analytics
 
   // Compare same-room vs flip-room to identify the bigger lever
-  const sameRoomGap = standardSurgicalTurnover.value - (standardSurgicalTurnover.target ?? 45)
-  const flipRoomGap = flipRoomTime.value - (flipRoomTime.target ?? 15)
+  const sameRoomGap = sameRoomSurgicalTurnover.value - (sameRoomSurgicalTurnover.target ?? 45)
+  const flipRoomGap = flipRoomSurgicalTurnover.value - (flipRoomSurgicalTurnover.target ?? 15)
 
   // Parse counts from subtitles
-  const sameRoomCountMatch = standardSurgicalTurnover.subtitle.match(/(\d+)\s+turnovers/)
-  const flipCountMatch = flipRoomTime.subtitle.match(/(\d+)\s+flips/)
+  const sameRoomCountMatch = sameRoomSurgicalTurnover.subtitle.match(/(\d+)\s+turnovers/)
+  const flipCountMatch = flipRoomSurgicalTurnover.subtitle.match(/(\d+)\s+flips/)
   const sameRoomCount = sameRoomCountMatch ? parseInt(sameRoomCountMatch[1]) : 0
   const flipCount = flipCountMatch ? parseInt(flipCountMatch[1]) : 0
 
   // Room turnover (patient out → patient in)
-  // Note: turnoverTime.target is the compliance target % (e.g., 80%), not threshold minutes.
+  // Note: sameRoomTurnover.target is the compliance target % (e.g., 80%), not threshold minutes.
   // The threshold minutes are in the subtitle: "X% under Y min target"
-  if (!turnoverTime.targetMet && turnoverTime.value > 0) {
-    const thresholdMatch = turnoverTime.subtitle.match(/under\s+(\d+)\s+min/)
+  if (!sameRoomTurnover.targetMet && sameRoomTurnover.value > 0) {
+    const thresholdMatch = sameRoomTurnover.subtitle.match(/under\s+(\d+)\s+min/)
     const targetMinutes = thresholdMatch ? parseInt(thresholdMatch[1]) : 30
-    const excessPerTurnover = Math.max(0, turnoverTime.value - targetMinutes)
+    const excessPerTurnover = Math.max(0, sameRoomTurnover.value - targetMinutes)
     // Estimate turnovers per day from subtitle
-    const complianceMatch = turnoverTime.subtitle.match(/(\d+)%/)
+    const complianceMatch = sameRoomTurnover.subtitle.match(/(\d+)%/)
     const complianceRate = complianceMatch ? parseInt(complianceMatch[1]) : 0
 
     const totalTurnoversPerDay = Math.round((sameRoomCount + flipCount) / Math.max(analytics.completedCases / 20, 1)) // rough daily estimate
@@ -274,19 +274,19 @@ function analyzeTurnoverEfficiency(
       category: 'turnover_efficiency',
       severity: complianceRate < 50 ? 'critical' : 'warning',
       title: 'Room Turnover Above Target',
-      body: `Median room turnover is ${turnoverTime.displayValue} against a ${targetMinutes} min target, with only ${complianceRate}% of turnovers meeting the goal. ${excessPerTurnover > 10 ? 'This suggests systemic process delays beyond normal room cleaning.' : 'Tightening handoff communication between teams could close the remaining gap.'}`,
+      body: `Median room turnover is ${sameRoomTurnover.displayValue} against a ${targetMinutes} min target, with only ${complianceRate}% of turnovers meeting the goal. ${excessPerTurnover > 10 ? 'This suggests systemic process delays beyond normal room cleaning.' : 'Tightening handoff communication between teams could close the remaining gap.'}`,
       action: 'View turnover trends →',
       actionRoute: '/analytics/turnover',
       financialImpact: annualImpact > 10000 ? `~$${formatCompactNumber(annualImpact)}/year recoverable` : undefined,
       drillThroughType: 'turnover',
-      metadata: { median: turnoverTime.value, target: targetMinutes, complianceRate, excessPerTurnover },
+      metadata: { median: sameRoomTurnover.value, target: targetMinutes, complianceRate, excessPerTurnover },
     })
   }
 
   // Surgical turnover comparison: which is the bigger problem?
   if (sameRoomGap > 0 && flipRoomGap > 0 && sameRoomCount > 0 && flipCount > 0) {
-    const sameRoomTarget = standardSurgicalTurnover.target ?? 45
-    const flipRoomTarget = flipRoomTime.target ?? 15
+    const sameRoomTarget = sameRoomSurgicalTurnover.target ?? 45
+    const flipRoomTarget = flipRoomSurgicalTurnover.target ?? 15
     const biggerProblem = sameRoomGap * sameRoomCount > flipRoomGap * flipCount ? 'same-room' : 'flip-room'
     const totalExcessMinutes = (sameRoomGap * sameRoomCount) + (flipRoomGap * flipCount)
 
@@ -295,7 +295,7 @@ function analyzeTurnoverEfficiency(
       category: 'turnover_efficiency',
       severity: 'info',
       title: 'Surgical Turnover Breakdown',
-      body: `Same-room surgical turnover is ${standardSurgicalTurnover.displayValue} (target ≤${sameRoomTarget} min, ${sameRoomCount} transitions) while flip-room is ${flipRoomTime.displayValue} (target ≤${flipRoomTarget} min, ${flipCount} flips). The ${biggerProblem} pathway accounts for more total excess minutes — focus process improvements there first.`,
+      body: `Same-room surgical turnover is ${sameRoomSurgicalTurnover.displayValue} (target ≤${sameRoomTarget} min, ${sameRoomCount} transitions) while flip-room is ${flipRoomSurgicalTurnover.displayValue} (target ≤${flipRoomTarget} min, ${flipCount} flips). The ${biggerProblem} pathway accounts for more total excess minutes — focus process improvements there first.`,
       action: 'Compare turnover types →',
       actionRoute: '/analytics/turnover',
       drillThroughType: 'turnover',

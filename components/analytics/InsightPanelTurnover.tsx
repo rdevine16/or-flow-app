@@ -12,7 +12,7 @@ import type { TurnoverResult, TurnoverDetail, FacilityAnalyticsConfig } from '@/
 // ============================================
 
 interface InsightPanelTurnoverProps {
-  turnoverTime: TurnoverResult
+  sameRoomTurnover: TurnoverResult
   config: FacilityAnalyticsConfig
 }
 
@@ -74,10 +74,10 @@ function computeSurgeonStats(details: TurnoverDetail[], threshold: number): Surg
 // ============================================
 
 export default function InsightPanelTurnover({
-  turnoverTime,
+  sameRoomTurnover,
   config,
 }: InsightPanelTurnoverProps) {
-  const { details, compliantCount, nonCompliantCount, complianceRate } = turnoverTime
+  const { details, compliantCount, nonCompliantCount, complianceRate } = sameRoomTurnover
   const threshold = config.turnoverThresholdMinutes
   const target = config.turnoverComplianceTarget
 
