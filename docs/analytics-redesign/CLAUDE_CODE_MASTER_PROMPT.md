@@ -14,7 +14,7 @@ All files referenced below are in the project root under `/docs/analytics-redesi
 
 ### Implementation Files (integrate into the codebase):
 - `insightsEngine.ts` — Drop into `lib/insightsEngine.ts`. This is production-ready TypeScript. It imports from `@/lib/analyticsV2` and exports `generateInsights()`.
-- `IMPLEMENTATION_PLAN.md` — Phased implementation plan with exact line numbers, interface changes, and test checklists per phase.
+- `docs/implementation-plan.md` — Phased implementation plan with exact line numbers, interface changes, and test checklists per phase. (Moved from this directory to the standard docs/ location.)
 - `DRILL_THROUGH_PLAN.md` — Data availability analysis per insight type. Shows which drill-throughs need analyticsV2 changes and which don't.
 
 ## Current State
@@ -30,7 +30,7 @@ The existing page is at `app/analytics/kpi/page.tsx` (or wherever AnalyticsOverv
 
 ### Phase 1: Extend analyticsV2.ts
 
-Add `numericValue: number` to the `DailyTrackerData` interface. Every function that builds `dailyData` already computes this value before assigning a color — just add it to the return object. See IMPLEMENTATION_PLAN.md Phase 1 for exact locations.
+Add `numericValue: number` to the `DailyTrackerData` interface. Every function that builds `dailyData` already computes this value before assigning a color — just add it to the return object. See docs/implementation-plan.md Phase 1 for exact locations.
 
 Also:
 - Return `weeklyVolume` from `calculateCaseVolume` (it's computed on lines ~1216-1223 but discarded)

@@ -1,125 +1,345 @@
-# Implementation Plan: Flat Milestone List Redesign
+# ORbit Analytics Dashboard Redesign — Claude Code Implementation Plan
 
-## Summary
+## Overview
 
-Replace the grouped collapsible PhaseBlock cards with a **single flat list** where phase membership is indicated by colored vertical rails, not by grouping milestones into separate cards. All milestones (including phase boundaries) are freely draggable — phase ranges update dynamically based on where boundaries sit.
+Redesign the `/analytics/kpi` page to use information hierarchy (glance → scan → dive), replace Tremor block trackers with sparklines, add an AI Insights engine, and reorganize metrics by decision rather than data type.
 
-**Previous feature (Subphases/Edit/Archive/Intervals) is COMPLETE** — all 5 phases merged. This plan builds on that work.
+**Key constraint**: Zero new database queries. Everything derives from the existing `calculateAnalyticsOverview()` output.
 
-## Key Architecture
+## Progress
 
-- **One flat list** — all milestones in a single scrollable container, no collapsing
-- **Primary color rail** — 4px SVG bar on left edge, color matches the top-level phase
-- **Sub-phase rails** — additional 4px colored bars for child phases
-- **Boundary milestones are regular rows** — bold text, lock icon, phase tags, draggable
-- **Order determined by display_order** — `buildFlatRows` sorts ALL milestones by display_order, then computes phase ranges dynamically from boundary positions (matching reference design `docs/orbit-flat-milestones.jsx`)
-- **ROW_HEIGHT = 40px**
+| Phase | Description | Status | Commit |
+|-------|-------------|--------|--------|
+| 1 | Extend analyticsV2.ts — Sparkline Data + Utilities | DONE | `46c8acf` |
+| 2 | insightsEngine.ts (already exists, TS fix applied) | DONE (bundled with Phase 1) | `46c8acf` |
+| 3 | Build Sparkline Component | NEXT | — |
+| 4 | Redesign KPI Page Layout | Pending | — |
+| 5 | Responsive + Polish | Pending | — |
 
-## Reference Design
+### Phase 1 Notes
+- All 7 dailyData builders now include `numericValue`
+- Added `FCOTSDetail` + `firstCaseDetails` to FCOTS return (for Phase 5 drill-through)
+- Added `CaseVolumeResult` with `weeklyVolume` (previously computed but discarded)
+- Added `dailyData` to `calculateNonOperativeTime` (was missing)
+- Added `getKPIStatus()` utility for 3-tier status
+- Fixed TS narrowing bug in `insightsEngine.ts` `findWorstDayOfWeek`
+- 20 new unit tests in `lib/__tests__/analyticsV2-phase1.test.ts`
+- insightsEngine.ts was already in `lib/` — confirmed fully compatible, no changes needed beyond the TS fix
 
-`docs/orbit-flat-milestones.jsx` — standalone React component showing the target UX.
-
----
-
-## Phase 1: Core component + utility ✅ COMPLETE
-
-**Commit:** `69e456d feat(milestones): phase 1 - FlatMilestoneList component and buildFlatRows utility`
-
-**Files created:**
-- `lib/utils/buildFlatRows.ts` — pure function producing flat ordered `FlatRow[]`
-- `components/settings/milestones/FlatMilestoneList.tsx` — renders legend, rails, brackets, rows
-- `lib/utils/__tests__/buildFlatRows.test.ts` — 16 unit tests
-
----
-
-## Phase 2: Wire up milestones page (table mode) ✅ COMPLETE
-
-**Commit:** `74e1e49 feat(milestones): phase 2 - milestones page uses FlatMilestoneList`
-
-**Files modified:**
-- `app/settings/milestones/page.tsx` — replaced PhaseBlock/BoundaryMarker loop with single `<FlatMilestoneList>`
-- `lib/utils/buildFlatRows.ts` — **rewritten** to sort ALL milestones by display_order and compute phase ranges dynamically (matching reference design approach)
-- `components/settings/milestones/FlatMilestoneList.tsx` — all milestones (including boundaries) are draggable, no cross-phase constraint
-
-**Key changes:**
-- Removed `toBlockMilestones`, `phaseBlockData`, `unphasedMilestones`, `renderData` computed blocks (~240 lines)
-- Removed `handleCrossPhaseMove` (free reorder across full list)
-- `handleReorder` persists order for ALL milestones (boundaries included)
-- `buildFlatRows` now sorts by display_order first, computes phase ranges from boundary positions (like reference `computePhaseRanges`)
+### Phase 2 Notes
+- `lib/insightsEngine.ts` was already placed by the user before Phase 1 started
+- Verified all type imports match `analyticsV2.ts` (zero mismatches)
+- The only change needed was the TS narrowing fix (done in Phase 1 commit)
+- Integration into the page component (the `useMemo` wiring) will happen in Phase 4 when the page is redesigned
 
 ---
 
-## ⚠️ Verify Before Phase 3
+## Phase 1: Extend `analyticsV2.ts` — Sparkline Data + Utilities ✅
 
-**Left-side color rails need visual verification.** The primary rail SVG and sub-phase rail divs are implemented in `FlatMilestoneList.tsx` (lines 180-246) and data flows from `buildFlatRows`. However, the user has not confirmed they render correctly in the browser. Before starting Phase 3:
-1. Load the milestones page for a facility WITH phase_definitions (e.g., River Walk)
-2. Confirm the primary color rail (4px colored bar) appears on the left edge
-3. Confirm sub-phase rails appear next to the primary rail for child phases
-4. Confirm gradient transitions appear at shared boundary milestones
-5. If rails are NOT visible, debug: check `primaryColor` values in rows, check CSS positioning/z-index, check `overflow-hidden` on container
+### Goal
+Add numeric daily values to every KPI so sparklines can render actual trend lines instead of color blocks.
+
+### Changes to `lib/analyticsV2.ts`
+
+**1. Add `numericValue` to `DailyTrackerData` interface (line ~58):**
+
+```ts
+export interface DailyTrackerData {
+  date: string
+  color: Color
+  tooltip: string
+  numericValue: number  // ← ADD: raw value for sparkline rendering
+}
+```
+
+**2. Populate `numericValue` in every function that builds `dailyData`:**
+
+Each calculation function already computes the numeric value before assigning a color. Add it to the return object:
+
+- `calculateFCOTS` (line ~892): Add `numericValue: dayRate`
+- `calculateTurnoverTime` (line ~1006): Add `numericValue: dayMedian`
+- `calculateORUtilization` (line ~1163): Add `numericValue: dayAvg`
+- `calculateCancellationRate` (line ~1277): Add `numericValue: data.sameDay`
+- `calculateCumulativeTardiness` (line ~1330): Add `numericValue: minutes`
+- `calculateSurgicalTurnovers` sameRoomDailyData (line ~741): Add `numericValue: dayMedian`
+- `calculateSurgicalTurnovers` flipRoomDailyData (line ~753): Add `numericValue: dayMedian`
+
+**3. Return `weeklyVolume` from `calculateCaseVolume` (line ~1199):**
+
+The weekly volume Map is already calculated on lines 1216-1223 but discarded. Add to return:
+
+```ts
+// Add to KPIResult or create CaseVolumeResult extending KPIResult
+export interface CaseVolumeResult extends KPIResult {
+  weeklyVolume: Array<{ week: string; count: number }>
+}
+```
+
+Update the return to include `weeklyVolume: Array.from(weeklyVolume.entries()).sort(...).map(...)`.
+
+**4. Add `dailyData` to `calculateNonOperativeTime` (line ~1355):**
+
+Follow the same pattern as other functions — group by `c.scheduled_date`, compute daily average, assign color thresholds.
+
+**5. Add utility function for 3-tier status:**
+
+```ts
+export function getKPIStatus(
+  value: number,
+  target: number,
+  inverse: boolean = false
+): 'good' | 'warn' | 'bad' {
+  const ratio = inverse ? target / Math.max(value, 0.01) : value / Math.max(target, 0.01)
+  if (ratio >= 1) return 'good'
+  if (ratio >= 0.7) return 'warn'
+  return 'bad'
+}
+```
+
+**6. Update `AnalyticsOverview` interface (line ~151):**
+
+Change `caseVolume: KPIResult` → `caseVolume: CaseVolumeResult`
+
+### Testing (Phase 1)
+
+```
+- Unit: Verify numericValue is populated for all KPIs with test data
+- Unit: Verify getKPIStatus returns correct tier for edge cases (0, equal-to-target, above-target)
+- Unit: Verify weeklyVolume array is sorted chronologically
+- Integration: calculateAnalyticsOverview returns all new fields without breaking existing consumers
+- Workflow: Existing KPI page still renders correctly (backward compatible)
+```
+
+### Commit point: `feat: add sparkline numeric data and status utilities to analyticsV2`
 
 ---
 
-## Phase 3: Wire up procedure + surgeon pages (config mode) — NEXT
+## Phase 2: Create `insightsEngine.ts` ✅ (bundled with Phase 1)
 
-**Replace PhaseBlock + BoundaryMarker on both config-mode pages with FlatMilestoneList.**
+### Goal
+Add the insight synthesis engine as a new file with zero coupling to UI components.
 
-### Files to modify
-- `app/settings/procedure-milestones/page.tsx`
-- `app/settings/surgeon-milestones/page.tsx`
+### File: `lib/insightsEngine.ts`
 
-### Key changes (both pages)
-1. Add `buildFlatRows()` call to produce `flatRows`
-2. Remove `renderData` computation and PhaseBlock rendering loop
-3. Adapt `handleReorder` signature to accept `FlatRow[]`
-4. Replace render with `<FlatMilestoneList mode="config" .../>`
-5. Remove PhaseBlock/BoundaryMarker/PairBracketOverlay imports
+Copy the `insightsEngine.ts` file provided (attached to this plan). This file:
 
-### Page-specific notes
+- Exports `generateInsights(analytics: AnalyticsOverview, config?: InsightsConfig): Insight[]`
+- Contains 7 analyzer functions that each examine one domain
+- Returns prioritized, severity-ranked insights with financial projections
+- Uses only the `AnalyticsOverview` type from analyticsV2 — no DB access
 
-**Procedure page:**
-- `config={effectiveConfig}`, `parentConfig={defaultConfig}`, `overrideLabel="OVERRIDE"`
-- `draggable={isCustomized}`, `onReorder` only when customized
+### Integration point in `kpi.js` (page component):
 
-**Surgeon page:**
-- `config={effectiveConfig}`, `parentConfig={parentConfig}` (procedure-level), `overrideLabel="SURGEON"`
-- `draggable={true}` (always)
-- Uses `configOrderMap` for milestone sorting — pass to `buildFlatRows`
-- InheritanceBreadcrumb stays above the list
+```ts
+import { generateInsights, type Insight } from '@/lib/insightsEngine'
 
-### Commit
-`feat(milestones): phase 3 - procedure and surgeon pages use FlatMilestoneList`
+// Inside the component, after analytics useMemo:
+const insights = useMemo(() => {
+  return generateInsights(analytics, {
+    revenuePerORMinute: 36,  // Could come from facility_analytics_settings
+    revenuePerCase: 5800,
+  })
+}, [analytics])
+```
 
----
+### Testing (Phase 2)
 
-## Phase 4: Delete dead code ✅ COMPLETE
+```
+- Unit: generateInsights returns empty array for empty analytics
+- Unit: FCOTS at 90% (above target) generates 'positive' severity, not 'warning'
+- Unit: Zero cancellations generates streak insight with correct day count
+- Unit: Financial projections use config values, not hardcoded
+- Unit: Insights are sorted critical → warning → positive → info
+- Unit: maxInsights config caps output length
+- Integration: insights array is stable across re-renders (useMemo works correctly)
+```
 
-**Commit:** `15e8d70 refactor(milestones): phase 4 - remove PhaseBlock, BoundaryMarker, PairBracketOverlay`
-
-**Remove PhaseBlock, BoundaryMarker, PairBracketOverlay, and their tests. Move bracket utilities to shared location.**
-
-### Files to delete
-- `components/settings/milestones/PhaseBlock.tsx`
-- `components/settings/milestones/BoundaryMarker.tsx`
-- `components/settings/milestones/PairBracketOverlay.tsx`
-- `components/settings/milestones/__tests__/PhaseBlock.test.tsx`
-- `components/settings/milestones/__tests__/BoundaryMarker.test.tsx`
-- `components/settings/milestones/__tests__/PairBracketOverlay.test.tsx`
-
-### Files to create/modify
-- **Create `lib/utils/bracketUtils.ts`** — move `computeBracketData`, `computeBracketAreaWidth` from PairBracketOverlay.tsx before deleting
-- **Update `FlatMilestoneList.tsx`** — change import path for bracket utilities
-
-### Commit
-`refactor(milestones): phase 4 - remove PhaseBlock, BoundaryMarker, PairBracketOverlay`
+### Commit point: `feat: add AI insights synthesis engine`
 
 ---
 
-## Session Log
+## Phase 3: Build Sparkline Component ← NEXT
 
-| Date | Session | What happened |
-|------|---------|---------------|
-| 2026-02-16 | Session 1 | Phase 1 complete. Created buildFlatRows + FlatMilestoneList + 16 tests. |
-| 2026-02-16 | Session 2 | Phase 2 complete. Wired milestones page. Rewrote buildFlatRows to sort by display_order and compute phase ranges dynamically (matching reference design). Fixed boundary milestone draggability — all milestones now freely reorderable. |
-| 2026-02-16 | Session 3 | Phase 3 complete. Replaced PhaseBlock/BoundaryMarker on procedure + surgeon pages with FlatMilestoneList. Removed ~380 lines of dead renderData/phaseBlockData/toBlockMilestones code. Added configOrderMap for customized procedures. |
-| 2026-02-16 | Session 4 | Phase 4 complete. Deleted PhaseBlock, BoundaryMarker, PairBracketOverlay + tests (6 files, -2174 lines). Moved bracket utils to lib/utils/bracketUtils.ts. Inlined PhaseBlockMilestone into buildFlatRows.ts. Ported 14 bracket tests. |
+### Goal
+Create a reusable SVG sparkline component to replace Tremor Tracker blocks.
+
+### File: `components/ui/Sparkline.tsx`
+
+```tsx
+interface SparklineProps {
+  data: number[]
+  color?: string        // Defaults based on status
+  width?: number        // Default 120
+  height?: number       // Default 32
+  showArea?: boolean    // Default true
+  strokeWidth?: number  // Default 1.5
+  className?: string
+}
+```
+
+Key implementation notes:
+- Pure SVG, no external dependencies
+- Handles edge cases: single data point, all-zero, empty array
+- Endpoint dot with white fill + colored stroke for visibility on both light/dark backgrounds
+- Area fill at 7% opacity for subtle depth
+- Responsive: accepts className for Tailwind width overrides
+
+Also create a helper to extract sparkline data from existing `DailyTrackerData[]`:
+
+```ts
+// In the component or as a utility
+export function dailyDataToSparkline(dailyData?: DailyTrackerData[]): number[] {
+  if (!dailyData) return []
+  return dailyData.map(d => d.numericValue)
+}
+```
+
+### Testing (Phase 3)
+
+```
+- Unit: Renders without error with empty data array
+- Unit: Renders single data point without NaN in path
+- Unit: SVG dimensions match width/height props
+- Visual: Compare sparkline output against Tremor Tracker for same data set
+```
+
+### Commit point: `feat: add Sparkline SVG component`
+
+---
+
+## Phase 4: Redesign KPI Page Layout
+
+### Goal
+Replace the current equal-weight card grid with the 4-layer information hierarchy.
+
+### File: `app/analytics/kpi/page.tsx` (or wherever `AnalyticsOverviewPage` lives)
+
+### Layer 1: Health Overview (ORbit Score + Action Items)
+
+**ORbit Score**: If the scoring engine is available, import and display the radar chart. If not yet integrated, create a placeholder card with a "Coming Soon" state that shows the 4 KPI status dots as a simplified health check instead.
+
+**Action Items**: Derive from analytics data:
+```ts
+const actionItems = useMemo(() => {
+  const items = []
+  if (!analytics.fcots.targetMet) items.push({ text: `First case on-time at ${analytics.fcots.displayValue}`, status: 'bad' })
+  if (!analytics.orUtilization.targetMet) items.push({ text: `OR utilization at ${analytics.orUtilization.displayValue}`, status: 'bad' })
+  const callSoonerCount = analytics.surgeonIdleSummaries.filter(s => s.status === 'call_sooner').length
+  if (callSoonerCount > 0) items.push({ text: `${callSoonerCount} surgeons need earlier callbacks`, status: 'warn' })
+  if (analytics.cancellationRate.sameDayCount === 0) items.push({ text: 'Zero same-day cancellations', status: 'good' })
+  return items
+}, [analytics])
+```
+
+### Layer 2: KPI Strip (4 cards, horizontal)
+
+Replace current `KPICard` usage with a denser card that includes:
+- Status dot (3-tier from `getKPIStatus`)
+- Sparkline (from `dailyDataToSparkline(kpi.dailyData)`)
+- Target gauge (mini progress bar)
+- Detail text in footer
+
+Remove the Tremor `<Tracker>` component entirely.
+
+### Layer 3: Two-Column Operational Layout
+
+**Left column — "Where are we losing time?"**
+- Turnover metrics as compact horizontal rows (not full cards)
+- Each row: status dot | label + detail | sparkline | value + trend
+
+**Right column — "What should we fix?"**
+- Callback optimization as a card with:
+  - Summary strip (3 values: overall, flip, same-room)
+  - Table of surgeon rows (reuse existing SurgeonIdleTimeCard data)
+
+### Layer 4: AI Insights
+
+Render `insights` array from Phase 2 as severity-coded cards:
+- Left color border (3px) by severity
+- Severity label badge
+- Body text
+- Action link + financial impact badge
+
+### What to Remove
+
+- Tremor `Tracker` component import
+- Tremor `BarChart` and `DonutChart` (move to a separate "Visual Analytics" sub-page or keep below the fold)
+- `SurgeonIdleTimeCard` component (replaced by inline table)
+- Row 4 "Time Breakdown" (6 mini cards) — move to time breakdown detail page
+- Row 5 "Visual Analytics" (bar + donut charts) — move to detail page
+- OR Utilization Modal — keep but trigger from the utilization KPI card click
+
+### Testing (Phase 4)
+
+```
+- Unit: actionItems generates correct items for various analytics states
+- Integration: Page renders without error for all date filter selections
+- Integration: Empty state (0 cases) renders gracefully
+- Workflow: Date filter changes trigger data refresh and re-render all layers
+- Workflow: OR Utilization modal still opens from KPI card click
+- Visual: All 4 layers visible above the fold on 1440px screen
+- Visual: Responsive behavior on tablet (1024px) — two-column collapses to single
+- Accessibility: All interactive elements have focus states and aria labels
+```
+
+### Commit point: `feat: redesign analytics page with information hierarchy`
+
+---
+
+## Phase 5: Responsive + Polish
+
+### Goal
+Handle mobile/tablet breakpoints and add micro-interactions.
+
+### Changes
+
+1. **Responsive breakpoints** (Tailwind classes):
+   - `lg` (1024+): Full 4-column KPI strip, 2-column operational layout
+   - `md` (768-1023): 2-column KPI strip, stacked operational layout
+   - `sm` (<768): Single column everything, compact cards
+
+2. **Staggered load animation**: Each layer fades in with 80ms delay (CSS `animation-delay` or React state)
+
+3. **Hover states**: Subtle border color shift + shadow on all cards
+
+4. **Sparkline tooltips**: Show value on hover (optional, lower priority)
+
+5. **Financial impact formatting**: Ensure `formatCompactNumber` handles edge cases
+
+### Testing (Phase 5)
+
+```
+- Visual: Test at 1440px, 1024px, 768px, 375px breakpoints
+- Visual: Stagger animation plays correctly on initial load
+- Visual: Hover states on all interactive cards
+- Accessibility: Tab navigation through all clickable elements
+- Performance: No layout shift during load animation
+```
+
+### Commit point: `feat: responsive layout and polish for analytics redesign`
+
+---
+
+## File Summary
+
+| File | Action | Phase |
+|---|---|---|
+| `lib/analyticsV2.ts` | Modify — add numericValue, weeklyVolume, non-op dailyData, getKPIStatus | 1 |
+| `lib/insightsEngine.ts` | **Create** — insight synthesis engine | 2 |
+| `components/ui/Sparkline.tsx` | **Create** — SVG sparkline component | 3 |
+| `app/analytics/kpi/page.tsx` | Modify — full layout redesign | 4 |
+| `components/ui/KPICard.tsx` | Modify or replace — denser layout with sparkline | 4 |
+| `components/ui/SurgeonIdleTimeCard.tsx` | Remove — replaced by inline table | 4 |
+
+## Dependencies
+
+- No new npm packages required
+- Tremor `Tracker` import can be removed after Phase 4
+- Tremor `BarChart`, `DonutChart`, `Legend` can be removed if charts move to sub-page
+- All existing Supabase queries remain unchanged
+
+## Risk Notes
+
+- `insightsEngine.ts` parses subtitle strings (e.g., `"11 late of 16 first cases"`) via regex. If subtitle format changes in analyticsV2, the regex will silently fail and that insight won't generate. Consider adding the raw values to the KPIResult interface in a future pass so insights don't depend on string parsing.
+- Financial projections are estimates based on configurable defaults. Add a disclaimer tooltip: "Estimates based on $36/OR minute. Configure in Settings."
+- The ORbit Score radar chart requires the scoring engine. If not yet available, Phase 4 should use the simplified health check placeholder instead of blocking the entire redesign.
