@@ -695,7 +695,7 @@ export function computePhaseDurations(
       if (startTs && endTs) {
         const startMs = new Date(startTs).getTime()
         const endMs = new Date(endTs).getTime()
-        if (endMs > startMs) {
+        if (!isNaN(startMs) && !isNaN(endMs) && endMs > startMs) {
           durationSeconds = (endMs - startMs) / 1000
         }
       }

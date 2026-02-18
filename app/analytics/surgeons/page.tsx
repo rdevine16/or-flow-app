@@ -42,7 +42,7 @@ import {
 } from '@/lib/analyticsV2'
 
 // Enterprise analytics components
-import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Pencil, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
+import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Info, Pencil, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
 import {
   SectionHeader,
   EnhancedMetricCard,
@@ -1246,7 +1246,17 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         }
                       />
 
-                      {caseBreakdown.length === 0 ? (
+                      {phaseDefinitions.length === 0 ? (
+                        <div className="mt-4">
+                          <EmptyState
+                            icon={
+                              <Info className="w-6 h-6 text-slate-400" />
+                            }
+                            title="No Phases Configured"
+                            description="This facility has no phase definitions configured. Set up phases in Settings to see case breakdowns."
+                          />
+                        </div>
+                      ) : caseBreakdown.length === 0 ? (
                         <div className="mt-4">
                           <EmptyState
                             icon={
