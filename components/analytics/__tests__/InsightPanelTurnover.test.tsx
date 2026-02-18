@@ -121,4 +121,67 @@ describe('InsightPanelTurnover', () => {
     expect(screen.getByText('OK')).toBeDefined()
     expect(screen.getByText('Over')).toBeDefined()
   })
+
+  // ============================================
+  // Phase 3: flipRoomTurnover optional prop
+  // Added in turnover-4-metric-restructure Phase 3
+  // ============================================
+
+  it('renders without error when flipRoomTurnover prop is omitted (undefined)', () => {
+    // flipRoomTurnover is optional — omitting it must not crash the component
+    const details = [makeDetail({ isCompliant: true })]
+    expect(() =>
+      render(<InsightPanelTurnover sameRoomTurnover={makeTurnoverResult(details)} config={defaultConfig} />)
+    ).not.toThrow()
+  })
+
+  it('renders without error when flipRoomTurnover prop is provided with zero value', () => {
+    // The most common production case: no flip-room turnovers this period
+    const details = [makeDetail({ isCompliant: true })]
+    const noFlips: TurnoverResult = {
+      value: 0,
+      displayValue: '--',
+      subtitle: 'No flip-room turnovers',
+      details: [],
+      compliantCount: 0,
+      nonCompliantCount: 0,
+      complianceRate: 0,
+    }
+    expect(() =>
+      render(
+        <InsightPanelTurnover
+          sameRoomTurnover={makeTurnoverResult(details)}
+          flipRoomTurnover={noFlips}
+          config={defaultConfig}
+        />
+      )
+    ).not.toThrow()
+    // Same-room detail table still renders correctly when flipRoomTurnover is zero
+    expect(screen.getByText('Turnover Detail')).toBeDefined()
+  })
+
+  it('renders without error when flipRoomTurnover prop is provided with real data', () => {
+    // Flip-room data present — component must accept the prop without crashing
+    const details = [makeDetail({ isCompliant: true })]
+    const withFlips: TurnoverResult = {
+      value: 35,
+      displayValue: '35 min',
+      subtitle: '10 flips',
+      details: [makeDetail({ roomName: 'OR-2', turnoverMinutes: 35, isCompliant: false })],
+      compliantCount: 5,
+      nonCompliantCount: 5,
+      complianceRate: 50,
+    }
+    expect(() =>
+      render(
+        <InsightPanelTurnover
+          sameRoomTurnover={makeTurnoverResult(details)}
+          flipRoomTurnover={withFlips}
+          config={defaultConfig}
+        />
+      )
+    ).not.toThrow()
+    // Same-room compliance summary must still render (prop must not disrupt existing layout)
+    expect(screen.getByText('Turnover Detail')).toBeDefined()
+  })
 })

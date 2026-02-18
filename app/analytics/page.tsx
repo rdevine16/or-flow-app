@@ -799,13 +799,11 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-slate-50/50">
-        <Container className="py-8">
           {/* Page Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-semibold text-slate-900">Analytics</h1>
-              <p className="text-slate-500 mt-1">
+              <p className="text-slate-500 text-sm mt-1">
                 Performance insights and operational metrics
               </p>
             </div>
@@ -839,7 +837,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       trendType={analytics.fcots.deltaType === 'increase' ? 'up' : analytics.fcots.deltaType === 'decrease' ? 'down' : undefined}
     />
     <QuickStatCard
-      title="Avg Turnover"
+      title="Same Room Turnover"
       value={analytics.sameRoomTurnover.displayValue}
       icon={RefreshCw}
       trend={analytics.sameRoomTurnover.delta}
@@ -1082,8 +1080,6 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
               />
             </div>
           )}
-        </Container>
-      </div>
     </DashboardLayout>
   )
 }

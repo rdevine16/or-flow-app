@@ -846,6 +846,218 @@ describe('Insight.drillThroughType field', () => {
 })
 
 // ============================================
+// Phase 3: turnover-room-comparison insight (same-room vs flip-room room turnovers)
+// Added in insightsEngine.ts during turnover-4-metric-restructure Phase 3
+// ============================================
+
+describe('turnover-room-comparison insight', () => {
+  it('generates turnover-room-comparison when flip-room is 5+ min longer than same-room', () => {
+    // flip=35, same=25 → diff=+10 → triggers insight (flip-room pathway longer)
+    const analytics = makeAnalytics({
+      sameRoomTurnover: { ...makeKPI({
+        value: 25,
+        displayValue: '25 min',
+        target: 80,
+        targetMet: true,
+        subtitle: '80% under 30 min target · 40 turnovers',
+      }), details: [], compliantCount: 32, nonCompliantCount: 8, complianceRate: 80 },
+      flipRoomTurnover: {
+        value: 35,
+        displayValue: '35 min',
+        target: 80,
+        targetMet: false,
+        subtitle: '12 flips',
+        details: [],
+        compliantCount: 6,
+        nonCompliantCount: 6,
+        complianceRate: 50,
+      },
+    })
+
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'turnover-room-comparison')
+
+    expect(insight).toBeDefined()
+    expect(insight?.severity).toBe('info')
+    expect(insight?.drillThroughType).toBe('turnover')
+    // Body must name the longer pathway (flip-room) and include the absolute diff
+    expect(insight?.body).toContain('flip-room')
+    expect(insight?.body).toContain('10 min longer')
+  })
+
+  it('generates turnover-room-comparison when same-room is 5+ min longer than flip-room', () => {
+    // same=38, flip=20 → diff=-18 → triggers insight (same-room pathway longer)
+    const analytics = makeAnalytics({
+      sameRoomTurnover: { ...makeKPI({
+        value: 38,
+        displayValue: '38 min',
+        target: 80,
+        targetMet: false,
+        subtitle: '40% under 30 min target · 25 turnovers',
+      }), details: [], compliantCount: 10, nonCompliantCount: 15, complianceRate: 40 },
+      flipRoomTurnover: {
+        value: 20,
+        displayValue: '20 min',
+        target: 80,
+        targetMet: true,
+        subtitle: '8 flips',
+        details: [],
+        compliantCount: 7,
+        nonCompliantCount: 1,
+        complianceRate: 88,
+      },
+    })
+
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'turnover-room-comparison')
+
+    expect(insight).toBeDefined()
+    expect(insight?.body).toContain('same-room')
+    expect(insight?.body).toContain('18 min longer')
+  })
+
+  it('does NOT generate turnover-room-comparison when diff is less than 5 min', () => {
+    // same=27, flip=30 → diff=+3 → below 5 min threshold, no insight
+    const analytics = makeAnalytics({
+      sameRoomTurnover: { ...makeKPI({
+        value: 27,
+        displayValue: '27 min',
+        target: 80,
+        targetMet: true,
+        subtitle: '82% under 30 min target · 30 turnovers',
+      }), details: [], compliantCount: 25, nonCompliantCount: 5, complianceRate: 82 },
+      flipRoomTurnover: {
+        value: 30,
+        displayValue: '30 min',
+        target: 80,
+        targetMet: true,
+        subtitle: '10 flips',
+        details: [],
+        compliantCount: 9,
+        nonCompliantCount: 1,
+        complianceRate: 90,
+      },
+    })
+
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'turnover-room-comparison')
+
+    expect(insight).toBeUndefined()
+  })
+
+  it('does NOT generate turnover-room-comparison when flip-room count is 0', () => {
+    // flip value > 0 but subtitle has no "N flips" — flipRoomTurnoverCount resolves to 0
+    const analytics = makeAnalytics({
+      sameRoomTurnover: { ...makeKPI({
+        value: 25,
+        displayValue: '25 min',
+        subtitle: '30 turnovers',
+      }), details: [], compliantCount: 20, nonCompliantCount: 5, complianceRate: 80 },
+      flipRoomTurnover: {
+        value: 35,
+        displayValue: '35 min',
+        subtitle: 'No flip count in subtitle',
+        details: [],
+        compliantCount: 0,
+        nonCompliantCount: 0,
+        complianceRate: 0,
+      },
+    })
+
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'turnover-room-comparison')
+
+    expect(insight).toBeUndefined()
+  })
+
+  it('does NOT generate turnover-room-comparison when flip-room value is 0', () => {
+    // flipRoomTurnover.value = 0 → no flips exist, guard condition prevents insight
+    const analytics = makeAnalytics({
+      sameRoomTurnover: { ...makeKPI({
+        value: 25,
+        displayValue: '25 min',
+        subtitle: '80% under 30 min target · 30 turnovers',
+      }), details: [], compliantCount: 24, nonCompliantCount: 6, complianceRate: 80 },
+      flipRoomTurnover: {
+        value: 0,
+        displayValue: '--',
+        subtitle: 'No flip-room turnovers',
+        details: [],
+        compliantCount: 0,
+        nonCompliantCount: 0,
+        complianceRate: 0,
+      },
+    })
+
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'turnover-room-comparison')
+
+    expect(insight).toBeUndefined()
+  })
+
+  it('turnover-room-comparison insight has drillThroughType = "turnover"', () => {
+    const analytics = makeAnalytics({
+      sameRoomTurnover: { ...makeKPI({
+        value: 22,
+        displayValue: '22 min',
+        target: 80,
+        targetMet: true,
+        subtitle: '85% under 30 min target · 20 turnovers',
+      }), details: [], compliantCount: 17, nonCompliantCount: 3, complianceRate: 85 },
+      flipRoomTurnover: {
+        value: 35,
+        displayValue: '35 min',
+        target: 80,
+        targetMet: false,
+        subtitle: '7 flips',
+        details: [],
+        compliantCount: 4,
+        nonCompliantCount: 3,
+        complianceRate: 57,
+      },
+    })
+
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'turnover-room-comparison')
+
+    expect(insight).toBeDefined()
+    expect(insight?.drillThroughType).toBe('turnover')
+    expect(Object.prototype.hasOwnProperty.call(insight, 'drillThroughType')).toBe(true)
+  })
+
+  it('turnover-room-comparison metadata contains sameRoomMedian, flipRoomMedian, and diff', () => {
+    const analytics = makeAnalytics({
+      sameRoomTurnover: { ...makeKPI({
+        value: 24,
+        displayValue: '24 min',
+        target: 80,
+        targetMet: true,
+        subtitle: '82% under 30 min target · 18 turnovers',
+      }), details: [], compliantCount: 15, nonCompliantCount: 3, complianceRate: 82 },
+      flipRoomTurnover: {
+        value: 38,
+        displayValue: '38 min',
+        target: 80,
+        targetMet: false,
+        subtitle: '9 flips',
+        details: [],
+        compliantCount: 4,
+        nonCompliantCount: 5,
+        complianceRate: 44,
+      },
+    })
+
+    const insights = generateInsights(analytics)
+    const insight = insights.find(i => i.id === 'turnover-room-comparison')
+
+    expect(insight).toBeDefined()
+    expect(insight?.metadata.sameRoomMedian).toBe(24)
+    expect(insight?.metadata.flipRoomMedian).toBe(38)
+    expect(insight?.metadata.diff).toBe(14) // Math.round(38 - 24)
+  })
+})
+
+// ============================================
 // KPI page integration: orHourlyRate + operatingDaysPerYear
 // (Tests the exact call pattern used by app/analytics/kpi/page.tsx)
 // ============================================

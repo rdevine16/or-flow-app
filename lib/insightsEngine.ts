@@ -242,7 +242,7 @@ function analyzeTurnoverEfficiency(
   cfg: ResolvedInsightsConfig
 ): Insight[] {
   const insights: Insight[] = []
-  const { sameRoomTurnover, sameRoomSurgicalTurnover, flipRoomSurgicalTurnover } = analytics
+  const { sameRoomTurnover, flipRoomTurnover, sameRoomSurgicalTurnover, flipRoomSurgicalTurnover } = analytics
 
   // Compare same-room vs flip-room to identify the bigger lever
   const sameRoomGap = sameRoomSurgicalTurnover.value - (sameRoomSurgicalTurnover.target ?? 45)
@@ -301,6 +301,29 @@ function analyzeTurnoverEfficiency(
       drillThroughType: 'turnover',
       metadata: { sameRoomGap, flipRoomGap, biggerProblem, totalExcessMinutes },
     })
+  }
+
+  // Room turnover comparison: same-room vs flip-room (facility perspective)
+  if (flipRoomTurnover.value > 0 && sameRoomTurnover.value > 0) {
+    const diff = Math.round(flipRoomTurnover.value - sameRoomTurnover.value)
+    const flipRoomCountMatch = flipRoomTurnover.subtitle.match(/(\d+)\s+flips/)
+    const flipRoomTurnoverCount = flipRoomCountMatch ? parseInt(flipRoomCountMatch[1]) : 0
+    const sameRoomTurnoverCountMatch = sameRoomTurnover.subtitle.match(/(\d+)\s+turnovers/) || sameRoomTurnover.subtitle.match(/·\s+(\d+)\s/)
+    const sameRoomTurnoverCount = sameRoomTurnoverCountMatch ? parseInt(sameRoomTurnoverCountMatch[1]) : 0
+
+    if (Math.abs(diff) >= 5 && flipRoomTurnoverCount > 0) {
+      const longer = diff > 0 ? 'flip-room' : 'same-room'
+      insights.push({
+        id: 'turnover-room-comparison',
+        category: 'turnover_efficiency',
+        severity: 'info',
+        title: 'Room Turnover: Same vs Flip',
+        body: `Same-room turnover is ${sameRoomTurnover.displayValue} (${sameRoomTurnoverCount} turnovers) while flip-room turnover is ${flipRoomTurnover.displayValue} (${flipRoomTurnoverCount} flips). The ${longer} pathway takes ${Math.abs(diff)} min longer — ${diff > 0 ? 'flip rooms may need more lead time for cleaning/prep before the surgeon arrives' : 'same-room turnovers are slower despite no room change, suggesting process bottlenecks'}.`,
+        action: 'View room turnover detail →',
+        drillThroughType: 'turnover',
+        metadata: { sameRoomMedian: sameRoomTurnover.value, flipRoomMedian: flipRoomTurnover.value, diff },
+      })
+    }
   }
 
   return insights

@@ -901,43 +901,65 @@ export default function AnalyticsOverviewPage() {
                 </div>
               </section>
 
-              {/* ROW 2: TURNOVER METRICS (4 cards including Non-Operative) */}
+              {/* ROW 2: TURNOVER METRICS (2x2 + 1) */}
               <section>
                 <SectionHeader
                   title="Turnover Metrics"
                   subtitle="Room and surgeon transition efficiency"
                 />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <KPICard 
-                    title="Median Same Room Turnover" 
-                    kpi={analytics.sameRoomTurnover}
-                    icon={Clock}
-                    accentColor="green"
-                    tooltip="Time from Patient Out (Case A) to Patient In (Case B) in the same room. Measures room cleaning and prep efficiency."
-                  />
-                  <KPICard 
-                    title="Median Same-Room Surgical Turnover" 
-                    kpi={analytics.sameRoomSurgicalTurnover}
-                    icon={Clock}
-                    accentColor="blue"
-                    tooltip="Time from Surgeon Done (Case A) to Incision (Case B) for the same surgeon in the same room. Measures how long the surgeon waits between cuts."
-                  />
-                  <KPICard 
-                    title="Median Flip-Room Surgical Turnover" 
-                    kpi={analytics.flipRoomSurgicalTurnover}
-                    icon={ArrowRight}
-                    accentColor="violet"
-                    tooltip="Time from Surgeon Done (Case A) to Incision (Case B) when the surgeon moves to a different room. Measures flip room transition efficiency."
-                  />
-                  <KPICard 
-                    title="Non-Operative Time" 
-                    kpi={analytics.nonOperativeTime}
-                    icon={Clock}
-                    accentColor="amber"
-                    showTracker={false}
-                    invertDelta={true}
-                    tooltip="Average time the patient is in the OR but not being operated on. Includes Pre-Op (Patient In → Incision) and Post-Op (Closing Complete → Patient Out)."
-                  />
+                <div className="space-y-4">
+                  {/* Row 1: Room Turnovers (facility perspective) */}
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Room Turnovers</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <KPICard
+                        title="Same-Room Turnover"
+                        kpi={analytics.sameRoomTurnover}
+                        icon={Clock}
+                        accentColor="green"
+                        tooltip="Time from Patient Out (Case A) to Patient In (Case B) in the same room. Measures room cleaning and prep efficiency."
+                      />
+                      <KPICard
+                        title="Flip-Room Turnover"
+                        kpi={analytics.flipRoomTurnover}
+                        icon={ArrowRight}
+                        accentColor="green"
+                        tooltip="Time from Patient Out (previous case in Room Y) to Patient In (surgeon's flip case in Room Y). Measures how quickly the destination room was prepared for a flip."
+                      />
+                    </div>
+                  </div>
+                  {/* Row 2: Surgical Turnovers (surgeon perspective) */}
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Surgical Turnovers</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <KPICard
+                        title="Same-Room Surgical"
+                        kpi={analytics.sameRoomSurgicalTurnover}
+                        icon={Clock}
+                        accentColor="blue"
+                        tooltip="Time from Surgeon Done (Case A) to Incision (Case B) for the same surgeon in the same room. Measures how long the surgeon waits between cuts."
+                      />
+                      <KPICard
+                        title="Flip-Room Surgical"
+                        kpi={analytics.flipRoomSurgicalTurnover}
+                        icon={ArrowRight}
+                        accentColor="violet"
+                        tooltip="Time from Surgeon Done (Case A) to Incision (Case B) when the surgeon moves to a different room. Measures flip room transition efficiency."
+                      />
+                    </div>
+                  </div>
+                  {/* Row 3: Non-Operative Time */}
+                  <div>
+                    <KPICard
+                      title="Non-Operative Time"
+                      kpi={analytics.nonOperativeTime}
+                      icon={Clock}
+                      accentColor="amber"
+                      showTracker={false}
+                      invertDelta={true}
+                      tooltip="Average time the patient is in the OR but not being operated on. Includes Pre-Op (Patient In → Incision) and Post-Op (Closing Complete → Patient Out)."
+                    />
+                  </div>
                 </div>
               </section>
 

@@ -330,7 +330,15 @@ describe('exportTurnoverEfficiency', () => {
       complianceRate: 67,
     }
 
-    exportTurnoverEfficiency(roomTurnover, makeKPI(), makeKPI(), makeKPI())
+    const flipRoomTurnover: TurnoverResult = {
+      ...makeKPI({ value: 32, displayValue: '32 min', target: 80, targetMet: false }),
+      details: [],
+      compliantCount: 6,
+      nonCompliantCount: 4,
+      complianceRate: 60,
+    }
+
+    exportTurnoverEfficiency(roomTurnover, flipRoomTurnover, makeKPI(), makeKPI(), makeKPI())
 
     expect(capturedFilenames[0]).toMatch(/^orbit-turnover-report-\d{4}-\d{2}\.xlsx$/)
   })
@@ -356,7 +364,15 @@ describe('exportTurnoverEfficiency', () => {
       complianceRate: 100,
     }
 
-    exportTurnoverEfficiency(roomTurnover, makeKPI(), makeKPI(), makeKPI(), details)
+    const flipRoomTurnover: TurnoverResult = {
+      ...makeKPI({ value: 35, displayValue: '35 min', target: 80, targetMet: false }),
+      details: [],
+      compliantCount: 3,
+      nonCompliantCount: 2,
+      complianceRate: 60,
+    }
+
+    exportTurnoverEfficiency(roomTurnover, flipRoomTurnover, makeKPI(), makeKPI(), makeKPI(), details)
 
     expect(capturedFilenames[0]).toMatch(/orbit-turnover-report/)
   })

@@ -149,6 +149,7 @@ export default function InsightSlideOver({ insight, onClose, analytics, config }
             ) : insight?.drillThroughType === 'turnover' ? (
               <InsightPanelTurnover
                 sameRoomTurnover={analytics.sameRoomTurnover}
+                flipRoomTurnover={analytics.flipRoomTurnover}
                 config={config}
               />
             ) : insight?.drillThroughType === 'cancellation' ? (

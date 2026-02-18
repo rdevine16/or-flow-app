@@ -13,6 +13,7 @@ import type { TurnoverResult, TurnoverDetail, FacilityAnalyticsConfig } from '@/
 
 interface InsightPanelTurnoverProps {
   sameRoomTurnover: TurnoverResult
+  flipRoomTurnover?: TurnoverResult
   config: FacilityAnalyticsConfig
 }
 
@@ -75,6 +76,7 @@ function computeSurgeonStats(details: TurnoverDetail[], threshold: number): Surg
 
 export default function InsightPanelTurnover({
   sameRoomTurnover,
+  flipRoomTurnover,
   config,
 }: InsightPanelTurnoverProps) {
   const { details, compliantCount, nonCompliantCount, complianceRate } = sameRoomTurnover

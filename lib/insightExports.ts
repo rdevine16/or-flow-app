@@ -503,6 +503,7 @@ export function exportUtilizationBreakdown(
 
 export function exportTurnoverEfficiency(
   roomTurnover: TurnoverResult,
+  flipRoomTurnover: TurnoverResult,
   sameRoomSurgical: KPIResult,
   flipRoomSurgical: KPIResult,
   nonOperativeTime: KPIResult,
@@ -517,12 +518,20 @@ export function exportTurnoverEfficiency(
     [],
     ['Metric', 'Median', 'Target', 'Met Target', 'Trend', 'Detail'],
     [
-      'Room Turnover (Patient Out → In)',
+      'Same-Room Turnover (Patient Out → In)',
       roomTurnover.displayValue,
       roomTurnover.target ? `${roomTurnover.target}% compliance` : '—',
       roomTurnover.targetMet ? 'Yes' : 'No',
       roomTurnover.delta !== undefined ? `${roomTurnover.deltaType === 'increase' ? '+' : '-'}${roomTurnover.delta}%` : '—',
       roomTurnover.subtitle,
+    ],
+    [
+      'Flip-Room Turnover (Patient Out → In)',
+      flipRoomTurnover.displayValue,
+      flipRoomTurnover.target ? `${flipRoomTurnover.target}% compliance` : '—',
+      flipRoomTurnover.targetMet ? 'Yes' : 'No',
+      flipRoomTurnover.delta !== undefined ? `${flipRoomTurnover.deltaType === 'increase' ? '+' : '-'}${flipRoomTurnover.delta}%` : '—',
+      flipRoomTurnover.subtitle,
     ],
     [
       'Same-Room Surgical Turnover',
@@ -804,7 +813,8 @@ export function exportFullAnalyticsReport(
     ['Same-Day Cancellation', analytics.cancellationRate.displayValue, `<${analytics.cancellationRate.target ?? 5}%`, analytics.cancellationRate.targetMet ? 'Yes' : 'No', analytics.cancellationRate.delta !== undefined ? `${analytics.cancellationRate.delta}%` : '—', analytics.cancellationRate.subtitle],
     [],
     ['Turnover Metrics', '', '', '', '', ''],
-    ['Room Turnover', analytics.sameRoomTurnover.displayValue, `${analytics.sameRoomTurnover.target}% compliance`, analytics.sameRoomTurnover.targetMet ? 'Yes' : 'No', analytics.sameRoomTurnover.delta !== undefined ? `${analytics.sameRoomTurnover.delta}%` : '—', analytics.sameRoomTurnover.subtitle],
+    ['Same-Room Turnover', analytics.sameRoomTurnover.displayValue, `${analytics.sameRoomTurnover.target}% compliance`, analytics.sameRoomTurnover.targetMet ? 'Yes' : 'No', analytics.sameRoomTurnover.delta !== undefined ? `${analytics.sameRoomTurnover.delta}%` : '—', analytics.sameRoomTurnover.subtitle],
+    ['Flip-Room Turnover', analytics.flipRoomTurnover.displayValue, `${analytics.flipRoomTurnover.target}% compliance`, analytics.flipRoomTurnover.targetMet ? 'Yes' : 'No', analytics.flipRoomTurnover.delta !== undefined ? `${analytics.flipRoomTurnover.delta}%` : '—', analytics.flipRoomTurnover.subtitle],
     ['Same-Room Surgical', analytics.sameRoomSurgicalTurnover.displayValue, `≤${analytics.sameRoomSurgicalTurnover.target} min`, analytics.sameRoomSurgicalTurnover.targetMet ? 'Yes' : 'No', analytics.sameRoomSurgicalTurnover.delta !== undefined ? `${analytics.sameRoomSurgicalTurnover.delta}%` : '—', analytics.sameRoomSurgicalTurnover.subtitle],
     ['Flip-Room Surgical', analytics.flipRoomSurgicalTurnover.displayValue, `≤${analytics.flipRoomSurgicalTurnover.target} min`, analytics.flipRoomSurgicalTurnover.targetMet ? 'Yes' : 'No', analytics.flipRoomSurgicalTurnover.delta !== undefined ? `${analytics.flipRoomSurgicalTurnover.delta}%` : '—', analytics.flipRoomSurgicalTurnover.subtitle],
     ['Non-Operative Time', analytics.nonOperativeTime.displayValue, '—', '—', analytics.nonOperativeTime.delta !== undefined ? `${analytics.nonOperativeTime.delta}%` : '—', analytics.nonOperativeTime.subtitle],
@@ -922,7 +932,7 @@ export function exportInsightPanel(
       exportUtilizationBreakdown(analytics.orUtilization, analytics.orUtilization.dailyData, financialConfig)
       break
     case 'turnover':
-      exportTurnoverEfficiency(analytics.sameRoomTurnover, analytics.sameRoomSurgicalTurnover, analytics.flipRoomSurgicalTurnover, analytics.nonOperativeTime, analytics.sameRoomTurnover.details)
+      exportTurnoverEfficiency(analytics.sameRoomTurnover, analytics.flipRoomTurnover, analytics.sameRoomSurgicalTurnover, analytics.flipRoomSurgicalTurnover, analytics.nonOperativeTime, analytics.sameRoomTurnover.details)
       break
     case 'cancellation':
       exportCancellationReport(analytics.cancellationRate)

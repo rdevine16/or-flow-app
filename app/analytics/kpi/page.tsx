@@ -485,6 +485,13 @@ export default function AnalyticsOverviewPage() {
       unit: 'min',
     },
     {
+      label: 'Flip-Room Turnover',
+      kpi: analytics.flipRoomTurnover,
+      status: getKPIStatus(analytics.flipRoomTurnover.value, analytics.flipRoomTurnover.target ?? config.turnoverThresholdMinutes, true),
+      sparkline: dailyDataToSparkline(analytics.flipRoomTurnover.dailyData),
+      unit: 'min',
+    },
+    {
       label: 'Flip-Room Surgical',
       kpi: analytics.flipRoomSurgicalTurnover,
       status: getKPIStatus(analytics.flipRoomSurgicalTurnover.value, analytics.flipRoomSurgicalTurnover.target ?? config.flipRoomTurnoverTarget, true),
@@ -562,13 +569,11 @@ export default function AnalyticsOverviewPage() {
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-slate-50/50">
-        <Container className="py-8">
           {/* Page Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-7">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Analytics Overview</h1>
-              <p className="text-sm text-slate-400 mt-1">
+              <h1 className="text-2xl font-semibold text-slate-900">Analytics Overview</h1>
+              <p className="text-slate-500 text-sm mt-1">
                 {analytics.completedCases} completed cases analyzed
                 {analytics.totalCases > analytics.completedCases && (
                   <span> · {analytics.totalCases} total</span>
