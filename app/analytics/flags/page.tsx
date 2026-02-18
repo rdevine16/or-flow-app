@@ -27,11 +27,12 @@ import {
   calculateAnalyticsOverview,
   formatMinutes,
   type CaseWithMilestonesAndSurgeon,
-  type FCOTSConfig,
   type RoomHoursMap,
   type ORUtilizationResult,
   type SurgeonIdleSummary,
+  type FacilityAnalyticsConfig,
 } from '@/lib/analyticsV2'
+import { useAnalyticsConfig } from '@/lib/hooks/useAnalyticsConfig'
 
 import { AlertTriangle, ArrowRight, BarChart3, CalendarDays, CheckCircle2, Clock, Info, Sparkles, TrendingDown, TrendingUp, X } from 'lucide-react'
 
@@ -596,14 +597,16 @@ function SectionHeader({
 // OR UTILIZATION MODAL (Room Breakdown)
 // ============================================
 
-function ORUtilizationModal({ 
-  isOpen, 
-  onClose, 
-  data 
-}: { 
+function ORUtilizationModal({
+  isOpen,
+  onClose,
+  data,
+  config,
+}: {
   isOpen: boolean
   onClose: () => void
   data: ORUtilizationResult
+  config: FacilityAnalyticsConfig
 }) {
   if (!isOpen) return null
   
@@ -656,35 +659,36 @@ function ORUtilizationModal({
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="p-3 bg-green-50 rounded-lg border border-green-200/60 text-center">
                     <div className="text-2xl font-semibold text-green-600">
-                      {roomBreakdown.filter(r => r.utilization >= 75).length}
+                      {roomBreakdown.filter(r => r.utilization >= config.utilizationTargetPercent).length}
                     </div>
                     <div className="text-xs text-green-600 font-medium">Above Target</div>
                   </div>
                   <div className="p-3 bg-amber-50 rounded-lg border border-amber-200/60 text-center">
                     <div className="text-2xl font-semibold text-amber-700">
-                      {roomBreakdown.filter(r => r.utilization >= 60 && r.utilization < 75).length}
+                      {roomBreakdown.filter(r => r.utilization >= config.utilizationTargetPercent * 0.8 && r.utilization < config.utilizationTargetPercent).length}
                     </div>
                     <div className="text-xs text-amber-700 font-medium">Near Target</div>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/60 text-center">
                     <div className="text-2xl font-semibold text-slate-600">
-                      {roomBreakdown.filter(r => r.utilization < 60).length}
+                      {roomBreakdown.filter(r => r.utilization < config.utilizationTargetPercent * 0.8).length}
                     </div>
-                    <div className="text-xs text-slate-500 font-medium">Below 60%</div>
+                    <div className="text-xs text-slate-500 font-medium">Below {Math.round(config.utilizationTargetPercent * 0.8)}%</div>
                   </div>
                 </div>
                 
                 {/* Room rows */}
                 {roomBreakdown.map((room) => {
-                  const barColor = room.utilization >= 75 
-                    ? 'bg-green-500' 
-                    : room.utilization >= 60 
-                    ? 'bg-amber-500' 
+                  const nearTarget = config.utilizationTargetPercent * 0.8
+                  const barColor = room.utilization >= config.utilizationTargetPercent
+                    ? 'bg-green-500'
+                    : room.utilization >= nearTarget
+                    ? 'bg-amber-500'
                     : 'bg-slate-400'
-                  const textColor = room.utilization >= 75 
-                    ? 'text-green-600' 
-                    : room.utilization >= 60 
-                    ? 'text-amber-700' 
+                  const textColor = room.utilization >= config.utilizationTargetPercent
+                    ? 'text-green-600'
+                    : room.utilization >= nearTarget
+                    ? 'text-amber-700'
                     : 'text-slate-600'
                   
                   return (
@@ -748,13 +752,12 @@ export default function AnalyticsOverviewPage() {
   
   const [showORUtilModal, setShowORUtilModal] = useState(false)
   const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
-  const [fcotsConfig, setFcotsConfig] = useState<FCOTSConfig>({ milestone: 'patient_in', graceMinutes: 2, targetPercent: 85 })
+  const { config } = useAnalyticsConfig()
 
-  // Fetch room available hours and analytics settings when facility changes
+  // Fetch room available hours when facility changes
   useEffect(() => {
     if (!effectiveFacilityId) return
-    
-    // Room hours
+
     const fetchRoomHours = async () => {
       const { data } = await supabase
         .from('or_rooms')
@@ -769,25 +772,8 @@ export default function AnalyticsOverviewPage() {
         setRoomHoursMap(map)
       }
     }
-    
-    // Facility analytics settings (FCOTS config, targets)
-    const fetchAnalyticsSettings = async () => {
-      const { data } = await supabase
-        .from('facility_analytics_settings')
-        .select('fcots_milestone, fcots_grace_minutes, fcots_target_percent')
-        .eq('facility_id', effectiveFacilityId)
-        .single()
-      if (data) {
-        setFcotsConfig({
-          milestone: (data.fcots_milestone as 'patient_in' | 'incision') || 'patient_in',
-          graceMinutes: data.fcots_grace_minutes ?? 2,
-          targetPercent: data.fcots_target_percent ?? 85,
-        })
-      }
-    }
-    
+
     fetchRoomHours()
-    fetchAnalyticsSettings()
   }, [effectiveFacilityId, supabase])
 
   // Fetch data
@@ -937,12 +923,8 @@ export default function AnalyticsOverviewPage() {
 
   // Calculate all analytics
   const analytics = useMemo(() => {
-    return calculateAnalyticsOverview(cases, previousPeriodCases, {
-      fcotsMilestone: fcotsConfig.milestone,
-      fcotsGraceMinutes: fcotsConfig.graceMinutes,
-      fcotsTargetPercent: fcotsConfig.targetPercent,
-    }, roomHoursMap)
-  }, [cases, previousPeriodCases, fcotsConfig, roomHoursMap])
+    return calculateAnalyticsOverview(cases, previousPeriodCases, config, roomHoursMap)
+  }, [cases, previousPeriodCases, config, roomHoursMap])
 
   // Chart data
   const phaseChartData = [
@@ -1243,6 +1225,7 @@ export default function AnalyticsOverviewPage() {
                 isOpen={showORUtilModal}
                 onClose={() => setShowORUtilModal(false)}
                 data={analytics.orUtilization}
+                config={config}
               />
             </div>
           )}

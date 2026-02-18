@@ -511,6 +511,8 @@ describe('calculateFCOTS target-relative colors', () => {
 
     // With target = 40%: 50 ≥ 40 → green
     const lenientResult = calculateFCOTS(cases, undefined, {
+      milestone: 'patient_in',
+      graceMinutes: 2,
       targetPercent: 40,
     })
     expect(lenientResult.dailyData![0].color).toBe('green')

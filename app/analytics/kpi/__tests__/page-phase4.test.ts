@@ -12,6 +12,7 @@ import {
   CancellationResult,
   ORUtilizationResult,
   SurgeonIdleSummary,
+  ANALYTICS_CONFIG_DEFAULTS,
 } from '@/lib/analyticsV2'
 import { dailyDataToSparkline } from '@/components/ui/Sparkline'
 import { generateInsights } from '@/lib/insightsEngine'
@@ -441,22 +442,146 @@ describe('Surgeon Split Logic', () => {
 // Non-Operative Time Status Heuristic
 // ============================================
 
-describe('Non-Operative Time Status', () => {
-  it('returns good for <= 20 min', () => {
+describe('Non-Operative Time Status (config-driven)', () => {
+  const cfg = ANALYTICS_CONFIG_DEFAULTS
+
+  it('returns good for value <= nonOpWarnMinutes', () => {
     const value = 18
-    const status = value > 30 ? 'bad' : value > 20 ? 'warn' : 'good'
+    const status = value > cfg.nonOpBadMinutes ? 'bad' : value > cfg.nonOpWarnMinutes ? 'warn' : 'good'
     expect(status).toBe('good')
   })
 
-  it('returns warn for 21-30 min', () => {
+  it('returns warn for value between nonOpWarnMinutes and nonOpBadMinutes', () => {
     const value = 27
-    const status = value > 30 ? 'bad' : value > 20 ? 'warn' : 'good'
+    const status = value > cfg.nonOpBadMinutes ? 'bad' : value > cfg.nonOpWarnMinutes ? 'warn' : 'good'
     expect(status).toBe('warn')
   })
 
-  it('returns bad for > 30 min', () => {
+  it('returns bad for value > nonOpBadMinutes', () => {
     const value = 35
-    const status = value > 30 ? 'bad' : value > 20 ? 'warn' : 'good'
+    const status = value > cfg.nonOpBadMinutes ? 'bad' : value > cfg.nonOpWarnMinutes ? 'warn' : 'good'
     expect(status).toBe('bad')
+  })
+
+  it('uses custom config thresholds correctly', () => {
+    // Custom config with wider warning range
+    const customCfg = { nonOpWarnMinutes: 15, nonOpBadMinutes: 25 }
+    const value = 20
+    const status = value > customCfg.nonOpBadMinutes ? 'bad' : value > customCfg.nonOpWarnMinutes ? 'warn' : 'good'
+    expect(status).toBe('warn') // 20 > 15 warn threshold
+  })
+})
+
+// ============================================
+// Phase 3: Config-Driven Targets
+// ============================================
+
+describe('Config-driven KPI target fallbacks', () => {
+  const cfg = ANALYTICS_CONFIG_DEFAULTS
+
+  it('KPI status uses config.fcotsTargetPercent as fallback', () => {
+    // When analytics.fcots.target is undefined, the page falls back to config
+    const value = 80
+    const status = getKPIStatus(value, cfg.fcotsTargetPercent)
+    expect(status).toBe('warn') // 80/85 ≈ 0.94 → within 0.8-1.0 range
+  })
+
+  it('KPI status uses config.utilizationTargetPercent as fallback', () => {
+    const value = 75
+    const status = getKPIStatus(value, cfg.utilizationTargetPercent)
+    expect(status).toBe('good') // 75/75 = 1.0 → good
+  })
+
+  it('KPI status uses config.cancellationTargetPercent as fallback (inverse)', () => {
+    const value = 3
+    const status = getKPIStatus(value, cfg.cancellationTargetPercent, true)
+    expect(status).toBe('good') // 5/3 = 1.67 → good (inverse)
+  })
+
+  it('turnover status uses config.turnoverThresholdMinutes as fallback', () => {
+    const value = 25
+    const status = getKPIStatus(value, cfg.turnoverThresholdMinutes, true)
+    expect(status).toBe('good') // 30/25 = 1.2 → good (inverse: below target)
+  })
+
+  it('turnover status uses config.sameRoomTurnoverTarget as fallback', () => {
+    const value = 50
+    const status = getKPIStatus(value, cfg.sameRoomTurnoverTarget, true)
+    expect(status).toBe('warn') // 45/50 = 0.9 → warn (inverse: above target but within 20%)
+  })
+
+  it('turnover status uses config.flipRoomTurnoverTarget as fallback', () => {
+    const value = 12
+    const status = getKPIStatus(value, cfg.flipRoomTurnoverTarget, true)
+    expect(status).toBe('good') // 15/12 = 1.25 → good (inverse: below target)
+  })
+})
+
+describe('OR Utilization modal config-driven thresholds', () => {
+  const cfg = ANALYTICS_CONFIG_DEFAULTS
+  const nearTarget = cfg.utilizationTargetPercent * 0.8
+
+  it('rooms above target are counted correctly', () => {
+    const rooms = [
+      { utilization: 80 },
+      { utilization: 70 },
+      { utilization: 50 },
+    ]
+    const aboveTarget = rooms.filter(r => r.utilization >= cfg.utilizationTargetPercent).length
+    expect(aboveTarget).toBe(1) // Only 80% >= 75%
+  })
+
+  it('rooms near target are counted correctly', () => {
+    const rooms = [
+      { utilization: 80 },
+      { utilization: 70 },
+      { utilization: 50 },
+    ]
+    const nearCount = rooms.filter(r => r.utilization >= nearTarget && r.utilization < cfg.utilizationTargetPercent).length
+    expect(nearCount).toBe(1) // 70% is between 60% and 75%
+  })
+
+  it('rooms below near-target threshold are counted correctly', () => {
+    const rooms = [
+      { utilization: 80 },
+      { utilization: 70 },
+      { utilization: 50 },
+    ]
+    const belowCount = rooms.filter(r => r.utilization < nearTarget).length
+    expect(belowCount).toBe(1) // 50% < 60%
+  })
+
+  it('with custom utilization target (90%), thresholds adjust correctly', () => {
+    const customTarget = 90
+    const customNearTarget = customTarget * 0.8 // 72
+    const rooms = [
+      { utilization: 80 }, // near target (72-90)
+      { utilization: 70 }, // below near target (<72)
+      { utilization: 95 }, // above target (>=90)
+    ]
+    expect(rooms.filter(r => r.utilization >= customTarget).length).toBe(1)
+    expect(rooms.filter(r => r.utilization >= customNearTarget && r.utilization < customTarget).length).toBe(1)
+    expect(rooms.filter(r => r.utilization < customNearTarget).length).toBe(1)
+  })
+})
+
+describe('Revenue config integration', () => {
+  it('converts orHourlyRate to revenuePerORMinute correctly', () => {
+    // Page does: config.orHourlyRate / 60
+    const hourlyRate = 2160 // $2160/hr = $36/min
+    const perMinute = hourlyRate / 60
+    expect(perMinute).toBe(36)
+  })
+
+  it('uses default $36/min when orHourlyRate is null', () => {
+    const orHourlyRate: number | null = null
+    const perMinute = orHourlyRate ? orHourlyRate / 60 : 36
+    expect(perMinute).toBe(36)
+  })
+
+  it('uses custom rate when orHourlyRate is set', () => {
+    const orHourlyRate: number | null = 3000 // $50/min
+    const perMinute = orHourlyRate ? orHourlyRate / 60 : 36
+    expect(perMinute).toBe(50)
   })
 })

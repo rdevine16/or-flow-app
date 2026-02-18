@@ -17,11 +17,12 @@ import {
   calculateAnalyticsOverview,
   getKPIStatus,
   type CaseWithMilestonesAndSurgeon,
-  type FCOTSConfig,
   type RoomHoursMap,
   type ORUtilizationResult,
   type KPIResult,
+  type FacilityAnalyticsConfig,
 } from '@/lib/analyticsV2'
+import { useAnalyticsConfig } from '@/lib/hooks/useAnalyticsConfig'
 
 import { ArrowRight, BarChart3, X } from 'lucide-react'
 
@@ -140,11 +141,13 @@ const SURGEON_STATUS_CONFIG: Record<
 function ORUtilizationModal({
   isOpen,
   onClose,
-  data
+  data,
+  config,
 }: {
   isOpen: boolean
   onClose: () => void
   data: ORUtilizationResult
+  config: FacilityAnalyticsConfig
 }) {
   if (!isOpen) return null
 
@@ -198,34 +201,35 @@ function ORUtilizationModal({
                 <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
                   <div className="p-2 sm:p-3 bg-green-50 rounded-lg border border-green-200/60 text-center">
                     <div className="text-xl sm:text-2xl font-semibold text-green-600">
-                      {roomBreakdown.filter(r => r.utilization >= 75).length}
+                      {roomBreakdown.filter(r => r.utilization >= config.utilizationTargetPercent).length}
                     </div>
                     <div className="text-[10px] sm:text-xs text-green-600 font-medium">Above Target</div>
                   </div>
                   <div className="p-2 sm:p-3 bg-amber-50 rounded-lg border border-amber-200/60 text-center">
                     <div className="text-xl sm:text-2xl font-semibold text-amber-700">
-                      {roomBreakdown.filter(r => r.utilization >= 60 && r.utilization < 75).length}
+                      {roomBreakdown.filter(r => r.utilization >= config.utilizationTargetPercent * 0.8 && r.utilization < config.utilizationTargetPercent).length}
                     </div>
                     <div className="text-[10px] sm:text-xs text-amber-700 font-medium">Near Target</div>
                   </div>
                   <div className="p-2 sm:p-3 bg-slate-50 rounded-lg border border-slate-200/60 text-center">
                     <div className="text-xl sm:text-2xl font-semibold text-slate-600">
-                      {roomBreakdown.filter(r => r.utilization < 60).length}
+                      {roomBreakdown.filter(r => r.utilization < config.utilizationTargetPercent * 0.8).length}
                     </div>
-                    <div className="text-[10px] sm:text-xs text-slate-500 font-medium">Below 60%</div>
+                    <div className="text-[10px] sm:text-xs text-slate-500 font-medium">Below {Math.round(config.utilizationTargetPercent * 0.8)}%</div>
                   </div>
                 </div>
 
                 {/* Room rows */}
                 {roomBreakdown.map((room) => {
-                  const barColor = room.utilization >= 75
+                  const nearTarget = config.utilizationTargetPercent * 0.8
+                  const barColor = room.utilization >= config.utilizationTargetPercent
                     ? 'bg-green-500'
-                    : room.utilization >= 60
+                    : room.utilization >= nearTarget
                     ? 'bg-amber-500'
                     : 'bg-slate-400'
-                  const textColor = room.utilization >= 75
+                  const textColor = room.utilization >= config.utilizationTargetPercent
                     ? 'text-green-600'
-                    : room.utilization >= 60
+                    : room.utilization >= nearTarget
                     ? 'text-amber-700'
                     : 'text-slate-600'
 
@@ -292,13 +296,12 @@ export default function AnalyticsOverviewPage() {
 
   const [showORUtilModal, setShowORUtilModal] = useState(false)
   const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
-  const [fcotsConfig, setFcotsConfig] = useState<FCOTSConfig>({ milestone: 'patient_in', graceMinutes: 2, targetPercent: 85 })
+  const { config } = useAnalyticsConfig()
 
-  // Fetch room available hours and analytics settings when facility changes
+  // Fetch room available hours when facility changes
   useEffect(() => {
     if (!effectiveFacilityId) return
 
-    // Room hours
     const fetchRoomHours = async () => {
       const { data } = await supabase
         .from('or_rooms')
@@ -314,24 +317,7 @@ export default function AnalyticsOverviewPage() {
       }
     }
 
-    // Facility analytics settings (FCOTS config, targets)
-    const fetchAnalyticsSettings = async () => {
-      const { data } = await supabase
-        .from('facility_analytics_settings')
-        .select('fcots_milestone, fcots_grace_minutes, fcots_target_percent')
-        .eq('facility_id', effectiveFacilityId)
-        .single()
-      if (data) {
-        setFcotsConfig({
-          milestone: (data.fcots_milestone as 'patient_in' | 'incision') || 'patient_in',
-          graceMinutes: data.fcots_grace_minutes ?? 2,
-          targetPercent: data.fcots_target_percent ?? 85,
-        })
-      }
-    }
-
     fetchRoomHours()
-    fetchAnalyticsSettings()
   }, [effectiveFacilityId, supabase])
 
   // Determine effective facility ID
@@ -494,20 +480,16 @@ export default function AnalyticsOverviewPage() {
   // ============================================
 
   const analytics = useMemo(() => {
-    return calculateAnalyticsOverview(cases, previousPeriodCases, {
-      fcotsMilestone: fcotsConfig.milestone,
-      fcotsGraceMinutes: fcotsConfig.graceMinutes,
-      fcotsTargetPercent: fcotsConfig.targetPercent,
-    }, roomHoursMap)
-  }, [cases, previousPeriodCases, fcotsConfig, roomHoursMap])
+    return calculateAnalyticsOverview(cases, previousPeriodCases, config, roomHoursMap)
+  }, [cases, previousPeriodCases, config, roomHoursMap])
 
   // AI Insights from insightsEngine
   const insights = useMemo(() => {
     return generateInsights(analytics, {
-      revenuePerORMinute: 36,
+      revenuePerORMinute: config.orHourlyRate ? config.orHourlyRate / 60 : 36,
       revenuePerCase: 5800,
     })
-  }, [analytics])
+  }, [analytics, config.orHourlyRate])
 
   // Action items for health overview
   const actionItems = useMemo(() => {
@@ -530,13 +512,13 @@ export default function AnalyticsOverviewPage() {
 
   // Health status dots for ORbit Score placeholder
   const healthStatuses = useMemo(() => ({
-    fcots: getKPIStatus(analytics.fcots.value, analytics.fcots.target ?? 85),
-    utilization: getKPIStatus(analytics.orUtilization.value, analytics.orUtilization.target ?? 75),
+    fcots: getKPIStatus(analytics.fcots.value, analytics.fcots.target ?? config.fcotsTargetPercent),
+    utilization: getKPIStatus(analytics.orUtilization.value, analytics.orUtilization.target ?? config.utilizationTargetPercent),
     volume: (analytics.caseVolume.deltaType === 'decrease' && (analytics.caseVolume.delta ?? 0) > 15
       ? 'bad' as const
       : 'good' as const),
-    cancellation: getKPIStatus(analytics.cancellationRate.value, analytics.cancellationRate.target ?? 5, true),
-  }), [analytics])
+    cancellation: getKPIStatus(analytics.cancellationRate.value, analytics.cancellationRate.target ?? config.cancellationTargetPercent, true),
+  }), [analytics, config])
 
   // ============================================
   // KPI STRIP DATA (Layer 2)
@@ -546,7 +528,7 @@ export default function AnalyticsOverviewPage() {
     {
       label: 'First Case On-Time',
       kpi: analytics.fcots as KPIResult,
-      status: getKPIStatus(analytics.fcots.value, analytics.fcots.target ?? 85),
+      status: getKPIStatus(analytics.fcots.value, analytics.fcots.target ?? config.fcotsTargetPercent),
       sparkline: dailyDataToSparkline(analytics.fcots.dailyData),
       onClick: undefined as (() => void) | undefined,
       inverse: false,
@@ -554,7 +536,7 @@ export default function AnalyticsOverviewPage() {
     {
       label: 'OR Utilization',
       kpi: analytics.orUtilization as KPIResult,
-      status: getKPIStatus(analytics.orUtilization.value, analytics.orUtilization.target ?? 75),
+      status: getKPIStatus(analytics.orUtilization.value, analytics.orUtilization.target ?? config.utilizationTargetPercent),
       sparkline: dailyDataToSparkline(analytics.orUtilization.dailyData),
       onClick: (() => setShowORUtilModal(true)) as (() => void) | undefined,
       inverse: false,
@@ -570,7 +552,7 @@ export default function AnalyticsOverviewPage() {
     {
       label: 'Same-Day Cancellation',
       kpi: analytics.cancellationRate as KPIResult,
-      status: getKPIStatus(analytics.cancellationRate.value, analytics.cancellationRate.target ?? 5, true),
+      status: getKPIStatus(analytics.cancellationRate.value, analytics.cancellationRate.target ?? config.cancellationTargetPercent, true),
       sparkline: dailyDataToSparkline(analytics.cancellationRate.dailyData),
       onClick: undefined as (() => void) | undefined,
       inverse: true,
@@ -585,30 +567,30 @@ export default function AnalyticsOverviewPage() {
     {
       label: 'Same Room Turnover',
       kpi: analytics.turnoverTime,
-      status: getKPIStatus(analytics.turnoverTime.value, analytics.turnoverTime.target ?? 30, true),
+      status: getKPIStatus(analytics.turnoverTime.value, analytics.turnoverTime.target ?? config.turnoverThresholdMinutes, true),
       sparkline: dailyDataToSparkline(analytics.turnoverTime.dailyData),
       unit: 'min',
     },
     {
       label: 'Same-Room Surgical',
       kpi: analytics.standardSurgicalTurnover,
-      status: getKPIStatus(analytics.standardSurgicalTurnover.value, analytics.standardSurgicalTurnover.target ?? 45, true),
+      status: getKPIStatus(analytics.standardSurgicalTurnover.value, analytics.standardSurgicalTurnover.target ?? config.sameRoomTurnoverTarget, true),
       sparkline: dailyDataToSparkline(analytics.standardSurgicalTurnover.dailyData),
       unit: 'min',
     },
     {
       label: 'Flip-Room Surgical',
       kpi: analytics.flipRoomTime,
-      status: getKPIStatus(analytics.flipRoomTime.value, analytics.flipRoomTime.target ?? 15, true),
+      status: getKPIStatus(analytics.flipRoomTime.value, analytics.flipRoomTime.target ?? config.flipRoomTurnoverTarget, true),
       sparkline: dailyDataToSparkline(analytics.flipRoomTime.dailyData),
       unit: 'min',
     },
     {
       label: 'Non-Operative Time',
       kpi: analytics.nonOperativeTime,
-      status: (analytics.nonOperativeTime.value > 30
+      status: (analytics.nonOperativeTime.value > config.nonOpBadMinutes
         ? 'bad'
-        : analytics.nonOperativeTime.value > 20
+        : analytics.nonOperativeTime.value > config.nonOpWarnMinutes
         ? 'warn'
         : 'good') as 'good' | 'warn' | 'bad',
       sparkline: dailyDataToSparkline(analytics.nonOperativeTime.dailyData),
@@ -1002,6 +984,7 @@ export default function AnalyticsOverviewPage() {
                 isOpen={showORUtilModal}
                 onClose={() => setShowORUtilModal(false)}
                 data={analytics.orUtilization}
+                config={config}
               />
             </div>
           )}
