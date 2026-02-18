@@ -151,20 +151,20 @@ function ORUtilizationModal({
   const { roomBreakdown, roomsWithRealHours, roomsWithDefaultHours } = data
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-label="OR Utilization by Room">
+      <div className="flex min-h-full items-center justify-center p-2 sm:p-4">
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
 
-        <div className="relative bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
+        <div className="relative bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-hidden border border-slate-200">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-violet-100">
+              <div className="p-2 rounded-lg bg-violet-100 hidden sm:flex">
                 <BarChart3 className="w-5 h-5 text-violet-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">OR Utilization by Room</h2>
-                <p className="text-sm text-slate-500">
+                <h2 className="text-base sm:text-lg font-semibold text-slate-900">OR Utilization by Room</h2>
+                <p className="text-xs sm:text-sm text-slate-500">
                   {roomsWithRealHours > 0 && roomsWithDefaultHours > 0
                     ? `${roomsWithRealHours} rooms configured · ${roomsWithDefaultHours} using default (10h)`
                     : roomsWithDefaultHours === roomBreakdown.length
@@ -175,14 +175,15 @@ function ORUtilizationModal({
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+              aria-label="Close modal"
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
+          <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(90vh-80px)] sm:max-h-[calc(85vh-80px)]">
             {roomBreakdown.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
@@ -194,24 +195,24 @@ function ORUtilizationModal({
             ) : (
               <div className="space-y-3">
                 {/* Summary bar */}
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="p-3 bg-green-50 rounded-lg border border-green-200/60 text-center">
-                    <div className="text-2xl font-semibold text-green-600">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+                  <div className="p-2 sm:p-3 bg-green-50 rounded-lg border border-green-200/60 text-center">
+                    <div className="text-xl sm:text-2xl font-semibold text-green-600">
                       {roomBreakdown.filter(r => r.utilization >= 75).length}
                     </div>
-                    <div className="text-xs text-green-600 font-medium">Above Target</div>
+                    <div className="text-[10px] sm:text-xs text-green-600 font-medium">Above Target</div>
                   </div>
-                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200/60 text-center">
-                    <div className="text-2xl font-semibold text-amber-700">
+                  <div className="p-2 sm:p-3 bg-amber-50 rounded-lg border border-amber-200/60 text-center">
+                    <div className="text-xl sm:text-2xl font-semibold text-amber-700">
                       {roomBreakdown.filter(r => r.utilization >= 60 && r.utilization < 75).length}
                     </div>
-                    <div className="text-xs text-amber-700 font-medium">Near Target</div>
+                    <div className="text-[10px] sm:text-xs text-amber-700 font-medium">Near Target</div>
                   </div>
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/60 text-center">
-                    <div className="text-2xl font-semibold text-slate-600">
+                  <div className="p-2 sm:p-3 bg-slate-50 rounded-lg border border-slate-200/60 text-center">
+                    <div className="text-xl sm:text-2xl font-semibold text-slate-600">
                       {roomBreakdown.filter(r => r.utilization < 60).length}
                     </div>
-                    <div className="text-xs text-slate-500 font-medium">Below 60%</div>
+                    <div className="text-[10px] sm:text-xs text-slate-500 font-medium">Below 60%</div>
                   </div>
                 </div>
 
@@ -229,9 +230,9 @@ function ORUtilizationModal({
                     : 'text-slate-600'
 
                   return (
-                    <div key={room.roomId} className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <div key={room.roomId} className="p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-200">
                       <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold text-slate-900">{room.roomName}</span>
                           {!room.usingRealHours && (
                             <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded">
@@ -253,11 +254,11 @@ function ORUtilizationModal({
                       </div>
 
                       {/* Stats row */}
-                      <div className="flex items-center gap-4 text-xs text-slate-500">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                         <span>{room.caseCount} cases</span>
-                        <span className="text-slate-300">·</span>
+                        <span className="text-slate-300 hidden sm:inline">·</span>
                         <span>{room.daysActive} days active</span>
-                        <span className="text-slate-300">·</span>
+                        <span className="text-slate-300 hidden sm:inline">·</span>
                         <span>~{Math.round(room.usedMinutes / room.daysActive / 60 * 10) / 10}h avg/day of {room.availableHours}h</span>
                       </div>
                     </div>
@@ -698,11 +699,11 @@ export default function AnalyticsOverviewPage() {
               {/* ======================================== */}
               {/* LAYER 1: HEALTH OVERVIEW                 */}
               {/* ======================================== */}
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
+              <div className="stagger-item grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
                 {/* ORbit Score Placeholder */}
-                <div className="bg-white border border-slate-200 rounded-xl flex items-center gap-7 px-6 py-5">
+                <div className="bg-white border border-slate-200 rounded-xl flex flex-col sm:flex-row items-center gap-4 sm:gap-7 px-4 sm:px-6 py-4 sm:py-5 transition-all duration-150 hover:border-slate-300 hover:shadow-sm">
                   {/* Placeholder radar chart area */}
-                  <div className="w-[146px] h-[146px] rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center flex-shrink-0">
+                  <div className="w-[100px] h-[100px] sm:w-[146px] sm:h-[146px] rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center flex-shrink-0">
                     <div className="text-center">
                       <p className="text-xs font-semibold text-slate-400">ORbit Score</p>
                       <p className="text-[10px] text-slate-300 mt-1">Coming Soon</p>
@@ -710,7 +711,7 @@ export default function AnalyticsOverviewPage() {
                   </div>
 
                   {/* Health check grid */}
-                  <div className="flex-1">
+                  <div className="flex-1 w-full sm:w-auto">
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-3">
                       Health Check
                     </p>
@@ -732,7 +733,7 @@ export default function AnalyticsOverviewPage() {
                 </div>
 
                 {/* Action Items */}
-                <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col">
+                <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 flex flex-col transition-all duration-150 hover:border-slate-300 hover:shadow-sm">
                   <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2.5">
                     Action Items
                   </span>
@@ -758,74 +759,80 @@ export default function AnalyticsOverviewPage() {
               {/* ======================================== */}
               {/* LAYER 2: KPI STRIP                       */}
               {/* ======================================== */}
-              <Section title="How are we tracking?" subtitle="Core KPIs vs targets">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {kpiCards.map((card) => (
-                    <div
-                      key={card.label}
-                      className={`bg-white border border-slate-200 rounded-xl p-4 transition-all duration-150 ${
-                        card.onClick ? 'cursor-pointer hover:border-slate-300 hover:shadow-sm' : ''
-                      }`}
-                      onClick={card.onClick}
-                    >
-                      {/* Top: status dot + label, value + trend, sparkline */}
-                      <div className="flex justify-between items-start mb-2.5">
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-2">
-                            <StatusDot status={card.status} />
-                            <span className="text-xs text-slate-500 font-medium">{card.label}</span>
+              <div className="stagger-item">
+                <Section title="How are we tracking?" subtitle="Core KPIs vs targets">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {kpiCards.map((card) => (
+                      <div
+                        key={card.label}
+                        role={card.onClick ? 'button' : undefined}
+                        tabIndex={card.onClick ? 0 : undefined}
+                        aria-label={card.onClick ? `${card.label}: ${card.kpi.displayValue} — click for details` : undefined}
+                        onKeyDown={card.onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.onClick?.() } } : undefined}
+                        className={`bg-white border border-slate-200 rounded-xl p-3 sm:p-4 transition-all duration-150 hover:border-slate-300 hover:shadow-sm ${
+                          card.onClick ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1' : ''
+                        }`}
+                        onClick={card.onClick}
+                      >
+                        {/* Top: status dot + label, value + trend, sparkline */}
+                        <div className="flex justify-between items-start mb-2.5">
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <StatusDot status={card.status} />
+                              <span className="text-xs text-slate-500 font-medium">{card.label}</span>
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-[22px] sm:text-[26px] font-bold text-slate-900 font-mono tracking-tight leading-none">
+                                {card.kpi.displayValue}
+                              </span>
+                              {card.kpi.delta !== undefined && card.kpi.deltaType && card.kpi.deltaType !== 'unchanged' && (
+                                <DeltaBadge delta={toSignedDelta(card.kpi)} invert={card.inverse} />
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-[26px] font-bold text-slate-900 font-mono tracking-tight leading-none">
-                              {card.kpi.displayValue}
-                            </span>
-                            {card.kpi.delta !== undefined && card.kpi.deltaType && card.kpi.deltaType !== 'unchanged' && (
-                              <DeltaBadge delta={toSignedDelta(card.kpi)} invert={card.inverse} />
-                            )}
-                          </div>
+                          {card.sparkline.length > 1 && (
+                            <Sparkline
+                              data={card.sparkline}
+                              color={STATUS_COLORS[card.status]}
+                              width={68}
+                              height={30}
+                            />
+                          )}
                         </div>
-                        {card.sparkline.length > 1 && (
-                          <Sparkline
-                            data={card.sparkline}
-                            color={STATUS_COLORS[card.status]}
-                            width={68}
-                            height={30}
-                          />
-                        )}
-                      </div>
 
-                      {/* Bottom: detail + target gauge */}
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                        <span className="text-[11px] text-slate-400 truncate mr-2">{card.kpi.subtitle}</span>
-                        {card.kpi.target !== undefined && (
-                          <TargetGauge
-                            value={card.kpi.value}
-                            target={card.kpi.target}
-                            inverse={card.inverse}
-                          />
-                        )}
+                        {/* Bottom: detail + target gauge */}
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                          <span className="text-[11px] text-slate-400 truncate mr-2">{card.kpi.subtitle}</span>
+                          {card.kpi.target !== undefined && (
+                            <TargetGauge
+                              value={card.kpi.value}
+                              target={card.kpi.target}
+                              inverse={card.inverse}
+                            />
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </Section>
+                    ))}
+                  </div>
+                </Section>
+              </div>
 
               {/* ======================================== */}
               {/* LAYER 3: TWO-COLUMN OPERATIONAL          */}
               {/* ======================================== */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div className="stagger-item grid grid-cols-1 lg:grid-cols-2 gap-5">
                 {/* LEFT: Where are we losing time? */}
                 <Section title="Where are we losing time?" subtitle="Room turnover & non-operative time">
                   <div className="flex flex-col gap-2">
                     {turnoverRows.map((row) => (
                       <div
                         key={row.label}
-                        className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 transition-all duration-150 hover:border-slate-300 hover:shadow-sm"
+                        className="bg-white border border-slate-200 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-3 transition-all duration-150 hover:border-slate-300 hover:shadow-sm"
                       >
                         <StatusDot status={row.status} />
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium text-slate-700 mb-0.5">{row.label}</div>
-                          <div className="text-[11px] text-slate-400 truncate">{row.kpi.subtitle}</div>
+                          <div className="text-[11px] text-slate-400 truncate hidden sm:block">{row.kpi.subtitle}</div>
                         </div>
                         {row.sparkline.length > 1 && (
                           <Sparkline
@@ -833,11 +840,12 @@ export default function AnalyticsOverviewPage() {
                             color={STATUS_COLORS[row.status]}
                             width={68}
                             height={24}
+                            className="hidden sm:block"
                           />
                         )}
                         <div className="text-right min-w-[56px]">
                           <div className="flex items-baseline justify-end gap-0.5">
-                            <span className="text-xl font-bold text-slate-900 font-mono">
+                            <span className="text-lg sm:text-xl font-bold text-slate-900 font-mono">
                               {Math.round(row.kpi.value)}
                             </span>
                             <span className="text-[11px] text-slate-400">{row.unit}</span>
@@ -853,15 +861,15 @@ export default function AnalyticsOverviewPage() {
 
                 {/* RIGHT: What should we fix? */}
                 <Section title="What should we fix?" subtitle="Surgeon callback optimization & idle time">
-                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden transition-all duration-150 hover:border-slate-300 hover:shadow-sm">
                     {/* Summary strip */}
-                    <div className="grid grid-cols-3 border-b border-slate-100">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 border-b border-slate-100">
                       {[
                         { label: 'Overall Median', kpi: analytics.surgeonIdleTime, count: `${analytics.surgeonIdleSummaries.length} surgeons`, color: 'text-slate-900' },
                         { label: 'Flip Room Idle', kpi: analytics.surgeonIdleFlip, count: `${flipSurgeons.length} w/ flips`, color: 'text-indigo-600' },
                         { label: 'Same Room Idle', kpi: analytics.surgeonIdleSameRoom, count: `${sameRoomOnlySurgeons.length} same-room`, color: 'text-amber-600' },
                       ].map((s, i) => (
-                        <div key={s.label} className={`p-3.5 ${i < 2 ? 'border-r border-slate-100' : ''}`}>
+                        <div key={s.label} className={`p-3 sm:p-3.5 ${i < 2 ? 'border-b sm:border-b-0 sm:border-r border-slate-100' : ''}`}>
                           <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-1">{s.label}</div>
                           <div className={`text-xl font-bold font-mono ${s.color}`}>{s.kpi.displayValue}</div>
                           <div className="text-[11px] text-slate-400">{s.count}</div>
@@ -869,59 +877,62 @@ export default function AnalyticsOverviewPage() {
                       ))}
                     </div>
 
-                    {/* Table header */}
-                    <div className="grid grid-cols-[1fr_56px_56px_44px_80px] px-4 py-2 bg-slate-50 border-b border-slate-100">
-                      {['Surgeon', 'Flip', 'Same', 'Cases', 'Status'].map(h => (
-                        <span key={h} className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{h}</span>
-                      ))}
-                    </div>
+                    {/* Table — horizontally scrollable on small screens */}
+                    <div className="overflow-x-auto">
+                      {/* Table header */}
+                      <div className="grid grid-cols-[1fr_56px_56px_44px_80px] min-w-[420px] px-4 py-2 bg-slate-50 border-b border-slate-100">
+                        {['Surgeon', 'Flip', 'Same', 'Cases', 'Status'].map(h => (
+                          <span key={h} className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{h}</span>
+                        ))}
+                      </div>
 
-                    {/* Surgeon rows */}
-                    <div className="divide-y divide-slate-50 max-h-[320px] overflow-y-auto">
-                      {analytics.surgeonIdleSummaries.map((surgeon) => {
-                        const sc = SURGEON_STATUS_CONFIG[surgeon.status]
-                        return (
-                          <div
-                            key={surgeon.surgeonId}
-                            className="grid grid-cols-[1fr_56px_56px_44px_80px] px-4 py-2.5 items-center hover:bg-slate-50/50 transition-colors"
-                          >
-                            <div>
-                              <span className="text-[13px] font-medium text-slate-800">{surgeon.surgeonName}</span>
-                              <div className="flex gap-1 mt-0.5">
-                                {surgeon.flipGapCount > 0 && (
-                                  <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1 py-px rounded">
-                                    {surgeon.flipGapCount} flip{surgeon.flipGapCount !== 1 ? 's' : ''}
-                                  </span>
-                                )}
-                                {surgeon.sameRoomGapCount > 0 && (
-                                  <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-px rounded">
-                                    {surgeon.sameRoomGapCount} same
-                                  </span>
-                                )}
+                      {/* Surgeon rows */}
+                      <div className="divide-y divide-slate-50 max-h-[320px] overflow-y-auto">
+                        {analytics.surgeonIdleSummaries.map((surgeon) => {
+                          const sc = SURGEON_STATUS_CONFIG[surgeon.status]
+                          return (
+                            <div
+                              key={surgeon.surgeonId}
+                              className="grid grid-cols-[1fr_56px_56px_44px_80px] min-w-[420px] px-4 py-2.5 items-center hover:bg-slate-50/50 transition-colors"
+                            >
+                              <div>
+                                <span className="text-[13px] font-medium text-slate-800">{surgeon.surgeonName}</span>
+                                <div className="flex gap-1 mt-0.5">
+                                  {surgeon.flipGapCount > 0 && (
+                                    <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1 py-px rounded">
+                                      {surgeon.flipGapCount} flip{surgeon.flipGapCount !== 1 ? 's' : ''}
+                                    </span>
+                                  )}
+                                  {surgeon.sameRoomGapCount > 0 && (
+                                    <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-px rounded">
+                                      {surgeon.sameRoomGapCount} same
+                                    </span>
+                                  )}
+                                </div>
                               </div>
+                              <span className={`text-[13px] font-mono font-semibold ${
+                                surgeon.hasFlipData
+                                  ? surgeon.medianFlipIdle <= 5 ? 'text-emerald-500' : surgeon.medianFlipIdle <= 10 ? 'text-amber-600' : 'text-red-500'
+                                  : 'text-slate-300'
+                              }`}>
+                                {surgeon.hasFlipData ? `${Math.round(surgeon.medianFlipIdle)}m` : '—'}
+                              </span>
+                              <span className={`text-[13px] font-mono font-medium ${
+                                surgeon.sameRoomGapCount > 0
+                                  ? surgeon.medianSameRoomIdle <= 30 ? 'text-emerald-500' : surgeon.medianSameRoomIdle <= 50 ? 'text-amber-600' : 'text-red-500'
+                                  : 'text-slate-300'
+                              }`}>
+                                {surgeon.sameRoomGapCount > 0 ? `${Math.round(surgeon.medianSameRoomIdle)}m` : '—'}
+                              </span>
+                              <span className="text-[13px] text-slate-500 font-mono">{surgeon.caseCount}</span>
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sc.bg} ${sc.text} ${sc.border}`}>
+                                <span className={`w-[5px] h-[5px] rounded-full ${sc.dot}`} />
+                                {surgeon.statusLabel}
+                              </span>
                             </div>
-                            <span className={`text-[13px] font-mono font-semibold ${
-                              surgeon.hasFlipData
-                                ? surgeon.medianFlipIdle <= 5 ? 'text-emerald-500' : surgeon.medianFlipIdle <= 10 ? 'text-amber-600' : 'text-red-500'
-                                : 'text-slate-300'
-                            }`}>
-                              {surgeon.hasFlipData ? `${Math.round(surgeon.medianFlipIdle)}m` : '—'}
-                            </span>
-                            <span className={`text-[13px] font-mono font-medium ${
-                              surgeon.sameRoomGapCount > 0
-                                ? surgeon.medianSameRoomIdle <= 30 ? 'text-emerald-500' : surgeon.medianSameRoomIdle <= 50 ? 'text-amber-600' : 'text-red-500'
-                                : 'text-slate-300'
-                            }`}>
-                              {surgeon.sameRoomGapCount > 0 ? `${Math.round(surgeon.medianSameRoomIdle)}m` : '—'}
-                            </span>
-                            <span className="text-[13px] text-slate-500 font-mono">{surgeon.caseCount}</span>
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sc.bg} ${sc.text} ${sc.border}`}>
-                              <span className={`w-[5px] h-[5px] rounded-full ${sc.dot}`} />
-                              {surgeon.statusLabel}
-                            </span>
-                          </div>
-                        )
-                      })}
+                          )
+                        })}
+                      </div>
                     </div>
 
                     {/* Empty state */}
@@ -937,48 +948,50 @@ export default function AnalyticsOverviewPage() {
               {/* ======================================== */}
               {/* LAYER 4: AI INSIGHTS                     */}
               {/* ======================================== */}
-              <Section
-                title="AI Insights"
-                subtitle="Prioritized opportunities ranked by financial impact"
-                badge={
-                  <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full tracking-wider">
-                    POWERED BY ORBIT ENGINE
-                  </span>
-                }
-              >
-                <div className="flex flex-col gap-2.5">
-                  {insights.map((insight) => {
-                    const cfg = SEVERITY_CONFIG[insight.severity] ?? SEVERITY_CONFIG.info
-                    return (
-                      <div
-                        key={insight.id}
-                        className={`bg-white border border-slate-200 rounded-xl p-4 pr-5 border-l-[3px] ${cfg.border} transition-all duration-150 hover:border-slate-300 hover:shadow-sm`}
-                      >
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${cfg.labelBg} ${cfg.labelText}`}>
-                            {insight.severity}
-                          </span>
-                          <span className="text-sm font-semibold text-slate-900">{insight.title}</span>
-                        </div>
-                        <p className="text-[13px] text-slate-600 leading-relaxed mb-2.5">{insight.body}</p>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-semibold text-indigo-600">{insight.action}</span>
-                          {insight.financialImpact && (
-                            <span className="text-[11px] font-semibold font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                              {insight.financialImpact}
+              <div className="stagger-item">
+                <Section
+                  title="AI Insights"
+                  subtitle="Prioritized opportunities ranked by financial impact"
+                  badge={
+                    <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full tracking-wider">
+                      POWERED BY ORBIT ENGINE
+                    </span>
+                  }
+                >
+                  <div className="flex flex-col gap-2.5">
+                    {insights.map((insight) => {
+                      const cfg = SEVERITY_CONFIG[insight.severity] ?? SEVERITY_CONFIG.info
+                      return (
+                        <div
+                          key={insight.id}
+                          className={`bg-white border border-slate-200 rounded-xl p-3 sm:p-4 pr-4 sm:pr-5 border-l-[3px] ${cfg.border} transition-all duration-150 hover:border-slate-300 hover:shadow-sm`}
+                        >
+                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${cfg.labelBg} ${cfg.labelText}`}>
+                              {insight.severity}
                             </span>
-                          )}
+                            <span className="text-sm font-semibold text-slate-900">{insight.title}</span>
+                          </div>
+                          <p className="text-[13px] text-slate-600 leading-relaxed mb-2.5">{insight.body}</p>
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                            <span className="text-xs font-semibold text-indigo-600">{insight.action}</span>
+                            {insight.financialImpact && (
+                              <span className="text-[11px] font-semibold font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                {insight.financialImpact}
+                              </span>
+                            )}
+                          </div>
                         </div>
+                      )
+                    })}
+                    {insights.length === 0 && (
+                      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
+                        <p className="text-sm text-slate-400">No insights generated for this period</p>
                       </div>
-                    )
-                  })}
-                  {insights.length === 0 && (
-                    <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
-                      <p className="text-sm text-slate-400">No insights generated for this period</p>
-                    </div>
-                  )}
-                </div>
-              </Section>
+                    )}
+                  </div>
+                </Section>
+              </div>
 
               {/* OR UTILIZATION MODAL */}
               <ORUtilizationModal

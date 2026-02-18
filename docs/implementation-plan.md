@@ -14,7 +14,7 @@ Redesign the `/analytics/kpi` page to use information hierarchy (glance → scan
 | 2 | insightsEngine.ts (already exists, TS fix applied) | DONE (bundled with Phase 1) | `46c8acf` |
 | 3 | Build Sparkline Component | DONE | `4fd601a` |
 | 4 | Redesign KPI Page Layout | DONE | — |
-| 5 | Responsive + Polish | NEXT | — |
+| 5 | Responsive + Polish | DONE | — |
 
 ### Phase 1 Notes
 - All 7 dailyData builders now include `numericValue`
