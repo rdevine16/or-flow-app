@@ -17,7 +17,6 @@ BEGIN
       ADD COLUMN is_draft BOOLEAN NOT NULL DEFAULT false;
   END IF;
 END$$;
-
 -- ============================================
 -- Update create_case_with_milestones to support drafts
 -- When p_is_draft = true: insert case without milestones
@@ -111,7 +110,6 @@ BEGIN
   RETURN v_case_id;
 END;
 $$;
-
 -- ============================================
 -- finalize_draft_case: Convert a draft to a full case
 -- Updates the case, creates milestones, rolls back on failure.

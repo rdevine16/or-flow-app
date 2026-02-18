@@ -6,7 +6,6 @@
 ALTER TABLE case_flags
   ADD COLUMN IF NOT EXISTS facility_milestone_id UUID
     REFERENCES facility_milestones(id);
-
 CREATE INDEX IF NOT EXISTS idx_case_flags_facility_milestone_id
   ON case_flags(facility_milestone_id)
   WHERE facility_milestone_id IS NOT NULL;

@@ -18,12 +18,10 @@ CREATE OR REPLACE FUNCTION get_my_access_level()
 RETURNS TEXT AS $$
   SELECT access_level FROM public.users WHERE id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
-
 CREATE OR REPLACE FUNCTION get_my_facility_id()
 RETURNS UUID AS $$
   SELECT facility_id FROM public.users WHERE id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
-
 -- ---------------------------------------------------------------------------
 -- 1. permissions — Master registry of all permissions
 -- ---------------------------------------------------------------------------
@@ -41,21 +39,16 @@ CREATE TABLE IF NOT EXISTS permissions (
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
 CREATE INDEX idx_permissions_category ON permissions(category, sort_order);
 CREATE INDEX idx_permissions_key ON permissions(key);
-
 ALTER TABLE permissions ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Authenticated users can view permissions"
   ON permissions FOR SELECT
   USING (auth.uid() IS NOT NULL);
-
 CREATE POLICY "Global admins can manage permissions"
   ON permissions FOR ALL
   USING (get_my_access_level() = 'global_admin')
   WITH CHECK (get_my_access_level() = 'global_admin');
-
 -- ---------------------------------------------------------------------------
 -- 2. permission_templates — Global admin blueprints per access_level
 -- ---------------------------------------------------------------------------
@@ -69,20 +62,15 @@ CREATE TABLE IF NOT EXISTS permission_templates (
   updated_by UUID REFERENCES users(id),
   UNIQUE(access_level, permission_key)
 );
-
 CREATE INDEX idx_permission_templates_access ON permission_templates(access_level);
-
 ALTER TABLE permission_templates ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Global admins can manage permission templates"
   ON permission_templates FOR ALL
   USING (get_my_access_level() = 'global_admin')
   WITH CHECK (get_my_access_level() = 'global_admin');
-
 CREATE POLICY "Facility admins can view permission templates"
   ON permission_templates FOR SELECT
   USING (get_my_access_level() = 'facility_admin');
-
 -- ---------------------------------------------------------------------------
 -- 3. facility_permissions — Per-facility configuration
 -- ---------------------------------------------------------------------------
@@ -97,17 +85,13 @@ CREATE TABLE IF NOT EXISTS facility_permissions (
   updated_by UUID REFERENCES users(id),
   UNIQUE(facility_id, access_level, permission_key)
 );
-
 CREATE INDEX idx_facility_permissions_lookup
   ON facility_permissions(facility_id, access_level);
-
 ALTER TABLE facility_permissions ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Global admins can manage all facility permissions"
   ON facility_permissions FOR ALL
   USING (get_my_access_level() = 'global_admin')
   WITH CHECK (get_my_access_level() = 'global_admin');
-
 CREATE POLICY "Facility admins can manage own facility permissions"
   ON facility_permissions FOR ALL
   USING (
@@ -118,11 +102,9 @@ CREATE POLICY "Facility admins can manage own facility permissions"
     get_my_access_level() = 'facility_admin'
     AND facility_id = get_my_facility_id()
   );
-
 CREATE POLICY "Users can view own facility permissions"
   ON facility_permissions FOR SELECT
   USING (facility_id = get_my_facility_id());
-
 -- ---------------------------------------------------------------------------
 -- 4. Seed permissions data (41 permissions)
 -- ---------------------------------------------------------------------------
@@ -185,7 +167,6 @@ INSERT INTO permissions (key, label, description, category, resource, resource_t
   -- Admin
   ('audit.view',           'View Audit Log',         'View the audit log',                                 'Admin',      'audit',      'page',   'view', 90)
 ON CONFLICT (key) DO NOTHING;
-
 -- ---------------------------------------------------------------------------
 -- 5. Seed default permission templates — 'user' access level
 -- ---------------------------------------------------------------------------
@@ -248,7 +229,6 @@ INSERT INTO permission_templates (access_level, permission_key, granted) VALUES
   -- Admin: denied
   ('user', 'audit.view', false)
 ON CONFLICT (access_level, permission_key) DO NOTHING;
-
 -- ---------------------------------------------------------------------------
 -- 6. Seed default permission templates — 'coordinator' access level
 --    Nearly facility_admin level: all granted except settings.manage,
@@ -313,7 +293,6 @@ INSERT INTO permission_templates (access_level, permission_key, granted) VALUES
   -- Admin: denied
   ('coordinator', 'audit.view', false)
 ON CONFLICT (access_level, permission_key) DO NOTHING;
-
 -- ---------------------------------------------------------------------------
 -- 7. Function: Copy template to a new facility
 -- ---------------------------------------------------------------------------
@@ -327,7 +306,6 @@ BEGIN
   ON CONFLICT (facility_id, access_level, permission_key) DO NOTHING;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
 -- ---------------------------------------------------------------------------
 -- 8. Function: Resolve user permissions (single RPC)
 -- ---------------------------------------------------------------------------
@@ -369,7 +347,6 @@ BEGIN
   RETURN COALESCE(v_result, '{}'::jsonb);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
-
 -- ---------------------------------------------------------------------------
 -- 9. Function: Helper for RLS policies (future use)
 -- ---------------------------------------------------------------------------
@@ -397,7 +374,6 @@ BEGIN
   RETURN COALESCE(v_granted, false);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
-
 -- ---------------------------------------------------------------------------
 -- 10. Backfill existing facilities
 -- ---------------------------------------------------------------------------

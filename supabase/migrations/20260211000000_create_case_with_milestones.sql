@@ -16,7 +16,6 @@ BEGIN
       ADD COLUMN created_by UUID REFERENCES auth.users(id);
   END IF;
 END$$;
-
 -- Ensure created_at exists (should already, but be safe)
 DO $$
 BEGIN
@@ -30,7 +29,6 @@ BEGIN
       ADD COLUMN created_at TIMESTAMPTZ DEFAULT now();
   END IF;
 END$$;
-
 -- ============================================
 -- 1.1 — create_case_with_milestones RPC
 -- Single transaction: inserts case + milestones.

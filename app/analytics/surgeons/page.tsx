@@ -57,7 +57,6 @@ import {
   SurgeonSelector,
   ConsistencyBadge,
   EmptyState,
-  ProcedureComparisonChart,
   MetricPillStrip,
   UptimeRing,
   FlagCountPills,
@@ -67,9 +66,9 @@ import {
   CaseDetailPanel,
   SidebarFlagList,
   PhaseTreeLegend,
-  type ProcedureComparisonData,
   type TimelineCaseData,
   type TimelineCasePhase,
+  type TimelineCaseSubphase,
   SkeletonMetricCards,
   SkeletonTable,
   SkeletonChart,
@@ -710,23 +709,80 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       // Build a lookup of subphase offsets by parent phase ID
       const subphaseByParent = new Map(subphaseOffsets.map(p => [p.phaseId, p.subphases]))
 
-      const phases: TimelineCasePhase[] = phaseTree.map(node => {
+      // Compute actual start/end timestamps for each phase (for timing-overlap detection)
+      const phaseTimings = new Map<string, { startMs: number; endMs: number }>()
+      for (const phaseDef of phaseDefinitions) {
+        const startTs = timestampMap.get(phaseDef.start_milestone_id)
+        const endTs = timestampMap.get(phaseDef.end_milestone_id)
+        if (startTs && endTs) {
+          const startMs = new Date(startTs).getTime()
+          const endMs = new Date(endTs).getTime()
+          if (!isNaN(startMs) && !isNaN(endMs) && endMs > startMs) {
+            phaseTimings.set(phaseDef.id, { startMs, endMs })
+          }
+        }
+      }
+
+      // Build initial phases from phaseTree (includes all top-level nodes)
+      const allPhases: TimelineCasePhase[] = phaseTree.map(node => {
         const dur = durations.find(d => d.phaseId === node.phase.id)
-        const subs = subphaseByParent.get(node.phase.id) || []
+        const subs = (subphaseByParent.get(node.phase.id) || []).map(sub => ({
+          label: sub.label,
+          color: sub.color,
+          durationSeconds: sub.durationSeconds,
+          offsetSeconds: sub.offsetSeconds,
+        }))
 
         return {
           phaseId: node.phase.id,
           label: dur?.displayName ?? node.phase.display_name,
-          color: resolvePhaseHex(dur?.colorKey ?? node.phase.color_key),
+          color: resolvePhaseHex(dur?.colorKey ?? (node.phase as typeof node.phase & { color_key?: string | null }).color_key),
           durationSeconds: dur?.durationSeconds ?? 0,
-          subphases: subs.map(sub => ({
-            label: sub.label,
-            color: sub.color,
-            durationSeconds: sub.durationSeconds,
-            offsetSeconds: sub.offsetSeconds,
-          })),
+          subphases: subs,
         }
       }).filter(p => p.durationSeconds > 0)
+
+      // Detect timing containment: if phase A's time span is fully within phase B's,
+      // merge A into B as a sub-phase (handles cases where parent_phase_id isn't set)
+      const childIds = new Set<string>()
+      const mergedSubs = new Map<string, TimelineCaseSubphase[]>()
+
+      for (const phaseA of allPhases) {
+        const timingA = phaseTimings.get(phaseA.phaseId)
+        if (!timingA) continue
+
+        for (const phaseB of allPhases) {
+          if (phaseA.phaseId === phaseB.phaseId) continue
+          const timingB = phaseTimings.get(phaseB.phaseId)
+          if (!timingB) continue
+
+          // Check if A is fully contained within B
+          if (timingA.startMs >= timingB.startMs && timingA.endMs <= timingB.endMs) {
+            childIds.add(phaseA.phaseId)
+            const offsetSeconds = (timingA.startMs - timingB.startMs) / 1000
+            const existing = mergedSubs.get(phaseB.phaseId) || []
+            existing.push({
+              label: phaseA.label,
+              color: phaseA.color,
+              durationSeconds: phaseA.durationSeconds,
+              offsetSeconds,
+            })
+            mergedSubs.set(phaseB.phaseId, existing)
+            break // A can only be child of one parent
+          }
+        }
+      }
+
+      // Build final phases: remove children from top-level, add merged sub-phases
+      const phases = allPhases
+        .filter(p => !childIds.has(p.phaseId))
+        .map(p => {
+          const additional = mergedSubs.get(p.phaseId) || []
+          if (additional.length > 0 && p.subphases.length === 0) {
+            return { ...p, subphases: additional }
+          }
+          return p
+        })
 
       const startTime = m.patient_in ?? new Date()
       const endTime = m.patient_out ?? new Date()
@@ -766,50 +822,6 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
     }
     return result
   }, [selectedCaseId, dayCases, getCompletedCases, procedureMedians])
-
-  // Procedure performance for day analysis
-  const getProcedurePerformance = useCallback((): ProcedureComparisonData[] => {
-    const completedCases = getCompletedCases(dayCases)
-    const completed30DayCases = getCompletedCases(last30DaysCases)
-    
-    // Group today's cases by procedure type
-    const byProcedure = new Map<string, { name: string; cases: CaseWithMilestones[] }>()
-    
-    completedCases.forEach(c => {
-      const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-      if (!proc?.id) return
-      if (!byProcedure.has(proc.id)) {
-        byProcedure.set(proc.id, { name: proc.name, cases: [] })
-      }
-      byProcedure.get(proc.id)!.cases.push(c)
-    })
-
-    return Array.from(byProcedure.entries()).map(([procId, { name, cases }]) => {
-      // Today's averages for this procedure
-      const todayOrTimes = cases.map(c => getTotalORTime(getMilestoneMap(c)))
-      const todaySurgTimes = cases.map(c => getSurgicalTime(getMilestoneMap(c)))
-
-      // 30-day averages for this procedure (exclude today's cases)
-      const baseline30Day = completed30DayCases.filter(c => {
-        const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-        return proc?.id === procId
-      })
-      const baselineOrTimes = baseline30Day.map(c => getTotalORTime(getMilestoneMap(c)))
-      const baselineSurgTimes = baseline30Day.map(c => getSurgicalTime(getMilestoneMap(c)))
-
-      return {
-        procedureName: name,
-        procedureId: procId,
-        caseCount: cases.length,
-        todayORTime: calculateAverage(todayOrTimes) || 0,
-        avgORTime: calculateAverage(baselineOrTimes) || 0,
-        todaySurgicalTime: calculateAverage(todaySurgTimes) || 0,
-        avgSurgicalTime: calculateAverage(baselineSurgTimes) || 0,
-      }
-    })
-  }, [dayCases, last30DaysCases, getCompletedCases])
-
-  const procedurePerformance = useMemo(() => getProcedurePerformance(), [getProcedurePerformance])
 
   // Daily trend data for overview chart
   const dailyTrendData = useMemo(() => {
@@ -1275,8 +1287,8 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       )}
                     </div>
 
-                    {/* Sidebar (280px) */}
-                    <div className="lg:w-[280px] w-full space-y-4">
+                    {/* Sidebar (425px) */}
+                    <div className="lg:w-[425px] w-full space-y-4">
                       {/* Phase Medians Card (always visible) */}
                       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
                         <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Phase Medians</h4>
@@ -1309,21 +1321,6 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     </div>
                   </div>
 
-                  {/* Procedure Performance (full width, below the bottom split) */}
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                    <SectionHeader
-                      title="Procedure Performance"
-                      subtitle="Today vs 30-day average by procedure"
-                      accentColor="green"
-                      icon={<BarChart3 className="w-4 h-4" />}
-                    />
-                    <div className="mt-4">
-                      <ProcedureComparisonChart
-                        data={procedurePerformance}
-                        formatValue={formatSecondsToHHMMSS}
-                      />
-                    </div>
-                  </div>
                 </div>
               )}
             </div>

@@ -11,14 +11,11 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
-
 --
 -- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
 CREATE SCHEMA IF NOT EXISTS public;
-
-
 --
 -- Name: archive_old_audit_logs(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -38,8 +35,6 @@ BEGIN
   RETURN archived_count;
 END;
 $$;
-
-
 --
 -- Name: audit_case_device_companies_changes(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -212,8 +207,6 @@ BEGIN
   RETURN COALESCE(NEW, OLD);
 END;
 $$;
-
-
 --
 -- Name: audit_case_implants_changes(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -320,8 +313,6 @@ BEGIN
   RETURN NULL;
 END;
 $$;
-
-
 --
 -- Name: auto_create_patient_checkin(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -375,8 +366,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: calculate_case_costs(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -437,8 +426,6 @@ BEGIN
   RETURN QUERY SELECT v_total_debits, v_total_credits, (v_total_debits - v_total_credits);
 END;
 $$;
-
-
 --
 -- Name: calculate_case_stats(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -584,8 +571,6 @@ BEGIN
     v_cost_source;
 END;
 $$;
-
-
 --
 -- Name: calculate_expected_arrival(uuid, uuid, date, time without time zone); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -616,8 +601,6 @@ BEGIN
   RETURN v_scheduled_datetime - (v_lead_time || ' minutes')::INTERVAL;
 END;
 $$;
-
-
 --
 -- Name: case_requires_rep(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -646,8 +629,6 @@ BEGIN
     END IF;
 END;
 $$;
-
-
 --
 -- Name: clean_expired_notifications(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -659,8 +640,6 @@ BEGIN
     DELETE FROM notifications WHERE expires_at < NOW();
 END;
 $$;
-
-
 --
 -- Name: cleanup_expired_sessions(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -673,8 +652,6 @@ BEGIN
   WHERE expires_at < NOW() - INTERVAL '7 days';
 END;
 $$;
-
-
 --
 -- Name: cleanup_expired_user_invites(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -694,8 +671,6 @@ BEGIN
   RETURN deleted_count;
 END;
 $$;
-
-
 --
 -- Name: cleanup_old_error_logs(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -708,8 +683,6 @@ BEGIN
   WHERE created_at < NOW() - INTERVAL '90 days';
 END;
 $$;
-
-
 --
 -- Name: cleanup_old_login_attempts(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -722,8 +695,6 @@ BEGIN
   WHERE created_at < NOW() - INTERVAL '7 days';
 END;
 $$;
-
-
 --
 -- Name: cleanup_old_soft_deletes(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -740,8 +711,6 @@ BEGIN
   RAISE NOTICE 'Soft delete cleanup check completed at %', NOW();
 END;
 $$;
-
-
 --
 -- Name: copy_complexities_to_facility(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -767,8 +736,6 @@ BEGIN
     RETURN v_count;
 END;
 $$;
-
-
 --
 -- Name: copy_cost_category_templates_to_facility(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -795,8 +762,6 @@ BEGIN
   RETURN v_count;
 END;
 $$;
-
-
 --
 -- Name: copy_milestone_settings_to_new_facility(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -837,8 +802,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: copy_permission_template_to_facility(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -853,8 +816,6 @@ BEGIN
   ON CONFLICT (facility_id, access_level, permission_key) DO NOTHING;
 END;
 $$;
-
-
 --
 -- Name: create_case_with_milestones(text, date, time without time zone, uuid, uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, text, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -924,8 +885,6 @@ BEGIN
   RETURN v_case_id;
 END;
 $$;
-
-
 --
 -- Name: create_case_with_milestones(text, date, time without time zone, uuid, uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, text, boolean, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1000,8 +959,6 @@ BEGIN
   RETURN v_case_id;
 END;
 $$;
-
-
 --
 -- Name: create_case_with_milestones(text, date, time without time zone, uuid, uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, text, boolean, boolean, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1097,8 +1054,6 @@ BEGIN
   RETURN v_case_id;
 END;
 $$;
-
-
 --
 -- Name: create_device_rep_profile(uuid, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1122,8 +1077,6 @@ BEGIN
   VALUES (user_id, user_email, first_name, last_name, phone_number, 'device_rep', NULL, rep_role_id);
 END;
 $$;
-
-
 --
 -- Name: detect_case_issues(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1331,8 +1284,6 @@ BEGIN
   RETURN;
 END;
 $$;
-
-
 --
 -- Name: disable_demo_audit_triggers(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1344,8 +1295,6 @@ BEGIN
     ALTER TABLE case_implants DISABLE TRIGGER audit_case_implants_trigger;
 END;
 $$;
-
-
 --
 -- Name: disable_demo_triggers(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1370,8 +1319,6 @@ BEGIN
   ALTER TABLE cases DISABLE TRIGGER trigger_auto_create_patient_checkin;
 END;
 $$;
-
-
 --
 -- Name: enable_demo_audit_triggers(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1383,8 +1330,6 @@ BEGIN
     ALTER TABLE case_implants ENABLE TRIGGER audit_case_implants_trigger;
 END;
 $$;
-
-
 --
 -- Name: enable_demo_triggers(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1409,8 +1354,6 @@ BEGIN
   ALTER TABLE cases ENABLE TRIGGER trigger_auto_create_patient_checkin;
 END;
 $$;
-
-
 --
 -- Name: end_procedure_cost_item(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1425,8 +1368,6 @@ BEGIN
     AND effective_to IS NULL;
 END;
 $$;
-
-
 --
 -- Name: end_surgeon_cost_item(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1441,8 +1382,6 @@ BEGIN
     AND effective_to IS NULL; -- Only end currently active items
 END;
 $$;
-
-
 --
 -- Name: ensure_checkin_records(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1494,8 +1433,6 @@ BEGIN
   RETURN v_created_count;
 END;
 $$;
-
-
 --
 -- Name: expire_old_issues(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1521,8 +1458,6 @@ BEGIN
   RETURN v_count;
 END;
 $$;
-
-
 --
 -- Name: facility_has_feature(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1570,8 +1505,6 @@ BEGIN
   RETURN true;
 END;
 $$;
-
-
 --
 -- Name: finalize_draft_case(uuid, text, date, time without time zone, uuid, uuid, uuid, uuid, uuid, uuid, text, uuid, text, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1631,8 +1564,6 @@ BEGIN
   RETURN p_case_id;
 END;
 $$;
-
-
 --
 -- Name: generate_escort_link(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1682,8 +1613,6 @@ BEGIN
   RETURN v_token;
 END;
 $$;
-
-
 --
 -- Name: get_anesthesiologist_block_stats(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1731,8 +1660,6 @@ BEGIN
     HAVING COUNT(*) >= 10;  -- Minimum 10 cases for reliable median
 END;
 $$;
-
-
 --
 -- Name: get_blocks_for_date_range(uuid, date, date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1808,8 +1735,6 @@ BEGIN
   ORDER BY block_date, start_time;
 END;
 $$;
-
-
 --
 -- Name: get_case_tray_status(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1861,8 +1786,6 @@ BEGIN
     END IF;
 END;
 $$;
-
-
 --
 -- Name: get_current_user_facility(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1872,8 +1795,6 @@ CREATE FUNCTION public.get_current_user_facility() RETURNS uuid
     AS $$
   SELECT facility_id FROM users WHERE id = auth.uid()
 $$;
-
-
 --
 -- Name: get_escort_status(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1946,8 +1867,6 @@ BEGIN
   RETURN v_result;
 END;
 $$;
-
-
 --
 -- Name: get_facility_demo_counts(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1972,8 +1891,6 @@ BEGIN
      WHERE c.facility_id = p_facility_id) as delay_count;
 END;
 $$;
-
-
 --
 -- Name: get_facility_errors(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1995,8 +1912,6 @@ BEGIN
   ORDER BY el.created_at DESC;
 END;
 $$;
-
-
 --
 -- Name: get_facility_id_from_procedure(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2015,8 +1930,6 @@ BEGIN
   RETURN result;
 END;
 $$;
-
-
 --
 -- Name: get_facility_id_from_surgeon(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2035,8 +1948,6 @@ BEGIN
   RETURN result;
 END;
 $$;
-
-
 --
 -- Name: get_facility_median_block_time(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2079,8 +1990,6 @@ BEGIN
     RETURN COALESCE(result, 20.0);  -- Default to 20 min if no data
 END;
 $$;
-
-
 --
 -- Name: get_facility_median_turnover(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2137,8 +2046,6 @@ BEGIN
     RETURN COALESCE(result, 20.0);  -- Default to 20 min if no data
 END;
 $$;
-
-
 --
 -- Name: get_failed_logins_global(integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2163,8 +2070,6 @@ BEGIN
   ORDER BY failed_login_count DESC;
 END;
 $$;
-
-
 --
 -- Name: get_full_day_financials(uuid, date, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2205,8 +2110,6 @@ BEGIN
   ORDER BY c.case_number;
 END;
 $$;
-
-
 --
 -- Name: get_milestone_interval_medians(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2293,8 +2196,6 @@ BEGIN
   ORDER BY i.ms_order;
 END;
 $$;
-
-
 --
 -- Name: get_my_access_level(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2304,8 +2205,6 @@ CREATE FUNCTION public.get_my_access_level() RETURNS text
     AS $$
   SELECT access_level FROM public.users WHERE id = auth.uid();
 $$;
-
-
 --
 -- Name: get_my_facility_id(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2315,8 +2214,6 @@ CREATE FUNCTION public.get_my_facility_id() RETURNS uuid
     AS $$
   SELECT facility_id FROM public.users WHERE id = auth.uid();
 $$;
-
-
 --
 -- Name: get_my_implant_company_id(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2335,12 +2232,8 @@ BEGIN
   RETURN result;
 END;
 $$;
-
-
 SET default_tablespace = '';
-
 SET default_table_access_method = heap;
-
 --
 -- Name: patients; Type: TABLE; Schema: public; Owner: -
 --
@@ -2365,8 +2258,6 @@ CREATE TABLE public.patients (
     deleted_at timestamp with time zone,
     deleted_by uuid
 );
-
-
 --
 -- Name: get_patient_display_name(public.patients); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2389,8 +2280,6 @@ BEGIN
   RETURN 'Patient';
 END;
 $$;
-
-
 --
 -- Name: get_previous_case_for_surgeon(uuid, date, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2416,8 +2305,6 @@ BEGIN
   LIMIT 1;
 END;
 $$;
-
-
 --
 -- Name: get_previous_case_in_room(uuid, date, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2441,8 +2328,6 @@ BEGIN
   LIMIT 1;
 END;
 $$;
-
-
 --
 -- Name: get_previous_case_in_room(uuid, date, timestamp with time zone, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2467,8 +2352,6 @@ BEGIN
   LIMIT 1;
 END;
 $$;
-
-
 --
 -- Name: get_room_available_minutes(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2499,8 +2382,6 @@ BEGIN
   RETURN EXTRACT(EPOCH FROM (v_schedule.close_time - v_schedule.open_time))::INTEGER / 60;
 END;
 $$;
-
-
 --
 -- Name: get_room_case_sequence(uuid, date, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2523,8 +2404,6 @@ BEGIN
   RETURN COALESCE(v_sequence, 1);
 END;
 $$;
-
-
 --
 -- Name: get_room_schedule_for_date(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2544,8 +2423,6 @@ BEGIN
   LIMIT 1;
 END;
 $$;
-
-
 --
 -- Name: get_surgeon_case_sequence(uuid, date, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2568,8 +2445,6 @@ BEGIN
   RETURN COALESCE(v_sequence, 1);
 END;
 $$;
-
-
 --
 -- Name: get_surgeon_day_overview(uuid, uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2657,8 +2532,6 @@ BEGIN
     RETURN result;
 END;
 $$;
-
-
 --
 -- Name: get_surgeon_done_time(uuid, timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2700,8 +2573,6 @@ BEGIN
   RETURN COALESCE(p_closing_complete_time, p_closing_time);
 END;
 $$;
-
-
 --
 -- Name: get_surgeon_median_times(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2765,8 +2636,6 @@ BEGIN
     HAVING COUNT(*) >= 5;  -- Minimum 5 cases for reliable median
 END;
 $$;
-
-
 --
 -- Name: get_surgeon_next_or_day(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2790,8 +2659,6 @@ BEGIN
     LIMIT 1;
 END;
 $$;
-
-
 --
 -- Name: get_surgeon_room_count(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2812,8 +2679,6 @@ BEGIN
   RETURN COALESCE(v_count, 0);
 END;
 $$;
-
-
 --
 -- Name: get_surgeon_team_familiarity(uuid, uuid[]); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2839,8 +2704,6 @@ BEGIN
     ORDER BY cases_together DESC;
 END;
 $$;
-
-
 --
 -- Name: get_trial_days_remaining(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2865,8 +2728,6 @@ BEGIN
     RETURN GREATEST(0, EXTRACT(DAY FROM trial_end - NOW())::INTEGER);
 END;
 $$;
-
-
 --
 -- Name: get_user_permissions(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2909,8 +2770,6 @@ BEGIN
   RETURN COALESCE(v_result, '{}'::jsonb);
 END;
 $$;
-
-
 --
 -- Name: get_week_of_month(date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2922,8 +2781,6 @@ BEGIN
   RETURN CEIL(EXTRACT(DAY FROM p_date) / 7.0)::INT;
 END;
 $$;
-
-
 --
 -- Name: introspect_columns(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2941,8 +2798,6 @@ CREATE FUNCTION public.introspect_columns(target_table text) RETURNS TABLE(colum
     AND c.table_name = target_table
   ORDER BY c.ordinal_position;
 $$;
-
-
 --
 -- Name: introspect_foreign_keys(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2967,8 +2822,6 @@ CREATE FUNCTION public.introspect_foreign_keys(target_table text) RETURNS TABLE(
     AND tc.table_name = target_table
   ORDER BY kcu.column_name;
 $$;
-
-
 --
 -- Name: introspect_indexes(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -2988,8 +2841,6 @@ CREATE FUNCTION public.introspect_indexes(target_table text) RETURNS TABLE(index
     AND t.relname = target_table
   ORDER BY i.relname;
 $$;
-
-
 --
 -- Name: introspect_row_count(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3002,8 +2853,6 @@ CREATE FUNCTION public.introspect_row_count(target_table text) RETURNS TABLE(cou
   WHERE relname = target_table
     AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public');
 $$;
-
-
 --
 -- Name: introspect_triggers(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3022,8 +2871,6 @@ CREATE FUNCTION public.introspect_triggers(target_table text) RETURNS TABLE(trig
     AND t.event_object_table = target_table
   ORDER BY t.trigger_name;
 $$;
-
-
 --
 -- Name: is_block_active_on_date(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3072,8 +2919,6 @@ BEGIN
   END CASE;
 END;
 $$;
-
-
 --
 -- Name: is_facility_accessible(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3109,8 +2954,6 @@ BEGIN
     RETURN false;
 END;
 $$;
-
-
 --
 -- Name: is_facility_closed(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3150,8 +2993,6 @@ BEGIN
   RETURN FALSE;
 END;
 $$;
-
-
 --
 -- Name: is_last_weekday_of_month(date); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3166,8 +3007,6 @@ BEGIN
   RETURN EXTRACT(MONTH FROM v_next_week) != EXTRACT(MONTH FROM p_date);
 END;
 $$;
-
-
 --
 -- Name: is_soft_deleted(timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3177,8 +3016,6 @@ CREATE FUNCTION public.is_soft_deleted(p_deleted_at timestamp with time zone) RE
     AS $$
   SELECT p_deleted_at IS NOT NULL;
 $$;
-
-
 --
 -- Name: notify_facility_admins_of_issues(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3200,8 +3037,6 @@ BEGIN
     AND u.access_level IN ('facility_admin', 'global_admin');
 END;
 $$;
-
-
 --
 -- Name: recalculate_surgeon_averages(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3329,8 +3164,6 @@ BEGIN
   );
 END;
 $$;
-
-
 --
 -- Name: record_case_stats(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3611,8 +3444,6 @@ BEGIN
     p_case_id, v_final_profit, v_total_debits, v_total_credits, v_or_time_cost, v_stats.cost_source;
 END;
 $$;
-
-
 --
 -- Name: refresh_all_stats(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3628,8 +3459,6 @@ BEGIN
   REFRESH MATERIALIZED VIEW CONCURRENTLY surgeon_overall_stats;
 END;
 $$;
-
-
 --
 -- Name: refresh_case_completion_stats(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3716,8 +3545,6 @@ BEGIN
   RETURN v_count;
 END;
 $$;
-
-
 --
 -- Name: refresh_case_stats(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3734,8 +3561,6 @@ BEGIN
   REFRESH MATERIALIZED VIEW CONCURRENTLY facility_milestone_stats;
 END;
 $$;
-
-
 --
 -- Name: refresh_facility_health_scores(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3747,8 +3572,6 @@ BEGIN
   REFRESH MATERIALIZED VIEW CONCURRENTLY mv_facility_health_scores;
 END;
 $$;
-
-
 --
 -- Name: run_issue_detection_for_case(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3821,8 +3644,6 @@ BEGIN
   RETURN v_count;
 END;
 $$;
-
-
 --
 -- Name: seed_facility_flag_rules(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3858,8 +3679,6 @@ BEGIN
   RETURN v_count;
 END;
 $$;
-
-
 --
 -- Name: seed_facility_milestones(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -3910,8 +3729,6 @@ BEGIN
     
 END;
 $$;
-
-
 --
 -- Name: seed_facility_with_templates(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4013,8 +3830,6 @@ BEGIN
 
 END;
 $$;
-
-
 --
 -- Name: set_room_display_order(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4034,8 +3849,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: sync_soft_delete_columns(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4063,8 +3876,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: trigger_issue_detection_on_case_update(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4080,8 +3891,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: trigger_issue_detection_on_milestone(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4095,8 +3904,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: trigger_recalculate_averages(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4123,8 +3930,6 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: trigger_record_case_stats(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4149,8 +3954,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: trigger_record_stats_on_validation(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4176,8 +3979,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: trigger_refresh_stats_on_completion(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4199,8 +4000,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: trigger_remove_stats_on_invalidation(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4219,8 +4018,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: trigger_seed_facility_milestones(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4233,8 +4030,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: trigger_seed_facility_on_create(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4247,8 +4042,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: trigger_sync_exclusion_to_stats(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4299,8 +4092,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: trigger_update_case_stats(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4328,8 +4119,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: update_analytics_settings_timestamp(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4342,8 +4131,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: update_case_device_companies_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4356,8 +4143,6 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: update_case_implants_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4370,8 +4155,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: update_default_complexities_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4384,8 +4167,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: update_flag_rules_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4398,8 +4179,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: update_last_login(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4414,8 +4193,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: update_page_registry_timestamp(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4428,8 +4205,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: update_patient_status_from_milestone(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4482,8 +4257,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4496,8 +4269,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-
 --
 -- Name: user_has_permission(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -4526,8 +4297,6 @@ BEGIN
   RETURN COALESCE(v_granted, false);
 END;
 $$;
-
-
 --
 -- Name: cost_categories; Type: TABLE; Schema: public; Owner: -
 --
@@ -4546,8 +4315,6 @@ CREATE TABLE public.cost_categories (
     deleted_by uuid,
     CONSTRAINT cost_categories_type_check CHECK ((type = ANY (ARRAY['debit'::text, 'credit'::text])))
 );
-
-
 --
 -- Name: active_cost_categories; Type: VIEW; Schema: public; Owner: -
 --
@@ -4565,8 +4332,6 @@ CREATE VIEW public.active_cost_categories AS
     deleted_at
    FROM public.cost_categories
   WHERE ((deleted_at IS NULL) AND (is_active = true));
-
-
 --
 -- Name: admin_sessions; Type: TABLE; Schema: public; Owner: -
 --
@@ -4579,8 +4344,6 @@ CREATE TABLE public.admin_sessions (
     ended_at timestamp with time zone,
     is_active boolean DEFAULT true
 );
-
-
 --
 -- Name: audit_log; Type: TABLE; Schema: public; Owner: -
 --
@@ -4605,8 +4368,6 @@ CREATE TABLE public.audit_log (
     impersonating_user_email text,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: facilities; Type: TABLE; Schema: public; Owner: -
 --
@@ -4639,8 +4400,6 @@ CREATE TABLE public.facilities (
     default_arrival_lead_time_minutes integer DEFAULT 90,
     CONSTRAINT facilities_subscription_status_check CHECK ((subscription_status = ANY (ARRAY['trial'::text, 'active'::text, 'past_due'::text, 'cancelled'::text, 'disabled'::text])))
 );
-
-
 --
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
@@ -4672,8 +4431,6 @@ CREATE TABLE public.users (
     CONSTRAINT users_closing_workflow_check CHECK ((closing_workflow = ANY (ARRAY['surgeon_closes'::text, 'pa_closes'::text]))),
     CONSTRAINT valid_access_level CHECK ((access_level = ANY (ARRAY['global_admin'::text, 'facility_admin'::text, 'user'::text, 'device_rep'::text])))
 );
-
-
 --
 -- Name: audit_log_with_users; Type: VIEW; Schema: public; Owner: -
 --
@@ -4704,8 +4461,6 @@ CREATE VIEW public.audit_log_with_users AS
      LEFT JOIN public.users u ON ((al.user_id = u.id)))
      LEFT JOIN public.facilities f ON ((al.facility_id = f.id)))
      LEFT JOIN public.users iu ON ((al.impersonating_user_id = iu.id)));
-
-
 --
 -- Name: block_schedules; Type: TABLE; Schema: public; Owner: -
 --
@@ -4729,8 +4484,6 @@ CREATE TABLE public.block_schedules (
     CONSTRAINT block_schedules_day_of_week_check CHECK (((day_of_week >= 0) AND (day_of_week <= 6))),
     CONSTRAINT valid_time_range CHECK ((end_time > start_time))
 );
-
-
 --
 -- Name: body_regions; Type: TABLE; Schema: public; Owner: -
 --
@@ -4745,8 +4498,6 @@ CREATE TABLE public.body_regions (
     deleted_by uuid,
     is_active boolean DEFAULT true
 );
-
-
 --
 -- Name: cancellation_reason_templates; Type: TABLE; Schema: public; Owner: -
 --
@@ -4762,8 +4513,6 @@ CREATE TABLE public.cancellation_reason_templates (
     deleted_by uuid,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: cancellation_reasons; Type: TABLE; Schema: public; Owner: -
 --
@@ -4781,8 +4530,6 @@ CREATE TABLE public.cancellation_reasons (
     deleted_by uuid,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: case_completion_stats; Type: TABLE; Schema: public; Owner: -
 --
@@ -4830,8 +4577,6 @@ CREATE TABLE public.case_completion_stats (
     exclusion_reason text,
     cost_source text
 );
-
-
 --
 -- Name: case_complexities; Type: TABLE; Schema: public; Owner: -
 --
@@ -4843,8 +4588,6 @@ CREATE TABLE public.case_complexities (
     created_at timestamp with time zone DEFAULT now(),
     created_by uuid
 );
-
-
 --
 -- Name: case_delays; Type: TABLE; Schema: public; Owner: -
 --
@@ -4859,8 +4602,6 @@ CREATE TABLE public.case_delays (
     recorded_by uuid,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: case_device_activity; Type: TABLE; Schema: public; Owner: -
 --
@@ -4878,8 +4619,6 @@ CREATE TABLE public.case_device_activity (
     CONSTRAINT case_device_activity_activity_type_check CHECK ((activity_type = ANY (ARRAY['case_created'::text, 'company_assigned'::text, 'company_removed'::text, 'consignment_confirmed'::text, 'loaners_confirmed'::text, 'trays_delivered'::text, 'reminder_sent'::text, 'status_reset'::text]))),
     CONSTRAINT case_device_activity_actor_type_check CHECK ((actor_type = ANY (ARRAY['facility_staff'::text, 'device_rep'::text, 'system'::text])))
 );
-
-
 --
 -- Name: case_device_companies; Type: TABLE; Schema: public; Owner: -
 --
@@ -4901,8 +4640,6 @@ CREATE TABLE public.case_device_companies (
     last_modified_platform text DEFAULT 'web'::text,
     CONSTRAINT case_device_companies_tray_status_check CHECK ((tray_status = ANY (ARRAY['pending'::text, 'consignment'::text, 'loaners_confirmed'::text, 'delivered'::text])))
 );
-
-
 --
 -- Name: cases; Type: TABLE; Schema: public; Owner: -
 --
@@ -4944,8 +4681,6 @@ CREATE TABLE public.cases (
     created_by uuid,
     CONSTRAINT cases_operative_side_check CHECK ((operative_side = ANY (ARRAY['left'::text, 'right'::text, 'bilateral'::text, 'n/a'::text])))
 );
-
-
 --
 -- Name: implant_companies; Type: TABLE; Schema: public; Owner: -
 --
@@ -4961,8 +4696,6 @@ CREATE TABLE public.implant_companies (
     deleted_by uuid,
     is_active boolean DEFAULT true NOT NULL
 );
-
-
 --
 -- Name: case_device_companies_detail; Type: VIEW; Schema: public; Owner: -
 --
@@ -4995,8 +4728,6 @@ CREATE VIEW public.case_device_companies_detail AS
      JOIN public.cases c ON ((cdc.case_id = c.id)))
      LEFT JOIN public.users confirmed_user ON ((cdc.confirmed_by = confirmed_user.id)))
      LEFT JOIN public.users delivered_user ON ((cdc.delivered_by = delivered_user.id)));
-
-
 --
 -- Name: case_flags; Type: TABLE; Schema: public; Owner: -
 --
@@ -5020,8 +4751,6 @@ CREATE TABLE public.case_flags (
     CONSTRAINT case_flags_flag_type_check CHECK ((flag_type = ANY (ARRAY['threshold'::text, 'delay'::text]))),
     CONSTRAINT case_flags_severity_check CHECK ((severity = ANY (ARRAY['info'::text, 'warning'::text, 'critical'::text])))
 );
-
-
 --
 -- Name: case_implant_companies; Type: TABLE; Schema: public; Owner: -
 --
@@ -5032,8 +4761,6 @@ CREATE TABLE public.case_implant_companies (
     implant_company_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: case_implants; Type: TABLE; Schema: public; Owner: -
 --
@@ -5073,8 +4800,6 @@ CREATE TABLE public.case_implants (
     CONSTRAINT case_implants_fixation_type_check CHECK ((fixation_type = ANY (ARRAY['cemented'::text, 'pressfit'::text]))),
     CONSTRAINT case_implants_patella_type_check CHECK ((patella_type = ANY (ARRAY['asymmetric'::text, 'symmetric'::text])))
 );
-
-
 --
 -- Name: case_milestone_stats; Type: TABLE; Schema: public; Owner: -
 --
@@ -5091,8 +4816,6 @@ CREATE TABLE public.case_milestone_stats (
     recorded_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: case_milestones; Type: TABLE; Schema: public; Owner: -
 --
@@ -5106,8 +4829,6 @@ CREATE TABLE public.case_milestones (
     facility_milestone_id uuid,
     updated_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: case_staff; Type: TABLE; Schema: public; Owner: -
 --
@@ -5121,8 +4842,6 @@ CREATE TABLE public.case_staff (
     removed_at timestamp with time zone,
     removed_by uuid
 );
-
-
 --
 -- Name: case_statuses; Type: TABLE; Schema: public; Owner: -
 --
@@ -5133,8 +4852,6 @@ CREATE TABLE public.case_statuses (
     display_order integer,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: complexities; Type: TABLE; Schema: public; Owner: -
 --
@@ -5154,8 +4871,6 @@ CREATE TABLE public.complexities (
     deleted_at timestamp with time zone,
     deleted_by uuid
 );
-
-
 --
 -- Name: complexity_templates; Type: TABLE; Schema: public; Owner: -
 --
@@ -5173,8 +4888,6 @@ CREATE TABLE public.complexity_templates (
     deleted_at timestamp with time zone,
     deleted_by uuid
 );
-
-
 --
 -- Name: cost_category_templates; Type: TABLE; Schema: public; Owner: -
 --
@@ -5192,8 +4905,6 @@ CREATE TABLE public.cost_category_templates (
     deleted_by uuid,
     CONSTRAINT default_cost_categories_type_check CHECK ((type = ANY (ARRAY['debit'::text, 'credit'::text])))
 );
-
-
 --
 -- Name: data_quality_notifications; Type: TABLE; Schema: public; Owner: -
 --
@@ -5210,8 +4921,6 @@ CREATE TABLE public.data_quality_notifications (
     created_at timestamp with time zone DEFAULT now(),
     read_at timestamp with time zone
 );
-
-
 --
 -- Name: delay_types; Type: TABLE; Schema: public; Owner: -
 --
@@ -5227,8 +4936,6 @@ CREATE TABLE public.delay_types (
     deleted_by uuid,
     is_active boolean DEFAULT true NOT NULL
 );
-
-
 --
 -- Name: device_rep_facility_access; Type: TABLE; Schema: public; Owner: -
 --
@@ -5239,8 +4946,6 @@ CREATE TABLE public.device_rep_facility_access (
     facility_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: device_rep_invites; Type: TABLE; Schema: public; Owner: -
 --
@@ -5256,8 +4961,6 @@ CREATE TABLE public.device_rep_invites (
     accepted_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: device_tokens; Type: TABLE; Schema: public; Owner: -
 --
@@ -5270,8 +4973,6 @@ CREATE TABLE public.device_tokens (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: error_logs; Type: TABLE; Schema: public; Owner: -
 --
@@ -5290,8 +4991,6 @@ CREATE TABLE public.error_logs (
     CONSTRAINT error_logs_category_check CHECK ((category = ANY (ARRAY['authentication'::text, 'database'::text, 'api'::text, 'validation'::text, 'network'::text, 'system'::text, 'general'::text]))),
     CONSTRAINT error_logs_severity_check CHECK ((severity = ANY (ARRAY['debug'::text, 'info'::text, 'warning'::text, 'error'::text, 'critical'::text])))
 );
-
-
 --
 -- Name: escort_status_links; Type: TABLE; Schema: public; Owner: -
 --
@@ -5308,8 +5007,6 @@ CREATE TABLE public.escort_status_links (
     created_at timestamp with time zone DEFAULT now(),
     created_by uuid
 );
-
-
 --
 -- Name: facility_analytics_settings; Type: TABLE; Schema: public; Owner: -
 --
@@ -5342,8 +5039,6 @@ CREATE TABLE public.facility_analytics_settings (
     CONSTRAINT facility_analytics_settings_waiting_on_surgeon_floor_minu_check CHECK (((waiting_on_surgeon_floor_minutes >= 3) AND (waiting_on_surgeon_floor_minutes <= 30))),
     CONSTRAINT facility_analytics_settings_waiting_on_surgeon_minutes_check CHECK (((waiting_on_surgeon_minutes >= 0) AND (waiting_on_surgeon_minutes <= 15)))
 );
-
-
 --
 -- Name: facility_closures; Type: TABLE; Schema: public; Owner: -
 --
@@ -5356,8 +5051,6 @@ CREATE TABLE public.facility_closures (
     created_by uuid,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: facility_device_reps; Type: TABLE; Schema: public; Owner: -
 --
@@ -5373,8 +5066,6 @@ CREATE TABLE public.facility_device_reps (
     created_at timestamp with time zone DEFAULT now(),
     CONSTRAINT facility_device_reps_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'revoked'::text])))
 );
-
-
 --
 -- Name: facility_features; Type: TABLE; Schema: public; Owner: -
 --
@@ -5393,8 +5084,6 @@ CREATE TABLE public.facility_features (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: facility_holidays; Type: TABLE; Schema: public; Owner: -
 --
@@ -5417,8 +5106,6 @@ CREATE TABLE public.facility_holidays (
     CONSTRAINT facility_holidays_week_of_month_check CHECK (((week_of_month >= 1) AND (week_of_month <= 5))),
     CONSTRAINT valid_holiday_definition CHECK ((((day IS NOT NULL) AND (month IS NOT NULL)) OR ((week_of_month IS NOT NULL) AND (day_of_week IS NOT NULL) AND (month IS NOT NULL))))
 );
-
-
 --
 -- Name: milestone_types; Type: TABLE; Schema: public; Owner: -
 --
@@ -5436,8 +5123,6 @@ CREATE TABLE public.milestone_types (
     deleted_by uuid,
     CONSTRAINT milestone_types_pair_position_check CHECK ((pair_position = ANY (ARRAY['start'::text, 'end'::text])))
 );
-
-
 --
 -- Name: facility_milestone_stats; Type: MATERIALIZED VIEW; Schema: public; Owner: -
 --
@@ -5462,8 +5147,6 @@ CREATE MATERIALIZED VIEW public.facility_milestone_stats AS
   WHERE (cms.procedure_type_id IS NOT NULL)
   GROUP BY cms.facility_id, cms.procedure_type_id, cms.milestone_type_id, mt.name, mt.display_name
   WITH NO DATA;
-
-
 --
 -- Name: facility_milestones; Type: TABLE; Schema: public; Owner: -
 --
@@ -5489,8 +5172,6 @@ CREATE TABLE public.facility_milestones (
     CONSTRAINT facility_milestones_phase_group_check CHECK ((phase_group = ANY (ARRAY['pre_op'::text, 'surgical'::text, 'closing'::text, 'post_op'::text]))),
     CONSTRAINT facility_milestones_validation_type_check CHECK ((validation_type = ANY (ARRAY['duration'::text, 'sequence_gap'::text])))
 );
-
-
 --
 -- Name: facility_permissions; Type: TABLE; Schema: public; Owner: -
 --
@@ -5504,8 +5185,6 @@ CREATE TABLE public.facility_permissions (
     updated_at timestamp with time zone DEFAULT now(),
     updated_by uuid
 );
-
-
 --
 -- Name: facility_procedure_stats; Type: MATERIALIZED VIEW; Schema: public; Owner: -
 --
@@ -5555,8 +5234,6 @@ CREATE MATERIALIZED VIEW public.facility_procedure_stats AS
   WHERE ((procedure_type_id IS NOT NULL) AND (total_duration_minutes IS NOT NULL) AND ((is_excluded = false) OR (is_excluded IS NULL)))
   GROUP BY facility_id, procedure_type_id
   WITH NO DATA;
-
-
 --
 -- Name: features; Type: TABLE; Schema: public; Owner: -
 --
@@ -5573,8 +5250,6 @@ CREATE TABLE public.features (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: flag_rules; Type: TABLE; Schema: public; Owner: -
 --
@@ -5600,8 +5275,6 @@ CREATE TABLE public.flag_rules (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: global_milestone_settings; Type: TABLE; Schema: public; Owner: -
 --
@@ -5616,8 +5289,6 @@ CREATE TABLE public.global_milestone_settings (
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT global_milestone_settings_validation_type_check CHECK ((validation_type = ANY (ARRAY['duration'::text, 'sequence_gap'::text])))
 );
-
-
 --
 -- Name: user_sessions; Type: TABLE; Schema: public; Owner: -
 --
@@ -5632,8 +5303,6 @@ CREATE TABLE public.user_sessions (
     last_activity timestamp with time zone DEFAULT now(),
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: global_security_stats; Type: VIEW; Schema: public; Owner: -
 --
@@ -5657,8 +5326,6 @@ CREATE VIEW public.global_security_stats AS
      LEFT JOIN public.user_sessions us ON (((us.user_id = u.id) AND (us.expires_at > now()))))
   GROUP BY f.id, f.name, f.city, f.state
   ORDER BY f.name;
-
-
 --
 -- Name: issue_types; Type: TABLE; Schema: public; Owner: -
 --
@@ -5672,8 +5339,6 @@ CREATE TABLE public.issue_types (
     created_at timestamp with time zone DEFAULT now(),
     CONSTRAINT issue_types_severity_check CHECK ((severity = ANY (ARRAY['info'::text, 'warning'::text, 'error'::text])))
 );
-
-
 --
 -- Name: login_attempts; Type: TABLE; Schema: public; Owner: -
 --
@@ -5687,8 +5352,6 @@ CREATE TABLE public.login_attempts (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: metric_issues; Type: TABLE; Schema: public; Owner: -
 --
@@ -5712,8 +5375,6 @@ CREATE TABLE public.metric_issues (
     created_at timestamp with time zone DEFAULT now(),
     milestone_id uuid
 );
-
-
 --
 -- Name: mv_facility_health_scores; Type: MATERIALIZED VIEW; Schema: public; Owner: -
 --
@@ -5733,8 +5394,6 @@ CREATE MATERIALIZED VIEW public.mv_facility_health_scores AS
      LEFT JOIN public.audit_log al ON ((al.facility_id = f.id)))
   GROUP BY f.id, f.name, f.city, f.state
   WITH NO DATA;
-
-
 --
 -- Name: notification_reads; Type: TABLE; Schema: public; Owner: -
 --
@@ -5745,8 +5404,6 @@ CREATE TABLE public.notification_reads (
     user_id uuid NOT NULL,
     read_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: notifications; Type: TABLE; Schema: public; Owner: -
 --
@@ -5763,8 +5420,6 @@ CREATE TABLE public.notifications (
     expires_at timestamp with time zone DEFAULT (now() + '24:00:00'::interval) NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: or_rooms; Type: TABLE; Schema: public; Owner: -
 --
@@ -5780,8 +5435,6 @@ CREATE TABLE public.or_rooms (
     display_order integer DEFAULT 0,
     available_hours numeric DEFAULT 10
 );
-
-
 --
 -- Name: outlier_review_notes; Type: TABLE; Schema: public; Owner: -
 --
@@ -5794,8 +5447,6 @@ CREATE TABLE public.outlier_review_notes (
     created_at timestamp with time zone DEFAULT now(),
     is_system_note boolean DEFAULT false
 );
-
-
 --
 -- Name: outlier_reviews; Type: TABLE; Schema: public; Owner: -
 --
@@ -5812,8 +5463,6 @@ CREATE TABLE public.outlier_reviews (
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT outlier_reviews_status_check CHECK ((status = ANY (ARRAY['needs_review'::text, 'reviewed'::text, 'excluded'::text])))
 );
-
-
 --
 -- Name: page_registry; Type: TABLE; Schema: public; Owner: -
 --
@@ -5848,8 +5497,6 @@ CREATE TABLE public.page_registry (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     http_methods text[] DEFAULT '{}'::text[] NOT NULL
 );
-
-
 --
 -- Name: page_registry_categories; Type: TABLE; Schema: public; Owner: -
 --
@@ -5863,8 +5510,6 @@ CREATE TABLE public.page_registry_categories (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
-
-
 --
 -- Name: patient_checkins; Type: TABLE; Schema: public; Owner: -
 --
@@ -5892,8 +5537,6 @@ CREATE TABLE public.patient_checkins (
     updated_at timestamp with time zone DEFAULT now(),
     patient_id uuid
 );
-
-
 --
 -- Name: patient_statuses; Type: TABLE; Schema: public; Owner: -
 --
@@ -5910,8 +5553,6 @@ CREATE TABLE public.patient_statuses (
     is_active boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: payers; Type: TABLE; Schema: public; Owner: -
 --
@@ -5925,8 +5566,6 @@ CREATE TABLE public.payers (
     deleted_by uuid,
     is_active boolean DEFAULT true NOT NULL
 );
-
-
 --
 -- Name: user_invites; Type: TABLE; Schema: public; Owner: -
 --
@@ -5947,8 +5586,6 @@ CREATE TABLE public.user_invites (
     existing_user_id uuid,
     CONSTRAINT user_invites_access_level_check CHECK ((access_level = ANY (ARRAY['facility_admin'::text, 'user'::text])))
 );
-
-
 --
 -- Name: user_roles; Type: TABLE; Schema: public; Owner: -
 --
@@ -5958,8 +5595,6 @@ CREATE TABLE public.user_roles (
     name text NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: pending_user_invites; Type: VIEW; Schema: public; Owner: -
 --
@@ -5986,8 +5621,6 @@ CREATE VIEW public.pending_user_invites AS
      LEFT JOIN public.facilities f ON ((ui.facility_id = f.id)))
      LEFT JOIN public.user_roles ur ON ((ui.role_id = ur.id)))
   WHERE (ui.accepted_at IS NULL);
-
-
 --
 -- Name: permission_templates; Type: TABLE; Schema: public; Owner: -
 --
@@ -6000,8 +5633,6 @@ CREATE TABLE public.permission_templates (
     updated_at timestamp with time zone DEFAULT now(),
     updated_by uuid
 );
-
-
 --
 -- Name: permissions; Type: TABLE; Schema: public; Owner: -
 --
@@ -6019,8 +5650,6 @@ CREATE TABLE public.permissions (
     is_active boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: preop_checklist_field_templates; Type: TABLE; Schema: public; Owner: -
 --
@@ -6042,8 +5671,6 @@ CREATE TABLE public.preop_checklist_field_templates (
     deleted_at timestamp with time zone,
     deleted_by uuid
 );
-
-
 --
 -- Name: preop_checklist_fields; Type: TABLE; Schema: public; Owner: -
 --
@@ -6067,8 +5694,6 @@ CREATE TABLE public.preop_checklist_fields (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: procedure_categories; Type: TABLE; Schema: public; Owner: -
 --
@@ -6085,8 +5710,6 @@ CREATE TABLE public.procedure_categories (
     deleted_at timestamp with time zone,
     deleted_by uuid
 );
-
-
 --
 -- Name: procedure_cost_items; Type: TABLE; Schema: public; Owner: -
 --
@@ -6102,8 +5725,6 @@ CREATE TABLE public.procedure_cost_items (
     effective_from date DEFAULT CURRENT_DATE NOT NULL,
     effective_to date
 );
-
-
 --
 -- Name: procedure_milestone_config; Type: TABLE; Schema: public; Owner: -
 --
@@ -6117,8 +5738,6 @@ CREATE TABLE public.procedure_milestone_config (
     is_enabled boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: procedure_milestone_templates; Type: TABLE; Schema: public; Owner: -
 --
@@ -6130,8 +5749,6 @@ CREATE TABLE public.procedure_milestone_templates (
     display_order integer DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: procedure_reimbursements; Type: TABLE; Schema: public; Owner: -
 --
@@ -6146,8 +5763,6 @@ CREATE TABLE public.procedure_reimbursements (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
-
-
 --
 -- Name: procedure_techniques; Type: TABLE; Schema: public; Owner: -
 --
@@ -6159,8 +5774,6 @@ CREATE TABLE public.procedure_techniques (
     display_order integer DEFAULT 0,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: procedure_type_templates; Type: TABLE; Schema: public; Owner: -
 --
@@ -6178,8 +5791,6 @@ CREATE TABLE public.procedure_type_templates (
     deleted_by uuid,
     CONSTRAINT default_procedure_types_implant_category_check CHECK ((implant_category = ANY (ARRAY['total_hip'::text, 'total_knee'::text])))
 );
-
-
 --
 -- Name: procedure_types; Type: TABLE; Schema: public; Owner: -
 --
@@ -6202,8 +5813,6 @@ CREATE TABLE public.procedure_types (
     requires_operative_side boolean DEFAULT false NOT NULL,
     CONSTRAINT procedure_types_implant_category_check CHECK ((implant_category = ANY (ARRAY['total_hip'::text, 'total_knee'::text])))
 );
-
-
 --
 -- Name: resolution_types; Type: TABLE; Schema: public; Owner: -
 --
@@ -6215,8 +5824,6 @@ CREATE TABLE public.resolution_types (
     description text,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: room_schedules; Type: TABLE; Schema: public; Owner: -
 --
@@ -6237,8 +5844,6 @@ CREATE TABLE public.room_schedules (
     CONSTRAINT room_schedules_valid_dates CHECK (((effective_end IS NULL) OR (effective_end >= effective_start))),
     CONSTRAINT room_schedules_valid_times CHECK (((is_closed = true) OR (close_time > open_time)))
 );
-
-
 --
 -- Name: spd_case_summary; Type: VIEW; Schema: public; Owner: -
 --
@@ -6277,8 +5882,6 @@ CREATE VIEW public.spd_case_summary AS
      LEFT JOIN public.users s ON ((c.surgeon_id = s.id)))
      LEFT JOIN public.case_statuses cs ON ((c.status_id = cs.id)))
   WHERE (cs.name <> 'cancelled'::text);
-
-
 --
 -- Name: surgeon_colors; Type: TABLE; Schema: public; Owner: -
 --
@@ -6290,8 +5893,6 @@ CREATE TABLE public.surgeon_colors (
     color character varying(7) NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: surgeon_cost_items; Type: TABLE; Schema: public; Owner: -
 --
@@ -6308,8 +5909,6 @@ CREATE TABLE public.surgeon_cost_items (
     effective_from date DEFAULT CURRENT_DATE NOT NULL,
     effective_to date
 );
-
-
 --
 -- Name: surgeon_milestone_averages; Type: TABLE; Schema: public; Owner: -
 --
@@ -6323,8 +5922,6 @@ CREATE TABLE public.surgeon_milestone_averages (
     sample_size integer DEFAULT 0 NOT NULL,
     updated_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: surgeon_milestone_stats; Type: MATERIALIZED VIEW; Schema: public; Owner: -
 --
@@ -6349,8 +5946,6 @@ CREATE MATERIALIZED VIEW public.surgeon_milestone_stats AS
   WHERE ((cms.surgeon_id IS NOT NULL) AND (cms.procedure_type_id IS NOT NULL))
   GROUP BY cms.facility_id, cms.surgeon_id, cms.procedure_type_id, cms.milestone_type_id, mt.name, mt.display_name
   WITH NO DATA;
-
-
 --
 -- Name: surgeon_overall_stats; Type: MATERIALIZED VIEW; Schema: public; Owner: -
 --
@@ -6383,8 +5978,6 @@ CREATE MATERIALIZED VIEW public.surgeon_overall_stats AS
   WHERE (surgeon_id IS NOT NULL)
   GROUP BY facility_id, surgeon_id
   WITH NO DATA;
-
-
 --
 -- Name: surgeon_preference_companies; Type: TABLE; Schema: public; Owner: -
 --
@@ -6395,8 +5988,6 @@ CREATE TABLE public.surgeon_preference_companies (
     implant_company_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: surgeon_preferences; Type: TABLE; Schema: public; Owner: -
 --
@@ -6411,8 +6002,6 @@ CREATE TABLE public.surgeon_preferences (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: surgeon_procedure_averages; Type: TABLE; Schema: public; Owner: -
 --
@@ -6425,8 +6014,6 @@ CREATE TABLE public.surgeon_procedure_averages (
     sample_size integer DEFAULT 0 NOT NULL,
     updated_at timestamp with time zone DEFAULT now()
 );
-
-
 --
 -- Name: surgeon_procedure_stats; Type: MATERIALIZED VIEW; Schema: public; Owner: -
 --
@@ -6476,8 +6063,6 @@ CREATE MATERIALIZED VIEW public.surgeon_procedure_stats AS
   WHERE ((surgeon_id IS NOT NULL) AND (procedure_type_id IS NOT NULL) AND (total_duration_minutes IS NOT NULL) AND ((is_excluded = false) OR (is_excluded IS NULL)))
   GROUP BY facility_id, surgeon_id, procedure_type_id
   WITH NO DATA;
-
-
 --
 -- Name: v_daily_checkins; Type: VIEW; Schema: public; Owner: -
 --
@@ -6513,4354 +6098,3208 @@ CREATE VIEW public.v_daily_checkins AS
    FROM ((public.cases c
      LEFT JOIN public.patients p ON ((c.patient_id = p.id)))
      LEFT JOIN public.patient_checkins pc ON ((c.id = pc.case_id)));
-
-
 --
 -- Name: admin_sessions admin_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.admin_sessions
     ADD CONSTRAINT admin_sessions_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: audit_log audit_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.audit_log
     ADD CONSTRAINT audit_log_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: block_schedules block_schedules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.block_schedules
     ADD CONSTRAINT block_schedules_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: body_regions body_regions_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.body_regions
     ADD CONSTRAINT body_regions_name_key UNIQUE (name);
-
-
 --
 -- Name: body_regions body_regions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.body_regions
     ADD CONSTRAINT body_regions_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: cancellation_reason_templates cancellation_reason_templates_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cancellation_reason_templates
     ADD CONSTRAINT cancellation_reason_templates_name_key UNIQUE (name);
-
-
 --
 -- Name: cancellation_reason_templates cancellation_reason_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cancellation_reason_templates
     ADD CONSTRAINT cancellation_reason_templates_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: cancellation_reasons cancellation_reasons_facility_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cancellation_reasons
     ADD CONSTRAINT cancellation_reasons_facility_id_name_key UNIQUE (facility_id, name);
-
-
 --
 -- Name: cancellation_reasons cancellation_reasons_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cancellation_reasons
     ADD CONSTRAINT cancellation_reasons_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_completion_stats case_completion_stats_case_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_completion_stats
     ADD CONSTRAINT case_completion_stats_case_id_key UNIQUE (case_id);
-
-
 --
 -- Name: case_completion_stats case_completion_stats_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_completion_stats
     ADD CONSTRAINT case_completion_stats_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_complexities case_complexities_case_id_complexity_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_complexities
     ADD CONSTRAINT case_complexities_case_id_complexity_id_key UNIQUE (case_id, complexity_id);
-
-
 --
 -- Name: case_complexities case_complexities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_complexities
     ADD CONSTRAINT case_complexities_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_delays case_delays_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_delays
     ADD CONSTRAINT case_delays_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_device_activity case_device_activity_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_device_activity
     ADD CONSTRAINT case_device_activity_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_device_companies case_device_companies_case_id_implant_company_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_device_companies
     ADD CONSTRAINT case_device_companies_case_id_implant_company_id_key UNIQUE (case_id, implant_company_id);
-
-
 --
 -- Name: case_device_companies case_device_companies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_device_companies
     ADD CONSTRAINT case_device_companies_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_flags case_flags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_flags
     ADD CONSTRAINT case_flags_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_implant_companies case_implant_companies_case_id_implant_company_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_implant_companies
     ADD CONSTRAINT case_implant_companies_case_id_implant_company_id_key UNIQUE (case_id, implant_company_id);
-
-
 --
 -- Name: case_implant_companies case_implant_companies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_implant_companies
     ADD CONSTRAINT case_implant_companies_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_implants case_implants_case_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_implants
     ADD CONSTRAINT case_implants_case_id_key UNIQUE (case_id);
-
-
 --
 -- Name: case_implants case_implants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_implants
     ADD CONSTRAINT case_implants_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_milestone_stats case_milestone_stats_case_id_milestone_type_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestone_stats
     ADD CONSTRAINT case_milestone_stats_case_id_milestone_type_id_key UNIQUE (case_id, milestone_type_id);
-
-
 --
 -- Name: case_milestone_stats case_milestone_stats_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestone_stats
     ADD CONSTRAINT case_milestone_stats_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_milestones case_milestones_case_id_facility_milestone_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestones
     ADD CONSTRAINT case_milestones_case_id_facility_milestone_id_key UNIQUE (case_id, facility_milestone_id);
-
-
 --
 -- Name: case_milestones case_milestones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestones
     ADD CONSTRAINT case_milestones_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_staff case_staff_case_id_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_staff
     ADD CONSTRAINT case_staff_case_id_user_id_key UNIQUE (case_id, user_id);
-
-
 --
 -- Name: case_staff case_staff_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_staff
     ADD CONSTRAINT case_staff_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: case_statuses case_statuses_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_statuses
     ADD CONSTRAINT case_statuses_name_key UNIQUE (name);
-
-
 --
 -- Name: case_statuses case_statuses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_statuses
     ADD CONSTRAINT case_statuses_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: cases cases_facility_id_case_number_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_facility_id_case_number_key UNIQUE (facility_id, case_number);
-
-
 --
 -- Name: cases cases_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: complexities complexities_facility_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.complexities
     ADD CONSTRAINT complexities_facility_id_name_key UNIQUE (facility_id, name);
-
-
 --
 -- Name: complexities complexities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.complexities
     ADD CONSTRAINT complexities_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: complexity_templates complexity_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.complexity_templates
     ADD CONSTRAINT complexity_templates_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: cost_categories cost_categories_facility_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cost_categories
     ADD CONSTRAINT cost_categories_facility_id_name_key UNIQUE (facility_id, name);
-
-
 --
 -- Name: cost_categories cost_categories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cost_categories
     ADD CONSTRAINT cost_categories_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: cost_category_templates cost_category_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cost_category_templates
     ADD CONSTRAINT cost_category_templates_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: data_quality_notifications data_quality_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.data_quality_notifications
     ADD CONSTRAINT data_quality_notifications_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: delay_types delay_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.delay_types
     ADD CONSTRAINT delay_types_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: device_rep_facility_access device_rep_facility_access_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_rep_facility_access
     ADD CONSTRAINT device_rep_facility_access_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: device_rep_facility_access device_rep_facility_access_user_id_facility_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_rep_facility_access
     ADD CONSTRAINT device_rep_facility_access_user_id_facility_id_key UNIQUE (user_id, facility_id);
-
-
 --
 -- Name: device_rep_invites device_rep_invites_facility_id_email_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_rep_invites
     ADD CONSTRAINT device_rep_invites_facility_id_email_key UNIQUE (facility_id, email);
-
-
 --
 -- Name: device_rep_invites device_rep_invites_invite_token_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_rep_invites
     ADD CONSTRAINT device_rep_invites_invite_token_key UNIQUE (invite_token);
-
-
 --
 -- Name: device_rep_invites device_rep_invites_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_rep_invites
     ADD CONSTRAINT device_rep_invites_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: device_tokens device_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_tokens
     ADD CONSTRAINT device_tokens_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: device_tokens device_tokens_user_id_token_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_tokens
     ADD CONSTRAINT device_tokens_user_id_token_key UNIQUE (user_id, token);
-
-
 --
 -- Name: error_logs error_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.error_logs
     ADD CONSTRAINT error_logs_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: escort_status_links escort_status_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.escort_status_links
     ADD CONSTRAINT escort_status_links_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: escort_status_links escort_status_links_token_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.escort_status_links
     ADD CONSTRAINT escort_status_links_token_key UNIQUE (token);
-
-
 --
 -- Name: facilities facilities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facilities
     ADD CONSTRAINT facilities_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: facility_analytics_settings facility_analytics_settings_facility_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_analytics_settings
     ADD CONSTRAINT facility_analytics_settings_facility_id_key UNIQUE (facility_id);
-
-
 --
 -- Name: facility_analytics_settings facility_analytics_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_analytics_settings
     ADD CONSTRAINT facility_analytics_settings_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: facility_closures facility_closures_facility_id_closure_date_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_closures
     ADD CONSTRAINT facility_closures_facility_id_closure_date_key UNIQUE (facility_id, closure_date);
-
-
 --
 -- Name: facility_closures facility_closures_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_closures
     ADD CONSTRAINT facility_closures_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: facility_device_reps facility_device_reps_facility_id_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_device_reps
     ADD CONSTRAINT facility_device_reps_facility_id_user_id_key UNIQUE (facility_id, user_id);
-
-
 --
 -- Name: facility_device_reps facility_device_reps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_device_reps
     ADD CONSTRAINT facility_device_reps_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: facility_features facility_features_facility_id_feature_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_features
     ADD CONSTRAINT facility_features_facility_id_feature_id_key UNIQUE (facility_id, feature_id);
-
-
 --
 -- Name: facility_features facility_features_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_features
     ADD CONSTRAINT facility_features_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: facility_holidays facility_holidays_facility_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_holidays
     ADD CONSTRAINT facility_holidays_facility_id_name_key UNIQUE (facility_id, name);
-
-
 --
 -- Name: facility_holidays facility_holidays_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_holidays
     ADD CONSTRAINT facility_holidays_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: facility_milestones facility_milestones_facility_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_milestones
     ADD CONSTRAINT facility_milestones_facility_id_name_key UNIQUE (facility_id, name);
-
-
 --
 -- Name: facility_milestones facility_milestones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_milestones
     ADD CONSTRAINT facility_milestones_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: facility_permissions facility_permissions_facility_id_access_level_permission_ke_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_permissions
     ADD CONSTRAINT facility_permissions_facility_id_access_level_permission_ke_key UNIQUE (facility_id, access_level, permission_key);
-
-
 --
 -- Name: facility_permissions facility_permissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_permissions
     ADD CONSTRAINT facility_permissions_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: features features_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.features
     ADD CONSTRAINT features_name_key UNIQUE (name);
-
-
 --
 -- Name: features features_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.features
     ADD CONSTRAINT features_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: flag_rules flag_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.flag_rules
     ADD CONSTRAINT flag_rules_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: global_milestone_settings global_milestone_settings_milestone_type_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.global_milestone_settings
     ADD CONSTRAINT global_milestone_settings_milestone_type_id_key UNIQUE (milestone_type_id);
-
-
 --
 -- Name: global_milestone_settings global_milestone_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.global_milestone_settings
     ADD CONSTRAINT global_milestone_settings_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: implant_companies implant_companies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.implant_companies
     ADD CONSTRAINT implant_companies_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: issue_types issue_types_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.issue_types
     ADD CONSTRAINT issue_types_name_key UNIQUE (name);
-
-
 --
 -- Name: issue_types issue_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.issue_types
     ADD CONSTRAINT issue_types_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: login_attempts login_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.login_attempts
     ADD CONSTRAINT login_attempts_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: metric_issues metric_issues_case_id_facility_milestone_id_issue_type_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric_issues
     ADD CONSTRAINT metric_issues_case_id_facility_milestone_id_issue_type_id_key UNIQUE (case_id, facility_milestone_id, issue_type_id);
-
-
 --
 -- Name: metric_issues metric_issues_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric_issues
     ADD CONSTRAINT metric_issues_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: milestone_types milestone_types_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.milestone_types
     ADD CONSTRAINT milestone_types_name_key UNIQUE (name);
-
-
 --
 -- Name: milestone_types milestone_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.milestone_types
     ADD CONSTRAINT milestone_types_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: notification_reads notification_reads_notification_id_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notification_reads
     ADD CONSTRAINT notification_reads_notification_id_user_id_key UNIQUE (notification_id, user_id);
-
-
 --
 -- Name: notification_reads notification_reads_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notification_reads
     ADD CONSTRAINT notification_reads_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: notifications notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: or_rooms or_rooms_facility_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.or_rooms
     ADD CONSTRAINT or_rooms_facility_id_name_key UNIQUE (facility_id, name);
-
-
 --
 -- Name: or_rooms or_rooms_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.or_rooms
     ADD CONSTRAINT or_rooms_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: outlier_review_notes outlier_review_notes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.outlier_review_notes
     ADD CONSTRAINT outlier_review_notes_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: outlier_reviews outlier_reviews_case_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.outlier_reviews
     ADD CONSTRAINT outlier_reviews_case_id_key UNIQUE (case_id);
-
-
 --
 -- Name: outlier_reviews outlier_reviews_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.outlier_reviews
     ADD CONSTRAINT outlier_reviews_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: page_registry_categories page_registry_categories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.page_registry_categories
     ADD CONSTRAINT page_registry_categories_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: page_registry page_registry_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.page_registry
     ADD CONSTRAINT page_registry_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: patient_checkins patient_checkins_case_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patient_checkins
     ADD CONSTRAINT patient_checkins_case_id_key UNIQUE (case_id);
-
-
 --
 -- Name: patient_checkins patient_checkins_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patient_checkins
     ADD CONSTRAINT patient_checkins_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: patient_statuses patient_statuses_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patient_statuses
     ADD CONSTRAINT patient_statuses_name_key UNIQUE (name);
-
-
 --
 -- Name: patient_statuses patient_statuses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patient_statuses
     ADD CONSTRAINT patient_statuses_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: patients patients_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patients
     ADD CONSTRAINT patients_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: payers payers_facility_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.payers
     ADD CONSTRAINT payers_facility_id_name_key UNIQUE (facility_id, name);
-
-
 --
 -- Name: payers payers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.payers
     ADD CONSTRAINT payers_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: permission_templates permission_templates_access_level_permission_key_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_templates
     ADD CONSTRAINT permission_templates_access_level_permission_key_key UNIQUE (access_level, permission_key);
-
-
 --
 -- Name: permission_templates permission_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_templates
     ADD CONSTRAINT permission_templates_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: permissions permissions_key_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permissions
     ADD CONSTRAINT permissions_key_key UNIQUE (key);
-
-
 --
 -- Name: permissions permissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permissions
     ADD CONSTRAINT permissions_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: preop_checklist_field_templates preop_checklist_field_templates_field_key_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.preop_checklist_field_templates
     ADD CONSTRAINT preop_checklist_field_templates_field_key_key UNIQUE (field_key);
-
-
 --
 -- Name: preop_checklist_field_templates preop_checklist_field_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.preop_checklist_field_templates
     ADD CONSTRAINT preop_checklist_field_templates_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: preop_checklist_fields preop_checklist_fields_facility_id_field_key_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.preop_checklist_fields
     ADD CONSTRAINT preop_checklist_fields_facility_id_field_key_key UNIQUE (facility_id, field_key);
-
-
 --
 -- Name: preop_checklist_fields preop_checklist_fields_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.preop_checklist_fields
     ADD CONSTRAINT preop_checklist_fields_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: procedure_categories procedure_categories_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_categories
     ADD CONSTRAINT procedure_categories_name_key UNIQUE (name);
-
-
 --
 -- Name: procedure_categories procedure_categories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_categories
     ADD CONSTRAINT procedure_categories_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: procedure_cost_items procedure_cost_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_cost_items
     ADD CONSTRAINT procedure_cost_items_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: procedure_cost_items procedure_cost_items_procedure_type_id_cost_category_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_cost_items
     ADD CONSTRAINT procedure_cost_items_procedure_type_id_cost_category_id_key UNIQUE (procedure_type_id, cost_category_id);
-
-
 --
 -- Name: procedure_milestone_config procedure_milestone_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_milestone_config
     ADD CONSTRAINT procedure_milestone_config_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: procedure_milestone_config procedure_milestone_config_procedure_type_id_facility_miles_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_milestone_config
     ADD CONSTRAINT procedure_milestone_config_procedure_type_id_facility_miles_key UNIQUE (procedure_type_id, facility_milestone_id);
-
-
 --
 -- Name: procedure_milestone_templates procedure_milestone_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_milestone_templates
     ADD CONSTRAINT procedure_milestone_templates_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: procedure_milestone_templates procedure_milestone_templates_procedure_type_template_id_milest; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_milestone_templates
     ADD CONSTRAINT procedure_milestone_templates_procedure_type_template_id_milest UNIQUE (procedure_type_template_id, milestone_type_id);
-
-
 --
 -- Name: procedure_reimbursements procedure_reimbursements_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_reimbursements
     ADD CONSTRAINT procedure_reimbursements_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: procedure_techniques procedure_techniques_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_techniques
     ADD CONSTRAINT procedure_techniques_name_key UNIQUE (name);
-
-
 --
 -- Name: procedure_techniques procedure_techniques_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_techniques
     ADD CONSTRAINT procedure_techniques_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: procedure_type_templates procedure_type_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_type_templates
     ADD CONSTRAINT procedure_type_templates_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: procedure_types procedure_types_facility_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_types
     ADD CONSTRAINT procedure_types_facility_id_name_key UNIQUE (facility_id, name);
-
-
 --
 -- Name: procedure_types procedure_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_types
     ADD CONSTRAINT procedure_types_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: resolution_types resolution_types_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.resolution_types
     ADD CONSTRAINT resolution_types_name_key UNIQUE (name);
-
-
 --
 -- Name: resolution_types resolution_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.resolution_types
     ADD CONSTRAINT resolution_types_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: room_schedules room_schedules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.room_schedules
     ADD CONSTRAINT room_schedules_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: surgeon_colors surgeon_colors_facility_id_surgeon_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_colors
     ADD CONSTRAINT surgeon_colors_facility_id_surgeon_id_key UNIQUE (facility_id, surgeon_id);
-
-
 --
 -- Name: surgeon_colors surgeon_colors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_colors
     ADD CONSTRAINT surgeon_colors_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: surgeon_cost_items surgeon_cost_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_cost_items
     ADD CONSTRAINT surgeon_cost_items_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: surgeon_cost_items surgeon_cost_items_surgeon_id_procedure_type_id_cost_catego_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_cost_items
     ADD CONSTRAINT surgeon_cost_items_surgeon_id_procedure_type_id_cost_catego_key UNIQUE (surgeon_id, procedure_type_id, cost_category_id);
-
-
 --
 -- Name: surgeon_milestone_averages surgeon_milestone_averages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_milestone_averages
     ADD CONSTRAINT surgeon_milestone_averages_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: surgeon_milestone_averages surgeon_milestone_averages_surgeon_id_procedure_type_id_mil_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_milestone_averages
     ADD CONSTRAINT surgeon_milestone_averages_surgeon_id_procedure_type_id_mil_key UNIQUE (surgeon_id, procedure_type_id, milestone_type_id);
-
-
 --
 -- Name: surgeon_milestone_averages surgeon_milestone_averages_surgeon_procedure_milestone_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_milestone_averages
     ADD CONSTRAINT surgeon_milestone_averages_surgeon_procedure_milestone_key UNIQUE (surgeon_id, procedure_type_id, milestone_type_id);
-
-
 --
 -- Name: surgeon_preference_companies surgeon_preference_companies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_preference_companies
     ADD CONSTRAINT surgeon_preference_companies_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: surgeon_preference_companies surgeon_preference_companies_surgeon_preference_id_implant__key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_preference_companies
     ADD CONSTRAINT surgeon_preference_companies_surgeon_preference_id_implant__key UNIQUE (surgeon_preference_id, implant_company_id);
-
-
 --
 -- Name: surgeon_preferences surgeon_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_preferences
     ADD CONSTRAINT surgeon_preferences_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: surgeon_procedure_averages surgeon_procedure_averages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_procedure_averages
     ADD CONSTRAINT surgeon_procedure_averages_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: surgeon_procedure_averages surgeon_procedure_averages_surgeon_id_procedure_type_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_procedure_averages
     ADD CONSTRAINT surgeon_procedure_averages_surgeon_id_procedure_type_id_key UNIQUE (surgeon_id, procedure_type_id);
-
-
 --
 -- Name: surgeon_procedure_averages surgeon_procedure_averages_surgeon_procedure_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_procedure_averages
     ADD CONSTRAINT surgeon_procedure_averages_surgeon_procedure_key UNIQUE (surgeon_id, procedure_type_id);
-
-
 --
 -- Name: procedure_milestone_config uq_proc_milestone_config; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_milestone_config
     ADD CONSTRAINT uq_proc_milestone_config UNIQUE (facility_id, procedure_type_id, facility_milestone_id);
-
-
 --
 -- Name: user_invites user_invites_invite_token_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_invites
     ADD CONSTRAINT user_invites_invite_token_key UNIQUE (invite_token);
-
-
 --
 -- Name: user_invites user_invites_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_invites
     ADD CONSTRAINT user_invites_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: user_roles user_roles_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_roles
     ADD CONSTRAINT user_roles_name_key UNIQUE (name);
-
-
 --
 -- Name: user_roles user_roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_roles
     ADD CONSTRAINT user_roles_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: user_sessions user_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_sessions
     ADD CONSTRAINT user_sessions_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_email_key UNIQUE (email);
-
-
 --
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
-
-
 --
 -- Name: idx_admin_sessions_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_admin_sessions_active ON public.admin_sessions USING btree (admin_user_id, is_active) WHERE (is_active = true);
-
-
 --
 -- Name: idx_audit_log_action; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_log_action ON public.audit_log USING btree (action);
-
-
 --
 -- Name: idx_audit_log_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_log_created_at ON public.audit_log USING btree (created_at DESC);
-
-
 --
 -- Name: idx_audit_log_facility_action_created; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_log_facility_action_created ON public.audit_log USING btree (facility_id, action, created_at DESC);
-
-
 --
 -- Name: idx_audit_log_facility_created; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_log_facility_created ON public.audit_log USING btree (facility_id, created_at DESC);
-
-
 --
 -- Name: idx_audit_log_facility_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_log_facility_date ON public.audit_log USING btree (facility_id, created_at DESC);
-
-
 --
 -- Name: idx_audit_log_facility_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_log_facility_id ON public.audit_log USING btree (facility_id);
-
-
 --
 -- Name: idx_audit_log_target; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_log_target ON public.audit_log USING btree (target_type, target_id);
-
-
 --
 -- Name: idx_audit_log_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_audit_log_user_id ON public.audit_log USING btree (user_id);
-
-
 --
 -- Name: idx_block_schedules_day; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_block_schedules_day ON public.block_schedules USING btree (day_of_week) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_block_schedules_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_block_schedules_facility ON public.block_schedules USING btree (facility_id) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_block_schedules_surgeon; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_block_schedules_surgeon ON public.block_schedules USING btree (surgeon_id) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_body_regions_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_body_regions_active ON public.body_regions USING btree (deleted_at) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_cancellation_reason_templates_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cancellation_reason_templates_active ON public.cancellation_reason_templates USING btree (is_active) WHERE ((is_active = true) AND (deleted_at IS NULL));
-
-
 --
 -- Name: idx_cancellation_reasons_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cancellation_reasons_active ON public.cancellation_reasons USING btree (facility_id, is_active) WHERE ((is_active = true) AND (deleted_at IS NULL));
-
-
 --
 -- Name: idx_cancellation_reasons_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cancellation_reasons_facility ON public.cancellation_reasons USING btree (facility_id);
-
-
 --
 -- Name: idx_case_complexities_case; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_complexities_case ON public.case_complexities USING btree (case_id);
-
-
 --
 -- Name: idx_case_delays_case; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_delays_case ON public.case_delays USING btree (case_id);
-
-
 --
 -- Name: idx_case_device_activity_case; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_device_activity_case ON public.case_device_activity USING btree (case_id);
-
-
 --
 -- Name: idx_case_device_activity_company; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_device_activity_company ON public.case_device_activity USING btree (implant_company_id) WHERE (implant_company_id IS NOT NULL);
-
-
 --
 -- Name: idx_case_device_activity_created; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_device_activity_created ON public.case_device_activity USING btree (created_at DESC);
-
-
 --
 -- Name: idx_case_device_companies_case; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_device_companies_case ON public.case_device_companies USING btree (case_id);
-
-
 --
 -- Name: idx_case_device_companies_company; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_device_companies_company ON public.case_device_companies USING btree (implant_company_id);
-
-
 --
 -- Name: idx_case_device_companies_pending; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_device_companies_pending ON public.case_device_companies USING btree (tray_status) WHERE (tray_status = 'pending'::text);
-
-
 --
 -- Name: idx_case_device_companies_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_device_companies_status ON public.case_device_companies USING btree (tray_status);
-
-
 --
 -- Name: idx_case_flags_case_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_flags_case_id ON public.case_flags USING btree (case_id);
-
-
 --
 -- Name: idx_case_flags_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_flags_created_at ON public.case_flags USING btree (created_at DESC);
-
-
 --
 -- Name: idx_case_flags_delay_type_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_flags_delay_type_id ON public.case_flags USING btree (delay_type_id);
-
-
 --
 -- Name: idx_case_flags_facility_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_flags_facility_id ON public.case_flags USING btree (facility_id);
-
-
 --
 -- Name: idx_case_flags_facility_milestone_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_flags_facility_milestone_id ON public.case_flags USING btree (facility_milestone_id) WHERE (facility_milestone_id IS NOT NULL);
-
-
 --
 -- Name: idx_case_flags_facility_severity; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_flags_facility_severity ON public.case_flags USING btree (facility_id, severity, created_at DESC);
-
-
 --
 -- Name: idx_case_flags_flag_rule_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_flags_flag_rule_id ON public.case_flags USING btree (flag_rule_id);
-
-
 --
 -- Name: idx_case_flags_flag_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_flags_flag_type ON public.case_flags USING btree (flag_type);
-
-
 --
 -- Name: idx_case_flags_severity; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_flags_severity ON public.case_flags USING btree (severity);
-
-
 --
 -- Name: idx_case_implant_companies_case; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_implant_companies_case ON public.case_implant_companies USING btree (case_id);
-
-
 --
 -- Name: idx_case_implant_companies_company; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_implant_companies_company ON public.case_implant_companies USING btree (implant_company_id);
-
-
 --
 -- Name: idx_case_milestones_case; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_milestones_case ON public.case_milestones USING btree (case_id);
-
-
 --
 -- Name: idx_case_milestones_recorded; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_milestones_recorded ON public.case_milestones USING btree (recorded_at);
-
-
 --
 -- Name: idx_case_staff_case; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_case_staff_case ON public.case_staff USING btree (case_id);
-
-
 --
 -- Name: idx_cases_called_back; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_called_back ON public.cases USING btree (called_back_at) WHERE (called_back_at IS NOT NULL);
-
-
 --
 -- Name: idx_cases_cancellation; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_cancellation ON public.cases USING btree (cancellation_reason_id) WHERE (cancellation_reason_id IS NOT NULL);
-
-
 --
 -- Name: idx_cases_cancelled_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_cancelled_at ON public.cases USING btree (cancelled_at) WHERE (cancelled_at IS NOT NULL);
-
-
 --
 -- Name: idx_cases_data_validated; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_data_validated ON public.cases USING btree (data_validated) WHERE (data_validated = true);
-
-
 --
 -- Name: idx_cases_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_facility ON public.cases USING btree (facility_id);
-
-
 --
 -- Name: idx_cases_facility_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_facility_date ON public.cases USING btree (facility_id, scheduled_date);
-
-
 --
 -- Name: idx_cases_facility_status_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_facility_status_date ON public.cases USING btree (facility_id, status_id, scheduled_date);
-
-
 --
 -- Name: idx_cases_patient; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_patient ON public.cases USING btree (patient_id) WHERE (patient_id IS NOT NULL);
-
-
 --
 -- Name: idx_cases_scheduled_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_scheduled_date ON public.cases USING btree (scheduled_date);
-
-
 --
 -- Name: idx_cases_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_status ON public.cases USING btree (status_id);
-
-
 --
 -- Name: idx_cases_surgeon_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_surgeon_date ON public.cases USING btree (surgeon_id, scheduled_date) WHERE (surgeon_id IS NOT NULL);
-
-
 --
 -- Name: idx_cases_validation_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cases_validation_status ON public.cases USING btree (data_validated, is_excluded_from_metrics);
-
-
 --
 -- Name: idx_ccs_case_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_ccs_case_date ON public.case_completion_stats USING btree (case_date);
-
-
 --
 -- Name: idx_ccs_excluded; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_ccs_excluded ON public.case_completion_stats USING btree (facility_id, excluded_at) WHERE (is_excluded = true);
-
-
 --
 -- Name: idx_ccs_facility_procedure; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_ccs_facility_procedure ON public.case_completion_stats USING btree (facility_id, procedure_type_id);
-
-
 --
 -- Name: idx_ccs_facility_surgeon_procedure; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_ccs_facility_surgeon_procedure ON public.case_completion_stats USING btree (facility_id, surgeon_id, procedure_type_id);
-
-
 --
 -- Name: idx_ccs_not_excluded; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_ccs_not_excluded ON public.case_completion_stats USING btree (facility_id, case_date) WHERE ((is_excluded = false) OR (is_excluded IS NULL));
-
-
 --
 -- Name: idx_ccs_room_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_ccs_room_date ON public.case_completion_stats USING btree (or_room_id, case_date);
-
-
 --
 -- Name: idx_ccs_surgeon; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_ccs_surgeon ON public.case_completion_stats USING btree (surgeon_id) WHERE (surgeon_id IS NOT NULL);
-
-
 --
 -- Name: idx_ccs_surgeon_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_ccs_surgeon_date ON public.case_completion_stats USING btree (surgeon_id, case_date);
-
-
 --
 -- Name: idx_cms_case; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cms_case ON public.case_milestone_stats USING btree (case_id);
-
-
 --
 -- Name: idx_cms_facility_procedure_milestone; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cms_facility_procedure_milestone ON public.case_milestone_stats USING btree (facility_id, procedure_type_id, milestone_type_id);
-
-
 --
 -- Name: idx_cms_surgeon_procedure_milestone; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cms_surgeon_procedure_milestone ON public.case_milestone_stats USING btree (surgeon_id, procedure_type_id, milestone_type_id);
-
-
 --
 -- Name: idx_complexities_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_complexities_active ON public.complexities USING btree (facility_id, is_active);
-
-
 --
 -- Name: idx_complexities_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_complexities_facility ON public.complexities USING btree (facility_id);
-
-
 --
 -- Name: idx_complexities_facility_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_complexities_facility_active ON public.complexities USING btree (facility_id, is_active) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_complexity_templates_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_complexity_templates_active ON public.complexity_templates USING btree (is_active) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_cost_categories_deleted_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cost_categories_deleted_at ON public.cost_categories USING btree (deleted_at);
-
-
 --
 -- Name: idx_cost_categories_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cost_categories_facility ON public.cost_categories USING btree (facility_id);
-
-
 --
 -- Name: idx_cost_category_templates_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_cost_category_templates_active ON public.cost_category_templates USING btree (is_active) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_delay_types_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delay_types_facility ON public.delay_types USING btree (facility_id);
-
-
 --
 -- Name: idx_delay_types_facility_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_delay_types_facility_active ON public.delay_types USING btree (facility_id, is_active) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_delay_types_unique_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_delay_types_unique_facility ON public.delay_types USING btree (name, facility_id) WHERE (facility_id IS NOT NULL);
-
-
 --
 -- Name: idx_delay_types_unique_global; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_delay_types_unique_global ON public.delay_types USING btree (name) WHERE (facility_id IS NULL);
-
-
 --
 -- Name: idx_device_rep_invites_email; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_device_rep_invites_email ON public.device_rep_invites USING btree (email);
-
-
 --
 -- Name: idx_device_rep_invites_token; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_device_rep_invites_token ON public.device_rep_invites USING btree (invite_token);
-
-
 --
 -- Name: idx_device_tokens_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_device_tokens_user ON public.device_tokens USING btree (user_id);
-
-
 --
 -- Name: idx_dq_notifications_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_dq_notifications_facility ON public.data_quality_notifications USING btree (facility_id, created_at DESC);
-
-
 --
 -- Name: idx_dq_notifications_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_dq_notifications_user ON public.data_quality_notifications USING btree (user_id, is_read, created_at DESC);
-
-
 --
 -- Name: idx_error_logs_category; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_error_logs_category ON public.error_logs USING btree (category);
-
-
 --
 -- Name: idx_error_logs_context_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_error_logs_context_user ON public.error_logs USING gin (((context -> 'userId'::text)));
-
-
 --
 -- Name: idx_error_logs_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_error_logs_created_at ON public.error_logs USING btree (created_at DESC);
-
-
 --
 -- Name: idx_error_logs_facility_created; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_error_logs_facility_created ON public.error_logs USING btree (facility_id, created_at DESC);
-
-
 --
 -- Name: idx_error_logs_facility_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_error_logs_facility_id ON public.error_logs USING btree (facility_id);
-
-
 --
 -- Name: idx_error_logs_severity; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_error_logs_severity ON public.error_logs USING btree (severity);
-
-
 --
 -- Name: idx_escort_status_links_checkin; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_escort_status_links_checkin ON public.escort_status_links USING btree (checkin_id);
-
-
 --
 -- Name: idx_escort_status_links_token; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_escort_status_links_token ON public.escort_status_links USING btree (token) WHERE (is_active = true);
-
-
 --
 -- Name: idx_facility_closures_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_closures_date ON public.facility_closures USING btree (closure_date);
-
-
 --
 -- Name: idx_facility_closures_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_closures_facility ON public.facility_closures USING btree (facility_id);
-
-
 --
 -- Name: idx_facility_device_reps_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_device_reps_facility ON public.facility_device_reps USING btree (facility_id);
-
-
 --
 -- Name: idx_facility_device_reps_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_device_reps_status ON public.facility_device_reps USING btree (status);
-
-
 --
 -- Name: idx_facility_device_reps_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_device_reps_user ON public.facility_device_reps USING btree (user_id);
-
-
 --
 -- Name: idx_facility_features_enabled; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_features_enabled ON public.facility_features USING btree (facility_id, is_enabled) WHERE (is_enabled = true);
-
-
 --
 -- Name: idx_facility_features_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_features_facility ON public.facility_features USING btree (facility_id);
-
-
 --
 -- Name: idx_facility_features_feature; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_features_feature ON public.facility_features USING btree (feature_id);
-
-
 --
 -- Name: idx_facility_holidays_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_holidays_facility ON public.facility_holidays USING btree (facility_id);
-
-
 --
 -- Name: idx_facility_milestones_deleted_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_milestones_deleted_at ON public.facility_milestones USING btree (deleted_at) WHERE (deleted_at IS NOT NULL);
-
-
 --
 -- Name: idx_facility_milestones_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_milestones_facility ON public.facility_milestones USING btree (facility_id);
-
-
 --
 -- Name: idx_facility_permissions_lookup; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_permissions_lookup ON public.facility_permissions USING btree (facility_id, access_level);
-
-
 --
 -- Name: idx_facility_procedure_stats_pk; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_facility_procedure_stats_pk ON public.facility_procedure_stats USING btree (facility_id, procedure_type_id);
-
-
 --
 -- Name: idx_flag_rules_facility_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_flag_rules_facility_id ON public.flag_rules USING btree (facility_id);
-
-
 --
 -- Name: idx_flag_rules_is_enabled; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_flag_rules_is_enabled ON public.flag_rules USING btree (is_enabled);
-
-
 --
 -- Name: idx_flag_rules_metric; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_flag_rules_metric ON public.flag_rules USING btree (metric);
-
-
 --
 -- Name: idx_fms_lookup; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_fms_lookup ON public.facility_milestone_stats USING btree (facility_id, procedure_type_id, milestone_type_id);
-
-
 --
 -- Name: idx_implant_companies_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_implant_companies_active ON public.implant_companies USING btree (deleted_at) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_implant_companies_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_implant_companies_facility ON public.implant_companies USING btree (facility_id);
-
-
 --
 -- Name: idx_implant_companies_facility_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_implant_companies_facility_active ON public.implant_companies USING btree (facility_id, is_active) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_implant_companies_unique_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_implant_companies_unique_facility ON public.implant_companies USING btree (name, facility_id) WHERE (facility_id IS NOT NULL);
-
-
 --
 -- Name: idx_implant_companies_unique_global; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_implant_companies_unique_global ON public.implant_companies USING btree (name) WHERE (facility_id IS NULL);
-
-
 --
 -- Name: idx_login_attempts_blocked_until; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_login_attempts_blocked_until ON public.login_attempts USING btree (blocked_until);
-
-
 --
 -- Name: idx_login_attempts_email; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_login_attempts_email ON public.login_attempts USING btree (email);
-
-
 --
 -- Name: idx_login_attempts_ip; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_login_attempts_ip ON public.login_attempts USING btree (ip_address);
-
-
 --
 -- Name: idx_metric_issues_case; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_metric_issues_case ON public.metric_issues USING btree (case_id);
-
-
 --
 -- Name: idx_metric_issues_expires; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_metric_issues_expires ON public.metric_issues USING btree (expires_at) WHERE (resolved_at IS NULL);
-
-
 --
 -- Name: idx_metric_issues_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_metric_issues_facility ON public.metric_issues USING btree (facility_id);
-
-
 --
 -- Name: idx_metric_issues_unresolved; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_metric_issues_unresolved ON public.metric_issues USING btree (facility_id, resolved_at) WHERE (resolved_at IS NULL);
-
-
 --
 -- Name: idx_milestone_types_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_milestone_types_active ON public.milestone_types USING btree (deleted_at) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_milestone_types_deleted_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_milestone_types_deleted_at ON public.milestone_types USING btree (deleted_at) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_notification_reads_notification; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_notification_reads_notification ON public.notification_reads USING btree (notification_id);
-
-
 --
 -- Name: idx_notification_reads_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_notification_reads_user ON public.notification_reads USING btree (user_id);
-
-
 --
 -- Name: idx_notifications_created; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_notifications_created ON public.notifications USING btree (created_at DESC);
-
-
 --
 -- Name: idx_notifications_expires; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_notifications_expires ON public.notifications USING btree (expires_at);
-
-
 --
 -- Name: idx_notifications_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_notifications_facility ON public.notifications USING btree (facility_id);
-
-
 --
 -- Name: idx_or_rooms_display_order; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_or_rooms_display_order ON public.or_rooms USING btree (facility_id, display_order);
-
-
 --
 -- Name: idx_or_rooms_facility_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_or_rooms_facility_active ON public.or_rooms USING btree (facility_id, is_active) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_patient_checkins_case; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_patient_checkins_case ON public.patient_checkins USING btree (case_id);
-
-
 --
 -- Name: idx_patient_checkins_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_patient_checkins_date ON public.patient_checkins USING btree (facility_id, expected_arrival_time);
-
-
 --
 -- Name: idx_patient_checkins_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_patient_checkins_facility ON public.patient_checkins USING btree (facility_id);
-
-
 --
 -- Name: idx_patient_checkins_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_patient_checkins_status ON public.patient_checkins USING btree (patient_status_id);
-
-
 --
 -- Name: idx_patients_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_patients_facility ON public.patients USING btree (facility_id);
-
-
 --
 -- Name: idx_patients_identifier; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_patients_identifier ON public.patients USING btree (facility_id, identifier);
-
-
 --
 -- Name: idx_patients_mrn; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_patients_mrn ON public.patients USING btree (facility_id, mrn) WHERE (mrn IS NOT NULL);
-
-
 --
 -- Name: idx_payers_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_payers_facility ON public.payers USING btree (facility_id);
-
-
 --
 -- Name: idx_payers_facility_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_payers_facility_active ON public.payers USING btree (facility_id, is_active) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_pci_effective_range; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_pci_effective_range ON public.procedure_cost_items USING btree (procedure_type_id, facility_id, effective_from, effective_to);
-
-
 --
 -- Name: idx_permission_templates_access; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_permission_templates_access ON public.permission_templates USING btree (access_level);
-
-
 --
 -- Name: idx_permissions_category; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_permissions_category ON public.permissions USING btree (category, sort_order);
-
-
 --
 -- Name: idx_permissions_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_permissions_key ON public.permissions USING btree (key);
-
-
 --
 -- Name: idx_preop_checklist_fields_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_preop_checklist_fields_active ON public.preop_checklist_fields USING btree (facility_id, is_active) WHERE ((is_active = true) AND (deleted_at IS NULL));
-
-
 --
 -- Name: idx_preop_checklist_fields_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_preop_checklist_fields_facility ON public.preop_checklist_fields USING btree (facility_id);
-
-
 --
 -- Name: idx_procedure_categories_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_categories_active ON public.procedure_categories USING btree (deleted_at) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_procedure_categories_order; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_categories_order ON public.procedure_categories USING btree (display_order);
-
-
 --
 -- Name: idx_procedure_cost_items_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_cost_items_active ON public.procedure_cost_items USING btree (facility_id, procedure_type_id, cost_category_id) WHERE (effective_to IS NULL);
-
-
 --
 -- Name: idx_procedure_cost_items_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_cost_items_facility ON public.procedure_cost_items USING btree (facility_id);
-
-
 --
 -- Name: idx_procedure_cost_items_procedure; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_cost_items_procedure ON public.procedure_cost_items USING btree (procedure_type_id);
-
-
 --
 -- Name: idx_procedure_milestone_config_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_milestone_config_facility ON public.procedure_milestone_config USING btree (facility_id);
-
-
 --
 -- Name: idx_procedure_milestone_config_procedure; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_milestone_config_procedure ON public.procedure_milestone_config USING btree (procedure_type_id);
-
-
 --
 -- Name: idx_procedure_milestone_templates_procedure; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_milestone_templates_procedure ON public.procedure_milestone_templates USING btree (procedure_type_template_id);
-
-
 --
 -- Name: idx_procedure_reimbursements_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_reimbursements_facility ON public.procedure_reimbursements USING btree (facility_id);
-
-
 --
 -- Name: idx_procedure_reimbursements_payer; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_reimbursements_payer ON public.procedure_reimbursements USING btree (payer_id);
-
-
 --
 -- Name: idx_procedure_reimbursements_procedure; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_reimbursements_procedure ON public.procedure_reimbursements USING btree (procedure_type_id);
-
-
 --
 -- Name: idx_procedure_type_templates_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_type_templates_active ON public.procedure_type_templates USING btree (is_active, display_order);
-
-
 --
 -- Name: idx_procedure_types_category; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_types_category ON public.procedure_types USING btree (procedure_category_id);
-
-
 --
 -- Name: idx_procedure_types_facility_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_procedure_types_facility_active ON public.procedure_types USING btree (facility_id, is_active) WHERE (deleted_at IS NULL);
-
-
 --
 -- Name: idx_procedure_types_unique_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_procedure_types_unique_facility ON public.procedure_types USING btree (name, facility_id) WHERE (facility_id IS NOT NULL);
-
-
 --
 -- Name: idx_procedure_types_unique_global; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_procedure_types_unique_global ON public.procedure_types USING btree (name) WHERE (facility_id IS NULL);
-
-
 --
 -- Name: idx_room_schedules_effective; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_room_schedules_effective ON public.room_schedules USING btree (or_room_id, day_of_week, effective_start, effective_end);
-
-
 --
 -- Name: idx_room_schedules_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_room_schedules_facility ON public.room_schedules USING btree (facility_id);
-
-
 --
 -- Name: idx_room_schedules_room_day; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_room_schedules_room_day ON public.room_schedules USING btree (or_room_id, day_of_week);
-
-
 --
 -- Name: idx_sci_effective_range; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_sci_effective_range ON public.surgeon_cost_items USING btree (surgeon_id, procedure_type_id, facility_id, effective_from, effective_to);
-
-
 --
 -- Name: idx_sms_lookup; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_sms_lookup ON public.surgeon_milestone_stats USING btree (facility_id, surgeon_id, procedure_type_id, milestone_type_id);
-
-
 --
 -- Name: idx_sos_lookup; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_sos_lookup ON public.surgeon_overall_stats USING btree (facility_id, surgeon_id);
-
-
 --
 -- Name: idx_surgeon_colors_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_surgeon_colors_facility ON public.surgeon_colors USING btree (facility_id);
-
-
 --
 -- Name: idx_surgeon_cost_items_procedure; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_surgeon_cost_items_procedure ON public.surgeon_cost_items USING btree (procedure_type_id);
-
-
 --
 -- Name: idx_surgeon_cost_items_surgeon; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_surgeon_cost_items_surgeon ON public.surgeon_cost_items USING btree (surgeon_id);
-
-
 --
 -- Name: idx_surgeon_milestone_avg_lookup; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_surgeon_milestone_avg_lookup ON public.surgeon_milestone_averages USING btree (surgeon_id, procedure_type_id);
-
-
 --
 -- Name: idx_surgeon_preference_companies_pref; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_surgeon_preference_companies_pref ON public.surgeon_preference_companies USING btree (surgeon_preference_id);
-
-
 --
 -- Name: idx_surgeon_preferences_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_surgeon_preferences_facility ON public.surgeon_preferences USING btree (facility_id);
-
-
 --
 -- Name: idx_surgeon_preferences_surgeon; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_surgeon_preferences_surgeon ON public.surgeon_preferences USING btree (surgeon_id);
-
-
 --
 -- Name: idx_surgeon_procedure_avg_lookup; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_surgeon_procedure_avg_lookup ON public.surgeon_procedure_averages USING btree (surgeon_id, procedure_type_id);
-
-
 --
 -- Name: idx_surgeon_procedure_stats_pk; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_surgeon_procedure_stats_pk ON public.surgeon_procedure_stats USING btree (facility_id, surgeon_id, procedure_type_id);
-
-
 --
 -- Name: idx_user_invites_email; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_invites_email ON public.user_invites USING btree (email);
-
-
 --
 -- Name: idx_user_invites_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_invites_facility ON public.user_invites USING btree (facility_id);
-
-
 --
 -- Name: idx_user_invites_pending; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_invites_pending ON public.user_invites USING btree (email, facility_id) WHERE (accepted_at IS NULL);
-
-
 --
 -- Name: idx_user_invites_token; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_invites_token ON public.user_invites USING btree (invite_token);
-
-
 --
 -- Name: idx_user_sessions_expires_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_sessions_expires_at ON public.user_sessions USING btree (expires_at);
-
-
 --
 -- Name: idx_user_sessions_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_user_sessions_user_id ON public.user_sessions USING btree (user_id);
-
-
 --
 -- Name: idx_users_closing_workflow; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_users_closing_workflow ON public.users USING btree (closing_workflow) WHERE (closing_workflow = 'pa_closes'::text);
-
-
 --
 -- Name: idx_users_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_users_facility ON public.users USING btree (facility_id);
-
-
 --
 -- Name: idx_users_implant_company; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_users_implant_company ON public.users USING btree (implant_company_id);
-
-
 --
 -- Name: idx_users_invitation_token; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_users_invitation_token ON public.users USING btree (invitation_token) WHERE (invitation_token IS NOT NULL);
-
-
 --
 -- Name: idx_users_is_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_users_is_active ON public.users USING btree (is_active);
-
-
 --
 -- Name: mv_facility_health_scores_facility_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX mv_facility_health_scores_facility_id ON public.mv_facility_health_scores USING btree (facility_id);
-
-
 --
 -- Name: case_device_companies audit_case_device_companies_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER audit_case_device_companies_trigger AFTER INSERT OR DELETE OR UPDATE ON public.case_device_companies FOR EACH ROW EXECUTE FUNCTION public.audit_case_device_companies_changes();
-
-
 --
 -- Name: case_implants audit_case_implants_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER audit_case_implants_trigger AFTER INSERT OR DELETE OR UPDATE ON public.case_implants FOR EACH ROW EXECUTE FUNCTION public.audit_case_implants_changes();
-
-
 --
 -- Name: cases on_case_completed; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER on_case_completed AFTER UPDATE ON public.cases FOR EACH ROW WHEN ((old.status_id IS DISTINCT FROM new.status_id)) EXECUTE FUNCTION public.trigger_recalculate_averages();
-
-
 --
 -- Name: cases on_case_status_change_detect_issues; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER on_case_status_change_detect_issues AFTER UPDATE ON public.cases FOR EACH ROW WHEN ((old.status_id IS DISTINCT FROM new.status_id)) EXECUTE FUNCTION public.trigger_issue_detection_on_case_update();
-
-
 --
 -- Name: facilities on_facility_created_copy_milestones; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER on_facility_created_copy_milestones AFTER INSERT ON public.facilities FOR EACH ROW EXECUTE FUNCTION public.copy_milestone_settings_to_new_facility();
-
-
 --
 -- Name: facilities on_facility_created_seed_templates; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER on_facility_created_seed_templates AFTER INSERT ON public.facilities FOR EACH ROW EXECUTE FUNCTION public.trigger_seed_facility_on_create();
-
-
 --
 -- Name: case_milestones on_milestone_recorded_detect_issues; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER on_milestone_recorded_detect_issues AFTER INSERT ON public.case_milestones FOR EACH ROW EXECUTE FUNCTION public.trigger_issue_detection_on_milestone();
-
-
 --
 -- Name: page_registry page_registry_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER page_registry_updated_at BEFORE UPDATE ON public.page_registry FOR EACH ROW EXECUTE FUNCTION public.update_page_registry_timestamp();
-
-
 --
 -- Name: case_implants set_case_implants_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER set_case_implants_updated_at BEFORE UPDATE ON public.case_implants FOR EACH ROW EXECUTE FUNCTION public.update_case_implants_updated_at();
-
-
 --
 -- Name: case_milestones set_case_milestones_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER set_case_milestones_updated_at BEFORE UPDATE ON public.case_milestones FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
-
 --
 -- Name: cases set_cases_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER set_cases_updated_at BEFORE UPDATE ON public.cases FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
-
 --
 -- Name: page_registry_categories set_category_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER set_category_updated_at BEFORE UPDATE ON public.page_registry_categories FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
-
 --
 -- Name: complexity_templates set_complexity_templates_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER set_complexity_templates_updated_at BEFORE UPDATE ON public.complexity_templates FOR EACH ROW EXECUTE FUNCTION public.update_default_complexities_updated_at();
-
-
 --
 -- Name: body_regions sync_soft_delete_body_regions; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_body_regions BEFORE UPDATE ON public.body_regions FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: cancellation_reason_templates sync_soft_delete_cancellation_reason_templates; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_cancellation_reason_templates BEFORE UPDATE ON public.cancellation_reason_templates FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: cancellation_reasons sync_soft_delete_cancellation_reasons; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_cancellation_reasons BEFORE UPDATE ON public.cancellation_reasons FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: complexities sync_soft_delete_complexities; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_complexities BEFORE UPDATE ON public.complexities FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: complexity_templates sync_soft_delete_complexity_templates; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_complexity_templates BEFORE UPDATE ON public.complexity_templates FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: cost_categories sync_soft_delete_cost_categories; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_cost_categories BEFORE UPDATE ON public.cost_categories FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: cost_category_templates sync_soft_delete_cost_category_templates; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_cost_category_templates BEFORE UPDATE ON public.cost_category_templates FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: delay_types sync_soft_delete_delay_types; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_delay_types BEFORE UPDATE ON public.delay_types FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: facility_milestones sync_soft_delete_facility_milestones; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_facility_milestones BEFORE UPDATE ON public.facility_milestones FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: implant_companies sync_soft_delete_implant_companies; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_implant_companies BEFORE UPDATE ON public.implant_companies FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: milestone_types sync_soft_delete_milestone_types; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_milestone_types BEFORE UPDATE ON public.milestone_types FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: or_rooms sync_soft_delete_or_rooms; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_or_rooms BEFORE UPDATE ON public.or_rooms FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: patients sync_soft_delete_patients; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_patients BEFORE UPDATE ON public.patients FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: payers sync_soft_delete_payers; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_payers BEFORE UPDATE ON public.payers FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: preop_checklist_field_templates sync_soft_delete_preop_checklist_field_templates; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_preop_checklist_field_templates BEFORE UPDATE ON public.preop_checklist_field_templates FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: preop_checklist_fields sync_soft_delete_preop_checklist_fields; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_preop_checklist_fields BEFORE UPDATE ON public.preop_checklist_fields FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: procedure_categories sync_soft_delete_procedure_categories; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_procedure_categories BEFORE UPDATE ON public.procedure_categories FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: procedure_type_templates sync_soft_delete_procedure_type_templates; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_procedure_type_templates BEFORE UPDATE ON public.procedure_type_templates FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: procedure_types sync_soft_delete_procedure_types; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_procedure_types BEFORE UPDATE ON public.procedure_types FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: users sync_soft_delete_users; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER sync_soft_delete_users BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
-
-
 --
 -- Name: flag_rules trg_flag_rules_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_flag_rules_updated_at BEFORE UPDATE ON public.flag_rules FOR EACH ROW EXECUTE FUNCTION public.update_flag_rules_updated_at();
-
-
 --
 -- Name: case_milestones trg_record_case_stats; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_record_case_stats AFTER INSERT ON public.case_milestones FOR EACH ROW EXECUTE FUNCTION public.trigger_record_case_stats();
-
-
 --
 -- Name: cases trg_record_stats_on_validation; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_record_stats_on_validation AFTER UPDATE OF data_validated ON public.cases FOR EACH ROW EXECUTE FUNCTION public.trigger_record_stats_on_validation();
-
-
 --
 -- Name: cases trg_refresh_stats_on_completion; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_refresh_stats_on_completion AFTER UPDATE ON public.cases FOR EACH ROW WHEN ((old.status_id IS DISTINCT FROM new.status_id)) EXECUTE FUNCTION public.trigger_refresh_stats_on_completion();
-
-
 --
 -- Name: cases trg_remove_stats_on_invalidation; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_remove_stats_on_invalidation AFTER UPDATE OF data_validated ON public.cases FOR EACH ROW EXECUTE FUNCTION public.trigger_remove_stats_on_invalidation();
-
-
 --
 -- Name: cases trg_sync_exclusion_to_stats; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_sync_exclusion_to_stats AFTER UPDATE OF is_excluded_from_metrics ON public.cases FOR EACH ROW EXECUTE FUNCTION public.trigger_sync_exclusion_to_stats();
-
-
 --
 -- Name: case_milestones trg_update_case_stats; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_update_case_stats AFTER UPDATE ON public.case_milestones FOR EACH ROW EXECUTE FUNCTION public.trigger_update_case_stats();
-
-
 --
 -- Name: cases trigger_auto_create_patient_checkin; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trigger_auto_create_patient_checkin AFTER INSERT OR UPDATE OF scheduled_date, start_time, procedure_type_id ON public.cases FOR EACH ROW EXECUTE FUNCTION public.auto_create_patient_checkin();
-
-
 --
 -- Name: case_device_companies trigger_case_device_companies_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trigger_case_device_companies_updated_at BEFORE UPDATE ON public.case_device_companies FOR EACH ROW EXECUTE FUNCTION public.update_case_device_companies_updated_at();
-
-
 --
 -- Name: or_rooms trigger_set_room_display_order; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trigger_set_room_display_order BEFORE INSERT ON public.or_rooms FOR EACH ROW EXECUTE FUNCTION public.set_room_display_order();
-
-
 --
 -- Name: case_milestones trigger_update_patient_status_from_milestone; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trigger_update_patient_status_from_milestone AFTER INSERT ON public.case_milestones FOR EACH ROW EXECUTE FUNCTION public.update_patient_status_from_milestone();
-
-
 --
 -- Name: facility_analytics_settings update_facility_analytics_settings_timestamp; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_facility_analytics_settings_timestamp BEFORE UPDATE ON public.facility_analytics_settings FOR EACH ROW EXECUTE FUNCTION public.update_analytics_settings_timestamp();
-
-
 --
 -- Name: admin_sessions admin_sessions_admin_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.admin_sessions
     ADD CONSTRAINT admin_sessions_admin_user_id_fkey FOREIGN KEY (admin_user_id) REFERENCES public.users(id);
-
-
 --
 -- Name: admin_sessions admin_sessions_viewing_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.admin_sessions
     ADD CONSTRAINT admin_sessions_viewing_facility_id_fkey FOREIGN KEY (viewing_facility_id) REFERENCES public.facilities(id);
-
-
 --
 -- Name: audit_log audit_log_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.audit_log
     ADD CONSTRAINT audit_log_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE SET NULL;
-
-
 --
 -- Name: block_schedules block_schedules_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.block_schedules
     ADD CONSTRAINT block_schedules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
-
-
 --
 -- Name: block_schedules block_schedules_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.block_schedules
     ADD CONSTRAINT block_schedules_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: block_schedules block_schedules_surgeon_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.block_schedules
     ADD CONSTRAINT block_schedules_surgeon_id_fkey FOREIGN KEY (surgeon_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: cancellation_reason_templates cancellation_reason_templates_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cancellation_reason_templates
     ADD CONSTRAINT cancellation_reason_templates_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES auth.users(id);
-
-
 --
 -- Name: cancellation_reasons cancellation_reasons_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cancellation_reasons
     ADD CONSTRAINT cancellation_reasons_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES auth.users(id);
-
-
 --
 -- Name: cancellation_reasons cancellation_reasons_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cancellation_reasons
     ADD CONSTRAINT cancellation_reasons_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: cancellation_reasons cancellation_reasons_source_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cancellation_reasons
     ADD CONSTRAINT cancellation_reasons_source_template_id_fkey FOREIGN KEY (source_template_id) REFERENCES public.cancellation_reason_templates(id);
-
-
 --
 -- Name: case_completion_stats case_completion_stats_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_completion_stats
     ADD CONSTRAINT case_completion_stats_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_completion_stats case_completion_stats_excluded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_completion_stats
     ADD CONSTRAINT case_completion_stats_excluded_by_fkey FOREIGN KEY (excluded_by) REFERENCES public.users(id);
-
-
 --
 -- Name: case_completion_stats case_completion_stats_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_completion_stats
     ADD CONSTRAINT case_completion_stats_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_completion_stats case_completion_stats_or_room_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_completion_stats
     ADD CONSTRAINT case_completion_stats_or_room_id_fkey FOREIGN KEY (or_room_id) REFERENCES public.or_rooms(id) ON DELETE SET NULL;
-
-
 --
 -- Name: case_completion_stats case_completion_stats_payer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_completion_stats
     ADD CONSTRAINT case_completion_stats_payer_id_fkey FOREIGN KEY (payer_id) REFERENCES public.payers(id) ON DELETE SET NULL;
-
-
 --
 -- Name: case_completion_stats case_completion_stats_procedure_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_completion_stats
     ADD CONSTRAINT case_completion_stats_procedure_type_id_fkey FOREIGN KEY (procedure_type_id) REFERENCES public.procedure_types(id) ON DELETE SET NULL;
-
-
 --
 -- Name: case_completion_stats case_completion_stats_surgeon_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_completion_stats
     ADD CONSTRAINT case_completion_stats_surgeon_id_fkey FOREIGN KEY (surgeon_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
 --
 -- Name: case_complexities case_complexities_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_complexities
     ADD CONSTRAINT case_complexities_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_complexities case_complexities_complexity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_complexities
     ADD CONSTRAINT case_complexities_complexity_id_fkey FOREIGN KEY (complexity_id) REFERENCES public.complexities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_complexities case_complexities_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_complexities
     ADD CONSTRAINT case_complexities_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
-
-
 --
 -- Name: case_delays case_delays_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_delays
     ADD CONSTRAINT case_delays_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_delays case_delays_delay_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_delays
     ADD CONSTRAINT case_delays_delay_type_id_fkey FOREIGN KEY (delay_type_id) REFERENCES public.delay_types(id);
-
-
 --
 -- Name: case_delays case_delays_recorded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_delays
     ADD CONSTRAINT case_delays_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id);
-
-
 --
 -- Name: case_device_activity case_device_activity_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_device_activity
     ADD CONSTRAINT case_device_activity_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
 --
 -- Name: case_device_activity case_device_activity_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_device_activity
     ADD CONSTRAINT case_device_activity_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_device_activity case_device_activity_implant_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_device_activity
     ADD CONSTRAINT case_device_activity_implant_company_id_fkey FOREIGN KEY (implant_company_id) REFERENCES public.implant_companies(id) ON DELETE SET NULL;
-
-
 --
 -- Name: case_device_companies case_device_companies_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_device_companies
     ADD CONSTRAINT case_device_companies_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_device_companies case_device_companies_confirmed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_device_companies
     ADD CONSTRAINT case_device_companies_confirmed_by_fkey FOREIGN KEY (confirmed_by) REFERENCES public.users(id);
-
-
 --
 -- Name: case_device_companies case_device_companies_delivered_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_device_companies
     ADD CONSTRAINT case_device_companies_delivered_by_fkey FOREIGN KEY (delivered_by) REFERENCES public.users(id);
-
-
 --
 -- Name: case_device_companies case_device_companies_implant_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_device_companies
     ADD CONSTRAINT case_device_companies_implant_company_id_fkey FOREIGN KEY (implant_company_id) REFERENCES public.implant_companies(id) ON DELETE RESTRICT;
-
-
 --
 -- Name: case_flags case_flags_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_flags
     ADD CONSTRAINT case_flags_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_flags case_flags_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_flags
     ADD CONSTRAINT case_flags_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
 --
 -- Name: case_flags case_flags_delay_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_flags
     ADD CONSTRAINT case_flags_delay_type_id_fkey FOREIGN KEY (delay_type_id) REFERENCES public.delay_types(id) ON DELETE SET NULL;
-
-
 --
 -- Name: case_flags case_flags_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_flags
     ADD CONSTRAINT case_flags_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_flags case_flags_facility_milestone_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_flags
     ADD CONSTRAINT case_flags_facility_milestone_id_fkey FOREIGN KEY (facility_milestone_id) REFERENCES public.facility_milestones(id);
-
-
 --
 -- Name: case_flags case_flags_flag_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_flags
     ADD CONSTRAINT case_flags_flag_rule_id_fkey FOREIGN KEY (flag_rule_id) REFERENCES public.flag_rules(id) ON DELETE SET NULL;
-
-
 --
 -- Name: case_implant_companies case_implant_companies_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_implant_companies
     ADD CONSTRAINT case_implant_companies_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_implant_companies case_implant_companies_implant_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_implant_companies
     ADD CONSTRAINT case_implant_companies_implant_company_id_fkey FOREIGN KEY (implant_company_id) REFERENCES public.implant_companies(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_implants case_implants_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_implants
     ADD CONSTRAINT case_implants_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_milestone_stats case_milestone_stats_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestone_stats
     ADD CONSTRAINT case_milestone_stats_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_milestone_stats case_milestone_stats_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestone_stats
     ADD CONSTRAINT case_milestone_stats_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_milestone_stats case_milestone_stats_milestone_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestone_stats
     ADD CONSTRAINT case_milestone_stats_milestone_type_id_fkey FOREIGN KEY (milestone_type_id) REFERENCES public.milestone_types(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_milestone_stats case_milestone_stats_procedure_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestone_stats
     ADD CONSTRAINT case_milestone_stats_procedure_type_id_fkey FOREIGN KEY (procedure_type_id) REFERENCES public.procedure_types(id) ON DELETE SET NULL;
-
-
 --
 -- Name: case_milestone_stats case_milestone_stats_surgeon_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestone_stats
     ADD CONSTRAINT case_milestone_stats_surgeon_id_fkey FOREIGN KEY (surgeon_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
 --
 -- Name: case_milestones case_milestones_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestones
     ADD CONSTRAINT case_milestones_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_milestones case_milestones_facility_milestone_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestones
     ADD CONSTRAINT case_milestones_facility_milestone_id_fkey FOREIGN KEY (facility_milestone_id) REFERENCES public.facility_milestones(id);
-
-
 --
 -- Name: case_milestones case_milestones_recorded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_milestones
     ADD CONSTRAINT case_milestones_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id);
-
-
 --
 -- Name: case_staff case_staff_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_staff
     ADD CONSTRAINT case_staff_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: case_staff case_staff_removed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_staff
     ADD CONSTRAINT case_staff_removed_by_fkey FOREIGN KEY (removed_by) REFERENCES public.users(id);
-
-
 --
 -- Name: case_staff case_staff_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_staff
     ADD CONSTRAINT case_staff_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.user_roles(id);
-
-
 --
 -- Name: case_staff case_staff_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.case_staff
     ADD CONSTRAINT case_staff_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: cases cases_anesthesiologist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_anesthesiologist_id_fkey FOREIGN KEY (anesthesiologist_id) REFERENCES public.users(id);
-
-
 --
 -- Name: cases cases_call_time_recorded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_call_time_recorded_by_fkey FOREIGN KEY (call_time_recorded_by) REFERENCES public.users(id);
-
-
 --
 -- Name: cases cases_called_back_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_called_back_by_fkey FOREIGN KEY (called_back_by) REFERENCES public.users(id);
-
-
 --
 -- Name: cases cases_called_next_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_called_next_case_id_fkey FOREIGN KEY (called_next_case_id) REFERENCES public.cases(id);
-
-
 --
 -- Name: cases cases_cancellation_reason_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_cancellation_reason_id_fkey FOREIGN KEY (cancellation_reason_id) REFERENCES public.cancellation_reasons(id);
-
-
 --
 -- Name: cases cases_cancelled_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_cancelled_by_fkey FOREIGN KEY (cancelled_by) REFERENCES auth.users(id);
-
-
 --
 -- Name: cases cases_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id);
-
-
 --
 -- Name: cases cases_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: cases cases_or_room_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_or_room_id_fkey FOREIGN KEY (or_room_id) REFERENCES public.or_rooms(id);
-
-
 --
 -- Name: cases cases_patient_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES public.patients(id) ON DELETE SET NULL;
-
-
 --
 -- Name: cases cases_payer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_payer_id_fkey FOREIGN KEY (payer_id) REFERENCES public.payers(id);
-
-
 --
 -- Name: cases cases_procedure_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_procedure_type_id_fkey FOREIGN KEY (procedure_type_id) REFERENCES public.procedure_types(id);
-
-
 --
 -- Name: cases cases_status_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_status_id_fkey FOREIGN KEY (status_id) REFERENCES public.case_statuses(id);
-
-
 --
 -- Name: cases cases_surgeon_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_surgeon_id_fkey FOREIGN KEY (surgeon_id) REFERENCES public.users(id);
-
-
 --
 -- Name: cases cases_validated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cases
     ADD CONSTRAINT cases_validated_by_fkey FOREIGN KEY (validated_by) REFERENCES public.users(id);
-
-
 --
 -- Name: complexities complexities_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.complexities
     ADD CONSTRAINT complexities_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: complexities complexities_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.complexities
     ADD CONSTRAINT complexities_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: complexities complexities_source_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.complexities
     ADD CONSTRAINT complexities_source_template_id_fkey FOREIGN KEY (source_template_id) REFERENCES public.complexity_templates(id) ON DELETE SET NULL;
-
-
 --
 -- Name: complexity_templates complexity_templates_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.complexity_templates
     ADD CONSTRAINT complexity_templates_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: cost_categories cost_categories_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cost_categories
     ADD CONSTRAINT cost_categories_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: cost_categories cost_categories_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cost_categories
     ADD CONSTRAINT cost_categories_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: cost_category_templates cost_category_templates_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cost_category_templates
     ADD CONSTRAINT cost_category_templates_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: data_quality_notifications data_quality_notifications_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.data_quality_notifications
     ADD CONSTRAINT data_quality_notifications_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: data_quality_notifications data_quality_notifications_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.data_quality_notifications
     ADD CONSTRAINT data_quality_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
 --
 -- Name: procedure_milestone_templates default_procedure_milestones_milestone_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_milestone_templates
     ADD CONSTRAINT default_procedure_milestones_milestone_type_id_fkey FOREIGN KEY (milestone_type_id) REFERENCES public.milestone_types(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_type_templates default_procedure_types_body_region_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_type_templates
     ADD CONSTRAINT default_procedure_types_body_region_id_fkey FOREIGN KEY (body_region_id) REFERENCES public.body_regions(id);
-
-
 --
 -- Name: procedure_type_templates default_procedure_types_procedure_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_type_templates
     ADD CONSTRAINT default_procedure_types_procedure_category_id_fkey FOREIGN KEY (procedure_category_id) REFERENCES public.procedure_categories(id);
-
-
 --
 -- Name: delay_types delay_types_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.delay_types
     ADD CONSTRAINT delay_types_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: delay_types delay_types_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.delay_types
     ADD CONSTRAINT delay_types_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: device_rep_facility_access device_rep_facility_access_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_rep_facility_access
     ADD CONSTRAINT device_rep_facility_access_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: device_rep_facility_access device_rep_facility_access_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_rep_facility_access
     ADD CONSTRAINT device_rep_facility_access_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: device_rep_invites device_rep_invites_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_rep_invites
     ADD CONSTRAINT device_rep_invites_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: device_rep_invites device_rep_invites_implant_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_rep_invites
     ADD CONSTRAINT device_rep_invites_implant_company_id_fkey FOREIGN KEY (implant_company_id) REFERENCES public.implant_companies(id);
-
-
 --
 -- Name: device_rep_invites device_rep_invites_invited_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_rep_invites
     ADD CONSTRAINT device_rep_invites_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.users(id);
-
-
 --
 -- Name: device_tokens device_tokens_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.device_tokens
     ADD CONSTRAINT device_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: error_logs error_logs_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.error_logs
     ADD CONSTRAINT error_logs_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE SET NULL;
-
-
 --
 -- Name: escort_status_links escort_status_links_checkin_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.escort_status_links
     ADD CONSTRAINT escort_status_links_checkin_id_fkey FOREIGN KEY (checkin_id) REFERENCES public.patient_checkins(id) ON DELETE CASCADE;
-
-
 --
 -- Name: escort_status_links escort_status_links_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.escort_status_links
     ADD CONSTRAINT escort_status_links_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
-
-
 --
 -- Name: escort_status_links escort_status_links_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.escort_status_links
     ADD CONSTRAINT escort_status_links_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: facility_analytics_settings facility_analytics_settings_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_analytics_settings
     ADD CONSTRAINT facility_analytics_settings_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: facility_closures facility_closures_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_closures
     ADD CONSTRAINT facility_closures_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
-
-
 --
 -- Name: facility_closures facility_closures_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_closures
     ADD CONSTRAINT facility_closures_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: facility_device_reps facility_device_reps_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_device_reps
     ADD CONSTRAINT facility_device_reps_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: facility_device_reps facility_device_reps_invited_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_device_reps
     ADD CONSTRAINT facility_device_reps_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.users(id);
-
-
 --
 -- Name: facility_device_reps facility_device_reps_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_device_reps
     ADD CONSTRAINT facility_device_reps_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: facility_features facility_features_disabled_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_features
     ADD CONSTRAINT facility_features_disabled_by_fkey FOREIGN KEY (disabled_by) REFERENCES public.users(id);
-
-
 --
 -- Name: facility_features facility_features_enabled_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_features
     ADD CONSTRAINT facility_features_enabled_by_fkey FOREIGN KEY (enabled_by) REFERENCES public.users(id);
-
-
 --
 -- Name: facility_features facility_features_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_features
     ADD CONSTRAINT facility_features_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: facility_features facility_features_feature_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_features
     ADD CONSTRAINT facility_features_feature_id_fkey FOREIGN KEY (feature_id) REFERENCES public.features(id) ON DELETE CASCADE;
-
-
 --
 -- Name: facility_holidays facility_holidays_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_holidays
     ADD CONSTRAINT facility_holidays_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
-
-
 --
 -- Name: facility_holidays facility_holidays_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_holidays
     ADD CONSTRAINT facility_holidays_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: facility_milestones facility_milestones_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_milestones
     ADD CONSTRAINT facility_milestones_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: facility_milestones facility_milestones_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_milestones
     ADD CONSTRAINT facility_milestones_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: facility_milestones facility_milestones_pair_with_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_milestones
     ADD CONSTRAINT facility_milestones_pair_with_id_fkey FOREIGN KEY (pair_with_id) REFERENCES public.facility_milestones(id);
-
-
 --
 -- Name: facility_milestones facility_milestones_source_milestone_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_milestones
     ADD CONSTRAINT facility_milestones_source_milestone_type_id_fkey FOREIGN KEY (source_milestone_type_id) REFERENCES public.milestone_types(id);
-
-
 --
 -- Name: facility_permissions facility_permissions_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_permissions
     ADD CONSTRAINT facility_permissions_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: facility_permissions facility_permissions_permission_key_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_permissions
     ADD CONSTRAINT facility_permissions_permission_key_fkey FOREIGN KEY (permission_key) REFERENCES public.permissions(key) ON DELETE CASCADE;
-
-
 --
 -- Name: facility_permissions facility_permissions_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_permissions
     ADD CONSTRAINT facility_permissions_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id);
-
-
 --
 -- Name: flag_rules flag_rules_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.flag_rules
     ADD CONSTRAINT flag_rules_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: flag_rules flag_rules_source_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.flag_rules
     ADD CONSTRAINT flag_rules_source_rule_id_fkey FOREIGN KEY (source_rule_id) REFERENCES public.flag_rules(id);
-
-
 --
 -- Name: global_milestone_settings global_milestone_settings_milestone_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.global_milestone_settings
     ADD CONSTRAINT global_milestone_settings_milestone_type_id_fkey FOREIGN KEY (milestone_type_id) REFERENCES public.milestone_types(id) ON DELETE CASCADE;
-
-
 --
 -- Name: implant_companies implant_companies_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.implant_companies
     ADD CONSTRAINT implant_companies_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
-
-
 --
 -- Name: implant_companies implant_companies_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.implant_companies
     ADD CONSTRAINT implant_companies_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: implant_companies implant_companies_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.implant_companies
     ADD CONSTRAINT implant_companies_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: metric_issues metric_issues_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric_issues
     ADD CONSTRAINT metric_issues_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: metric_issues metric_issues_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric_issues
     ADD CONSTRAINT metric_issues_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: metric_issues metric_issues_facility_milestone_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric_issues
     ADD CONSTRAINT metric_issues_facility_milestone_id_fkey FOREIGN KEY (facility_milestone_id) REFERENCES public.facility_milestones(id);
-
-
 --
 -- Name: metric_issues metric_issues_issue_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric_issues
     ADD CONSTRAINT metric_issues_issue_type_id_fkey FOREIGN KEY (issue_type_id) REFERENCES public.issue_types(id);
-
-
 --
 -- Name: metric_issues metric_issues_milestone_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric_issues
     ADD CONSTRAINT metric_issues_milestone_id_fkey FOREIGN KEY (milestone_id) REFERENCES public.case_milestones(id);
-
-
 --
 -- Name: metric_issues metric_issues_resolution_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric_issues
     ADD CONSTRAINT metric_issues_resolution_type_id_fkey FOREIGN KEY (resolution_type_id) REFERENCES public.resolution_types(id);
-
-
 --
 -- Name: metric_issues metric_issues_resolved_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric_issues
     ADD CONSTRAINT metric_issues_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES public.users(id);
-
-
 --
 -- Name: milestone_types milestone_types_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.milestone_types
     ADD CONSTRAINT milestone_types_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES auth.users(id);
-
-
 --
 -- Name: milestone_types milestone_types_pair_with_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.milestone_types
     ADD CONSTRAINT milestone_types_pair_with_id_fkey FOREIGN KEY (pair_with_id) REFERENCES public.milestone_types(id);
-
-
 --
 -- Name: notification_reads notification_reads_notification_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notification_reads
     ADD CONSTRAINT notification_reads_notification_id_fkey FOREIGN KEY (notification_id) REFERENCES public.notifications(id) ON DELETE CASCADE;
-
-
 --
 -- Name: notification_reads notification_reads_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notification_reads
     ADD CONSTRAINT notification_reads_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: notifications notifications_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE SET NULL;
-
-
 --
 -- Name: notifications notifications_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: notifications notifications_room_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.or_rooms(id) ON DELETE SET NULL;
-
-
 --
 -- Name: notifications notifications_sent_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_sent_by_fkey FOREIGN KEY (sent_by) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
 --
 -- Name: or_rooms or_rooms_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.or_rooms
     ADD CONSTRAINT or_rooms_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: or_rooms or_rooms_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.or_rooms
     ADD CONSTRAINT or_rooms_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: outlier_review_notes outlier_review_notes_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.outlier_review_notes
     ADD CONSTRAINT outlier_review_notes_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
-
-
 --
 -- Name: outlier_review_notes outlier_review_notes_outlier_review_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.outlier_review_notes
     ADD CONSTRAINT outlier_review_notes_outlier_review_id_fkey FOREIGN KEY (outlier_review_id) REFERENCES public.outlier_reviews(id) ON DELETE CASCADE;
-
-
 --
 -- Name: outlier_reviews outlier_reviews_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.outlier_reviews
     ADD CONSTRAINT outlier_reviews_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: outlier_reviews outlier_reviews_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.outlier_reviews
     ADD CONSTRAINT outlier_reviews_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: outlier_reviews outlier_reviews_reviewed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.outlier_reviews
     ADD CONSTRAINT outlier_reviews_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.users(id);
-
-
 --
 -- Name: patient_checkins patient_checkins_case_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patient_checkins
     ADD CONSTRAINT patient_checkins_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.cases(id) ON DELETE CASCADE;
-
-
 --
 -- Name: patient_checkins patient_checkins_checked_in_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patient_checkins
     ADD CONSTRAINT patient_checkins_checked_in_by_fkey FOREIGN KEY (checked_in_by) REFERENCES public.users(id);
-
-
 --
 -- Name: patient_checkins patient_checkins_checklist_completed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patient_checkins
     ADD CONSTRAINT patient_checkins_checklist_completed_by_fkey FOREIGN KEY (checklist_completed_by) REFERENCES public.users(id);
-
-
 --
 -- Name: patient_checkins patient_checkins_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patient_checkins
     ADD CONSTRAINT patient_checkins_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: patient_checkins patient_checkins_patient_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patient_checkins
     ADD CONSTRAINT patient_checkins_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES public.patients(id) ON DELETE SET NULL;
-
-
 --
 -- Name: patient_checkins patient_checkins_patient_status_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patient_checkins
     ADD CONSTRAINT patient_checkins_patient_status_id_fkey FOREIGN KEY (patient_status_id) REFERENCES public.patient_statuses(id);
-
-
 --
 -- Name: patient_checkins patient_checkins_status_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patient_checkins
     ADD CONSTRAINT patient_checkins_status_updated_by_fkey FOREIGN KEY (status_updated_by) REFERENCES public.users(id);
-
-
 --
 -- Name: patients patients_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patients
     ADD CONSTRAINT patients_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES auth.users(id);
-
-
 --
 -- Name: patients patients_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patients
     ADD CONSTRAINT patients_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: payers payers_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.payers
     ADD CONSTRAINT payers_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: payers payers_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.payers
     ADD CONSTRAINT payers_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: permission_templates permission_templates_permission_key_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_templates
     ADD CONSTRAINT permission_templates_permission_key_fkey FOREIGN KEY (permission_key) REFERENCES public.permissions(key) ON DELETE CASCADE;
-
-
 --
 -- Name: permission_templates permission_templates_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.permission_templates
     ADD CONSTRAINT permission_templates_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id);
-
-
 --
 -- Name: preop_checklist_field_templates preop_checklist_field_templates_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.preop_checklist_field_templates
     ADD CONSTRAINT preop_checklist_field_templates_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES auth.users(id);
-
-
 --
 -- Name: preop_checklist_fields preop_checklist_fields_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.preop_checklist_fields
     ADD CONSTRAINT preop_checklist_fields_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: preop_checklist_fields preop_checklist_fields_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.preop_checklist_fields
     ADD CONSTRAINT preop_checklist_fields_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: preop_checklist_fields preop_checklist_fields_source_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.preop_checklist_fields
     ADD CONSTRAINT preop_checklist_fields_source_template_id_fkey FOREIGN KEY (source_template_id) REFERENCES public.preop_checklist_field_templates(id);
-
-
 --
 -- Name: procedure_categories procedure_categories_body_region_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_categories
     ADD CONSTRAINT procedure_categories_body_region_id_fkey FOREIGN KEY (body_region_id) REFERENCES public.body_regions(id) ON DELETE SET NULL;
-
-
 --
 -- Name: procedure_cost_items procedure_cost_items_cost_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_cost_items
     ADD CONSTRAINT procedure_cost_items_cost_category_id_fkey FOREIGN KEY (cost_category_id) REFERENCES public.cost_categories(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_cost_items procedure_cost_items_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_cost_items
     ADD CONSTRAINT procedure_cost_items_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_cost_items procedure_cost_items_procedure_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_cost_items
     ADD CONSTRAINT procedure_cost_items_procedure_type_id_fkey FOREIGN KEY (procedure_type_id) REFERENCES public.procedure_types(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_milestone_config procedure_milestone_config_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_milestone_config
     ADD CONSTRAINT procedure_milestone_config_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_milestone_config procedure_milestone_config_facility_milestone_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_milestone_config
     ADD CONSTRAINT procedure_milestone_config_facility_milestone_id_fkey FOREIGN KEY (facility_milestone_id) REFERENCES public.facility_milestones(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_milestone_config procedure_milestone_config_procedure_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_milestone_config
     ADD CONSTRAINT procedure_milestone_config_procedure_type_id_fkey FOREIGN KEY (procedure_type_id) REFERENCES public.procedure_types(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_milestone_templates procedure_milestone_templates_procedure_type_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_milestone_templates
     ADD CONSTRAINT procedure_milestone_templates_procedure_type_template_id_fkey FOREIGN KEY (procedure_type_template_id) REFERENCES public.procedure_type_templates(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_reimbursements procedure_reimbursements_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_reimbursements
     ADD CONSTRAINT procedure_reimbursements_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_reimbursements procedure_reimbursements_payer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_reimbursements
     ADD CONSTRAINT procedure_reimbursements_payer_id_fkey FOREIGN KEY (payer_id) REFERENCES public.payers(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_reimbursements procedure_reimbursements_procedure_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_reimbursements
     ADD CONSTRAINT procedure_reimbursements_procedure_type_id_fkey FOREIGN KEY (procedure_type_id) REFERENCES public.procedure_types(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_type_templates procedure_type_templates_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_type_templates
     ADD CONSTRAINT procedure_type_templates_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: procedure_types procedure_types_body_region_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_types
     ADD CONSTRAINT procedure_types_body_region_id_fkey FOREIGN KEY (body_region_id) REFERENCES public.body_regions(id);
-
-
 --
 -- Name: procedure_types procedure_types_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_types
     ADD CONSTRAINT procedure_types_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(id);
-
-
 --
 -- Name: procedure_types procedure_types_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_types
     ADD CONSTRAINT procedure_types_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: procedure_types procedure_types_procedure_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_types
     ADD CONSTRAINT procedure_types_procedure_category_id_fkey FOREIGN KEY (procedure_category_id) REFERENCES public.procedure_categories(id) ON DELETE SET NULL;
-
-
 --
 -- Name: procedure_types procedure_types_source_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_types
     ADD CONSTRAINT procedure_types_source_template_id_fkey FOREIGN KEY (source_template_id) REFERENCES public.procedure_type_templates(id) ON DELETE SET NULL;
-
-
 --
 -- Name: procedure_types procedure_types_technique_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.procedure_types
     ADD CONSTRAINT procedure_types_technique_id_fkey FOREIGN KEY (technique_id) REFERENCES public.procedure_techniques(id);
-
-
 --
 -- Name: room_schedules room_schedules_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.room_schedules
     ADD CONSTRAINT room_schedules_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: room_schedules room_schedules_or_room_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.room_schedules
     ADD CONSTRAINT room_schedules_or_room_id_fkey FOREIGN KEY (or_room_id) REFERENCES public.or_rooms(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_colors surgeon_colors_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_colors
     ADD CONSTRAINT surgeon_colors_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_colors surgeon_colors_surgeon_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_colors
     ADD CONSTRAINT surgeon_colors_surgeon_id_fkey FOREIGN KEY (surgeon_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_cost_items surgeon_cost_items_cost_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_cost_items
     ADD CONSTRAINT surgeon_cost_items_cost_category_id_fkey FOREIGN KEY (cost_category_id) REFERENCES public.cost_categories(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_cost_items surgeon_cost_items_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_cost_items
     ADD CONSTRAINT surgeon_cost_items_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_cost_items surgeon_cost_items_procedure_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_cost_items
     ADD CONSTRAINT surgeon_cost_items_procedure_type_id_fkey FOREIGN KEY (procedure_type_id) REFERENCES public.procedure_types(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_cost_items surgeon_cost_items_surgeon_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_cost_items
     ADD CONSTRAINT surgeon_cost_items_surgeon_id_fkey FOREIGN KEY (surgeon_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_milestone_averages surgeon_milestone_averages_milestone_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_milestone_averages
     ADD CONSTRAINT surgeon_milestone_averages_milestone_type_id_fkey FOREIGN KEY (milestone_type_id) REFERENCES public.milestone_types(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_milestone_averages surgeon_milestone_averages_procedure_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_milestone_averages
     ADD CONSTRAINT surgeon_milestone_averages_procedure_type_id_fkey FOREIGN KEY (procedure_type_id) REFERENCES public.procedure_types(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_milestone_averages surgeon_milestone_averages_surgeon_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_milestone_averages
     ADD CONSTRAINT surgeon_milestone_averages_surgeon_id_fkey FOREIGN KEY (surgeon_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_preference_companies surgeon_preference_companies_implant_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_preference_companies
     ADD CONSTRAINT surgeon_preference_companies_implant_company_id_fkey FOREIGN KEY (implant_company_id) REFERENCES public.implant_companies(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_preference_companies surgeon_preference_companies_surgeon_preference_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_preference_companies
     ADD CONSTRAINT surgeon_preference_companies_surgeon_preference_id_fkey FOREIGN KEY (surgeon_preference_id) REFERENCES public.surgeon_preferences(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_preferences surgeon_preferences_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_preferences
     ADD CONSTRAINT surgeon_preferences_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
-
-
 --
 -- Name: surgeon_preferences surgeon_preferences_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_preferences
     ADD CONSTRAINT surgeon_preferences_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_preferences surgeon_preferences_procedure_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_preferences
     ADD CONSTRAINT surgeon_preferences_procedure_type_id_fkey FOREIGN KEY (procedure_type_id) REFERENCES public.procedure_types(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_preferences surgeon_preferences_surgeon_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_preferences
     ADD CONSTRAINT surgeon_preferences_surgeon_id_fkey FOREIGN KEY (surgeon_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_procedure_averages surgeon_procedure_averages_procedure_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_procedure_averages
     ADD CONSTRAINT surgeon_procedure_averages_procedure_type_id_fkey FOREIGN KEY (procedure_type_id) REFERENCES public.procedure_types(id) ON DELETE CASCADE;
-
-
 --
 -- Name: surgeon_procedure_averages surgeon_procedure_averages_surgeon_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.surgeon_procedure_averages
     ADD CONSTRAINT surgeon_procedure_averages_surgeon_id_fkey FOREIGN KEY (surgeon_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: user_invites user_invites_existing_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_invites
     ADD CONSTRAINT user_invites_existing_user_id_fkey FOREIGN KEY (existing_user_id) REFERENCES public.users(id);
-
-
 --
 -- Name: user_invites user_invites_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_invites
     ADD CONSTRAINT user_invites_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: user_invites user_invites_invited_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_invites
     ADD CONSTRAINT user_invites_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.users(id);
-
-
 --
 -- Name: user_invites user_invites_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_invites
     ADD CONSTRAINT user_invites_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.user_roles(id);
-
-
 --
 -- Name: user_sessions user_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_sessions
     ADD CONSTRAINT user_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- Name: users users_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES auth.users(id);
-
-
 --
 -- Name: users users_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE CASCADE;
-
-
 --
 -- Name: users users_implant_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_implant_company_id_fkey FOREIGN KEY (implant_company_id) REFERENCES public.implant_companies(id);
-
-
 --
 -- Name: users users_invited_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.users(id);
-
-
 --
 -- Name: users users_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.user_roles(id);
-
-
 --
 -- Name: preop_checklist_fields Admins can manage own facility checklist fields; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Admins can manage own facility checklist fields" ON public.preop_checklist_fields USING (((public.get_my_access_level() = 'global_admin'::text) OR ((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())))) WITH CHECK (((public.get_my_access_level() = 'global_admin'::text) OR ((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id()))));
-
-
 --
 -- Name: escort_status_links Admins can manage own facility escort links; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Admins can manage own facility escort links" ON public.escort_status_links USING (((public.get_my_access_level() = 'global_admin'::text) OR ((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())) OR (facility_id = public.get_my_facility_id()))) WITH CHECK (((public.get_my_access_level() = 'global_admin'::text) OR ((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())) OR (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: surgeon_colors Admins can manage surgeon colors; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Admins can manage surgeon colors" ON public.surgeon_colors USING ((((facility_id = public.get_my_facility_id()) AND (public.get_my_access_level() = ANY (ARRAY['facility_admin'::text, 'global_admin'::text]))) OR (public.get_my_access_level() = 'global_admin'::text)));
-
-
 --
 -- Name: flag_rules Admins can manage their facility flag rules; Type: POLICY; Schema: public; Owner: -
 --
@@ -10868,8 +9307,6 @@ CREATE POLICY "Admins can manage surgeon colors" ON public.surgeon_colors USING 
 CREATE POLICY "Admins can manage their facility flag rules" ON public.flag_rules USING ((facility_id IN ( SELECT u.facility_id
    FROM public.users u
   WHERE ((u.id = auth.uid()) AND (u.access_level = ANY (ARRAY['facility_admin'::text, 'global_admin'::text]))))));
-
-
 --
 -- Name: room_schedules Admins can manage their facility room schedules; Type: POLICY; Schema: public; Owner: -
 --
@@ -10877,8 +9314,6 @@ CREATE POLICY "Admins can manage their facility flag rules" ON public.flag_rules
 CREATE POLICY "Admins can manage their facility room schedules" ON public.room_schedules USING ((facility_id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))));
-
-
 --
 -- Name: facility_analytics_settings Admins can manage their facility settings; Type: POLICY; Schema: public; Owner: -
 --
@@ -10887,8 +9322,6 @@ CREATE POLICY "Admins can manage their facility settings" ON public.facility_ana
    FROM (public.users u
      JOIN public.user_roles ur ON ((u.role_id = ur.id)))
   WHERE ((u.id = auth.uid()) AND (ur.name = ANY (ARRAY['admin'::text, 'facility_admin'::text]))))));
-
-
 --
 -- Name: audit_log Admins can view audit logs; Type: POLICY; Schema: public; Owner: -
 --
@@ -10898,8 +9331,6 @@ CREATE POLICY "Admins can view audit logs" ON public.audit_log FOR SELECT USING 
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))) OR (EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = ANY (ARRAY['facility_admin'::text, 'admin'::text])) AND (users.facility_id = audit_log.facility_id)))) OR (user_id = auth.uid())));
-
-
 --
 -- Name: error_logs Admins can view error logs; Type: POLICY; Schema: public; Owner: -
 --
@@ -10909,211 +9340,151 @@ CREATE POLICY "Admins can view error logs" ON public.error_logs FOR SELECT USING
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))) OR (EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = ANY (ARRAY['facility_admin'::text, 'admin'::text])) AND (users.facility_id = error_logs.facility_id))))));
-
-
 --
 -- Name: procedure_categories All authenticated users can view procedure categories; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All authenticated users can view procedure categories" ON public.procedure_categories FOR SELECT TO authenticated USING (true);
-
-
 --
 -- Name: body_regions All users can view body regions; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view body regions" ON public.body_regions FOR SELECT USING ((auth.uid() IS NOT NULL));
-
-
 --
 -- Name: cancellation_reason_templates All users can view cancellation reason templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view cancellation reason templates" ON public.cancellation_reason_templates FOR SELECT USING (true);
-
-
 --
 -- Name: case_statuses All users can view case statuses; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view case statuses" ON public.case_statuses FOR SELECT USING ((auth.uid() IS NOT NULL));
-
-
 --
 -- Name: preop_checklist_field_templates All users can view checklist templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view checklist templates" ON public.preop_checklist_field_templates FOR SELECT USING (true);
-
-
 --
 -- Name: complexity_templates All users can view complexity templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view complexity templates" ON public.complexity_templates FOR SELECT USING (true);
-
-
 --
 -- Name: cost_category_templates All users can view cost category templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view cost category templates" ON public.cost_category_templates FOR SELECT USING (true);
-
-
 --
 -- Name: delay_types All users can view delay types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view delay types" ON public.delay_types FOR SELECT USING (true);
-
-
 --
 -- Name: features All users can view features; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view features" ON public.features FOR SELECT USING (true);
-
-
 --
 -- Name: global_milestone_settings All users can view global milestone settings; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view global milestone settings" ON public.global_milestone_settings FOR SELECT USING (true);
-
-
 --
 -- Name: issue_types All users can view issue types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view issue types" ON public.issue_types FOR SELECT USING (true);
-
-
 --
 -- Name: milestone_types All users can view milestone types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view milestone types" ON public.milestone_types FOR SELECT USING ((auth.uid() IS NOT NULL));
-
-
 --
 -- Name: patient_statuses All users can view patient statuses; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view patient statuses" ON public.patient_statuses FOR SELECT USING (true);
-
-
 --
 -- Name: procedure_milestone_templates All users can view procedure milestone templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view procedure milestone templates" ON public.procedure_milestone_templates FOR SELECT USING (true);
-
-
 --
 -- Name: procedure_techniques All users can view procedure techniques; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view procedure techniques" ON public.procedure_techniques FOR SELECT USING ((auth.uid() IS NOT NULL));
-
-
 --
 -- Name: procedure_type_templates All users can view procedure type templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view procedure type templates" ON public.procedure_type_templates FOR SELECT USING (true);
-
-
 --
 -- Name: resolution_types All users can view resolution types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view resolution types" ON public.resolution_types FOR SELECT USING (true);
-
-
 --
 -- Name: user_roles All users can view user roles; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "All users can view user roles" ON public.user_roles FOR SELECT USING ((auth.uid() IS NOT NULL));
-
-
 --
 -- Name: error_logs Allow service role to insert errors; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Allow service role to insert errors" ON public.error_logs FOR INSERT WITH CHECK (true);
-
-
 --
 -- Name: escort_status_links Anyone can view active escort links by token; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Anyone can view active escort links by token" ON public.escort_status_links FOR SELECT TO anon USING (((is_active = true) AND (expires_at > now())));
-
-
 --
 -- Name: facilities Anyone can view facility names; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Anyone can view facility names" ON public.facilities FOR SELECT USING (true);
-
-
 --
 -- Name: device_rep_invites Anyone can view invite by token; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Anyone can view invite by token" ON public.device_rep_invites FOR SELECT USING (true);
-
-
 --
 -- Name: user_invites Anyone can view invite by token; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Anyone can view invite by token" ON public.user_invites FOR SELECT USING (true);
-
-
 --
 -- Name: audit_log Authenticated users can insert audit logs; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Authenticated users can insert audit logs" ON public.audit_log FOR INSERT WITH CHECK ((auth.uid() IS NOT NULL));
-
-
 --
 -- Name: implant_companies Authenticated users can view implant companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Authenticated users can view implant companies" ON public.implant_companies FOR SELECT TO authenticated USING (true);
-
-
 --
 -- Name: surgeon_milestone_averages Authenticated users can view milestone averages; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Authenticated users can view milestone averages" ON public.surgeon_milestone_averages FOR SELECT TO authenticated USING (true);
-
-
 --
 -- Name: permissions Authenticated users can view permissions; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Authenticated users can view permissions" ON public.permissions FOR SELECT USING ((auth.uid() IS NOT NULL));
-
-
 --
 -- Name: surgeon_procedure_averages Authenticated users can view procedure averages; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Authenticated users can view procedure averages" ON public.surgeon_procedure_averages FOR SELECT TO authenticated USING (true);
-
-
 --
 -- Name: facility_device_reps Device reps can accept own invites; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Device reps can accept own invites" ON public.facility_device_reps FOR UPDATE USING (((user_id = auth.uid()) AND (status = 'pending'::text))) WITH CHECK (((user_id = auth.uid()) AND (status = 'accepted'::text)));
-
-
 --
 -- Name: case_device_activity Device reps can insert case_device_activity; Type: POLICY; Schema: public; Owner: -
 --
@@ -11122,8 +9493,6 @@ CREATE POLICY "Device reps can insert case_device_activity" ON public.case_devic
    FROM (public.cases c
      JOIN public.facility_device_reps fdr ON ((fdr.facility_id = c.facility_id)))
   WHERE ((c.id = case_device_activity.case_id) AND (fdr.user_id = auth.uid()) AND (fdr.status = 'accepted'::text))))));
-
-
 --
 -- Name: case_implants Device reps can insert case_implants for their cases; Type: POLICY; Schema: public; Owner: -
 --
@@ -11132,8 +9501,6 @@ CREATE POLICY "Device reps can insert case_implants for their cases" ON public.c
    FROM (public.case_implant_companies cic
      JOIN public.users u ON ((u.implant_company_id = cic.implant_company_id)))
   WHERE ((cic.case_id = case_implants.case_id) AND (u.id = auth.uid())))));
-
-
 --
 -- Name: case_implants Device reps can update case_implants for their cases; Type: POLICY; Schema: public; Owner: -
 --
@@ -11142,8 +9509,6 @@ CREATE POLICY "Device reps can update case_implants for their cases" ON public.c
    FROM (public.case_implant_companies cic
      JOIN public.users u ON ((u.implant_company_id = cic.implant_company_id)))
   WHERE ((cic.case_id = case_implants.case_id) AND (u.id = auth.uid())))));
-
-
 --
 -- Name: case_device_companies Device reps can update their company case_device_companies; Type: POLICY; Schema: public; Owner: -
 --
@@ -11153,8 +9518,6 @@ CREATE POLICY "Device reps can update their company case_device_companies" ON pu
      JOIN public.facility_device_reps fdr ON ((fdr.facility_id = c.facility_id)))
      JOIN public.users u ON ((u.id = fdr.user_id)))
   WHERE ((c.id = case_device_companies.case_id) AND (fdr.user_id = auth.uid()) AND (fdr.status = 'accepted'::text) AND (case_device_companies.implant_company_id = u.implant_company_id))))));
-
-
 --
 -- Name: case_implants Device reps can view case_implants for their cases; Type: POLICY; Schema: public; Owner: -
 --
@@ -11163,8 +9526,6 @@ CREATE POLICY "Device reps can view case_implants for their cases" ON public.cas
    FROM (public.case_implant_companies cic
      JOIN public.users u ON ((u.implant_company_id = cic.implant_company_id)))
   WHERE ((cic.case_id = case_implants.case_id) AND (u.id = auth.uid())))));
-
-
 --
 -- Name: cases Device reps can view cases at assigned facilities with their co; Type: POLICY; Schema: public; Owner: -
 --
@@ -11174,15 +9535,11 @@ CREATE POLICY "Device reps can view cases at assigned facilities with their co" 
      JOIN public.users u ON ((u.id = drfa.user_id)))
      JOIN public.case_implant_companies cic ON ((cic.case_id = cases.id)))
   WHERE ((drfa.user_id = auth.uid()) AND (drfa.facility_id = cases.facility_id) AND (u.implant_company_id = cic.implant_company_id)))));
-
-
 --
 -- Name: facility_device_reps Device reps can view own access records; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Device reps can view own access records" ON public.facility_device_reps FOR SELECT USING ((user_id = auth.uid()));
-
-
 --
 -- Name: procedure_types Device reps can view procedures at assigned facilities; Type: POLICY; Schema: public; Owner: -
 --
@@ -11190,8 +9547,6 @@ CREATE POLICY "Device reps can view own access records" ON public.facility_devic
 CREATE POLICY "Device reps can view procedures at assigned facilities" ON public.procedure_types FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.device_rep_facility_access drfa
   WHERE ((drfa.user_id = auth.uid()) AND (drfa.facility_id = procedure_types.facility_id)))));
-
-
 --
 -- Name: or_rooms Device reps can view rooms at assigned facilities; Type: POLICY; Schema: public; Owner: -
 --
@@ -11199,8 +9554,6 @@ CREATE POLICY "Device reps can view procedures at assigned facilities" ON public
 CREATE POLICY "Device reps can view rooms at assigned facilities" ON public.or_rooms FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.device_rep_facility_access drfa
   WHERE ((drfa.user_id = auth.uid()) AND (drfa.facility_id = or_rooms.facility_id)))));
-
-
 --
 -- Name: case_device_activity Device reps can view their case_device_activity; Type: POLICY; Schema: public; Owner: -
 --
@@ -11209,8 +9562,6 @@ CREATE POLICY "Device reps can view their case_device_activity" ON public.case_d
    FROM (public.cases c
      JOIN public.facility_device_reps fdr ON ((fdr.facility_id = c.facility_id)))
   WHERE ((c.id = case_device_activity.case_id) AND (fdr.user_id = auth.uid()) AND (fdr.status = 'accepted'::text))))));
-
-
 --
 -- Name: case_implant_companies Device reps can view their company cases; Type: POLICY; Schema: public; Owner: -
 --
@@ -11221,8 +9572,6 @@ CREATE POLICY "Device reps can view their company cases" ON public.case_implant_
   WHERE ((c.id = case_implant_companies.case_id) AND (fdr.user_id = auth.uid()) AND (fdr.status = 'accepted'::text)))) AND (EXISTS ( SELECT 1
    FROM public.users u
   WHERE ((u.id = auth.uid()) AND (u.implant_company_id = u.implant_company_id))))));
-
-
 --
 -- Name: case_device_companies Device reps can view their facility case_device_companies; Type: POLICY; Schema: public; Owner: -
 --
@@ -11232,8 +9581,6 @@ CREATE POLICY "Device reps can view their facility case_device_companies" ON pub
      JOIN public.facility_device_reps fdr ON ((fdr.facility_id = c.facility_id)))
      JOIN public.users u ON ((u.id = fdr.user_id)))
   WHERE ((c.id = case_device_companies.case_id) AND (fdr.user_id = auth.uid()) AND (fdr.status = 'accepted'::text) AND (case_device_companies.implant_company_id = u.implant_company_id))))));
-
-
 --
 -- Name: users Device reps can view users at assigned facilities; Type: POLICY; Schema: public; Owner: -
 --
@@ -11241,8 +9588,6 @@ CREATE POLICY "Device reps can view their facility case_device_companies" ON pub
 CREATE POLICY "Device reps can view users at assigned facilities" ON public.users FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.device_rep_facility_access drfa
   WHERE ((drfa.user_id = auth.uid()) AND (drfa.facility_id = users.facility_id)))));
-
-
 --
 -- Name: case_staff Facility admins can create case staff at own facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -11251,36 +9596,26 @@ CREATE POLICY "Facility admins can create case staff at own facility" ON public.
    FROM (public.users u
      JOIN public.cases c ON ((c.facility_id = u.facility_id)))
   WHERE ((u.id = auth.uid()) AND (u.access_level = 'facility_admin'::text) AND (c.id = case_staff.case_id)))));
-
-
 --
 -- Name: device_rep_invites Facility admins can create invites; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can create invites" ON public.device_rep_invites FOR INSERT WITH CHECK (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND ((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))));
-
-
 --
 -- Name: user_invites Facility admins can create invites for own facility; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can create invites for own facility" ON public.user_invites FOR INSERT WITH CHECK (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: patients Facility admins can create patients at own facility; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can create patients at own facility" ON public.patients FOR INSERT WITH CHECK (((public.get_my_access_level() = ANY (ARRAY['facility_admin'::text, 'user'::text])) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: payers Facility admins can create payers at own facility; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can create payers at own facility" ON public.payers FOR INSERT WITH CHECK (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: procedure_types Facility admins can create procedure types at own facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -11288,8 +9623,6 @@ CREATE POLICY "Facility admins can create payers at own facility" ON public.paye
 CREATE POLICY "Facility admins can create procedure types at own facility" ON public.procedure_types FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'facility_admin'::text) AND (users.facility_id = users.facility_id)))));
-
-
 --
 -- Name: or_rooms Facility admins can create rooms at own facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -11297,15 +9630,11 @@ CREATE POLICY "Facility admins can create procedure types at own facility" ON pu
 CREATE POLICY "Facility admins can create rooms at own facility" ON public.or_rooms FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'facility_admin'::text) AND (users.facility_id = users.facility_id)))));
-
-
 --
 -- Name: users Facility admins can create users at own facility; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can create users at own facility" ON public.users FOR INSERT WITH CHECK (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: case_implant_companies Facility admins can delete case implant companies; Type: POLICY; Schema: public; Owner: -
 --
@@ -11313,8 +9642,6 @@ CREATE POLICY "Facility admins can create users at own facility" ON public.users
 CREATE POLICY "Facility admins can delete case implant companies" ON public.case_implant_companies FOR DELETE USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND (EXISTS ( SELECT 1
    FROM public.cases c
   WHERE ((c.id = case_implant_companies.case_id) AND ((c.facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text)))))));
-
-
 --
 -- Name: case_device_companies Facility admins can delete case_device_companies; Type: POLICY; Schema: public; Owner: -
 --
@@ -11322,43 +9649,31 @@ CREATE POLICY "Facility admins can delete case implant companies" ON public.case
 CREATE POLICY "Facility admins can delete case_device_companies" ON public.case_device_companies FOR DELETE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (EXISTS ( SELECT 1
    FROM public.cases c
   WHERE ((c.id = case_device_companies.case_id) AND (c.facility_id = public.get_my_facility_id()))))));
-
-
 --
 -- Name: delay_types Facility admins can delete facility delay types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can delete facility delay types" ON public.delay_types FOR DELETE USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: facility_device_reps Facility admins can delete facility device reps; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can delete facility device reps" ON public.facility_device_reps FOR DELETE USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND ((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))));
-
-
 --
 -- Name: implant_companies Facility admins can delete facility implant companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can delete facility implant companies" ON public.implant_companies FOR DELETE USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: device_rep_invites Facility admins can delete invites; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can delete invites" ON public.device_rep_invites FOR DELETE USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND ((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))));
-
-
 --
 -- Name: cancellation_reasons Facility admins can delete own facility cancellation reasons; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can delete own facility cancellation reasons" ON public.cancellation_reasons FOR DELETE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: case_delays Facility admins can delete own facility case delays; Type: POLICY; Schema: public; Owner: -
 --
@@ -11366,8 +9681,6 @@ CREATE POLICY "Facility admins can delete own facility cancellation reasons" ON 
 CREATE POLICY "Facility admins can delete own facility case delays" ON public.case_delays FOR DELETE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (EXISTS ( SELECT 1
    FROM public.cases
   WHERE ((cases.id = case_delays.case_id) AND (cases.facility_id = public.get_my_facility_id()))))));
-
-
 --
 -- Name: case_staff Facility admins can delete own facility case staff; Type: POLICY; Schema: public; Owner: -
 --
@@ -11376,15 +9689,11 @@ CREATE POLICY "Facility admins can delete own facility case staff" ON public.cas
    FROM (public.users u
      JOIN public.cases c ON ((c.facility_id = u.facility_id)))
   WHERE ((u.id = auth.uid()) AND (u.access_level = 'facility_admin'::text) AND (c.id = case_staff.case_id)))));
-
-
 --
 -- Name: user_invites Facility admins can delete own facility invites; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can delete own facility invites" ON public.user_invites FOR DELETE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: case_milestones Facility admins can delete own facility milestones; Type: POLICY; Schema: public; Owner: -
 --
@@ -11393,22 +9702,16 @@ CREATE POLICY "Facility admins can delete own facility milestones" ON public.cas
    FROM (public.users u
      JOIN public.cases c ON ((c.facility_id = u.facility_id)))
   WHERE ((u.id = auth.uid()) AND (u.access_level = 'facility_admin'::text) AND (c.id = case_milestones.case_id)))));
-
-
 --
 -- Name: patients Facility admins can delete own facility patients; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can delete own facility patients" ON public.patients FOR DELETE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: payers Facility admins can delete own facility payers; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can delete own facility payers" ON public.payers FOR DELETE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: procedure_types Facility admins can delete own facility procedure types; Type: POLICY; Schema: public; Owner: -
 --
@@ -11416,8 +9719,6 @@ CREATE POLICY "Facility admins can delete own facility payers" ON public.payers 
 CREATE POLICY "Facility admins can delete own facility procedure types" ON public.procedure_types FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'facility_admin'::text) AND (users.facility_id = procedure_types.facility_id)))));
-
-
 --
 -- Name: or_rooms Facility admins can delete own facility rooms; Type: POLICY; Schema: public; Owner: -
 --
@@ -11425,15 +9726,11 @@ CREATE POLICY "Facility admins can delete own facility procedure types" ON publi
 CREATE POLICY "Facility admins can delete own facility rooms" ON public.or_rooms FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'facility_admin'::text) AND (users.facility_id = or_rooms.facility_id)))));
-
-
 --
 -- Name: users Facility admins can delete own facility users; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can delete own facility users" ON public.users FOR DELETE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: surgeon_preference_companies Facility admins can delete surgeon preference companies; Type: POLICY; Schema: public; Owner: -
 --
@@ -11441,15 +9738,11 @@ CREATE POLICY "Facility admins can delete own facility users" ON public.users FO
 CREATE POLICY "Facility admins can delete surgeon preference companies" ON public.surgeon_preference_companies FOR DELETE USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND (EXISTS ( SELECT 1
    FROM public.surgeon_preferences sp
   WHERE ((sp.id = surgeon_preference_companies.surgeon_preference_id) AND ((sp.facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text)))))));
-
-
 --
 -- Name: surgeon_preferences Facility admins can delete surgeon preferences; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can delete surgeon preferences" ON public.surgeon_preferences FOR DELETE USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND ((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))));
-
-
 --
 -- Name: case_implant_companies Facility admins can insert case implant companies; Type: POLICY; Schema: public; Owner: -
 --
@@ -11457,8 +9750,6 @@ CREATE POLICY "Facility admins can delete surgeon preferences" ON public.surgeon
 CREATE POLICY "Facility admins can insert case implant companies" ON public.case_implant_companies FOR INSERT WITH CHECK (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND (EXISTS ( SELECT 1
    FROM public.cases c
   WHERE ((c.id = case_implant_companies.case_id) AND ((c.facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text)))))));
-
-
 --
 -- Name: case_device_companies Facility admins can insert case_device_companies; Type: POLICY; Schema: public; Owner: -
 --
@@ -11466,36 +9757,26 @@ CREATE POLICY "Facility admins can insert case implant companies" ON public.case
 CREATE POLICY "Facility admins can insert case_device_companies" ON public.case_device_companies FOR INSERT WITH CHECK (((public.get_my_access_level() = 'facility_admin'::text) AND (EXISTS ( SELECT 1
    FROM public.cases c
   WHERE ((c.id = case_device_companies.case_id) AND (c.facility_id = public.get_my_facility_id()))))));
-
-
 --
 -- Name: delay_types Facility admins can insert facility delay types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can insert facility delay types" ON public.delay_types FOR INSERT WITH CHECK (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: facility_device_reps Facility admins can insert facility device reps; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can insert facility device reps" ON public.facility_device_reps FOR INSERT WITH CHECK (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND ((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))));
-
-
 --
 -- Name: implant_companies Facility admins can insert facility implant companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can insert facility implant companies" ON public.implant_companies FOR INSERT WITH CHECK (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: cancellation_reasons Facility admins can insert own facility cancellation reasons; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can insert own facility cancellation reasons" ON public.cancellation_reasons FOR INSERT WITH CHECK (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: surgeon_preference_companies Facility admins can insert surgeon preference companies; Type: POLICY; Schema: public; Owner: -
 --
@@ -11503,22 +9784,16 @@ CREATE POLICY "Facility admins can insert own facility cancellation reasons" ON 
 CREATE POLICY "Facility admins can insert surgeon preference companies" ON public.surgeon_preference_companies FOR INSERT WITH CHECK (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND (EXISTS ( SELECT 1
    FROM public.surgeon_preferences sp
   WHERE ((sp.id = surgeon_preference_companies.surgeon_preference_id) AND ((sp.facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text)))))));
-
-
 --
 -- Name: surgeon_preferences Facility admins can insert surgeon preferences; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can insert surgeon preferences" ON public.surgeon_preferences FOR INSERT WITH CHECK (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND ((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))));
-
-
 --
 -- Name: block_schedules Facility admins can manage own facility block_schedules; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility block_schedules" ON public.block_schedules USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: case_complexities Facility admins can manage own facility case complexities; Type: POLICY; Schema: public; Owner: -
 --
@@ -11528,85 +9803,61 @@ CREATE POLICY "Facility admins can manage own facility case complexities" ON pub
   WHERE (cases.facility_id = public.get_my_facility_id()))))) WITH CHECK (((public.get_my_access_level() = ANY (ARRAY['facility_admin'::text, 'user'::text])) AND (case_id IN ( SELECT cases.id
    FROM public.cases
   WHERE (cases.facility_id = public.get_my_facility_id())))));
-
-
 --
 -- Name: facility_closures Facility admins can manage own facility closures; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility closures" ON public.facility_closures USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: complexities Facility admins can manage own facility complexities; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility complexities" ON public.complexities USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id()))) WITH CHECK (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: cost_categories Facility admins can manage own facility cost categories; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility cost categories" ON public.cost_categories USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: facility_holidays Facility admins can manage own facility holidays; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility holidays" ON public.facility_holidays USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: facility_milestones Facility admins can manage own facility milestones; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility milestones" ON public.facility_milestones USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: facility_permissions Facility admins can manage own facility permissions; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility permissions" ON public.facility_permissions USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id()))) WITH CHECK (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: procedure_cost_items Facility admins can manage own facility procedure cost items; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility procedure cost items" ON public.procedure_cost_items USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: procedure_reimbursements Facility admins can manage own facility procedure reimbursement; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility procedure reimbursement" ON public.procedure_reimbursements USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: procedure_milestone_config Facility admins can manage own facility procedure_milestone_con; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility procedure_milestone_con" ON public.procedure_milestone_config USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: surgeon_cost_items Facility admins can manage own facility surgeon cost items; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility surgeon cost items" ON public.surgeon_cost_items USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: surgeon_colors Facility admins can manage own facility surgeon_colors; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage own facility surgeon_colors" ON public.surgeon_colors USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: outlier_review_notes Facility admins can manage review notes; Type: POLICY; Schema: public; Owner: -
 --
@@ -11614,15 +9865,11 @@ CREATE POLICY "Facility admins can manage own facility surgeon_colors" ON public
 CREATE POLICY "Facility admins can manage review notes" ON public.outlier_review_notes USING (((EXISTS ( SELECT 1
    FROM public.outlier_reviews
   WHERE ((outlier_reviews.id = outlier_review_notes.outlier_review_id) AND ((outlier_reviews.facility_id = public.get_my_facility_id()) AND (public.get_my_access_level() = ANY (ARRAY['facility_admin'::text, 'global_admin'::text])))))) OR (public.get_my_access_level() = 'global_admin'::text)));
-
-
 --
 -- Name: outlier_reviews Facility admins can manage reviews; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can manage reviews" ON public.outlier_reviews USING ((((facility_id = public.get_my_facility_id()) AND (public.get_my_access_level() = ANY (ARRAY['facility_admin'::text, 'global_admin'::text]))) OR (public.get_my_access_level() = 'global_admin'::text)));
-
-
 --
 -- Name: case_device_companies Facility admins can update case_device_companies; Type: POLICY; Schema: public; Owner: -
 --
@@ -11630,43 +9877,31 @@ CREATE POLICY "Facility admins can manage reviews" ON public.outlier_reviews USI
 CREATE POLICY "Facility admins can update case_device_companies" ON public.case_device_companies FOR UPDATE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (EXISTS ( SELECT 1
    FROM public.cases c
   WHERE ((c.id = case_device_companies.case_id) AND (c.facility_id = public.get_my_facility_id()))))));
-
-
 --
 -- Name: delay_types Facility admins can update facility delay types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can update facility delay types" ON public.delay_types FOR UPDATE USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: facility_device_reps Facility admins can update facility device reps; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can update facility device reps" ON public.facility_device_reps FOR UPDATE USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND ((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))));
-
-
 --
 -- Name: implant_companies Facility admins can update facility implant companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can update facility implant companies" ON public.implant_companies FOR UPDATE USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: facilities Facility admins can update own facility; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can update own facility" ON public.facilities FOR UPDATE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (id = public.get_my_facility_id()))) WITH CHECK (((public.get_my_access_level() = 'facility_admin'::text) AND (id = public.get_my_facility_id())));
-
-
 --
 -- Name: cancellation_reasons Facility admins can update own facility cancellation reasons; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can update own facility cancellation reasons" ON public.cancellation_reasons FOR UPDATE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: case_delays Facility admins can update own facility case delays; Type: POLICY; Schema: public; Owner: -
 --
@@ -11674,8 +9909,6 @@ CREATE POLICY "Facility admins can update own facility cancellation reasons" ON 
 CREATE POLICY "Facility admins can update own facility case delays" ON public.case_delays FOR UPDATE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (EXISTS ( SELECT 1
    FROM public.cases
   WHERE ((cases.id = case_delays.case_id) AND (cases.facility_id = public.get_my_facility_id()))))));
-
-
 --
 -- Name: case_staff Facility admins can update own facility case staff; Type: POLICY; Schema: public; Owner: -
 --
@@ -11684,22 +9917,16 @@ CREATE POLICY "Facility admins can update own facility case staff" ON public.cas
    FROM (public.users u
      JOIN public.cases c ON ((c.facility_id = u.facility_id)))
   WHERE ((u.id = auth.uid()) AND (u.access_level = 'facility_admin'::text) AND (c.id = case_staff.case_id)))));
-
-
 --
 -- Name: user_invites Facility admins can update own facility invites; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can update own facility invites" ON public.user_invites FOR UPDATE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: metric_issues Facility admins can update own facility metric issues; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can update own facility metric issues" ON public.metric_issues FOR UPDATE USING (((facility_id = public.get_my_facility_id()) AND (public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text]))));
-
-
 --
 -- Name: case_milestones Facility admins can update own facility milestones; Type: POLICY; Schema: public; Owner: -
 --
@@ -11708,22 +9935,16 @@ CREATE POLICY "Facility admins can update own facility milestones" ON public.cas
    FROM (public.users u
      JOIN public.cases c ON ((c.facility_id = u.facility_id)))
   WHERE ((u.id = auth.uid()) AND (u.access_level = 'facility_admin'::text) AND (c.id = case_milestones.case_id)))));
-
-
 --
 -- Name: patients Facility admins can update own facility patients; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can update own facility patients" ON public.patients FOR UPDATE USING (((public.get_my_access_level() = ANY (ARRAY['facility_admin'::text, 'user'::text])) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: payers Facility admins can update own facility payers; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can update own facility payers" ON public.payers FOR UPDATE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: procedure_types Facility admins can update own facility procedure types; Type: POLICY; Schema: public; Owner: -
 --
@@ -11731,8 +9952,6 @@ CREATE POLICY "Facility admins can update own facility payers" ON public.payers 
 CREATE POLICY "Facility admins can update own facility procedure types" ON public.procedure_types FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'facility_admin'::text) AND (users.facility_id = procedure_types.facility_id)))));
-
-
 --
 -- Name: or_rooms Facility admins can update own facility rooms; Type: POLICY; Schema: public; Owner: -
 --
@@ -11740,22 +9959,16 @@ CREATE POLICY "Facility admins can update own facility procedure types" ON publi
 CREATE POLICY "Facility admins can update own facility rooms" ON public.or_rooms FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'facility_admin'::text) AND (users.facility_id = or_rooms.facility_id)))));
-
-
 --
 -- Name: users Facility admins can update own facility users; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can update own facility users" ON public.users FOR UPDATE USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: surgeon_preferences Facility admins can update surgeon preferences; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can update surgeon preferences" ON public.surgeon_preferences FOR UPDATE USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND ((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))));
-
-
 --
 -- Name: users Facility admins can view device reps with facility access; Type: POLICY; Schema: public; Owner: -
 --
@@ -11763,43 +9976,31 @@ CREATE POLICY "Facility admins can update surgeon preferences" ON public.surgeon
 CREATE POLICY "Facility admins can view device reps with facility access" ON public.users FOR SELECT USING (((access_level = 'device_rep'::text) AND (EXISTS ( SELECT 1
    FROM public.facility_device_reps fdr
   WHERE ((fdr.user_id = users.id) AND (fdr.facility_id = public.get_my_facility_id()) AND (fdr.status <> 'revoked'::text))))));
-
-
 --
 -- Name: audit_log Facility admins can view own facility audit logs; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can view own facility audit logs" ON public.audit_log FOR SELECT USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: facility_device_reps Facility admins can view own facility device reps; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can view own facility device reps" ON public.facility_device_reps FOR SELECT USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: device_rep_invites Facility admins can view own facility invites; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can view own facility invites" ON public.device_rep_invites FOR SELECT USING (((public.get_my_access_level() = ANY (ARRAY['global_admin'::text, 'facility_admin'::text])) AND ((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))));
-
-
 --
 -- Name: user_invites Facility admins can view own facility invites; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can view own facility invites" ON public.user_invites FOR SELECT USING (((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: permission_templates Facility admins can view permission templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Facility admins can view permission templates" ON public.permission_templates FOR SELECT USING ((public.get_my_access_level() = 'facility_admin'::text));
-
-
 --
 -- Name: case_device_activity Facility users can insert case_device_activity; Type: POLICY; Schema: public; Owner: -
 --
@@ -11807,8 +10008,6 @@ CREATE POLICY "Facility admins can view permission templates" ON public.permissi
 CREATE POLICY "Facility users can insert case_device_activity" ON public.case_device_activity FOR INSERT WITH CHECK (((public.get_my_access_level() = ANY (ARRAY['facility_admin'::text, 'user'::text])) AND (EXISTS ( SELECT 1
    FROM public.cases c
   WHERE ((c.id = case_device_activity.case_id) AND (c.facility_id = public.get_my_facility_id()))))));
-
-
 --
 -- Name: case_device_activity Facility users can view own facility case_device_activity; Type: POLICY; Schema: public; Owner: -
 --
@@ -11816,8 +10015,6 @@ CREATE POLICY "Facility users can insert case_device_activity" ON public.case_de
 CREATE POLICY "Facility users can view own facility case_device_activity" ON public.case_device_activity FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.cases c
   WHERE ((c.id = case_device_activity.case_id) AND (c.facility_id = public.get_my_facility_id())))));
-
-
 --
 -- Name: case_device_companies Facility users can view own facility case_device_companies; Type: POLICY; Schema: public; Owner: -
 --
@@ -11825,8 +10022,6 @@ CREATE POLICY "Facility users can view own facility case_device_activity" ON pub
 CREATE POLICY "Facility users can view own facility case_device_companies" ON public.case_device_companies FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.cases c
   WHERE ((c.id = case_device_companies.case_id) AND (c.facility_id = public.get_my_facility_id())))));
-
-
 --
 -- Name: body_regions Global admins can create body regions; Type: POLICY; Schema: public; Owner: -
 --
@@ -11834,8 +10029,6 @@ CREATE POLICY "Facility users can view own facility case_device_companies" ON pu
 CREATE POLICY "Global admins can create body regions" ON public.body_regions FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: case_staff Global admins can create case staff; Type: POLICY; Schema: public; Owner: -
 --
@@ -11843,8 +10036,6 @@ CREATE POLICY "Global admins can create body regions" ON public.body_regions FOR
 CREATE POLICY "Global admins can create case staff" ON public.case_staff FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: case_statuses Global admins can create case statuses; Type: POLICY; Schema: public; Owner: -
 --
@@ -11852,8 +10043,6 @@ CREATE POLICY "Global admins can create case staff" ON public.case_staff FOR INS
 CREATE POLICY "Global admins can create case statuses" ON public.case_statuses FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: facilities Global admins can create facilities; Type: POLICY; Schema: public; Owner: -
 --
@@ -11861,15 +10050,11 @@ CREATE POLICY "Global admins can create case statuses" ON public.case_statuses F
 CREATE POLICY "Global admins can create facilities" ON public.facilities FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: metric_issues Global admins can create metric issues; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can create metric issues" ON public.metric_issues FOR INSERT WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: milestone_types Global admins can create milestone types; Type: POLICY; Schema: public; Owner: -
 --
@@ -11877,8 +10062,6 @@ CREATE POLICY "Global admins can create metric issues" ON public.metric_issues F
 CREATE POLICY "Global admins can create milestone types" ON public.milestone_types FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: case_milestones Global admins can create milestones; Type: POLICY; Schema: public; Owner: -
 --
@@ -11886,22 +10069,16 @@ CREATE POLICY "Global admins can create milestone types" ON public.milestone_typ
 CREATE POLICY "Global admins can create milestones" ON public.case_milestones FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: patients Global admins can create patients; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can create patients" ON public.patients FOR INSERT WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: payers Global admins can create payers; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can create payers" ON public.payers FOR INSERT WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_techniques Global admins can create procedure techniques; Type: POLICY; Schema: public; Owner: -
 --
@@ -11909,8 +10086,6 @@ CREATE POLICY "Global admins can create payers" ON public.payers FOR INSERT WITH
 CREATE POLICY "Global admins can create procedure techniques" ON public.procedure_techniques FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: procedure_types Global admins can create procedure types; Type: POLICY; Schema: public; Owner: -
 --
@@ -11918,8 +10093,6 @@ CREATE POLICY "Global admins can create procedure techniques" ON public.procedur
 CREATE POLICY "Global admins can create procedure types" ON public.procedure_types FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: or_rooms Global admins can create rooms; Type: POLICY; Schema: public; Owner: -
 --
@@ -11927,8 +10100,6 @@ CREATE POLICY "Global admins can create procedure types" ON public.procedure_typ
 CREATE POLICY "Global admins can create rooms" ON public.or_rooms FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: user_roles Global admins can create user roles; Type: POLICY; Schema: public; Owner: -
 --
@@ -11936,15 +10107,11 @@ CREATE POLICY "Global admins can create rooms" ON public.or_rooms FOR INSERT WIT
 CREATE POLICY "Global admins can create user roles" ON public.user_roles FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: users Global admins can create users; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can create users" ON public.users FOR INSERT WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: body_regions Global admins can delete body regions; Type: POLICY; Schema: public; Owner: -
 --
@@ -11952,29 +10119,21 @@ CREATE POLICY "Global admins can create users" ON public.users FOR INSERT WITH C
 CREATE POLICY "Global admins can delete body regions" ON public.body_regions FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: cancellation_reason_templates Global admins can delete cancellation reason templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete cancellation reason templates" ON public.cancellation_reason_templates FOR DELETE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: cancellation_reasons Global admins can delete cancellation reasons; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete cancellation reasons" ON public.cancellation_reasons FOR DELETE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_delays Global admins can delete case delays; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete case delays" ON public.case_delays FOR DELETE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_staff Global admins can delete case staff; Type: POLICY; Schema: public; Owner: -
 --
@@ -11982,8 +10141,6 @@ CREATE POLICY "Global admins can delete case delays" ON public.case_delays FOR D
 CREATE POLICY "Global admins can delete case staff" ON public.case_staff FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: case_statuses Global admins can delete case statuses; Type: POLICY; Schema: public; Owner: -
 --
@@ -11991,22 +10148,16 @@ CREATE POLICY "Global admins can delete case staff" ON public.case_staff FOR DEL
 CREATE POLICY "Global admins can delete case statuses" ON public.case_statuses FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: case_device_companies Global admins can delete case_device_companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete case_device_companies" ON public.case_device_companies FOR DELETE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: delay_types Global admins can delete delay types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete delay types" ON public.delay_types FOR DELETE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: facilities Global admins can delete facilities; Type: POLICY; Schema: public; Owner: -
 --
@@ -12014,36 +10165,26 @@ CREATE POLICY "Global admins can delete delay types" ON public.delay_types FOR D
 CREATE POLICY "Global admins can delete facilities" ON public.facilities FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: delay_types Global admins can delete global delay types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete global delay types" ON public.delay_types FOR DELETE USING (((public.get_my_access_level() = 'global_admin'::text) AND (facility_id IS NULL)));
-
-
 --
 -- Name: implant_companies Global admins can delete global implant companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete global implant companies" ON public.implant_companies FOR DELETE USING (((public.get_my_access_level() = 'global_admin'::text) AND (facility_id IS NULL)));
-
-
 --
 -- Name: global_milestone_settings Global admins can delete global milestone settings; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete global milestone settings" ON public.global_milestone_settings FOR DELETE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: metric_issues Global admins can delete metric issues; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete metric issues" ON public.metric_issues FOR DELETE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: milestone_types Global admins can delete milestone types; Type: POLICY; Schema: public; Owner: -
 --
@@ -12051,8 +10192,6 @@ CREATE POLICY "Global admins can delete metric issues" ON public.metric_issues F
 CREATE POLICY "Global admins can delete milestone types" ON public.milestone_types FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: case_milestones Global admins can delete milestones; Type: POLICY; Schema: public; Owner: -
 --
@@ -12060,15 +10199,11 @@ CREATE POLICY "Global admins can delete milestone types" ON public.milestone_typ
 CREATE POLICY "Global admins can delete milestones" ON public.case_milestones FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: notifications Global admins can delete notifications; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete notifications" ON public.notifications FOR DELETE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: page_registry Global admins can delete page_registry; Type: POLICY; Schema: public; Owner: -
 --
@@ -12076,29 +10211,21 @@ CREATE POLICY "Global admins can delete notifications" ON public.notifications F
 CREATE POLICY "Global admins can delete page_registry" ON public.page_registry FOR DELETE TO authenticated USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: patients Global admins can delete patients; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete patients" ON public.patients FOR DELETE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: payers Global admins can delete payers; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete payers" ON public.payers FOR DELETE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_categories Global admins can delete procedure categories; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete procedure categories" ON public.procedure_categories FOR DELETE TO authenticated USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_techniques Global admins can delete procedure techniques; Type: POLICY; Schema: public; Owner: -
 --
@@ -12106,8 +10233,6 @@ CREATE POLICY "Global admins can delete procedure categories" ON public.procedur
 CREATE POLICY "Global admins can delete procedure techniques" ON public.procedure_techniques FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: procedure_types Global admins can delete procedure types; Type: POLICY; Schema: public; Owner: -
 --
@@ -12115,8 +10240,6 @@ CREATE POLICY "Global admins can delete procedure techniques" ON public.procedur
 CREATE POLICY "Global admins can delete procedure types" ON public.procedure_types FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: or_rooms Global admins can delete rooms; Type: POLICY; Schema: public; Owner: -
 --
@@ -12124,8 +10247,6 @@ CREATE POLICY "Global admins can delete procedure types" ON public.procedure_typ
 CREATE POLICY "Global admins can delete rooms" ON public.or_rooms FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: user_roles Global admins can delete user roles; Type: POLICY; Schema: public; Owner: -
 --
@@ -12133,120 +10254,86 @@ CREATE POLICY "Global admins can delete rooms" ON public.or_rooms FOR DELETE USI
 CREATE POLICY "Global admins can delete user roles" ON public.user_roles FOR DELETE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: users Global admins can delete users; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can delete users" ON public.users FOR DELETE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: block_schedules Global admins can do anything with block_schedules; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can do anything with block_schedules" ON public.block_schedules USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: facility_closures Global admins can do anything with facility_closures; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can do anything with facility_closures" ON public.facility_closures USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: facility_holidays Global admins can do anything with facility_holidays; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can do anything with facility_holidays" ON public.facility_holidays USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: surgeon_colors Global admins can do anything with surgeon_colors; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can do anything with surgeon_colors" ON public.surgeon_colors USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_complexities Global admins can do everything with case_complexities; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can do everything with case_complexities" ON public.case_complexities USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: complexities Global admins can do everything with complexities; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can do everything with complexities" ON public.complexities USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: cancellation_reason_templates Global admins can insert cancellation reason templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can insert cancellation reason templates" ON public.cancellation_reason_templates FOR INSERT WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: cancellation_reasons Global admins can insert cancellation reasons; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can insert cancellation reasons" ON public.cancellation_reasons FOR INSERT WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_delays Global admins can insert case delays; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can insert case delays" ON public.case_delays FOR INSERT WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_device_activity Global admins can insert case_device_activity; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can insert case_device_activity" ON public.case_device_activity FOR INSERT WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_device_companies Global admins can insert case_device_companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can insert case_device_companies" ON public.case_device_companies FOR INSERT WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: delay_types Global admins can insert delay types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can insert delay types" ON public.delay_types FOR INSERT WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: delay_types Global admins can insert global delay types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can insert global delay types" ON public.delay_types FOR INSERT WITH CHECK (((public.get_my_access_level() = 'global_admin'::text) AND (facility_id IS NULL)));
-
-
 --
 -- Name: implant_companies Global admins can insert global implant companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can insert global implant companies" ON public.implant_companies FOR INSERT WITH CHECK (((public.get_my_access_level() = 'global_admin'::text) AND (facility_id IS NULL)));
-
-
 --
 -- Name: global_milestone_settings Global admins can insert global milestone settings; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can insert global milestone settings" ON public.global_milestone_settings FOR INSERT WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: page_registry Global admins can insert page_registry; Type: POLICY; Schema: public; Owner: -
 --
@@ -12254,85 +10341,61 @@ CREATE POLICY "Global admins can insert global milestone settings" ON public.glo
 CREATE POLICY "Global admins can insert page_registry" ON public.page_registry FOR INSERT TO authenticated WITH CHECK ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: procedure_categories Global admins can insert procedure categories; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can insert procedure categories" ON public.procedure_categories FOR INSERT TO authenticated WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: admin_sessions Global admins can manage admin sessions; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage admin sessions" ON public.admin_sessions USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: patient_checkins Global admins can manage all checkins; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage all checkins" ON public.patient_checkins USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: cost_categories Global admins can manage all cost categories; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage all cost categories" ON public.cost_categories USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: facility_permissions Global admins can manage all facility permissions; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage all facility permissions" ON public.facility_permissions USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: facility_milestones Global admins can manage all facility_milestones; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage all facility_milestones" ON public.facility_milestones USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_cost_items Global admins can manage all procedure cost items; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage all procedure cost items" ON public.procedure_cost_items USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_reimbursements Global admins can manage all procedure reimbursements; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage all procedure reimbursements" ON public.procedure_reimbursements USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_milestone_config Global admins can manage all procedure_milestone_config; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage all procedure_milestone_config" ON public.procedure_milestone_config USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: surgeon_cost_items Global admins can manage all surgeon cost items; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage all surgeon cost items" ON public.surgeon_cost_items USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: user_invites Global admins can manage all user invites; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage all user invites" ON public.user_invites USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: page_registry_categories Global admins can manage categories; Type: POLICY; Schema: public; Owner: -
 --
@@ -12340,85 +10403,61 @@ CREATE POLICY "Global admins can manage all user invites" ON public.user_invites
 CREATE POLICY "Global admins can manage categories" ON public.page_registry_categories USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: preop_checklist_field_templates Global admins can manage checklist templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage checklist templates" ON public.preop_checklist_field_templates USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: complexity_templates Global admins can manage complexity templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage complexity templates" ON public.complexity_templates USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: cost_category_templates Global admins can manage cost category templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage cost category templates" ON public.cost_category_templates USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: device_rep_facility_access Global admins can manage facility access; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage facility access" ON public.device_rep_facility_access USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: facility_features Global admins can manage facility features; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage facility features" ON public.facility_features USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: features Global admins can manage features; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage features" ON public.features USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: patient_statuses Global admins can manage patient statuses; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage patient statuses" ON public.patient_statuses USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: permission_templates Global admins can manage permission templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage permission templates" ON public.permission_templates USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: permissions Global admins can manage permissions; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage permissions" ON public.permissions USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_milestone_templates Global admins can manage procedure milestone templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage procedure milestone templates" ON public.procedure_milestone_templates USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_type_templates Global admins can manage procedure type templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can manage procedure type templates" ON public.procedure_type_templates USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: page_registry Global admins can read page_registry; Type: POLICY; Schema: public; Owner: -
 --
@@ -12426,8 +10465,6 @@ CREATE POLICY "Global admins can manage procedure type templates" ON public.proc
 CREATE POLICY "Global admins can read page_registry" ON public.page_registry FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: body_regions Global admins can update body regions; Type: POLICY; Schema: public; Owner: -
 --
@@ -12435,29 +10472,21 @@ CREATE POLICY "Global admins can read page_registry" ON public.page_registry FOR
 CREATE POLICY "Global admins can update body regions" ON public.body_regions FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: cancellation_reason_templates Global admins can update cancellation reason templates; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update cancellation reason templates" ON public.cancellation_reason_templates FOR UPDATE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: cancellation_reasons Global admins can update cancellation reasons; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update cancellation reasons" ON public.cancellation_reasons FOR UPDATE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_delays Global admins can update case delays; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update case delays" ON public.case_delays FOR UPDATE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_staff Global admins can update case staff; Type: POLICY; Schema: public; Owner: -
 --
@@ -12465,8 +10494,6 @@ CREATE POLICY "Global admins can update case delays" ON public.case_delays FOR U
 CREATE POLICY "Global admins can update case staff" ON public.case_staff FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: case_statuses Global admins can update case statuses; Type: POLICY; Schema: public; Owner: -
 --
@@ -12474,50 +10501,36 @@ CREATE POLICY "Global admins can update case staff" ON public.case_staff FOR UPD
 CREATE POLICY "Global admins can update case statuses" ON public.case_statuses FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: case_device_companies Global admins can update case_device_companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update case_device_companies" ON public.case_device_companies FOR UPDATE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: delay_types Global admins can update delay types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update delay types" ON public.delay_types FOR UPDATE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: facilities Global admins can update facilities; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update facilities" ON public.facilities FOR UPDATE USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: delay_types Global admins can update global delay types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update global delay types" ON public.delay_types FOR UPDATE USING (((public.get_my_access_level() = 'global_admin'::text) AND (facility_id IS NULL)));
-
-
 --
 -- Name: implant_companies Global admins can update global implant companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update global implant companies" ON public.implant_companies FOR UPDATE USING (((public.get_my_access_level() = 'global_admin'::text) AND (facility_id IS NULL)));
-
-
 --
 -- Name: global_milestone_settings Global admins can update global milestone settings; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update global milestone settings" ON public.global_milestone_settings FOR UPDATE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: milestone_types Global admins can update milestone types; Type: POLICY; Schema: public; Owner: -
 --
@@ -12525,8 +10538,6 @@ CREATE POLICY "Global admins can update global milestone settings" ON public.glo
 CREATE POLICY "Global admins can update milestone types" ON public.milestone_types FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: case_milestones Global admins can update milestones; Type: POLICY; Schema: public; Owner: -
 --
@@ -12534,8 +10545,6 @@ CREATE POLICY "Global admins can update milestone types" ON public.milestone_typ
 CREATE POLICY "Global admins can update milestones" ON public.case_milestones FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: page_registry Global admins can update page_registry; Type: POLICY; Schema: public; Owner: -
 --
@@ -12543,29 +10552,21 @@ CREATE POLICY "Global admins can update milestones" ON public.case_milestones FO
 CREATE POLICY "Global admins can update page_registry" ON public.page_registry FOR UPDATE TO authenticated USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: patients Global admins can update patients; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update patients" ON public.patients FOR UPDATE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: payers Global admins can update payers; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update payers" ON public.payers FOR UPDATE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_categories Global admins can update procedure categories; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update procedure categories" ON public.procedure_categories FOR UPDATE TO authenticated USING ((public.get_my_access_level() = 'global_admin'::text)) WITH CHECK ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_techniques Global admins can update procedure techniques; Type: POLICY; Schema: public; Owner: -
 --
@@ -12573,8 +10574,6 @@ CREATE POLICY "Global admins can update procedure categories" ON public.procedur
 CREATE POLICY "Global admins can update procedure techniques" ON public.procedure_techniques FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: procedure_types Global admins can update procedure types; Type: POLICY; Schema: public; Owner: -
 --
@@ -12582,8 +10581,6 @@ CREATE POLICY "Global admins can update procedure techniques" ON public.procedur
 CREATE POLICY "Global admins can update procedure types" ON public.procedure_types FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: or_rooms Global admins can update rooms; Type: POLICY; Schema: public; Owner: -
 --
@@ -12591,8 +10588,6 @@ CREATE POLICY "Global admins can update procedure types" ON public.procedure_typ
 CREATE POLICY "Global admins can update rooms" ON public.or_rooms FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: user_roles Global admins can update user roles; Type: POLICY; Schema: public; Owner: -
 --
@@ -12600,50 +10595,36 @@ CREATE POLICY "Global admins can update rooms" ON public.or_rooms FOR UPDATE USI
 CREATE POLICY "Global admins can update user roles" ON public.user_roles FOR UPDATE USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: users Global admins can update users; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can update users" ON public.users FOR UPDATE USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: audit_log Global admins can view all audit logs; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all audit logs" ON public.audit_log FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: cancellation_reasons Global admins can view all cancellation reasons; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all cancellation reasons" ON public.cancellation_reasons FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_completion_stats Global admins can view all case completion stats; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all case completion stats" ON public.case_completion_stats FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_delays Global admins can view all case delays; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all case delays" ON public.case_delays FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_milestone_stats Global admins can view all case milestone stats; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all case milestone stats" ON public.case_milestone_stats FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_staff Global admins can view all case staff; Type: POLICY; Schema: public; Owner: -
 --
@@ -12651,50 +10632,36 @@ CREATE POLICY "Global admins can view all case milestone stats" ON public.case_m
 CREATE POLICY "Global admins can view all case staff" ON public.case_staff FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: case_device_activity Global admins can view all case_device_activity; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all case_device_activity" ON public.case_device_activity FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_device_companies Global admins can view all case_device_companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all case_device_companies" ON public.case_device_companies FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: patient_checkins Global admins can view all checkins; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all checkins" ON public.patient_checkins FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: preop_checklist_fields Global admins can view all checklist fields; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all checklist fields" ON public.preop_checklist_fields FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: cost_categories Global admins can view all cost categories; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all cost categories" ON public.cost_categories FOR SELECT USING (((public.get_my_access_level() = 'global_admin'::text) AND ((deleted_at IS NULL) OR (deleted_at > (now() - '30 days'::interval)))));
-
-
 --
 -- Name: escort_status_links Global admins can view all escort links; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all escort links" ON public.escort_status_links FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: facilities Global admins can view all facilities; Type: POLICY; Schema: public; Owner: -
 --
@@ -12702,36 +10669,26 @@ CREATE POLICY "Global admins can view all escort links" ON public.escort_status_
 CREATE POLICY "Global admins can view all facilities" ON public.facilities FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: facility_device_reps Global admins can view all facility device reps; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all facility device reps" ON public.facility_device_reps FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: facility_features Global admins can view all facility features; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all facility features" ON public.facility_features FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: facility_milestones Global admins can view all facility_milestones; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all facility_milestones" ON public.facility_milestones FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: metric_issues Global admins can view all metric issues; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all metric issues" ON public.metric_issues FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: case_milestones Global admins can view all milestones; Type: POLICY; Schema: public; Owner: -
 --
@@ -12739,57 +10696,41 @@ CREATE POLICY "Global admins can view all metric issues" ON public.metric_issues
 CREATE POLICY "Global admins can view all milestones" ON public.case_milestones FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: notifications Global admins can view all notifications; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all notifications" ON public.notifications FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: patients Global admins can view all patients; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all patients" ON public.patients FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: payers Global admins can view all payers; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all payers" ON public.payers FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_cost_items Global admins can view all procedure cost items; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all procedure cost items" ON public.procedure_cost_items FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_reimbursements Global admins can view all procedure reimbursements; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all procedure reimbursements" ON public.procedure_reimbursements FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_types Global admins can view all procedure types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all procedure types" ON public.procedure_types FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: procedure_milestone_config Global admins can view all procedure_milestone_config; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all procedure_milestone_config" ON public.procedure_milestone_config FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: or_rooms Global admins can view all rooms; Type: POLICY; Schema: public; Owner: -
 --
@@ -12797,85 +10738,61 @@ CREATE POLICY "Global admins can view all procedure_milestone_config" ON public.
 CREATE POLICY "Global admins can view all rooms" ON public.or_rooms FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.users
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))));
-
-
 --
 -- Name: surgeon_cost_items Global admins can view all surgeon cost items; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all surgeon cost items" ON public.surgeon_cost_items FOR SELECT USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: users Global admins can view all users; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Global admins can view all users" ON public.users FOR SELECT TO authenticated USING ((public.get_my_access_level() = 'global_admin'::text));
-
-
 --
 -- Name: login_attempts Service role can manage login attempts; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Service role can manage login attempts" ON public.login_attempts USING (true) WITH CHECK (true);
-
-
 --
 -- Name: metric_issues System can create metric issues; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "System can create metric issues" ON public.metric_issues FOR INSERT WITH CHECK (true);
-
-
 --
 -- Name: data_quality_notifications System can create notifications; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "System can create notifications" ON public.data_quality_notifications FOR INSERT WITH CHECK (true);
-
-
 --
 -- Name: case_completion_stats System can delete case completion stats; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "System can delete case completion stats" ON public.case_completion_stats FOR DELETE USING (true);
-
-
 --
 -- Name: case_milestone_stats System can delete case milestone stats; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "System can delete case milestone stats" ON public.case_milestone_stats FOR DELETE USING (true);
-
-
 --
 -- Name: case_completion_stats System can insert case completion stats; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "System can insert case completion stats" ON public.case_completion_stats FOR INSERT WITH CHECK (true);
-
-
 --
 -- Name: case_milestone_stats System can insert case milestone stats; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "System can insert case milestone stats" ON public.case_milestone_stats FOR INSERT WITH CHECK (true);
-
-
 --
 -- Name: case_completion_stats System can update case completion stats; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "System can update case completion stats" ON public.case_completion_stats FOR UPDATE USING (true);
-
-
 --
 -- Name: case_milestone_stats System can update case milestone stats; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "System can update case milestone stats" ON public.case_milestone_stats FOR UPDATE USING (true);
-
-
 --
 -- Name: case_flags Users can create delay flags; Type: POLICY; Schema: public; Owner: -
 --
@@ -12883,8 +10800,6 @@ CREATE POLICY "System can update case milestone stats" ON public.case_milestone_
 CREATE POLICY "Users can create delay flags" ON public.case_flags FOR INSERT WITH CHECK (((flag_type = 'delay'::text) AND (facility_id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid())))));
-
-
 --
 -- Name: case_milestones Users can create milestones at own facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -12893,29 +10808,21 @@ CREATE POLICY "Users can create milestones at own facility" ON public.case_miles
    FROM (public.cases c
      JOIN public.users u ON ((u.facility_id = c.facility_id)))
   WHERE (u.id = auth.uid()))));
-
-
 --
 -- Name: notifications Users can create notifications at own facility; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can create notifications at own facility" ON public.notifications FOR INSERT WITH CHECK ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: notifications Users can delete notifications from own facility; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can delete notifications from own facility" ON public.notifications FOR DELETE USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: device_tokens Users can delete own device tokens; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can delete own device tokens" ON public.device_tokens FOR DELETE USING ((user_id = auth.uid()));
-
-
 --
 -- Name: surgeon_colors Users can delete surgeon colors for their facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -12923,15 +10830,11 @@ CREATE POLICY "Users can delete own device tokens" ON public.device_tokens FOR D
 CREATE POLICY "Users can delete surgeon colors for their facility" ON public.surgeon_colors FOR DELETE USING ((facility_id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))));
-
-
 --
 -- Name: user_sessions Users can delete their own sessions; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can delete their own sessions" ON public.user_sessions FOR DELETE USING ((auth.uid() = user_id));
-
-
 --
 -- Name: case_implants Users can insert implants for cases at their facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -12940,15 +10843,11 @@ CREATE POLICY "Users can insert implants for cases at their facility" ON public.
    FROM (public.cases c
      JOIN public.users u ON ((u.facility_id = c.facility_id)))
   WHERE ((c.id = case_implants.case_id) AND (u.id = auth.uid())))));
-
-
 --
 -- Name: device_tokens Users can insert own device tokens; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can insert own device tokens" ON public.device_tokens FOR INSERT WITH CHECK ((user_id = auth.uid()));
-
-
 --
 -- Name: case_delays Users can insert own facility case delays; Type: POLICY; Schema: public; Owner: -
 --
@@ -12956,29 +10855,21 @@ CREATE POLICY "Users can insert own device tokens" ON public.device_tokens FOR I
 CREATE POLICY "Users can insert own facility case delays" ON public.case_delays FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
    FROM public.cases
   WHERE ((cases.id = case_delays.case_id) AND (cases.facility_id = public.get_my_facility_id())))));
-
-
 --
 -- Name: users Users can insert own profile; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can insert own profile" ON public.users FOR INSERT WITH CHECK ((id = auth.uid()));
-
-
 --
 -- Name: user_sessions Users can insert their own sessions; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can insert their own sessions" ON public.user_sessions FOR INSERT WITH CHECK ((auth.uid() = user_id));
-
-
 --
 -- Name: patient_checkins Users can manage own facility checkins; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can manage own facility checkins" ON public.patient_checkins USING ((facility_id = public.get_my_facility_id())) WITH CHECK ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: surgeon_colors Users can manage surgeon colors for their facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -12986,22 +10877,16 @@ CREATE POLICY "Users can manage own facility checkins" ON public.patient_checkin
 CREATE POLICY "Users can manage surgeon colors for their facility" ON public.surgeon_colors FOR INSERT WITH CHECK ((facility_id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))));
-
-
 --
 -- Name: notification_reads Users can mark notifications as read; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can mark notifications as read" ON public.notification_reads FOR INSERT WITH CHECK ((user_id = auth.uid()));
-
-
 --
 -- Name: users Users can read own record; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can read own record" ON public.users FOR SELECT USING ((id = auth.uid()));
-
-
 --
 -- Name: case_flags Users can update flag notes; Type: POLICY; Schema: public; Owner: -
 --
@@ -13011,8 +10896,6 @@ CREATE POLICY "Users can update flag notes" ON public.case_flags FOR UPDATE USIN
   WHERE (users.id = auth.uid())))) WITH CHECK ((facility_id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))));
-
-
 --
 -- Name: case_implants Users can update implants for cases at their facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -13021,15 +10904,11 @@ CREATE POLICY "Users can update implants for cases at their facility" ON public.
    FROM (public.cases c
      JOIN public.users u ON ((u.facility_id = c.facility_id)))
   WHERE ((c.id = case_implants.case_id) AND (u.id = auth.uid())))));
-
-
 --
 -- Name: device_tokens Users can update own device tokens; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can update own device tokens" ON public.device_tokens FOR UPDATE USING ((user_id = auth.uid()));
-
-
 --
 -- Name: surgeon_colors Users can update surgeon colors for their facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -13037,8 +10916,6 @@ CREATE POLICY "Users can update own device tokens" ON public.device_tokens FOR U
 CREATE POLICY "Users can update surgeon colors for their facility" ON public.surgeon_colors FOR UPDATE USING ((facility_id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))));
-
-
 --
 -- Name: case_implant_companies Users can view case implant companies for own facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -13046,36 +10923,26 @@ CREATE POLICY "Users can update surgeon colors for their facility" ON public.sur
 CREATE POLICY "Users can view case implant companies for own facility" ON public.case_implant_companies FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.cases c
   WHERE ((c.id = case_implant_companies.case_id) AND ((c.facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))))));
-
-
 --
 -- Name: notifications Users can view facility notifications; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view facility notifications" ON public.notifications FOR SELECT USING (((facility_id = public.get_my_facility_id()) AND (expires_at > now())));
-
-
 --
 -- Name: delay_types Users can view global and own facility delay types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view global and own facility delay types" ON public.delay_types FOR SELECT USING (((facility_id IS NULL) OR (facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text)));
-
-
 --
 -- Name: implant_companies Users can view global and own facility implant companies; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view global and own facility implant companies" ON public.implant_companies FOR SELECT USING (((facility_id IS NULL) OR (facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text)));
-
-
 --
 -- Name: procedure_types Users can view global and own facility procedure types; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view global and own facility procedure types" ON public.procedure_types FOR SELECT USING (((facility_id IS NULL) OR (facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text)));
-
-
 --
 -- Name: case_implants Users can view implants for cases at their facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -13084,15 +10951,11 @@ CREATE POLICY "Users can view implants for cases at their facility" ON public.ca
    FROM (public.cases c
      JOIN public.users u ON ((u.facility_id = c.facility_id)))
   WHERE ((c.id = case_implants.case_id) AND (u.id = auth.uid())))));
-
-
 --
 -- Name: device_tokens Users can view own device tokens; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own device tokens" ON public.device_tokens FOR SELECT USING ((user_id = auth.uid()));
-
-
 --
 -- Name: facilities Users can view own facility; Type: POLICY; Schema: public; Owner: -
 --
@@ -13100,36 +10963,26 @@ CREATE POLICY "Users can view own device tokens" ON public.device_tokens FOR SEL
 CREATE POLICY "Users can view own facility" ON public.facilities FOR SELECT USING ((id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))));
-
-
 --
 -- Name: device_rep_facility_access Users can view own facility access; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility access" ON public.device_rep_facility_access FOR SELECT USING (((user_id = auth.uid()) OR (public.get_my_access_level() = 'global_admin'::text)));
-
-
 --
 -- Name: block_schedules Users can view own facility block_schedules; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility block_schedules" ON public.block_schedules FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: cancellation_reasons Users can view own facility cancellation reasons; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility cancellation reasons" ON public.cancellation_reasons FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: case_completion_stats Users can view own facility case completion stats; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility case completion stats" ON public.case_completion_stats FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: case_complexities Users can view own facility case complexities; Type: POLICY; Schema: public; Owner: -
 --
@@ -13137,8 +10990,6 @@ CREATE POLICY "Users can view own facility case completion stats" ON public.case
 CREATE POLICY "Users can view own facility case complexities" ON public.case_complexities FOR SELECT USING ((case_id IN ( SELECT cases.id
    FROM public.cases
   WHERE (cases.facility_id = public.get_my_facility_id()))));
-
-
 --
 -- Name: case_delays Users can view own facility case delays; Type: POLICY; Schema: public; Owner: -
 --
@@ -13146,15 +10997,11 @@ CREATE POLICY "Users can view own facility case complexities" ON public.case_com
 CREATE POLICY "Users can view own facility case delays" ON public.case_delays FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.cases
   WHERE ((cases.id = case_delays.case_id) AND (cases.facility_id = public.get_my_facility_id())))));
-
-
 --
 -- Name: case_milestone_stats Users can view own facility case milestone stats; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility case milestone stats" ON public.case_milestone_stats FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: case_staff Users can view own facility case staff; Type: POLICY; Schema: public; Owner: -
 --
@@ -13163,64 +11010,46 @@ CREATE POLICY "Users can view own facility case staff" ON public.case_staff FOR 
    FROM (public.cases c
      JOIN public.users u ON ((u.facility_id = c.facility_id)))
   WHERE (u.id = auth.uid()))));
-
-
 --
 -- Name: patient_checkins Users can view own facility checkins; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility checkins" ON public.patient_checkins FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: preop_checklist_fields Users can view own facility checklist fields; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility checklist fields" ON public.preop_checklist_fields FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: facility_closures Users can view own facility closures; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility closures" ON public.facility_closures FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: cost_categories Users can view own facility cost categories; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility cost categories" ON public.cost_categories FOR SELECT USING (((facility_id = public.get_my_facility_id()) AND ((deleted_at IS NULL) OR (deleted_at > (now() - '30 days'::interval)))));
-
-
 --
 -- Name: escort_status_links Users can view own facility escort links; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility escort links" ON public.escort_status_links FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: facility_features Users can view own facility features; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility features" ON public.facility_features FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: facility_holidays Users can view own facility holidays; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility holidays" ON public.facility_holidays FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: metric_issues Users can view own facility metric issues; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility metric issues" ON public.metric_issues FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: case_milestones Users can view own facility milestones; Type: POLICY; Schema: public; Owner: -
 --
@@ -13229,57 +11058,41 @@ CREATE POLICY "Users can view own facility milestones" ON public.case_milestones
    FROM (public.cases c
      JOIN public.users u ON ((u.facility_id = c.facility_id)))
   WHERE (u.id = auth.uid()))));
-
-
 --
 -- Name: facility_milestones Users can view own facility milestones; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility milestones" ON public.facility_milestones FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: patients Users can view own facility patients; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility patients" ON public.patients FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: payers Users can view own facility payers; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility payers" ON public.payers FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: facility_permissions Users can view own facility permissions; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility permissions" ON public.facility_permissions FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: procedure_cost_items Users can view own facility procedure cost items; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility procedure cost items" ON public.procedure_cost_items FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: procedure_reimbursements Users can view own facility procedure reimbursements; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility procedure reimbursements" ON public.procedure_reimbursements FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: procedure_milestone_config Users can view own facility procedure_milestone_config; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility procedure_milestone_config" ON public.procedure_milestone_config FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: outlier_review_notes Users can view own facility review notes; Type: POLICY; Schema: public; Owner: -
 --
@@ -13287,15 +11100,11 @@ CREATE POLICY "Users can view own facility procedure_milestone_config" ON public
 CREATE POLICY "Users can view own facility review notes" ON public.outlier_review_notes FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.outlier_reviews
   WHERE ((outlier_reviews.id = outlier_review_notes.outlier_review_id) AND ((outlier_reviews.facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))))));
-
-
 --
 -- Name: outlier_reviews Users can view own facility reviews; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility reviews" ON public.outlier_reviews FOR SELECT USING (((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text)));
-
-
 --
 -- Name: or_rooms Users can view own facility rooms; Type: POLICY; Schema: public; Owner: -
 --
@@ -13303,64 +11112,46 @@ CREATE POLICY "Users can view own facility reviews" ON public.outlier_reviews FO
 CREATE POLICY "Users can view own facility rooms" ON public.or_rooms FOR SELECT USING ((facility_id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))));
-
-
 --
 -- Name: surgeon_cost_items Users can view own facility surgeon cost items; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility surgeon cost items" ON public.surgeon_cost_items FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: surgeon_preferences Users can view own facility surgeon preferences; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility surgeon preferences" ON public.surgeon_preferences FOR SELECT USING (((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text)));
-
-
 --
 -- Name: surgeon_colors Users can view own facility surgeon_colors; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility surgeon_colors" ON public.surgeon_colors FOR SELECT USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: users Users can view own facility users; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own facility users" ON public.users FOR SELECT TO authenticated USING ((facility_id = public.get_my_facility_id()));
-
-
 --
 -- Name: notification_reads Users can view own notification reads; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own notification reads" ON public.notification_reads FOR SELECT USING ((user_id = auth.uid()));
-
-
 --
 -- Name: data_quality_notifications Users can view own notifications; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own notifications" ON public.data_quality_notifications FOR SELECT USING (((user_id = auth.uid()) OR (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: users Users can view own record; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view own record" ON public.users FOR SELECT TO authenticated USING ((id = auth.uid()));
-
-
 --
 -- Name: surgeon_colors Users can view surgeon colors for their facility; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view surgeon colors for their facility" ON public.surgeon_colors FOR SELECT USING (((facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text)));
-
-
 --
 -- Name: surgeon_preference_companies Users can view surgeon preference companies; Type: POLICY; Schema: public; Owner: -
 --
@@ -13368,15 +11159,11 @@ CREATE POLICY "Users can view surgeon colors for their facility" ON public.surge
 CREATE POLICY "Users can view surgeon preference companies" ON public.surgeon_preference_companies FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.surgeon_preferences sp
   WHERE ((sp.id = surgeon_preference_companies.surgeon_preference_id) AND ((sp.facility_id = public.get_my_facility_id()) OR (public.get_my_access_level() = 'global_admin'::text))))));
-
-
 --
 -- Name: complexities Users can view templates and own facility complexities; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view templates and own facility complexities" ON public.complexities FOR SELECT USING (((facility_id IS NULL) OR (facility_id = public.get_my_facility_id())));
-
-
 --
 -- Name: case_flags Users can view their facility case flags; Type: POLICY; Schema: public; Owner: -
 --
@@ -13384,8 +11171,6 @@ CREATE POLICY "Users can view templates and own facility complexities" ON public
 CREATE POLICY "Users can view their facility case flags" ON public.case_flags FOR SELECT USING ((facility_id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))));
-
-
 --
 -- Name: flag_rules Users can view their facility flag rules; Type: POLICY; Schema: public; Owner: -
 --
@@ -13393,8 +11178,6 @@ CREATE POLICY "Users can view their facility case flags" ON public.case_flags FO
 CREATE POLICY "Users can view their facility flag rules" ON public.flag_rules FOR SELECT USING (((facility_id IS NULL) OR (facility_id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid())))));
-
-
 --
 -- Name: room_schedules Users can view their facility room schedules; Type: POLICY; Schema: public; Owner: -
 --
@@ -13402,8 +11185,6 @@ CREATE POLICY "Users can view their facility flag rules" ON public.flag_rules FO
 CREATE POLICY "Users can view their facility room schedules" ON public.room_schedules FOR SELECT USING ((facility_id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))));
-
-
 --
 -- Name: facility_analytics_settings Users can view their facility settings; Type: POLICY; Schema: public; Owner: -
 --
@@ -13411,159 +11192,131 @@ CREATE POLICY "Users can view their facility room schedules" ON public.room_sche
 CREATE POLICY "Users can view their facility settings" ON public.facility_analytics_settings FOR SELECT USING ((facility_id IN ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))));
-
-
 --
 -- Name: user_sessions Users can view their own sessions; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can view their own sessions" ON public.user_sessions FOR SELECT USING ((auth.uid() = user_id));
-
-
 --
 -- Name: admin_sessions; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.admin_sessions ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: audit_log; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: block_schedules; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.block_schedules ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: body_regions; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.body_regions ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: cancellation_reason_templates; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.cancellation_reason_templates ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: cancellation_reasons; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.cancellation_reasons ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: case_completion_stats; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.case_completion_stats ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: case_complexities; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.case_complexities ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: case_delays; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.case_delays ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: case_device_activity; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.case_device_activity ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: case_device_companies; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.case_device_companies ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: case_flags; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.case_flags ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: case_implants; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.case_implants ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: case_milestone_stats; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.case_milestone_stats ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: case_milestones; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.case_milestones ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: case_staff; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.case_staff ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: case_statuses; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.case_statuses ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: cases; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.cases ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: complexities; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.complexities ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: complexity_templates; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.complexity_templates ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: cost_categories; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.cost_categories ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: cost_category_templates; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.cost_category_templates ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: data_quality_notifications; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.data_quality_notifications ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: delay_types; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.delay_types ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: cases delete_cases; Type: POLICY; Schema: public; Owner: -
 --
@@ -13575,92 +11328,76 @@ CREATE POLICY delete_cases ON public.cases FOR DELETE USING (((EXISTS ( SELECT 1
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))) OR (facility_id = ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))))));
-
-
 --
 -- Name: device_rep_facility_access; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.device_rep_facility_access ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: device_tokens; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.device_tokens ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: error_logs; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.error_logs ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: escort_status_links; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.escort_status_links ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: facilities; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.facilities ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: facility_analytics_settings; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.facility_analytics_settings ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: facility_closures; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.facility_closures ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: facility_features; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.facility_features ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: facility_holidays; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.facility_holidays ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: facility_milestones; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.facility_milestones ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: facility_permissions; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.facility_permissions ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: features; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.features ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: flag_rules; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.flag_rules ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: global_milestone_settings; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.global_milestone_settings ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: cases insert_cases; Type: POLICY; Schema: public; Owner: -
 --
@@ -13668,182 +11405,151 @@ ALTER TABLE public.global_milestone_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY insert_cases ON public.cases FOR INSERT WITH CHECK ((facility_id = ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid()))));
-
-
 --
 -- Name: issue_types; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.issue_types ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: login_attempts; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.login_attempts ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: metric_issues; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.metric_issues ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: milestone_types; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.milestone_types ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: notification_reads; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.notification_reads ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: notifications; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: or_rooms; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.or_rooms ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: outlier_review_notes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.outlier_review_notes ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: outlier_reviews; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.outlier_reviews ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: page_registry; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.page_registry ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: page_registry_categories; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.page_registry_categories ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: patient_checkins; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.patient_checkins ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: patient_statuses; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.patient_statuses ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: patients; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: payers; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.payers ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: permission_templates; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.permission_templates ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: permissions; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.permissions ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: preop_checklist_field_templates; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.preop_checklist_field_templates ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: preop_checklist_fields; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.preop_checklist_fields ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: procedure_categories; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.procedure_categories ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: procedure_cost_items; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.procedure_cost_items ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: procedure_milestone_config; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.procedure_milestone_config ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: procedure_milestone_templates; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.procedure_milestone_templates ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: procedure_reimbursements; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.procedure_reimbursements ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: procedure_techniques; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.procedure_techniques ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: procedure_type_templates; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.procedure_type_templates ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: procedure_types; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.procedure_types ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: resolution_types; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.resolution_types ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: room_schedules; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.room_schedules ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: cases select_cases; Type: POLICY; Schema: public; Owner: -
 --
@@ -13853,32 +11559,26 @@ CREATE POLICY select_cases ON public.cases FOR SELECT USING (((EXISTS ( SELECT 1
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))) OR (facility_id = ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid())))));
-
-
 --
 -- Name: surgeon_colors; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.surgeon_colors ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: surgeon_cost_items; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.surgeon_cost_items ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: surgeon_milestone_averages; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.surgeon_milestone_averages ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: surgeon_procedure_averages; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.surgeon_procedure_averages ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: cases update_cases; Type: POLICY; Schema: public; Owner: -
 --
@@ -13888,35 +11588,28 @@ CREATE POLICY update_cases ON public.cases FOR UPDATE USING (((EXISTS ( SELECT 1
   WHERE ((users.id = auth.uid()) AND (users.access_level = 'global_admin'::text)))) OR (facility_id = ( SELECT users.facility_id
    FROM public.users
   WHERE (users.id = auth.uid())))));
-
-
 --
 -- Name: user_invites; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.user_invites ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: user_roles; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: user_sessions; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.user_sessions ENABLE ROW LEVEL SECURITY;
-
 --
 -- Name: users; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-
 --
 -- PostgreSQL database dump complete
 --
 
--- end of baseline
-
+-- end of baseline;

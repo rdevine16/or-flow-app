@@ -21,7 +21,6 @@ BEGIN
       ADD COLUMN phase_group TEXT;
   END IF;
 END$$;
-
 -- 2) Add CHECK constraint for valid values
 DO $$
 BEGIN
@@ -34,7 +33,6 @@ BEGIN
       CHECK (phase_group IN ('pre_op', 'surgical', 'closing', 'post_op'));
   END IF;
 END$$;
-
 -- 3) Data migration: infer phase_group from milestone name
 UPDATE public.facility_milestones
 SET phase_group = CASE
@@ -49,7 +47,6 @@ SET phase_group = CASE
   ELSE NULL
 END
 WHERE phase_group IS NULL;
-
 -- 4) Comment for documentation
 COMMENT ON COLUMN public.facility_milestones.phase_group IS
   'Time allocation bucket: pre_op, surgical, closing, post_op. Used for milestone analytics time allocation bar.';

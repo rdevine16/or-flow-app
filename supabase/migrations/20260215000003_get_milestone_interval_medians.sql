@@ -68,6 +68,7 @@ BEGIN
       AND c.procedure_type_id = p_procedure_type_id
       AND cs.name = 'completed'
       AND c.data_validated = true
+      AND c.is_active = true
       AND cm.recorded_at IS NOT NULL
   ),
 
@@ -96,17 +97,17 @@ BEGIN
     i.cm_fm_id                                                         AS facility_milestone_id,
     i.ms_order                                                         AS display_order,
     i.ms_phase_group::TEXT                                             AS phase_group,
-    (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY i.interval_min)
+    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY i.interval_min)
       FILTER (WHERE i.case_surgeon_id = p_surgeon_id
               AND i.interval_min IS NOT NULL
-              AND i.interval_min > 0))::NUMERIC                        AS surgeon_median_minutes,
+              AND i.interval_min > 0)                                  AS surgeon_median_minutes,
     COUNT(*)
       FILTER (WHERE i.case_surgeon_id = p_surgeon_id
               AND i.interval_min IS NOT NULL
               AND i.interval_min > 0)::INT                             AS surgeon_case_count,
-    (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY i.interval_min)
+    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY i.interval_min)
       FILTER (WHERE i.interval_min IS NOT NULL
-              AND i.interval_min > 0))::NUMERIC                        AS facility_median_minutes,
+              AND i.interval_min > 0)                                  AS facility_median_minutes,
     COUNT(*)
       FILTER (WHERE i.interval_min IS NOT NULL
               AND i.interval_min > 0)::INT                             AS facility_case_count
@@ -115,11 +116,9 @@ BEGIN
   ORDER BY i.ms_order;
 END;
 $$;
-
 -- Grant execute to authenticated users (RLS enforces facility isolation)
 GRANT EXECUTE ON FUNCTION public.get_milestone_interval_medians(UUID, UUID, UUID)
   TO authenticated;
-
 COMMENT ON FUNCTION public.get_milestone_interval_medians IS
   'Returns median milestone intervals for surgeon + facility benchmarking. '
   'First milestone has NULL interval (no predecessor). '

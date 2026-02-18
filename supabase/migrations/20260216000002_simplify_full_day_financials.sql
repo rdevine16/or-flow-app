@@ -55,10 +55,8 @@ BEGIN
   ORDER BY c.case_number;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.get_full_day_financials(UUID, DATE, UUID)
   TO authenticated;
-
 COMMENT ON FUNCTION public.get_full_day_financials IS
   'Returns all cases for a surgeon on a given date with actual financials '
   'from case_completion_stats. Non-completed cases return NULLs for financials. '

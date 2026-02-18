@@ -1,14 +1,6 @@
--- ============================================
--- get_full_day_financials(surgeon_id, scheduled_date, facility_id)
---
--- Returns all cases + financial summaries for a surgeon on a given date.
--- DB computes everything in one round trip:
---   - Completed cases: actual financials from case_completion_stats
---   - Non-completed cases: projected financials from surgeon median duration,
---     OR hourly rate, procedure cost items, and reimbursement defaults
---
--- SECURITY INVOKER: inherits caller's RLS, facility isolation automatic.
--- ============================================
+-- Fix: remove c.is_active reference from get_full_day_financials
+-- The cases table does not have an is_active column.
+-- Cases are filtered by status via the case_statuses join instead.
 
 CREATE OR REPLACE FUNCTION public.get_full_day_financials(
   p_surgeon_id      UUID,
@@ -54,7 +46,6 @@ BEGIN
     WHERE c.surgeon_id = p_surgeon_id
       AND c.scheduled_date = p_scheduled_date
       AND c.facility_id = p_facility_id
-      AND c.is_active = true
   ),
 
   -- Actual financials for completed cases (from case_completion_stats)
@@ -71,39 +62,31 @@ BEGIN
   ),
 
   -- Projected financials for non-completed cases
-  -- Uses surgeon's median duration for this procedure + OR rate + cost items
   projections AS (
     SELECT
       dc.case_id,
-      -- Revenue: procedure default reimbursement → surgeon median → facility median
       COALESCE(
         pr.reimbursement,
         sps.median_reimbursement,
         fps.median_reimbursement
       ) AS proj_revenue,
-      -- OR cost: (median duration / 60) × hourly rate
       CASE
         WHEN v_or_hourly_rate IS NOT NULL
           AND COALESCE(sps.median_duration, fps.median_duration) IS NOT NULL
         THEN (COALESCE(sps.median_duration, fps.median_duration) / 60.0) * v_or_hourly_rate
         ELSE NULL
       END AS proj_or_cost,
-      -- Supply costs
       COALESCE(cost_agg.total_debits, 0) AS proj_debits,
       COALESCE(cost_agg.total_credits, 0) AS proj_credits
     FROM day_cases dc
-    -- Only project for cases NOT in actuals
     LEFT JOIN actuals a ON a.case_id = dc.case_id
-    -- Surgeon median stats
     LEFT JOIN surgeon_procedure_stats sps
       ON sps.surgeon_id = dc.surgeon_id
       AND sps.procedure_type_id = dc.procedure_type_id
       AND sps.facility_id = p_facility_id
-    -- Facility median stats
     LEFT JOIN facility_procedure_stats fps
       ON fps.procedure_type_id = dc.procedure_type_id
       AND fps.facility_id = p_facility_id
-    -- Default reimbursement for this procedure
     LEFT JOIN LATERAL (
       SELECT prm.reimbursement
       FROM procedure_reimbursements prm
@@ -113,7 +96,6 @@ BEGIN
       ORDER BY prm.effective_date DESC
       LIMIT 1
     ) pr ON true
-    -- Aggregate cost items for this procedure
     LEFT JOIN LATERAL (
       SELECT
         SUM(pci.amount) FILTER (WHERE cc.type = 'debit') AS total_debits,
@@ -124,23 +106,19 @@ BEGIN
         AND pci.procedure_type_id = dc.procedure_type_id
         AND pci.effective_to IS NULL
     ) cost_agg ON true
-    WHERE a.case_id IS NULL  -- Only non-completed cases
+    WHERE a.case_id IS NULL
   )
 
-  -- Combine actuals and projections
   SELECT
     dc.case_id,
     dc.case_number,
     dc.procedure_name,
     dc.status_name AS status,
-    -- Revenue
     COALESCE(a.revenue, p.proj_revenue) AS revenue,
-    -- Total costs
     COALESCE(
       a.total_costs,
       COALESCE(p.proj_or_cost, 0) + p.proj_debits - p.proj_credits
     ) AS total_costs,
-    -- Profit
     COALESCE(
       a.profit,
       CASE
@@ -150,7 +128,6 @@ BEGIN
         ELSE NULL
       END
     ) AS profit,
-    -- Margin %
     CASE
       WHEN COALESCE(a.revenue, p.proj_revenue) IS NOT NULL
         AND COALESCE(a.revenue, p.proj_revenue) > 0
@@ -170,11 +147,8 @@ BEGIN
   ORDER BY dc.case_number;
 END;
 $$;
-
--- Grant execute to authenticated users (RLS enforces facility isolation)
 GRANT EXECUTE ON FUNCTION public.get_full_day_financials(UUID, DATE, UUID)
   TO authenticated;
-
 COMMENT ON FUNCTION public.get_full_day_financials IS
   'Returns all cases + financials for a surgeon on a given date. '
   'Completed cases use actuals from case_completion_stats. '

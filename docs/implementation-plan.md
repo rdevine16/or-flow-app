@@ -1,290 +1,194 @@
-# Implementation Plan: Surgeon Day Analysis Redesign
+# Implementation Plan: Unified Header Breadcrumb
 
-## Overview
-Replace the Day Analysis tab content on the Surgeon Performance page with a timeline-first layout. 5 phases, ordered by dependency. Only the Day Analysis tab is modified — Overview tab is untouched.
+## Summary
+Consolidate the app's breadcrumb navigation into a single, consistent trail in the Header bar. Build a static route map + resolver, a React context for dynamic labels, integrate into the Header, and remove all duplicate per-page breadcrumbs.
 
-## Architecture Notes
-- All new visualization components go in `AnalyticsComponents.tsx` as shared exports
-- Flag detection is a separate pure-function module (`flag-detection.ts`) for testability
-- Sub-phase positioning is computed from existing `computePhaseDurations` output — we add a helper to calculate offset within parent
-- No new database queries — all data comes from existing `dayCases`, `last30DaysCases`, `phaseDefinitions`, and `phaseTree` state
-- Phase colors are always resolved dynamically via `resolvePhaseHex` / `resolveSubphaseHex` — never hardcoded
+## Interview Notes
+- **Admin breadcrumbs:** Yes, fix admin mode (currently shows "Dashboard" for all admin pages). Add admin routes to map with full depth (e.g., `Admin > Settings > Milestones`).
+- **Settings labels:** Delegate to `getNavItemForPath()` from `settings-nav-config.ts` for `/settings/*` routes — avoid duplicating 28 labels in the route map.
+- **UI approach:** Render breadcrumb trail inline in Header.tsx — no coupling to existing `?from=` system or `Breadcrumb` UI component.
+- **Case depth:** 3-level trails — `Cases > Case #1042 > Edit`.
+- **Admin depth:** Full depth — `Admin > Facilities > [Facility Name]`, `Admin > Settings > Milestones`.
+- **Flat pages:** 2-level only — `Facility > Rooms`, `Facility > Block Schedule`, etc.
+- **Dashboard nesting:** `Dashboard > Data Quality` for `/dashboard/data-quality` (3-level).
 
 ## Dependency Graph
 ```
-Phase 1 (flag engine) ──┐
-Phase 2 (components)  ───┤── Phase 4 (page integration)── Phase 5 (responsive + polish)
-Phase 3 (sub-phase helper)┘
+Phase 1 (infrastructure) → Phase 2 (header integration) → Phase 3 (remove duplicates + dynamic labels)
 ```
-Phases 1-3 are independent of each other. Phase 4 depends on all three. Phase 5 depends on 4.
+Strictly sequential — each phase depends on the previous.
 
 ---
 
-## Phase 1: Flag Detection Engine
+## Phase 1: Core Breadcrumb Infrastructure
 
-**What:** Create a standalone pure-function module for detecting case flags. This is extracted so it can be unit tested independently and reused on iOS later.
+**Complexity:** Medium
 
-**Files to create:**
-- `src/lib/flag-detection.ts`
+### What it does
+Build the foundational data layer: a static route-to-breadcrumb map, a resolver function that handles exact matches / dynamic segments / longest-prefix fallback, and a React context for pages to register dynamic labels (e.g., "Case #1042").
 
-**Files to modify:**
-- None
+### Files touched
+- `lib/breadcrumbs.ts` — ADD `RouteSegment` type, `ROUTE_BREADCRUMBS` map, `resolveBreadcrumbs()` function (existing `BREADCRUMB_MAP` / `?from=` system stays untouched)
+- `lib/BreadcrumbContext.tsx` — NEW: `BreadcrumbProvider`, `useBreadcrumbLabel()`, `useBreadcrumbContext()`
+- `lib/__tests__/breadcrumb-resolver.test.ts` — NEW: unit tests for `resolveBreadcrumbs()`
+- `lib/__tests__/breadcrumb-context.test.tsx` — NEW: unit tests for context + hooks
 
-**Implementation details:**
+### Route map coverage
+Static entries for all non-settings facility routes:
+- `/` → Dashboard
+- `/dashboard` → Dashboard
+- `/dashboard/data-quality` → Dashboard > Data Quality
+- `/cases` → Cases
+- `/cases/new` → Cases > New Case
+- `/cases/bulk-create` → Cases > Bulk Create
+- `/cases/[id]` → Cases > [dynamic]
+- `/cases/[id]/edit` → Cases > [dynamic] > Edit
+- `/cases/[id]/cancel` → Cases > [dynamic] > Cancel
+- `/analytics` → Analytics
+- `/analytics/surgeons` → Analytics > Surgeon Performance
+- `/analytics/block-utilization` → Analytics > Block & Room Utilization
+- `/analytics/financials` → Analytics > Financial Analytics
+- `/analytics/orbit-score` → Analytics > ORbit Score
+- `/analytics/flags` → Analytics > Flags
+- `/analytics/kpi` → Analytics > KPI Dashboard
+- `/rooms` → Rooms
+- `/block-schedule` → Block Schedule
+- `/checkin` → Check-In
+- `/spd` → SPD
+- `/profile` → Profile
+- `/settings` → Settings (deeper settings paths handled by `getNavItemForPath()` fallback)
 
-1. Define TypeScript types:
-```typescript
-interface CaseFlag {
-  type: string           // e.g. 'late_start', 'long_turnover', 'extended_preOp', 'fast_case'
-  severity: 'warning' | 'caution' | 'info' | 'positive'
-  label: string          // Human-readable: "Late Start", "Extended Surgical"
-  detail: string         // Context: "+12m vs scheduled", "47m vs 38m med"
-  icon: string           // Emoji for compact display
-}
+Admin routes (no facility prefix):
+- `/admin` → Admin
+- `/admin/facilities` → Admin > Facilities
+- `/admin/facilities/new` → Admin > New Facility
+- `/admin/facilities/[id]` → Admin > Facilities > [dynamic]
+- `/admin/audit-log` → Admin > Audit Log
+- `/admin/cancellation-reasons` → Admin > Cancellation Reasons
+- `/admin/checklist-templates` → Admin > Checklist Templates
+- `/admin/complexities` → Admin > Complexities
+- `/admin/demo` → Admin > Demo
+- `/admin/docs` → Admin > Docs
+- `/admin/global-security` → Admin > Global Security
+- `/admin/permission-templates` → Admin > Permission Templates
+- `/admin/settings/body-regions` → Admin > Settings > Body Regions
+- `/admin/settings/cost-categories` → Admin > Settings > Cost Categories
+- `/admin/settings/delay-types` → Admin > Settings > Delay Types
+- `/admin/settings/implant-companies` → Admin > Settings > Implant Companies
+- `/admin/settings/milestones` → Admin > Settings > Milestones
+- `/admin/settings/procedure-categories` → Admin > Settings > Procedure Categories
+- `/admin/settings/procedure-milestones` → Admin > Settings > Procedure Milestones
+- `/admin/settings/procedures` → Admin > Settings > Procedures
 
-interface FlagThresholds {
-  lateStartMinutes: number        // default 10
-  longTurnoverMinutes: number     // default 30
-  phaseExtendedPct: number        // default 0.4 (40% over median)
-  subphaseExtendedPct: number     // default 0.3 (30% over median)
-  fastCasePct: number             // default 0.15 (15% under median)
-}
+### Resolver logic (`resolveBreadcrumbs`)
 ```
-
-2. Export `DEFAULT_FLAG_THRESHOLDS` constant
-
-3. Export `detectCaseFlags(caseData, caseIndex, allDayCases, procedureMedians, thresholds?)` — pure function:
-   - Late start: only check `caseIndex === 0`, compare `patient_in` milestone timestamp to `start_time` (scheduled)
-   - Long turnover: find previous case in same room, compute gap, compare to threshold
-   - Extended phase: iterate parent phases from `computePhaseDurations` output, compare each to procedure-specific median
-   - Extended sub-phase: iterate child phases, same comparison with lower threshold
-   - Fast case: compare total OR time to procedure-specific median OR time
-   - Return `CaseFlag[]`
-
-4. Export `computeProcedureMedians(cases, phaseDefinitions)` — computes historical medians per procedure per phase/sub-phase from a case array (used with `last30DaysCases`)
-
-5. Export `aggregateDayFlags(cases, caseFlagsMap)` — returns `{ caseNumber, flag }[]` flat array for the sidebar list
-
-**Commit:** `feat(analytics): phase 1 - flag detection engine for surgeon day analysis`
-
-**Test gate:**
-1. `npm run typecheck` passes — all types are clean
-2. Unit tests for `detectCaseFlags`: late start detection, long turnover detection, extended phase detection, fast case detection, no-flags case
-3. Unit test for `computeProcedureMedians`: correct median computation with small and large cohorts
-4. Edge cases: case with missing milestones returns no phase-extension flags, single-case day returns no turnover flags
-
----
-
-## Phase 2: New Shared Components
-
-**What:** Build all new visualization components in `AnalyticsComponents.tsx`. These are presentational components only — no data fetching, no flag logic. Each receives pre-computed props.
-
-**Files to modify:**
-- `src/components/analytics/AnalyticsComponents.tsx` (add exports)
-
-**Components to create (all exported):**
-
-### 2a. Summary Strip Components
-1. **`MetricPillStrip`** — horizontal flex row of metric pills with dividers
-   - Props: `items: { label: string; value: string; sub?: string; accent?: boolean }[]`
-   - Renders each as label (uppercase xs slate) + value (lg semibold) + optional sub-text
-   - Dividers between items (`w-px h-10 bg-slate-100`)
-
-2. **`UptimeRing`** — SVG donut chart
-   - Props: `percent: number`
-   - 64×64 SVG with stroke-dashoffset animation, center text, surgical/other legend
-
-3. **`FlagCountPills`** — inline flag summary pills
-   - Props: `warningCount: number; positiveCount: number`
-   - Renders colored rounded pills: `● N flags`, `⚡ N fast`
-
-### 2b. Timeline Components
-4. **`DayTimeline`** — the full Gantt timeline
-   - Props: `cases: TimelineCaseData[]; caseFlags: Record<string, CaseFlag[]>; phaseTree: PhaseTreeNode[]; onHoverCase?: (id: string | null) => void`
-   - `TimelineCaseData`: `{ id, caseNumber, procedure, room, startTime (Date), endTime (Date), phases: { phaseId, label, color, durationSeconds, subphases: { label, color, durationSeconds, offsetSeconds }[] }[] }`
-   - Computes room grouping, time axis, turnover gaps internally
-   - Renders phase segments with sub-phase inset pills at bottom 25%
-   - Flag dots on top-right of case blocks
-   - Hover lifts block with shadow
-
-5. **`PhaseTreeLegend`** — legend showing parent phases + sub-phases
-   - Props: `phaseTree: PhaseTreeNode[]` (reuse existing type from `buildPhaseTree`)
-   - Sub-phases render adjacent to parent with smaller swatch
-
-### 2c. Case Breakdown Components
-6. **`CasePhaseBarNested`** — single case row with nested sub-phase pill
-   - Props: `caseNumber, procedureName, phases (same structure as timeline), totalSeconds, maxTotalSeconds, isSelected, onSelect, flags: CaseFlag[]`
-   - Parent phase bar with sub-phase inset pills at bottom 25%
-   - Compact flag badges inline with case number
-   - Blue ring highlight when selected
-
-### 2d. Sidebar Components
-7. **`PhaseMedianComparison`** — phase-by-phase today vs historical bars
-   - Props: `dayMedians: Record<string, number>; historicalMedians: Record<string, number>; phaseTree: PhaseTreeNode[]`
-   - Dual bars (faded historical, solid today) with median tick line
-   - Sub-phases indented with `└` connector
-   - Percentage change pills
-
-8. **`CaseDetailPanel`** — expanded detail for a selected case
-   - Props: `caseData: TimelineCaseData; flags: CaseFlag[]; procedureMedians: Record<string, number>`
-   - Start/end times, room badge, flag badges
-   - Phase rows with median delta, sub-phases indented with left-border
-
-9. **`SidebarFlagList`** — day flags list for when no case is selected
-   - Props: `flags: { caseNumber: string; flag: CaseFlag }[]`
-   - Compact rows with severity-colored background, icon, label, case number, detail
-   - Checkmark empty state when no flags
-
-10. **`FlagBadge`** — reusable flag badge
-    - Props: `flag: CaseFlag; compact?: boolean`
-    - Compact: emoji only with tooltip. Full: emoji + label
-
-**Commit:** `feat(analytics): phase 2 - day analysis visualization components`
-
-**Test gate:**
-1. `npm run typecheck` passes — all component prop types are clean
-2. `npm run lint` passes — no unused imports or variables
-3. Verify each component renders without error by inspecting type compatibility (functional render tests if test infrastructure supports React component tests)
-4. No hardcoded phase colors anywhere — all colors come from props
-
----
-
-## Phase 3: Sub-phase Positioning Helper
-
-**What:** Add a utility function that computes a sub-phase's offset and duration *within its parent phase*, using milestone timestamp data. This bridges the gap between `computePhaseDurations` (which gives absolute durations) and the visual positioning needed for inset pills.
-
-**Files to modify:**
-- `src/lib/analyticsV2.ts` (add export)
-
-**Implementation details:**
-
-1. Export `computeSubphaseOffsets(phaseTree, phaseDurations, timestampMap)`:
-   - For each parent phase that has children:
-     - Get the parent's start timestamp from `timestampMap` (using the parent's `start_milestone_id`)
-     - For each child sub-phase:
-       - Get the child's start timestamp from `timestampMap`
-       - Compute `offsetSeconds = childStart - parentStart`
-       - Get the child's `durationSeconds` from `phaseDurations`
-     - Return: `{ phaseId, subphases: { phaseId, offsetSeconds, durationSeconds, label, color }[] }[]`
-   - If a sub-phase's start milestone isn't recorded, skip it (graceful degradation)
-
-2. This function is called once per case in the page component, feeding the result into `DayTimeline` and `CasePhaseBarNested`
-
-**Commit:** `feat(analytics): phase 3 - sub-phase offset computation for nested visualization`
-
-**Test gate:**
-1. `npm run typecheck` passes
-2. Unit test: parent phase 0-1200s, sub-phase starts at 180s for 600s → offset = 180, duration = 600
-3. Unit test: missing sub-phase milestone → sub-phase omitted from output
-4. Unit test: sub-phase that extends beyond parent end → clamped to parent duration
-
----
-
-## Phase 4: Page Integration
-
-**What:** Replace the Day Analysis tab content in the surgeon page with the new layout, wiring all components to existing state and data.
-
-**Files to modify:**
-- `src/app/analytics/surgeons/page.tsx`
-
-**Implementation details:**
-
-### 4a. New state and computed values
-1. Add state: `selectedCaseId: string | null` (for case selection in breakdown)
-2. Add `useMemo` for `procedureMedians` — calls `computeProcedureMedians(last30DaysCases, phaseDefinitions)`
-3. Add `useMemo` for `caseFlags` — iterates `caseBreakdown`, calls `detectCaseFlags` for each, returns `Record<string, CaseFlag[]>`
-4. Add `useMemo` for `allDayFlags` — calls `aggregateDayFlags`
-5. Add `useMemo` for `dayMedians` — computes median per phase/sub-phase from today's cases
-6. Add `useMemo` for `timelineCases` — transforms `caseBreakdown` into `TimelineCaseData[]` format needed by `DayTimeline`, including sub-phase offsets from `computeSubphaseOffsets`
-
-### 4b. Replace Day Analysis tab JSX (lines ~1043-1310)
-Replace the entire Day Analysis section (everything after `{/* Date Picker */}` inside the day tab) with:
-
+resolveBreadcrumbs(pathname, dynamicLabels, options)
+  options: { isAdmin: boolean, facilityName: string | null }
 ```
-1. Summary Strip
-   ├── MetricPillStrip (First Case, Cases, OR Time, Surgical Time)
-   ├── FlagCountPills (if flags exist)
-   └── UptimeRing
+1. Exact match in `ROUTE_BREADCRUMBS` → return segments
+2. Try replacing path segments with `[id]` or `[token]` placeholders → match dynamic routes
+3. For `/settings/*` paths not in map → call `getNavItemForPath(pathname)` and build `[Settings, <label>]`
+4. Longest-prefix fallback → return partial match
+5. Each segment: `{ label: string, href: string | null }` — last segment has `href: null` (current page)
+6. Admin routes (`/admin/*`): segments WITHOUT a facility prefix
+7. Non-admin routes: prepend facility name as first segment (`href: '/'`)
+8. Dynamic segments marked `[dynamic]` in the map get replaced with labels from `dynamicLabels` map
 
-2. Timeline Card
-   ├── Header (title + PhaseTreeLegend)
-   └── DayTimeline
+### BreadcrumbContext design
+- `BreadcrumbProvider` holds `Map<string, string>` of pathname-key → label
+- `useBreadcrumbLabel(key, label)` — registers a dynamic label, cleans up on unmount
+- `useBreadcrumbContext()` — returns the label map (consumed by Header)
+- Bail-out: only triggers re-render when a label actually changes (via `useRef` + shallow compare)
 
-3. Bottom Split
-   ├── Case Breakdown (flex-1)
-   │   └── CasePhaseBarNested (for each case)
-   └── Sidebar (w-280)
-       ├── Phase Medians Card (always)
-       │   └── PhaseMedianComparison
-       └── Contextual Card
-           ├── CaseDetailPanel (if selectedCaseId)
-           └── SidebarFlagList (if no selection)
-```
+### Commit message
+`feat(breadcrumbs): phase 1 - route map, resolver, and BreadcrumbContext`
 
-### 4c. Keep date picker exactly as-is
-The `{/* Date Picker */}` section (chevron buttons, date input, Today button) is NOT modified — it stays above the new layout.
-
-### 4d. Keep Procedure Performance section
-The `{/* Procedure Performance */}` section below the case breakdown stays as-is. It moves to be below the full new layout (full-width, after the bottom split section).
-
-### 4e. Remove old sections
-- Remove the `{/* Day Overview Section */}` card (the 4×4 metric grid) — replaced by summary strip
-- Remove the old `{/* Cases List with Enhanced Stacked Bars */}` — replaced by new case breakdown
-- Keep `{/* Procedure Performance */}` card and move it to after the new bottom split
-
-### 4f. Clean up unused imports
-- Remove any imports that are no longer used after the old sections are removed (e.g., old metric card icons if only used in day analysis)
-
-**Commit:** `feat(analytics): phase 4 - integrate day analysis redesign into surgeon page`
-
-**Test gate:**
-1. `npm run typecheck && npm run lint` passes
-2. Navigate to `/analytics/surgeons`, select a surgeon, switch to Day Analysis tab — page renders without errors
-3. Select a date with cases — summary strip shows correct metrics, timeline shows cases by room, case breakdown shows all cases
-4. Click a case in breakdown — sidebar switches from flag list to case detail with correct phase/sub-phase data
-5. Click again — deselects, sidebar returns to flag list
-6. Select a date with no cases — appropriate empty states shown
-7. Verify sub-phase pills appear inside parent phase segments at bottom 25% in both timeline and case bars
-8. Verify flag dots appear on timeline blocks for flagged cases
-9. All phase colors match what `resolvePhaseHex` / `resolveSubphaseHex` return (no hardcoded colors)
-10. Date navigation (arrows, date picker, Today button) still works correctly
+### Test gate
+1. **Unit:** `resolveBreadcrumbs()` returns correct segments for: exact matches, dynamic `[id]` routes, settings fallback via `getNavItemForPath`, admin routes (no facility prefix), longest-prefix fallback, unknown routes. BreadcrumbContext registers/unregisters labels correctly.
+2. **Integration:** Resolver + settings-nav-config integration — `/settings/financials/cost-categories` returns `[Settings, Cost Categories]`.
+3. **Workflow:** Mount a test component that registers a dynamic label → verify context consumers see the label → unmount → verify cleanup.
 
 ---
 
-## Phase 5: Responsive Layout + Polish
+## Phase 2: Header Integration
 
-**What:** Ensure the layout works on smaller screens, add hover tooltips to timeline blocks, and polish transitions.
+**Complexity:** Medium
 
-**Files to modify:**
-- `src/app/analytics/surgeons/page.tsx` (responsive classes)
-- `src/components/analytics/AnalyticsComponents.tsx` (tooltip, transitions)
+### What it does
+Wire the breadcrumb infrastructure into the app. Wrap `DashboardLayout` children with `BreadcrumbProvider`. Replace the Header's flat `Facility > Page Name` display with a dynamic multi-level breadcrumb trail.
 
-**Implementation details:**
+### Files touched
+- `components/layouts/DashboardLayout.tsx` — wrap content area with `<BreadcrumbProvider>`
+- `components/layouts/Header.tsx` — replace flat breadcrumb with dynamic trail rendering
 
-1. **Responsive sidebar stacking**: The bottom split uses `flex gap-4`. Add `flex-col lg:flex-row` so sidebar stacks below on < 1024px. Sidebar width changes from fixed 280px to `lg:w-[280px] w-full`
+### Header breadcrumb rendering
+- Call `resolveBreadcrumbs(pathname, dynamicLabels, { isAdmin, facilityName })`
+- Render segments with `ChevronRight` separators
+- Clickable segments: `text-slate-500 hover:text-slate-700` as `<Link>`
+- Current page (last segment): `text-slate-900 font-semibold`, no link
+- Facility logo remains as leftmost element (already exists)
+- Truncation: `truncate` class on each segment for space-limited layouts
+- Admin mode: no facility prefix segment
 
-2. **Summary strip responsive**: On small screens, the metric pills should wrap. Change flex to `flex-wrap gap-4` and hide dividers below md breakpoint
+### Props changes
+- Header already receives `isAdmin` and `pathname` — pass to resolver
+- Header is a client component — can call `useBreadcrumbContext()` directly to get dynamic labels
 
-3. **Timeline tooltip on hover**: When hovering a case block in the timeline, show a lightweight tooltip with case number, procedure, total time, and any flags — using absolute positioning above the block
+### Commit message
+`feat(breadcrumbs): phase 2 - Header dynamic breadcrumb trail and BreadcrumbProvider`
 
-4. **Timeline scroll**: If the day has very long time spans (e.g., 6am to 6pm), ensure the timeline doesn't get compressed. Add `min-width: 600px` on the timeline track container and wrap in `overflow-x-auto` on small screens
+### Test gate
+1. **Unit:** Header renders correct breadcrumb trail for various pathnames. All segments except the last are clickable `<Link>` elements. Last segment is bold, non-clickable.
+2. **Integration:** DashboardLayout + Header + BreadcrumbContext work together. A child page registering a dynamic label causes the Header to update.
+3. **Workflow:** Navigate `/analytics/surgeons` → verify Header shows `Facility > Analytics > Surgeon Performance`. Navigate `/settings/users` → verify `Facility > Settings > Users & Roles`.
 
-5. **Transition polish**: 
-   - Case selection in sidebar: add `transition-all duration-200` for the swap between flag list and case detail
-   - Utilization ring: stroke-dashoffset already has 0.8s ease transition
-   - Phase bars: add `transition-all duration-300` on width for initial render
+---
 
-6. **Skeleton loading**: Replace the existing `SkeletonDayAnalysis` with a new skeleton that matches the new layout shape (summary strip skeleton + timeline skeleton + bottom split skeleton)
+## Phase 3: Remove Duplicates + Dynamic Labels
 
-**Commit:** `feat(analytics): phase 5 - responsive layout and polish for day analysis`
+**Complexity:** Medium
 
-**Test gate:**
-1. `npm run typecheck && npm run lint` passes
-2. Resize browser to 768px — sidebar stacks below, summary strip wraps gracefully
-3. Hover a case in timeline — tooltip appears with correct info
-4. Select surgeon with no day data — skeleton loads, then empty state appears
-5. Select surgeon → switch dates rapidly — no flicker or stale state
-6. All animations/transitions feel smooth, no layout jumps
+### What it does
+Remove all per-page breadcrumbs (now redundant since the Header handles everything). Wire `useBreadcrumbLabel` into case detail pages and admin facility detail. Clean up unused imports. Run full acceptance testing.
+
+### Files touched
+- `components/analytics/AnalyticsBreadcrumb.tsx` — remove `<nav>` from `AnalyticsPageHeader`, keep H1/description/actions. Remove unused `AnalyticsBreadcrumb` default export.
+- `components/settings/SettingsTabLayout.tsx` — remove `<Breadcrumb>` render + breadcrumb items construction. Remove `Breadcrumb` import.
+- `components/settings/SettingsLanding.tsx` — remove breadcrumb render + items. Remove `Breadcrumb` import. Clean up `userData` usage if only for breadcrumb.
+- `app/cases/[id]/page.tsx` — add `useBreadcrumbLabel` to register "Case #1042" from loaded data
+- `app/cases/[id]/edit/page.tsx` — add `useBreadcrumbLabel` for the case label
+- `app/cases/[id]/cancel/page.tsx` — add `useBreadcrumbLabel` for the case label
+- `app/admin/facilities/[id]/page.tsx` — add `useBreadcrumbLabel` for facility name
+
+### Dynamic label implementation
+- Case pages: After data loads, call `useBreadcrumbLabel('/cases/[id]', \`Case #\${caseData.case_number}\`)`
+- Fallback while loading: resolver shows generic "Case" until the hook fires
+- Admin facility: `useBreadcrumbLabel('/admin/facilities/[id]', facilityData.name)`
+
+### Cleanup checklist
+- `AnalyticsBreadcrumb` default export — remove (no external consumers)
+- `Breadcrumb` import in `SettingsTabLayout` — remove
+- `Breadcrumb` import in `SettingsLanding` — remove
+- `getNavItemForPath` import in `SettingsTabLayout` — keep (still used for SubNav active state)
+- `InheritanceBreadcrumb` — leave alone (config inheritance UI, not a navigation breadcrumb)
+
+### Commit message
+`feat(breadcrumbs): phase 3 - remove duplicate breadcrumbs, add dynamic labels`
+
+### Test gate
+1. **Unit:** `AnalyticsPageHeader` renders title/description/actions but no `<nav>`. `SettingsTabLayout` renders TabBar/SubNav but no Breadcrumb. Case detail pages register correct dynamic labels.
+2. **Integration:** Full page renders — analytics pages show header breadcrumb but no inline breadcrumb. Settings pages show header breadcrumb but no per-page breadcrumb. Case detail shows "Case #1042" in header.
+3. **Workflow:** Navigate through analytics → settings → case detail → admin facility detail. Verify every page shows exactly ONE breadcrumb (in the Header), no duplicates, all segments clickable, all labels correct. Run `npm run typecheck && npm run lint && npm run test`.
+
+---
+
+## Complexity Summary
+
+| Phase | Scope | Files | Complexity |
+|-------|-------|-------|------------|
+| 1 | Route map + resolver + context + tests | 4 new/modified | Medium |
+| 2 | Header rendering + DashboardLayout wrapper | 2 modified | Medium |
+| 3 | Remove duplicates + dynamic labels + cleanup | 7-8 modified | Medium |
 
 ---
 
@@ -297,8 +201,6 @@ The `{/* Procedure Performance */}` section below the case breakdown stays as-is
 
 | Phase | Description | Status | Commit |
 |-------|-------------|--------|--------|
-| 1 | Flag detection engine | ⬜ Pending | — |
-| 2 | New shared visualization components | ⬜ Pending | — |
-| 3 | Sub-phase offset computation helper | ⬜ Pending | — |
-| 4 | Page integration — wire everything together | ⬜ Pending | — |
-| 5 | Responsive layout + polish | ⬜ Pending | — |
+| 1 | Route map, resolver, and BreadcrumbContext | Pending | — |
+| 2 | Header dynamic breadcrumb trail + BreadcrumbProvider | Pending | — |
+| 3 | Remove duplicate breadcrumbs + dynamic labels | Pending | — |

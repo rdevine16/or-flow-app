@@ -1284,12 +1284,12 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
   }, [cases])
 
   // Compute time axis bounds
-  const { minTime, totalMs, hourMarkers } = useMemo(() => {
+  const { minTime, totalMs, hourMarkers, halfHourMarkers } = useMemo(() => {
     if (cases.length === 0) {
       const now = new Date()
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 7, 0, 0)
       const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 0, 0)
-      return { minTime: start, maxTime: end, totalMs: end.getTime() - start.getTime(), hourMarkers: [] as Date[] }
+      return { minTime: start, maxTime: end, totalMs: end.getTime() - start.getTime(), hourMarkers: [] as Date[], halfHourMarkers: [] as Date[] }
     }
 
     const allStarts = cases.map(c => c.startTime.getTime())
@@ -1314,7 +1314,13 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
       cursor.setHours(cursor.getHours() + 1)
     }
 
-    return { minTime: min, maxTime: max, totalMs: total, hourMarkers: markers }
+    // Half-hour markers (between hour marks)
+    const halfMarkers: Date[] = []
+    for (let t = min.getTime() + 30 * 60 * 1000; t < max.getTime(); t += 60 * 60 * 1000) {
+      halfMarkers.push(new Date(t))
+    }
+
+    return { minTime: min, maxTime: max, totalMs: total, hourMarkers: markers, halfHourMarkers: halfMarkers }
   }, [cases])
 
   const getPositionPct = (time: Date) => {
@@ -1326,6 +1332,18 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
     if (totalMs === 0) return 0
     return (durationMs / totalMs) * 100
   }
+
+  // Compute all turnovers for the footer legend
+  const turnovers = useMemo(() => {
+    const result: { gapMs: number }[] = []
+    for (const [, roomCases] of roomGroups) {
+      for (let i = 1; i < roomCases.length; i++) {
+        const gapMs = roomCases[i].startTime.getTime() - roomCases[i - 1].endTime.getTime()
+        if (gapMs > 0) result.push({ gapMs })
+      }
+    }
+    return result
+  }, [roomGroups])
 
   if (cases.length === 0) {
     return (
@@ -1341,7 +1359,7 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
     <div className="overflow-x-auto">
       <div style={{ minWidth: 600 }}>
         {/* Time axis */}
-        <div className="relative h-6 mb-2 ml-20">
+        <div className="relative h-6 mb-2" style={{ marginLeft: 80 }}>
           {hourMarkers.map((marker, idx) => (
             <div
               key={idx}
@@ -1356,19 +1374,27 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
         {/* Room rows */}
         {roomEntries.map(([room, roomCases]) => (
           <div key={room} className="flex items-stretch mb-2">
-            {/* Room label */}
-            <div className="w-20 flex-shrink-0 flex items-center">
-              <span className="text-xs font-medium text-slate-500 truncate">{room}</span>
+            {/* Room label — badge pill */}
+            <div className="flex-shrink-0 flex items-center justify-center" style={{ width: 72, marginRight: 8 }}>
+              <div className="flex items-center justify-center text-xs font-semibold text-slate-500 bg-slate-100 rounded-md" style={{ width: 64, height: 32 }}>{room}</div>
             </div>
 
             {/* Timeline track */}
-            <div className="flex-1 relative h-10 bg-slate-50 rounded">
-              {/* Half-hour grid lines */}
+            <div className="flex-1 relative h-10 rounded-lg" style={{ background: '#f8fafc' }}>
+              {/* Hour grid lines */}
               {hourMarkers.map((marker, idx) => (
                 <div
-                  key={idx}
-                  className="absolute top-0 bottom-0 w-px bg-slate-100"
-                  style={{ left: `${getPositionPct(marker)}%` }}
+                  key={`h-${idx}`}
+                  className="absolute top-0 bottom-0"
+                  style={{ left: `${getPositionPct(marker)}%`, width: 1, background: '#e2e8f0' }}
+                />
+              ))}
+              {/* Half-hour grid lines (lighter) */}
+              {halfHourMarkers.map((marker, idx) => (
+                <div
+                  key={`hh-${idx}`}
+                  className="absolute top-0 bottom-0"
+                  style={{ left: `${getPositionPct(marker)}%`, width: 1, background: '#f1f5f9' }}
                 />
               ))}
 
@@ -1384,11 +1410,17 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
                 return (
                   <div
                     key={`gap-${idx}`}
-                    className="absolute top-0 bottom-0 border border-dashed border-slate-300 flex items-center justify-center"
-                    style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                    className="absolute top-1 bottom-1 rounded flex items-center justify-center"
+                    style={{
+                      left: `${leftPct}%`,
+                      width: `${widthPct}%`,
+                      background: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(251,146,60,0.08) 3px, rgba(251,146,60,0.08) 6px)',
+                      border: '1px dashed rgba(251,146,60,0.3)',
+                      minWidth: 20,
+                    }}
                   >
                     {widthPct > 3 && (
-                      <span className="text-[9px] text-slate-400 font-medium">{gapMinutes}m</span>
+                      <span className="text-[10px] font-semibold text-amber-600/70 whitespace-nowrap">{gapMinutes}m</span>
                     )}
                   </div>
                 )
@@ -1406,13 +1438,29 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
                 return (
                   <div
                     key={c.id}
-                    className="absolute top-0.5 bottom-0.5 rounded overflow-visible cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                    style={{ left: `${leftPct}%`, width: `${Math.max(widthPct, 0.5)}%` }}
+                    className="absolute overflow-visible cursor-pointer"
+                    style={{
+                      left: `${leftPct}%`,
+                      width: `${Math.max(widthPct, 0.5)}%`,
+                      top: 2,
+                      bottom: 2,
+                      minWidth: 30,
+                      zIndex: hoveredCaseId === c.id ? 10 : 1,
+                    }}
                     onMouseEnter={() => { setHoveredCaseId(c.id); onHoverCase?.(c.id) }}
                     onMouseLeave={() => { setHoveredCaseId(null); onHoverCase?.(null) }}
                   >
                     {/* Phase segments */}
-                    <div className="flex h-full overflow-hidden rounded">
+                    <div
+                      className="absolute inset-0 rounded-md overflow-hidden flex"
+                      style={{
+                        boxShadow: hoveredCaseId === c.id
+                          ? '0 2px 8px rgba(0,0,0,0.15)'
+                          : '0 1px 2px rgba(0,0,0,0.06)',
+                        transform: hoveredCaseId === c.id ? 'translateY(-1px)' : 'none',
+                        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                      }}
+                    >
                       {c.phases.map((phase, pIdx) => {
                         const phasePct = totalPhaseSeconds > 0 ? (phase.durationSeconds / totalPhaseSeconds) * 100 : 0
                         if (phasePct < 0.5) return null
@@ -1420,11 +1468,15 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
                           <div
                             key={pIdx}
                             className="h-full relative"
-                            style={{ width: `${phasePct}%`, backgroundColor: phase.color }}
+                            style={{
+                              width: `${phasePct}%`,
+                              backgroundColor: phase.color,
+                              opacity: hoveredCaseId === c.id ? 1 : 0.85,
+                            }}
                           >
-                            {/* Sub-phase inset pills at bottom 25% */}
+                            {/* Sub-phase overlays — full height, own color */}
                             {phase.subphases.length > 0 && phase.durationSeconds > 0 && (
-                              <div className="absolute inset-x-0 bottom-0 h-[25%]">
+                              <div className="absolute inset-0">
                                 {phase.subphases.map((sub, sIdx) => {
                                   const subLeftPct = phase.durationSeconds > 0
                                     ? (sub.offsetSeconds / phase.durationSeconds) * 100
@@ -1436,12 +1488,18 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
                                   return (
                                     <div
                                       key={sIdx}
-                                      className="absolute top-0 bottom-0 rounded-sm"
+                                      className="absolute"
                                       style={{
+                                        top: 2,
+                                        bottom: 2,
                                         left: `${subLeftPct}%`,
                                         width: `${subWidthPct}%`,
                                         backgroundColor: sub.color,
+                                        opacity: 0.6,
+                                        borderRadius: 2,
+                                        minWidth: 3,
                                       }}
+                                      title={`${sub.label}: ${Math.round(sub.durationSeconds / 60)}m`}
                                     />
                                   )
                                 })}
@@ -1452,11 +1510,18 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
                       })}
                     </div>
 
+                    {/* Procedure label overlay — z-10 to sit above sub-phase overlays */}
+                    <div className="absolute inset-0 z-10 flex items-center px-1.5" style={{ pointerEvents: 'none' }}>
+                      <span className="text-[10px] font-bold text-white truncate" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
+                        {c.procedure}
+                      </span>
+                    </div>
+
                     {/* Flag indicator dots */}
                     {(hasWarningFlags || hasPositiveFlags) && (
-                      <div className="absolute top-0.5 right-0.5 flex gap-0.5">
-                        {hasWarningFlags && <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
-                        {hasPositiveFlags && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                      <div className="absolute -top-1.5 -right-1 flex gap-0.5" style={{ pointerEvents: 'none' }}>
+                        {hasWarningFlags && <span className="w-2.5 h-2.5 rounded-full border border-white" style={{ background: '#f97316', boxShadow: '0 1px 3px rgba(249,115,22,0.4)' }} />}
+                        {hasPositiveFlags && <span className="w-2.5 h-2.5 rounded-full border border-white" style={{ background: '#22c55e', boxShadow: '0 1px 3px rgba(34,197,94,0.4)' }} />}
                       </div>
                     )}
 
@@ -1479,6 +1544,26 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
             </div>
           </div>
         ))}
+
+        {/* Footer legend */}
+        <div className="flex items-center gap-4 mt-3 text-xs text-slate-500" style={{ marginLeft: 80 }}>
+          <span className="flex items-center gap-1.5">
+            <span
+              className="w-3 h-3 rounded-sm inline-block"
+              style={{
+                background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(251,146,60,0.15) 2px, rgba(251,146,60,0.15) 4px)',
+                border: '1px dashed rgba(251,146,60,0.4)',
+              }}
+            /> Turnover
+          </span>
+          <span className="text-slate-400">
+            Avg: {turnovers.length > 0 ? Math.round(turnovers.reduce((sum, t) => sum + t.gapMs, 0) / turnovers.length / 60000) : 0}m
+          </span>
+          <span className="text-slate-300">|</span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#ef4444', opacity: 0.6 }} /> Sub-phase
+          </span>
+        </div>
       </div>
     </div>
   )
@@ -1558,16 +1643,9 @@ export function CasePhaseBarNested({
                 style={{ width: `${phasePct}%`, backgroundColor: phase.color }}
                 title={`${phase.label}: ${fmtSec(phase.durationSeconds)}`}
               >
-                {/* Phase duration label (≥8 minutes) */}
-                {phaseMinutes >= 8 && phasePct > 12 && (
-                  <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white/90 truncate px-1">
-                    {fmtSec(phase.durationSeconds)}
-                  </span>
-                )}
-
-                {/* Sub-phase inset pills at bottom 25% */}
+                {/* Sub-phase overlays — full height, own color */}
                 {phase.subphases.length > 0 && phase.durationSeconds > 0 && (
-                  <div className="absolute inset-x-0 bottom-0 h-[25%]">
+                  <div className="absolute inset-0">
                     {phase.subphases.map((sub, sIdx) => {
                       const subLeftPct = phase.durationSeconds > 0
                         ? (sub.offsetSeconds / phase.durationSeconds) * 100
@@ -1579,17 +1657,29 @@ export function CasePhaseBarNested({
                       return (
                         <div
                           key={sIdx}
-                          className="absolute top-0 bottom-0 rounded-sm"
+                          className="absolute"
                           style={{
+                            top: 2,
+                            bottom: 2,
                             left: `${subLeftPct}%`,
                             width: `${subWidthPct}%`,
                             backgroundColor: sub.color,
+                            opacity: 0.6,
+                            borderRadius: 2,
+                            minWidth: 3,
                           }}
                           title={`${sub.label}: ${fmtSec(sub.durationSeconds)}`}
                         />
                       )
                     })}
                   </div>
+                )}
+
+                {/* Phase duration label (≥8 minutes) — z-10 to sit above sub-phase overlays */}
+                {phaseMinutes >= 8 && phasePct > 12 && (
+                  <span className="absolute inset-0 z-10 flex items-center justify-center text-xs font-bold text-white truncate px-1" style={{ pointerEvents: 'none', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
+                    {fmtSec(phase.durationSeconds)}
+                  </span>
                 )}
               </div>
             )
@@ -1627,84 +1717,133 @@ export function PhaseMedianComparison({
 
   const fmtMin = (seconds: number) => `${Math.round(seconds / 60)}m`
 
-  const renderRow = (
-    phaseId: string,
-    displayName: string,
-    colorKey: string | null,
-    isSubphase: boolean,
-  ) => {
-    const today = dayMedians[phaseId] ?? 0
-    const historical = historicalMedians[phaseId] ?? 0
-    const todayPct = maxVal > 0 ? (today / maxVal) * 100 : 0
-    const histPct = maxVal > 0 ? (historical / maxVal) * 100 : 0
-
-    let delta: number | null = null
-    if (historical > 0 && today > 0) {
-      delta = Math.round(((today - historical) / historical) * 100)
-    }
-
-    const hex = resolveHex(colorKey)
-
-    return (
-      <div key={phaseId} className={`${isSubphase ? 'ml-4' : ''} mb-2`}>
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-1.5">
-            {isSubphase && <span className="text-slate-300 text-xs">└</span>}
-            <span className={`text-xs font-medium ${isSubphase ? 'text-slate-500' : 'text-slate-700'}`}>
-              {displayName}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-slate-900 tabular-nums">{today > 0 ? fmtMin(today) : '—'}</span>
-            {delta !== null && (
-              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                delta <= 0
-                  ? 'text-green-600 bg-green-50'
-                  : 'text-red-600 bg-red-50'
-              }`}>
-                {delta <= 0 ? '↓' : '↑'} {Math.abs(delta)}%
-              </span>
-            )}
-          </div>
-        </div>
-        {/* Dual bars */}
-        <div className="relative h-3 bg-slate-50 rounded overflow-hidden">
-          {/* Historical bar (faded) */}
-          {histPct > 0 && (
-            <div
-              className="absolute inset-y-0 left-0 rounded opacity-25"
-              style={{ width: `${histPct}%`, backgroundColor: hex }}
-            />
-          )}
-          {/* Today bar (solid) */}
-          {todayPct > 0 && (
-            <div
-              className="absolute inset-y-0 left-0 rounded"
-              style={{ width: `${todayPct}%`, backgroundColor: hex }}
-            />
-          )}
-          {/* Historical median tick */}
-          {histPct > 2 && (
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-slate-900/30"
-              style={{ left: `${histPct}%` }}
-            />
-          )}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div>
       {phaseTree.map(node => {
         const phase = node.phase as PhaseDefLike & { color_key?: string | null }
+        const hasChildren = node.children.length > 0
+        const hex = resolveHex(phase.color_key ?? null)
+        const today = dayMedians[phase.id] ?? 0
+        const historical = historicalMedians[phase.id] ?? 0
+        const todayPct = maxVal > 0 ? (today / maxVal) * 100 : 0
+        const histPct = maxVal > 0 ? (historical / maxVal) * 100 : 0
+
+        let delta: number | null = null
+        if (historical > 0 && today > 0) {
+          delta = Math.round(((today - historical) / historical) * 100)
+        }
+
         return (
-          <div key={phase.id}>
-            {renderRow(phase.id, phase.display_name, phase.color_key ?? null, false)}
+          <div key={phase.id} className={`mb-2 ${hasChildren ? 'bg-slate-50/80 rounded-lg p-2' : ''}`}>
+            {/* Parent label row */}
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="rounded-sm flex-shrink-0"
+                  style={{ width: 8, height: 8, background: hex }}
+                />
+                <span className="font-medium text-slate-700" style={{ fontSize: 12 }}>
+                  {phase.display_name}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono text-slate-900 tabular-nums">{today > 0 ? fmtMin(today) : '—'}</span>
+                {delta !== null && (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                    delta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
+                  }`}>
+                    {delta <= 0 ? '↓' : '↑'} {Math.abs(delta)}%
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Parent bar with sub-phase insets */}
+            <div className="relative rounded overflow-hidden bg-slate-100" style={{ height: 14 }}>
+              {/* Historical (top half, faded) */}
+              <div
+                className="absolute top-0 rounded-t"
+                style={{ width: `${histPct}%`, height: '50%', background: hex, opacity: 0.2 }}
+              />
+              {/* Today (bottom half, solid) */}
+              <div
+                className="absolute bottom-0 rounded-b"
+                style={{ width: `${todayPct}%`, height: '50%', background: hex, opacity: 0.85, transition: 'width 0.4s ease' }}
+              />
+
+              {/* Sub-phase overlays — full height, own color */}
+              {node.children.map(child => {
+                const childPhase = child.phase as PhaseDefLike & { color_key?: string | null }
+                const childToday = dayMedians[childPhase.id] ?? 0
+                const childHex = resolveHex(childPhase.color_key ?? null)
+                // Sub-phase width as proportion of parent's today bar
+                const subBarPct = today > 0 ? (childToday / maxVal) * 100 : 0
+                if (subBarPct < 0.5) return null
+                return (
+                  <div
+                    key={childPhase.id}
+                    className="absolute"
+                    style={{
+                      top: 2,
+                      bottom: 2,
+                      width: `${subBarPct}%`,
+                      background: childHex,
+                      opacity: 0.6,
+                      borderRadius: 2,
+                      transition: 'width 0.4s ease',
+                    }}
+                    title={`${childPhase.display_name}: ${childToday > 0 ? fmtMin(childToday) : '—'}`}
+                  />
+                )
+              })}
+
+              {/* Historical median tick */}
+              {histPct > 2 && (
+                <div
+                  className="absolute top-0 bottom-0"
+                  style={{ left: `${histPct}%`, width: 1.5, background: '#64748b', opacity: 0.35 }}
+                />
+              )}
+            </div>
+
+            {/* Historical reference text */}
+            {historical > 0 && (
+              <div className="text-[10px] text-slate-400 mt-0.5">hist: {fmtMin(historical)}</div>
+            )}
+
+            {/* Sub-phase info rows (text details, no separate bars) */}
             {node.children.map(child => {
               const childPhase = child.phase as PhaseDefLike & { color_key?: string | null }
-              return renderRow(childPhase.id, childPhase.display_name, childPhase.color_key ?? null, true)
+              const childHex = resolveHex(childPhase.color_key ?? null)
+              const childToday = dayMedians[childPhase.id] ?? 0
+              const childHist = historicalMedians[childPhase.id] ?? 0
+              let childDelta: number | null = null
+              if (childHist > 0 && childToday > 0) {
+                childDelta = Math.round(((childToday - childHist) / childHist) * 100)
+              }
+              return (
+                <div key={childPhase.id} className="flex items-center justify-between mt-1.5 ml-3">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="rounded-sm flex-shrink-0"
+                      style={{ width: 7, height: 7, background: childHex }}
+                    />
+                    <span className="font-medium text-slate-500" style={{ fontSize: 11 }}>
+                      {childPhase.display_name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono text-slate-700 tabular-nums">{childToday > 0 ? fmtMin(childToday) : '—'}</span>
+                    {childDelta !== null && (
+                      <span className={`text-[10px] font-semibold px-1 py-0.5 rounded-full ${
+                        childDelta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
+                      }`}>
+                        {childDelta <= 0 ? '↓' : '↑'} {Math.abs(childDelta)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
             })}
           </div>
         )
@@ -1782,8 +1921,10 @@ export function CaseDetailPanel({
             ? Math.round(((phase.durationSeconds - median) / median) * 100)
             : null
 
+          const hasSubphases = phase.subphases.length > 0
+
           return (
-            <div key={phase.phaseId}>
+            <div key={phase.phaseId} className={hasSubphases ? 'bg-slate-50/80 rounded-lg p-2' : ''}>
               {/* Parent phase row */}
               <div className="flex items-center justify-between py-1">
                 <div className="flex items-center gap-1.5">
@@ -1801,6 +1942,9 @@ export function CaseDetailPanel({
                   )}
                 </div>
               </div>
+              {median != null && median > 0 && (
+                <div className="ml-[14px] text-[10px] text-slate-400 -mt-0.5 mb-0.5">med: {fmtDuration(median)}</div>
+              )}
 
               {/* Sub-phase rows */}
               {phase.subphases.map((sub, sIdx) => {
@@ -1812,22 +1956,27 @@ export function CaseDetailPanel({
                 return (
                   <div
                     key={sIdx}
-                    className="flex items-center justify-between py-0.5 ml-4"
+                    className="py-0.5 ml-4"
                     style={{ borderLeft: `2px solid ${sub.color}` }}
                   >
-                    <div className="flex items-center gap-1.5 pl-2">
-                      <span className="text-[11px] text-slate-500">{sub.label}</span>
+                    <div className="flex items-center justify-between pl-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-slate-500">{sub.label}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono text-slate-700 tabular-nums">{fmtDuration(sub.durationSeconds)}</span>
+                        {subDelta !== null && (
+                          <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${
+                            subDelta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
+                          }`}>
+                            {subDelta <= 0 ? '↓' : '↑'}{Math.abs(subDelta)}%
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-mono text-slate-700 tabular-nums">{fmtDuration(sub.durationSeconds)}</span>
-                      {subDelta !== null && (
-                        <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${
-                          subDelta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
-                        }`}>
-                          {subDelta <= 0 ? '↓' : '↑'}{Math.abs(subDelta)}%
-                        </span>
-                      )}
-                    </div>
+                    {subMedian != null && subMedian > 0 && (
+                      <div className="ml-[17px] text-[10px] text-slate-400 -mt-0.5">med: {fmtDuration(subMedian)}</div>
+                    )}
                   </div>
                 )
               })}
@@ -1839,8 +1988,24 @@ export function CaseDetailPanel({
       {/* Total */}
       <div className="flex items-center justify-between pt-2 border-t border-slate-100">
         <span className="text-xs font-semibold text-slate-700">Total</span>
-        <span className="text-xs font-mono font-semibold text-slate-900 tabular-nums">{fmtDuration(totalSeconds)}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-mono font-semibold text-slate-900 tabular-nums">{fmtDuration(totalSeconds)}</span>
+          {procedureMedians['total'] != null && procedureMedians['total'] > 0 && (() => {
+            const totalMedian = procedureMedians['total']
+            const totalDelta = Math.round(((totalSeconds - totalMedian) / totalMedian) * 100)
+            return (
+              <span className={`text-[10px] font-semibold px-1 py-0.5 rounded ${
+                totalDelta <= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
+              }`}>
+                {totalDelta <= 0 ? '↓' : '↑'}{Math.abs(totalDelta)}%
+              </span>
+            )
+          })()}
+        </div>
       </div>
+      {procedureMedians['total'] != null && procedureMedians['total'] > 0 && (
+        <div className="text-[10px] text-slate-400 text-right -mt-2">med: {fmtDuration(procedureMedians['total'])}</div>
+      )}
     </div>
   )
 }
