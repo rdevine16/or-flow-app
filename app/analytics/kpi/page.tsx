@@ -19,13 +19,11 @@ import {
   getKPIStatus,
   type CaseWithMilestonesAndSurgeon,
   type RoomHoursMap,
-  type ORUtilizationResult,
   type KPIResult,
-  type FacilityAnalyticsConfig,
 } from '@/lib/analyticsV2'
 import { useAnalyticsConfig } from '@/lib/hooks/useAnalyticsConfig'
 
-import { ArrowRight, BarChart3, ChevronRight, X } from 'lucide-react'
+import { ArrowRight, BarChart3, ChevronRight } from 'lucide-react'
 
 // ============================================
 // HELPERS
@@ -136,149 +134,6 @@ const SURGEON_STATUS_CONFIG: Record<
 }
 
 // ============================================
-// OR UTILIZATION MODAL (Room Breakdown)
-// ============================================
-
-function ORUtilizationModal({
-  isOpen,
-  onClose,
-  data,
-  config,
-}: {
-  isOpen: boolean
-  onClose: () => void
-  data: ORUtilizationResult
-  config: FacilityAnalyticsConfig
-}) {
-  if (!isOpen) return null
-
-  const { roomBreakdown, roomsWithRealHours, roomsWithDefaultHours } = data
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-label="OR Utilization by Room">
-      <div className="flex min-h-full items-center justify-center p-2 sm:p-4">
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-
-        <div className="relative bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-hidden border border-slate-200">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-slate-50">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-violet-100 hidden sm:flex">
-                <BarChart3 className="w-5 h-5 text-violet-600" />
-              </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-semibold text-slate-900">OR Utilization by Room</h2>
-                <p className="text-xs sm:text-sm text-slate-500">
-                  {roomsWithRealHours > 0 && roomsWithDefaultHours > 0
-                    ? `${roomsWithRealHours} rooms configured · ${roomsWithDefaultHours} using default (10h)`
-                    : roomsWithDefaultHours === roomBreakdown.length
-                    ? 'All rooms using default 10h availability — configure in Settings'
-                    : `All ${roomsWithRealHours} rooms have configured hours`}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              aria-label="Close modal"
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Content */}
-          <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(90vh-80px)] sm:max-h-[calc(85vh-80px)]">
-            {roomBreakdown.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                  <BarChart3 className="w-8 h-8 text-slate-400" />
-                </div>
-                <h3 className="text-base font-semibold text-slate-900 mb-1">No utilization data</h3>
-                <p className="text-sm text-slate-500">No rooms with case data found in this period.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {/* Summary bar */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
-                  <div className="p-2 sm:p-3 bg-green-50 rounded-lg border border-green-200/60 text-center">
-                    <div className="text-xl sm:text-2xl font-semibold text-green-600">
-                      {roomBreakdown.filter(r => r.utilization >= config.utilizationTargetPercent).length}
-                    </div>
-                    <div className="text-[10px] sm:text-xs text-green-600 font-medium">Above Target</div>
-                  </div>
-                  <div className="p-2 sm:p-3 bg-amber-50 rounded-lg border border-amber-200/60 text-center">
-                    <div className="text-xl sm:text-2xl font-semibold text-amber-700">
-                      {roomBreakdown.filter(r => r.utilization >= config.utilizationTargetPercent * 0.8 && r.utilization < config.utilizationTargetPercent).length}
-                    </div>
-                    <div className="text-[10px] sm:text-xs text-amber-700 font-medium">Near Target</div>
-                  </div>
-                  <div className="p-2 sm:p-3 bg-slate-50 rounded-lg border border-slate-200/60 text-center">
-                    <div className="text-xl sm:text-2xl font-semibold text-slate-600">
-                      {roomBreakdown.filter(r => r.utilization < config.utilizationTargetPercent * 0.8).length}
-                    </div>
-                    <div className="text-[10px] sm:text-xs text-slate-500 font-medium">Below {Math.round(config.utilizationTargetPercent * 0.8)}%</div>
-                  </div>
-                </div>
-
-                {/* Room rows */}
-                {roomBreakdown.map((room) => {
-                  const nearTarget = config.utilizationTargetPercent * 0.8
-                  const barColor = room.utilization >= config.utilizationTargetPercent
-                    ? 'bg-green-500'
-                    : room.utilization >= nearTarget
-                    ? 'bg-amber-500'
-                    : 'bg-slate-400'
-                  const textColor = room.utilization >= config.utilizationTargetPercent
-                    ? 'text-green-600'
-                    : room.utilization >= nearTarget
-                    ? 'text-amber-700'
-                    : 'text-slate-600'
-
-                  return (
-                    <div key={room.roomId} className="p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-200">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold text-slate-900">{room.roomName}</span>
-                          {!room.usingRealHours && (
-                            <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded">
-                              Default hours
-                            </span>
-                          )}
-                        </div>
-                        <span className={`text-xl font-semibold ${textColor}`}>
-                          {room.utilization}%
-                        </span>
-                      </div>
-
-                      {/* Utilization bar */}
-                      <div className="w-full bg-slate-200 rounded-full h-2 mb-3">
-                        <div
-                          className={`${barColor} h-2 rounded-full transition-all duration-500`}
-                          style={{ width: `${Math.min(room.utilization, 100)}%` }}
-                        />
-                      </div>
-
-                      {/* Stats row */}
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                        <span>{room.caseCount} cases</span>
-                        <span className="text-slate-300 hidden sm:inline">·</span>
-                        <span>{room.daysActive} days active</span>
-                        <span className="text-slate-300 hidden sm:inline">·</span>
-                        <span>~{Math.round(room.usedMinutes / room.daysActive / 60 * 10) / 10}h avg/day of {room.availableHours}h</span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================
 // MAIN PAGE COMPONENT
 // ============================================
 
@@ -295,7 +150,6 @@ export default function AnalyticsOverviewPage() {
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState('month')
 
-  const [showORUtilModal, setShowORUtilModal] = useState(false)
   const [activeInsight, setActiveInsight] = useState<Insight | null>(null)
   const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
   const { config } = useAnalyticsConfig()
@@ -522,6 +376,26 @@ export default function AnalyticsOverviewPage() {
     cancellation: getKPIStatus(analytics.cancellationRate.value, analytics.cancellationRate.target ?? config.cancellationTargetPercent, true),
   }), [analytics, config])
 
+  // Open utilization slide-over from KPI card click
+  const handleUtilizationClick = useCallback(() => {
+    const utilInsight = insights.find(i => i.drillThroughType === 'utilization')
+    if (utilInsight) {
+      setActiveInsight(utilInsight)
+    } else {
+      // Synthetic insight when no utilization insight was generated (e.g. on-target)
+      setActiveInsight({
+        id: 'utilization-kpi-click',
+        category: 'utilization_gap',
+        severity: analytics.orUtilization.targetMet ? 'positive' : 'warning',
+        title: 'OR Utilization by Room',
+        body: `Overall utilization is ${analytics.orUtilization.displayValue}.`,
+        action: 'Review room breakdown',
+        drillThroughType: 'utilization',
+        metadata: {},
+      })
+    }
+  }, [insights, analytics.orUtilization])
+
   // ============================================
   // KPI STRIP DATA (Layer 2)
   // ============================================
@@ -540,7 +414,7 @@ export default function AnalyticsOverviewPage() {
       kpi: analytics.orUtilization as KPIResult,
       status: getKPIStatus(analytics.orUtilization.value, analytics.orUtilization.target ?? config.utilizationTargetPercent),
       sparkline: dailyDataToSparkline(analytics.orUtilization.dailyData),
-      onClick: (() => setShowORUtilModal(true)) as (() => void) | undefined,
+      onClick: handleUtilizationClick as (() => void) | undefined,
       inverse: false,
     },
     {
@@ -995,14 +869,6 @@ export default function AnalyticsOverviewPage() {
                   </div>
                 </Section>
               </div>
-
-              {/* OR UTILIZATION MODAL */}
-              <ORUtilizationModal
-                isOpen={showORUtilModal}
-                onClose={() => setShowORUtilModal(false)}
-                data={analytics.orUtilization}
-                config={config}
-              />
 
               {/* INSIGHT DRILL-THROUGH SLIDE-OVER */}
               <InsightSlideOver

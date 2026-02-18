@@ -11,6 +11,7 @@ import type { Insight, InsightSeverity } from '@/lib/insightsEngine'
 import type { AnalyticsOverview, FacilityAnalyticsConfig } from '@/lib/analyticsV2'
 import InsightPanelCallback from '@/components/analytics/InsightPanelCallback'
 import InsightPanelFCOTS from '@/components/analytics/InsightPanelFCOTS'
+import InsightPanelUtilization from '@/components/analytics/InsightPanelUtilization'
 
 // ============================================
 // SEVERITY CONFIG
@@ -105,6 +106,11 @@ export default function InsightSlideOver({ insight, onClose, analytics, config }
                 graceMinutes={config.fcotsGraceMinutes}
                 targetPercent={config.fcotsTargetPercent}
               />
+            ) : insight?.drillThroughType === 'utilization' ? (
+              <InsightPanelUtilization
+                orUtilization={analytics.orUtilization}
+                config={config}
+              />
             ) : insight?.drillThroughType ? (
               <PanelPlaceholder type={insight.drillThroughType} />
             ) : null}
@@ -121,7 +127,6 @@ export default function InsightSlideOver({ insight, onClose, analytics, config }
 
 function PanelPlaceholder({ type }: { type: string }) {
   const phaseMap: Record<string, string> = {
-    utilization: 'Phase 4',
     non_op_time: 'Phase 5',
     scheduling: 'Phase 5',
     turnover: 'Phase 6',

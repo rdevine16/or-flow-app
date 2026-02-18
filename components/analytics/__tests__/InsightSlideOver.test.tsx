@@ -226,4 +226,13 @@ describe('InsightSlideOver — placeholder content', () => {
     // Should NOT show placeholder
     expect(screen.queryByText(/panel content coming in/i)).toBeNull()
   })
+
+  it('renders utilization panel content (not placeholder) for utilization type', () => {
+    const insight = makeInsight({ drillThroughType: 'utilization', category: 'utilization_gap' })
+    render(<InsightSlideOver insight={insight} onClose={() => {}} {...baseProps} />)
+    // With empty roomBreakdown, shows empty state
+    expect(screen.getByText('No utilization data')).toBeDefined()
+    // Should NOT show placeholder
+    expect(screen.queryByText(/panel content coming in/i)).toBeNull()
+  })
 })
