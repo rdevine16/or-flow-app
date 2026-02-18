@@ -6,9 +6,35 @@ Redesign the `/analytics/kpi` page to use information hierarchy (glance → scan
 
 **Key constraint**: Zero new database queries. Everything derives from the existing `calculateAnalyticsOverview()` output.
 
+## Progress
+
+| Phase | Description | Status | Commit |
+|-------|-------------|--------|--------|
+| 1 | Extend analyticsV2.ts — Sparkline Data + Utilities | DONE | `46c8acf` |
+| 2 | insightsEngine.ts (already exists, TS fix applied) | DONE (bundled with Phase 1) | `46c8acf` |
+| 3 | Build Sparkline Component | NEXT | — |
+| 4 | Redesign KPI Page Layout | Pending | — |
+| 5 | Responsive + Polish | Pending | — |
+
+### Phase 1 Notes
+- All 7 dailyData builders now include `numericValue`
+- Added `FCOTSDetail` + `firstCaseDetails` to FCOTS return (for Phase 5 drill-through)
+- Added `CaseVolumeResult` with `weeklyVolume` (previously computed but discarded)
+- Added `dailyData` to `calculateNonOperativeTime` (was missing)
+- Added `getKPIStatus()` utility for 3-tier status
+- Fixed TS narrowing bug in `insightsEngine.ts` `findWorstDayOfWeek`
+- 20 new unit tests in `lib/__tests__/analyticsV2-phase1.test.ts`
+- insightsEngine.ts was already in `lib/` — confirmed fully compatible, no changes needed beyond the TS fix
+
+### Phase 2 Notes
+- `lib/insightsEngine.ts` was already placed by the user before Phase 1 started
+- Verified all type imports match `analyticsV2.ts` (zero mismatches)
+- The only change needed was the TS narrowing fix (done in Phase 1 commit)
+- Integration into the page component (the `useMemo` wiring) will happen in Phase 4 when the page is redesigned
+
 ---
 
-## Phase 1: Extend `analyticsV2.ts` — Sparkline Data + Utilities
+## Phase 1: Extend `analyticsV2.ts` — Sparkline Data + Utilities ✅
 
 ### Goal
 Add numeric daily values to every KPI so sparklines can render actual trend lines instead of color blocks.
@@ -88,7 +114,7 @@ Change `caseVolume: KPIResult` → `caseVolume: CaseVolumeResult`
 
 ---
 
-## Phase 2: Create `insightsEngine.ts`
+## Phase 2: Create `insightsEngine.ts` ✅ (bundled with Phase 1)
 
 ### Goal
 Add the insight synthesis engine as a new file with zero coupling to UI components.
@@ -132,7 +158,7 @@ const insights = useMemo(() => {
 
 ---
 
-## Phase 3: Build Sparkline Component
+## Phase 3: Build Sparkline Component ← NEXT
 
 ### Goal
 Create a reusable SVG sparkline component to replace Tremor Tracker blocks.
