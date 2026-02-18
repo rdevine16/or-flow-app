@@ -11,10 +11,22 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Info, Plus } from 'lucide-react'
-import { PhaseCard, type PhaseCardData } from '@/components/settings/phases/PhaseCard'
+import { PhaseCard, PhaseCardOverlay, type PhaseCardData } from '@/components/settings/phases/PhaseCard'
 import { PhaseFormModal, type PhaseFormData } from '@/components/settings/phases/PhaseFormModal'
 import { ArchivedPhasesSection } from '@/components/settings/phases/ArchivedPhasesSection'
 import { SkeletonTable } from '@/components/ui/Skeleton'
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragMoveEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
 
 interface PhaseDefinition {
   id: string
@@ -40,6 +52,78 @@ interface PhaseTreeNode {
   phase: PhaseDefinition
   children: PhaseDefinition[]
 }
+
+/** Flat item in the rendered list (parent or child) with metadata for DnD */
+interface FlatPhaseItem {
+  phase: PhaseDefinition
+  isChild: boolean
+  /** Index in the flat list */
+  flatIndex: number
+}
+
+type DropIntent =
+  | { type: 'reorder'; targetId: string; position: 'before' | 'after' }
+  | { type: 'nest'; targetId: string }
+  | null
+
+// ── Draggable Phase Card wrapper ─────────────────────────
+
+function DraggablePhaseCard({
+  item,
+  milestones,
+  activePhases,
+  onEdit,
+  onArchive,
+  dropIntent,
+}: {
+  item: FlatPhaseItem
+  milestones: { id: string; display_name: string }[]
+  activePhases: PhaseCardData[]
+  onEdit: (phase: PhaseCardData, field: string, value: string) => void
+  onArchive: (phase: PhaseCardData) => void
+  dropIntent: DropIntent
+}) {
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+    id: `drag-${item.phase.id}`,
+    data: { phaseId: item.phase.id },
+  })
+
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: `drop-${item.phase.id}`,
+    data: { phaseId: item.phase.id, isChild: item.isChild },
+  })
+
+  // Merge refs
+  const mergedRef = useCallback((node: HTMLDivElement | null) => {
+    setDragRef(node)
+    setDropRef(node)
+  }, [setDragRef, setDropRef])
+
+  const isNestTarget = dropIntent?.type === 'nest' && dropIntent.targetId === item.phase.id
+  const dropIndicator =
+    dropIntent?.type === 'reorder' && dropIntent.targetId === item.phase.id
+      ? dropIntent.position
+      : null
+
+  return (
+    <PhaseCard
+      ref={mergedRef}
+      phase={item.phase}
+      milestones={milestones}
+      activePhases={activePhases}
+      onEdit={onEdit}
+      onArchive={onArchive}
+      isChild={item.isChild}
+      isNestTarget={isNestTarget}
+      dropIndicator={dropIndicator}
+      isDragging={isDragging}
+      dragHandleListeners={listeners}
+      dragHandleAttributes={attributes}
+    />
+  )
+}
+
+// ── Main Page ──────────────────────────────────────────────
 
 export default function PhasesSettingsPage() {
   const supabase = createClient()
@@ -78,8 +162,11 @@ export default function PhasesSettingsPage() {
 
   const [saving, setSaving] = useState(false)
   const [showFormModal, setShowFormModal] = useState(false)
-  const [draggedPhaseId, setDraggedPhaseId] = useState<string | null>(null)
-  const [nestTargetId, setNestTargetId] = useState<string | null>(null)
+
+  // DnD state
+  const [activeDragId, setActiveDragId] = useState<string | null>(null)
+  const [dropIntent, setDropIntent] = useState<DropIntent>(null)
+
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -126,6 +213,19 @@ export default function PhasesSettingsPage() {
     }))
   }, [activePhases])
 
+  // Flatten tree into ordered list for DnD
+  const flatItems = useMemo((): FlatPhaseItem[] => {
+    const items: FlatPhaseItem[] = []
+    let idx = 0
+    for (const node of phaseTree) {
+      items.push({ phase: node.phase, isChild: false, flatIndex: idx++ })
+      for (const child of node.children) {
+        items.push({ phase: child, isChild: true, flatIndex: idx++ })
+      }
+    }
+    return items
+  }, [phaseTree])
+
   const milestoneOptions = useMemo(
     () => (milestones || []).map(m => ({ id: m.id, display_name: m.display_name })),
     [milestones]
@@ -135,70 +235,112 @@ export default function PhasesSettingsPage() {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
   }
 
-  // ── Drag-and-Drop (native HTML5) ───────────────────────────
+  // ── @dnd-kit ────────────────────────────────────────────
 
-  const handleDragStart = useCallback((e: React.DragEvent, phaseId: string) => {
-    setDraggedPhaseId(phaseId)
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', phaseId)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor)
+  )
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const phaseId = event.active.data.current?.phaseId as string
+    setActiveDragId(phaseId)
   }, [])
 
-  const handleCardDragOver = useCallback((e: React.DragEvent, targetId: string) => {
-    e.preventDefault()
-    if (targetId === draggedPhaseId) return
+  const handleDragMove = useCallback((event: DragMoveEvent) => {
+    const { active, over } = event
+    if (!over) {
+      setDropIntent(null)
+      return
+    }
+
+    const draggedPhaseId = active.data.current?.phaseId as string
+    const targetPhaseId = over.data.current?.phaseId as string | undefined
+    if (!targetPhaseId || targetPhaseId === draggedPhaseId) {
+      setDropIntent(null)
+      return
+    }
+
+    // Get the over element's rect to determine position within the card
+    const overRect = over.rect
+    if (!overRect) {
+      setDropIntent(null)
+      return
+    }
+
+    // Use pointer position to determine zone
+    // We use the active's translated position to approximate pointer location
+    const pointerY = (event.activatorEvent as PointerEvent).clientY + (event.delta?.y ?? 0)
+    const cardTop = overRect.top
+    const cardHeight = overRect.height
+    const relativeY = pointerY - cardTop
+    const ratio = relativeY / cardHeight
+
+    const targetPhase = activePhases.find(p => p.id === targetPhaseId)
+    const draggedPhase = activePhases.find(p => p.id === draggedPhaseId)
+    if (!targetPhase || !draggedPhase) {
+      setDropIntent(null)
+      return
+    }
+
+    const draggedHasChildren = activePhases.some(p => p.parent_phase_id === draggedPhaseId)
+    const targetIsTopLevel = !targetPhase.parent_phase_id
+    const canNest = targetIsTopLevel && !draggedHasChildren
+
+    if (ratio < 0.25) {
+      // Top zone: insert before
+      setDropIntent({ type: 'reorder', targetId: targetPhaseId, position: 'before' })
+    } else if (ratio > 0.75) {
+      // Bottom zone: insert after
+      setDropIntent({ type: 'reorder', targetId: targetPhaseId, position: 'after' })
+    } else if (canNest) {
+      // Center zone: nest under target
+      setDropIntent({ type: 'nest', targetId: targetPhaseId })
+    } else {
+      // Can't nest, fall back to nearest edge
+      setDropIntent({
+        type: 'reorder',
+        targetId: targetPhaseId,
+        position: ratio < 0.5 ? 'before' : 'after',
+      })
+    }
+  }, [activePhases])
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const intent = dropIntent
+    const draggedPhaseId = event.active.data.current?.phaseId as string
+
+    // Reset DnD state immediately
+    setActiveDragId(null)
+    setDropIntent(null)
+
+    if (!intent || !draggedPhaseId) return
 
     const draggedPhase = activePhases.find(p => p.id === draggedPhaseId)
-    const targetPhase = activePhases.find(p => p.id === targetId)
-    if (!draggedPhase || !targetPhase) return
+    if (!draggedPhase) return
 
-    // Only allow nesting under a top-level phase
-    // Don't allow nesting a phase that already has children (1-level deep only)
-    const hasChildren = activePhases.some(p => p.parent_phase_id === draggedPhaseId)
-    if (!targetPhase.parent_phase_id && !hasChildren) {
-      setNestTargetId(targetId)
-    }
-  }, [draggedPhaseId, activePhases])
+    if (intent.type === 'nest') {
+      // Nest under target
+      const targetPhase = activePhases.find(p => p.id === intent.targetId)
+      if (!targetPhase) return
 
-  const handleCardDrop = useCallback(async (e: React.DragEvent, targetId: string) => {
-    e.preventDefault()
-    const droppedId = e.dataTransfer.getData('text/plain') || draggedPhaseId
-    if (!droppedId || droppedId === targetId) {
-      setDraggedPhaseId(null)
-      setNestTargetId(null)
-      return
-    }
-
-    const draggedPhase = activePhases.find(p => p.id === droppedId)
-    const targetPhase = activePhases.find(p => p.id === targetId)
-    if (!draggedPhase || !targetPhase) {
-      setDraggedPhaseId(null)
-      setNestTargetId(null)
-      return
-    }
-
-    // If dropping onto a top-level phase, nest under it
-    if (!targetPhase.parent_phase_id) {
-      // Don't nest if the dragged phase has children (1-level only)
-      const hasChildren = activePhases.some(p => p.parent_phase_id === droppedId)
+      const hasChildren = activePhases.some(p => p.parent_phase_id === draggedPhaseId)
       if (hasChildren) {
         showToast({ type: 'error', title: 'Cannot nest a phase that has subphases' })
-        setDraggedPhaseId(null)
-        setNestTargetId(null)
         return
       }
 
-      // Set parent_phase_id
       setSaving(true)
       try {
         const { error: updateError } = await supabase
           .from('phase_definitions')
-          .update({ parent_phase_id: targetId })
-          .eq('id', droppedId)
+          .update({ parent_phase_id: intent.targetId })
+          .eq('id', draggedPhaseId)
 
         if (updateError) throw updateError
 
         setPhases(
-          (phases || []).map(p => p.id === droppedId ? { ...p, parent_phase_id: targetId } : p)
+          (phases || []).map(p => p.id === draggedPhaseId ? { ...p, parent_phase_id: intent.targetId } : p)
         )
         showToast({ type: 'success', title: `"${draggedPhase.display_name}" nested under "${targetPhase.display_name}"` })
       } catch {
@@ -206,70 +348,114 @@ export default function PhasesSettingsPage() {
       } finally {
         setSaving(false)
       }
-    }
+    } else if (intent.type === 'reorder') {
+      // Reorder: compute new flat order
+      const targetPhaseId = intent.targetId
 
-    setDraggedPhaseId(null)
-    setNestTargetId(null)
-  }, [draggedPhaseId, activePhases, phases, setPhases, supabase, showToast])
+      // Work with the flat list of top-level phases (reorder among top-level only)
+      // If the dragged phase is a child, un-nest it first by clearing parent_phase_id
+      const wasChild = !!draggedPhase.parent_phase_id
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    // Only clear if we're leaving the card entirely (not entering a child element)
-    const related = e.relatedTarget as Node | null
-    if (!e.currentTarget.contains(related)) {
-      setNestTargetId(null)
+      // Build the new top-level order
+      const topLevel = activePhases
+        .filter(p => !p.parent_phase_id && p.id !== draggedPhaseId)
+        .sort((a, b) => a.display_order - b.display_order)
+
+      // Find where to insert: based on the target's position in the flat list
+      const targetItem = flatItems.find(fi => fi.phase.id === targetPhaseId)
+      if (!targetItem) return
+
+      // Determine the top-level phase to insert relative to
+      let insertRelativeToId = targetPhaseId
+      let insertPosition = intent.position
+
+      // If target is a child, insert relative to its parent instead
+      if (targetItem.isChild && targetItem.phase.parent_phase_id) {
+        insertRelativeToId = targetItem.phase.parent_phase_id
+        // If dropping after a child, insert after the parent group
+        if (intent.position === 'after') {
+          insertPosition = 'after'
+        } else {
+          // Dropping before a child means insert before the parent
+          insertPosition = 'before'
+        }
+      }
+
+      // Build new ordered list
+      const newTopLevel: PhaseDefinition[] = []
+      for (const p of topLevel) {
+        if (p.id === insertRelativeToId && insertPosition === 'before') {
+          newTopLevel.push({ ...draggedPhase, parent_phase_id: null })
+        }
+        newTopLevel.push(p)
+        if (p.id === insertRelativeToId && insertPosition === 'after') {
+          newTopLevel.push({ ...draggedPhase, parent_phase_id: null })
+        }
+      }
+
+      // If target wasn't found in top-level (edge case), append
+      if (!newTopLevel.some(p => p.id === draggedPhaseId)) {
+        newTopLevel.push({ ...draggedPhase, parent_phase_id: null })
+      }
+
+      // Compute new display_order values for all affected phases
+      const updates: { id: string; display_order: number; parent_phase_id: string | null }[] = []
+      let order = 1
+      for (const p of newTopLevel) {
+        const needsOrderUpdate = p.display_order !== order
+        const needsParentUpdate = p.id === draggedPhaseId && wasChild
+
+        if (needsOrderUpdate || needsParentUpdate) {
+          updates.push({
+            id: p.id,
+            display_order: order,
+            parent_phase_id: p.id === draggedPhaseId ? null : p.parent_phase_id,
+          })
+        }
+        order++
+      }
+
+      if (updates.length === 0) return
+
+      setSaving(true)
+      try {
+        // Batch update all changed phases
+        for (const u of updates) {
+          const { error: updateError } = await supabase
+            .from('phase_definitions')
+            .update({ display_order: u.display_order, parent_phase_id: u.parent_phase_id })
+            .eq('id', u.id)
+
+          if (updateError) throw updateError
+        }
+
+        // Update local state
+        const updateMap = new Map(updates.map(u => [u.id, u]))
+        setPhases(
+          (phases || []).map(p => {
+            const u = updateMap.get(p.id)
+            if (u) return { ...p, display_order: u.display_order, parent_phase_id: u.parent_phase_id }
+            return p
+          })
+        )
+
+        if (wasChild) {
+          showToast({ type: 'success', title: `"${draggedPhase.display_name}" moved to top level` })
+        }
+      } catch {
+        showToast({ type: 'error', title: 'Failed to reorder phases' })
+      } finally {
+        setSaving(false)
+      }
     }
+  }, [dropIntent, activePhases, flatItems, phases, setPhases, supabase, showToast])
+
+  const handleDragCancel = useCallback(() => {
+    setActiveDragId(null)
+    setDropIntent(null)
   }, [])
 
-  const handleDragEnd = useCallback(() => {
-    setDraggedPhaseId(null)
-    setNestTargetId(null)
-  }, [])
-
-  // Drop on the root zone (between phases or at top/bottom) to un-nest
-  const handleRootDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setNestTargetId(null)
-  }, [])
-
-  const handleRootDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault()
-    const droppedId = e.dataTransfer.getData('text/plain') || draggedPhaseId
-    if (!droppedId) {
-      setDraggedPhaseId(null)
-      return
-    }
-
-    const draggedPhase = activePhases.find(p => p.id === droppedId)
-    if (!draggedPhase || !draggedPhase.parent_phase_id) {
-      // Already top-level, nothing to do
-      setDraggedPhaseId(null)
-      setNestTargetId(null)
-      return
-    }
-
-    // Un-nest: clear parent_phase_id
-    setSaving(true)
-    try {
-      const { error: updateError } = await supabase
-        .from('phase_definitions')
-        .update({ parent_phase_id: null })
-        .eq('id', droppedId)
-
-      if (updateError) throw updateError
-
-      setPhases(
-        (phases || []).map(p => p.id === droppedId ? { ...p, parent_phase_id: null } : p)
-      )
-      showToast({ type: 'success', title: `"${draggedPhase.display_name}" moved to top level` })
-    } catch {
-      showToast({ type: 'error', title: 'Failed to un-nest phase' })
-    } finally {
-      setSaving(false)
-    }
-
-    setDraggedPhaseId(null)
-    setNestTargetId(null)
-  }, [draggedPhaseId, activePhases, phases, setPhases, supabase, showToast])
+  const activeDragPhase = activeDragId ? activePhases.find(p => p.id === activeDragId) : null
 
   // ── CRUD Handlers ────────────────────────────────────────
 
@@ -470,7 +656,7 @@ export default function PhasesSettingsPage() {
       <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-slate-50 border-l-[3px] border-indigo-400 rounded-r-lg text-sm text-slate-600">
         <Info className="w-4 h-4 text-indigo-400 flex-shrink-0" />
         <span>
-          Drag a phase onto another to nest it as a subphase. Drag to the gaps between phases to un-nest. Use the parent dropdown or color swatch to configure.
+          Drag between phases to reorder. Drag onto a phase to nest it as a subphase. Use the parent dropdown or color swatch to configure.
         </span>
       </div>
 
@@ -485,44 +671,32 @@ export default function PhasesSettingsPage() {
           </p>
         </div>
       ) : (
-        <div
-          className="space-y-2"
-          onDragOver={handleRootDragOver}
-          onDrop={handleRootDrop}
+        <DndContext
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
         >
-          {phaseTree.map((node) => (
-            <div key={node.phase.id}>
-              {/* Parent phase */}
-              <PhaseCard
-                phase={node.phase}
-                milestones={milestoneOptions}
-                activePhases={activePhases}
-                onEdit={handleEdit}
-                onArchive={handleArchive}
-                isNestTarget={nestTargetId === node.phase.id}
-                onDragStart={handleDragStart}
-                onDragOver={handleCardDragOver}
-                onDrop={handleCardDrop}
-                onDragLeave={handleDragLeave}
-              />
-              {/* Child phases (indented) */}
-              {node.children.map((child) => (
-                <div key={child.id} className="mt-1.5">
-                  <PhaseCard
-                    phase={child}
-                    milestones={milestoneOptions}
-                    activePhases={activePhases}
-                    onEdit={handleEdit}
-                    onArchive={handleArchive}
-                    isChild
-                    onDragStart={handleDragStart}
-                  />
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
+          <div className="space-y-2">
+            {flatItems.map((item) => (
+              <div key={item.phase.id} className={item.isChild ? 'mt-1.5' : ''}>
+                <DraggablePhaseCard
+                  item={item}
+                  milestones={milestoneOptions}
+                  activePhases={activePhases}
+                  onEdit={handleEdit}
+                  onArchive={handleArchive}
+                  dropIntent={dropIntent}
+                />
+              </div>
+            ))}
+          </div>
+
+          <DragOverlay dropAnimation={null}>
+            {activeDragPhase ? <PhaseCardOverlay phase={activeDragPhase} /> : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       {/* Archived phases section */}
