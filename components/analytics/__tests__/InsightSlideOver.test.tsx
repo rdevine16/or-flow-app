@@ -209,10 +209,13 @@ describe('InsightSlideOver — panel title per drillThroughType', () => {
 // ============================================
 
 describe('InsightSlideOver — placeholder content', () => {
-  it('renders placeholder for fcots panel type', () => {
+  it('renders FCOTS panel content (not placeholder) for fcots type', () => {
     const insight = makeInsight({ drillThroughType: 'fcots' })
     render(<InsightSlideOver insight={insight} onClose={() => {}} {...baseProps} />)
-    expect(screen.getByText(/panel content coming in/i)).toBeDefined()
+    // With empty firstCaseDetails, shows empty state
+    expect(screen.getByText('No First Case Data')).toBeDefined()
+    // Should NOT show placeholder
+    expect(screen.queryByText(/panel content coming in/i)).toBeNull()
   })
 
   it('renders callback panel content (not placeholder) for callback type', () => {

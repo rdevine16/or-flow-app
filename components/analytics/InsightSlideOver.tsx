@@ -10,6 +10,7 @@ import { X } from 'lucide-react'
 import type { Insight, InsightSeverity } from '@/lib/insightsEngine'
 import type { AnalyticsOverview, FacilityAnalyticsConfig } from '@/lib/analyticsV2'
 import InsightPanelCallback from '@/components/analytics/InsightPanelCallback'
+import InsightPanelFCOTS from '@/components/analytics/InsightPanelFCOTS'
 
 // ============================================
 // SEVERITY CONFIG
@@ -98,6 +99,12 @@ export default function InsightSlideOver({ insight, onClose, analytics, config }
                 revenuePerMinute={config.orHourlyRate ? config.orHourlyRate / 60 : 36}
                 operatingDaysPerYear={config.operatingDaysPerYear}
               />
+            ) : insight?.drillThroughType === 'fcots' ? (
+              <InsightPanelFCOTS
+                fcots={analytics.fcots}
+                graceMinutes={config.fcotsGraceMinutes}
+                targetPercent={config.fcotsTargetPercent}
+              />
             ) : insight?.drillThroughType ? (
               <PanelPlaceholder type={insight.drillThroughType} />
             ) : null}
@@ -114,7 +121,6 @@ export default function InsightSlideOver({ insight, onClose, analytics, config }
 
 function PanelPlaceholder({ type }: { type: string }) {
   const phaseMap: Record<string, string> = {
-    fcots: 'Phase 3',
     utilization: 'Phase 4',
     non_op_time: 'Phase 5',
     scheduling: 'Phase 5',
