@@ -9,7 +9,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import { useBreadcrumbLabel } from '@/lib/BreadcrumbContext'
+import { BreadcrumbLabel } from '@/lib/BreadcrumbContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { startImpersonation } from '@/lib/impersonation'
 import { formatAuditAction } from '@/lib/audit'
@@ -289,9 +289,6 @@ export default function FacilityDetailPage() {
 
   // Determine current plan (would come from database in production)
   const currentPlan = plans[1] // Professional
-
-  // Register dynamic breadcrumb label — facility name
-  useBreadcrumbLabel('/admin/facilities/[id]', facility?.name)
 
   // Redirect non-admins
   useEffect(() => {
@@ -836,6 +833,7 @@ export default function FacilityDetailPage() {
   if (userLoading || loading) {
     return (
       <DashboardLayout>
+        <BreadcrumbLabel routeKey="/admin/facilities/[id]" label={undefined} />
         <div className="flex items-center justify-center h-64">
           <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
         </div>
@@ -853,6 +851,7 @@ export default function FacilityDetailPage() {
 
   return (
     <DashboardLayout>
+      <BreadcrumbLabel routeKey="/admin/facilities/[id]" label={facility?.name} />
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
       {/* Header */}
       <div className="mb-6">

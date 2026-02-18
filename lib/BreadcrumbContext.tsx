@@ -69,6 +69,12 @@ export function useBreadcrumbContext(): LabelMap {
  * Register a dynamic label for a breadcrumb segment.
  * Call from pages that need custom labels (e.g., case detail → "Case #1042").
  * Cleans up on unmount.
+ *
+ * IMPORTANT: This hook must be called from a component rendered INSIDE
+ * <BreadcrumbProvider> (i.e., as a child/descendant of DashboardLayout's
+ * children). Calling it from a page component's top level won't work because
+ * the page is the PARENT of DashboardLayout. Use <BreadcrumbLabel> instead
+ * if you need a render-based alternative.
  */
 export function useBreadcrumbLabel(key: string, label: string | undefined): void {
   const { register, unregister } = useContext(RegisterContext)
@@ -81,4 +87,19 @@ export function useBreadcrumbLabel(key: string, label: string | undefined): void
       unregister(key)
     }
   }, [key, label, register, unregister])
+}
+
+/**
+ * Render-based alternative to useBreadcrumbLabel.
+ * Place this as a child of <DashboardLayout> so it sits inside the BreadcrumbProvider.
+ *
+ * Usage:
+ *   <DashboardLayout>
+ *     <BreadcrumbLabel routeKey="/cases/[id]" label={caseData ? `Case #${caseData.case_number}` : undefined} />
+ *     {/* page content *\/}
+ *   </DashboardLayout>
+ */
+export function BreadcrumbLabel({ routeKey, label }: { routeKey: string; label: string | undefined }) {
+  useBreadcrumbLabel(routeKey, label)
+  return null
 }

@@ -10,7 +10,7 @@ import { useState, useEffect, use, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import { useBreadcrumbLabel } from '@/lib/BreadcrumbContext'
+import { BreadcrumbLabel } from '@/lib/BreadcrumbContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { milestoneAudit, staffAudit } from '@/lib/audit-logger'
 import CaseActivitySummary from '@/components/cases/CaseActivitySummary'
@@ -169,9 +169,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [allProcedures, setAllProcedures] = useState<{ id: string; label: string }[]>([])
   const [allRooms, setAllRooms] = useState<{ id: string; label: string }[]>([])
   const [showIncompleteModal, setShowIncompleteModal] = useState(false)
-
-  // Register dynamic breadcrumb label — "Case #1042"
-  useBreadcrumbLabel('/cases/[id]', caseData?.case_number ? `Case #${caseData.case_number}` : undefined)
 
   // Live clock — only tick for active (non-completed) cases
   const isCompleted = caseData ? getJoinedValue(caseData.case_statuses)?.name === 'completed' : false
@@ -1057,6 +1054,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   if (loading) {
     return (
       <DashboardLayout>
+        <BreadcrumbLabel routeKey="/cases/[id]" label={undefined} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_330px] gap-6">
             {/* Main content skeleton */}
@@ -1114,6 +1112,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   if (!caseData) {
     return (
       <DashboardLayout>
+        <BreadcrumbLabel routeKey="/cases/[id]" label={undefined} />
         <ErrorBanner
           message={error}
           onRetry={fetchData}
@@ -1177,6 +1176,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
   return (
     <DashboardLayout>
+      <BreadcrumbLabel routeKey="/cases/[id]" label={`Case #${caseData.case_number}`} />
       {/* Undo confirmation dialog */}
       {confirmDialog}
 

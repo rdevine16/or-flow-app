@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import { useBreadcrumbLabel } from '@/lib/BreadcrumbContext'
+import { BreadcrumbLabel } from '@/lib/BreadcrumbContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { caseAudit } from '@/lib/audit-logger'
@@ -99,8 +99,6 @@ export default function CancelCasePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Register dynamic breadcrumb label — "Case #1042"
-  useBreadcrumbLabel('/cases/[id]', caseData?.case_number ? `Case #${caseData.case_number}` : undefined)
   
   // Form state
   const [selectedReasonId, setSelectedReasonId] = useState('')
@@ -324,6 +322,7 @@ export default function CancelCasePage() {
   if (loading || userLoading) {
     return (
       <DashboardLayout>
+        <BreadcrumbLabel routeKey="/cases/[id]" label={undefined} />
         <Container className="py-8">
           <div className="flex justify-center py-16">
             <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
@@ -340,6 +339,7 @@ export default function CancelCasePage() {
   if (error && !caseData) {
     return (
       <DashboardLayout>
+        <BreadcrumbLabel routeKey="/cases/[id]" label={undefined} />
         <Container className="py-8">
           <div className="max-w-2xl mx-auto text-center py-12">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -362,6 +362,7 @@ export default function CancelCasePage() {
 
   return (
     <DashboardLayout>
+      <BreadcrumbLabel routeKey="/cases/[id]" label={caseData?.case_number ? `Case #${caseData.case_number}` : undefined} />
       <Container className="py-8">
         <div className="max-w-3xl mx-auto">
           {/* Header */}
