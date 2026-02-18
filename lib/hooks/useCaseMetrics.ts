@@ -179,48 +179,13 @@ async function fetchAllTodayMetrics(
 // ============================================
 
 async function fetchCompletedMetrics(
-  supabase: AnySupabaseClient,
-  facilityId: string,
-  start: string,
-  end: string,
-  statusIds: Record<string, string>,
+  _supabase: AnySupabaseClient,
+  _facilityId: string,
+  _start: string,
+  _end: string,
+  _statusIds: Record<string, string>,
 ): Promise<CaseMetricCard[]> {
-  if (!statusIds.completed) {
-    return [
-      { title: 'Total Cases', value: 0, color: 'blue' },
-      { title: 'Median Duration', value: 0, suffix: ' min', color: 'green' },
-      { title: 'Total Profit', value: 0, prefix: '$', color: 'green' },
-    ]
-  }
-
-  // Fetch completed cases (IDs + durations)
-  const casesR = await supabase.from('cases')
-    .select('id, scheduled_duration_minutes')
-    .eq('facility_id', facilityId)
-    .gte('scheduled_date', start).lte('scheduled_date', end)
-    .eq('status_id', statusIds.completed)
-
-  const cases = (casesR.data ?? []) as Array<{ id: string; scheduled_duration_minutes: number | null }>
-  const totalCount = cases.length
-  const durations = cases.map(c => c.scheduled_duration_minutes).filter((d): d is number => d !== null)
-  const medianDuration = computeMedian(durations)
-
-  // Fetch profits from case_completion_stats for these cases
-  const caseIds = cases.map(c => c.id)
-  let totalProfit = 0
-  if (caseIds.length > 0) {
-    const profitR = await supabase.from('case_completion_stats')
-      .select('profit')
-      .in('case_id', caseIds)
-    totalProfit = ((profitR.data ?? []) as Array<{ profit: number | null }>)
-      .reduce((sum, d) => sum + (d.profit ?? 0), 0)
-  }
-
-  return [
-    { title: 'Total Cases', value: totalCount, color: 'blue' },
-    { title: 'Median Duration', value: medianDuration, suffix: ' min', color: 'green' },
-    { title: 'Total Profit', value: Math.round(totalProfit), prefix: '$', color: 'green' },
-  ]
+  return []
 }
 
 // ============================================
