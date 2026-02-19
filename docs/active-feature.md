@@ -1,303 +1,404 @@
-# Feature: Unify Anesthesiologist as Regular Staff Assignment
+# Feature: Case & Flag Analytics Page + Tremor-to-Recharts Migration
 
 ## Goal
 
-Remove the dedicated `cases.anesthesiologist_id` column and treat anesthesiologists as regular staff members via the `case_staff` join table — same as nurses, techs, and any other non-surgeon role. This applies to both the web app and iOS app.
+Replace the current `analytics/flags` page (which incorrectly shows the general analytics overview) with a dedicated **Case & Flag Analytics** dashboard. The new page is a comprehensive flags analytics tool with KPIs, severity breakdowns, computed pattern detection, trend charts, a day-of-week heatmap, flag rule/delay type breakdowns, surgeon flag distribution, room analysis, recent flagged cases, and drill-through panels.
+
+Additionally, migrate all remaining analytics pages from `@tremor/react` to **Recharts** for consistency, then remove the Tremor dependency.
 
 ## Background
 
-The codebase currently has a **dual-track system** for anesthesiologists:
+The codebase has a well-established flag system:
+- **`case_flags` table** — stores both auto-detected threshold flags and user-reported delay flags
+- **`flag_rules` table** — configurable rules (timing, efficiency, anesthesia, recovery categories)
+- **`delay_types` table** — user-reportable delay categories
+- **`flagEngine.ts`** — batch flag evaluation engine (auto-detection at case completion)
+- **`FlagsSummaryCard.tsx`** — compact summary card on the analytics hub (proven query pattern)
 
-1. **`cases.anesthesiologist_id`** — a dedicated FK column on the `cases` table pointing to `users.id`
-2. **`case_staff` join table** — generic staff assignments (nurses, techs, anesthesiologists)
+The current `/analytics/flags` page was a copy-paste mistake — it shows the general analytics overview (FCOTS, OR Utilization, turnovers, charts) with just the title changed to "Case Flags." The KPI page at `/analytics/kpi` already covers that content.
 
-The demo generator dual-writes to both. The `CaseForm` has a dedicated `SearchableDropdown` for anesthesiologist separate from the `StaffMultiSelect`. Multiple RPCs accept `p_anesthesiologist_id`. The iOS app joins on the FK to display anesthesiologist names.
-
-This complexity is unnecessary. Anesthesiologists should be assigned through `case_staff` like any other staff member.
+The design spec at `docs/case-flags-analytics-light.jsx` defines the complete page layout using mock data and Recharts.
 
 ## Key Decisions
 
 | # | Decision | Answer |
 |---|---|---|
-| 1 | Dashboard assignment | Drag-and-drop like other staff (StaffAssignmentPanel) |
-| 2 | Cardinality | Allow multiple anesthesiologists per case (no limit) |
-| 3 | Amber color theme | Keep — distinct clinical role still deserves visual distinction |
-| 4 | "Dr." prefix | Remove — only surgeons get "Dr." prefix |
-| 5 | `get_anesthesiologist_block_stats` RPC | Drop — dead code, nothing calls it |
-| 6 | `AnesthesiaPopover.tsx` | Delete — already dead code, not imported anywhere |
-| 7 | iOS app | Update in same feature branch |
-| 8 | Active feature file | Overwrite previous plan (scheduled_duration work is done) |
+| 1 | Chart library | Recharts — build new page with it, then migrate all analytics pages from Tremor |
+| 2 | Pattern insights | Computed from real flag data (day spikes, cascades, trends, concentrations) |
+| 3 | Heatmap categories | Map by `flag_rules.category` → FCOTS / Timing / Turnover / Delay buckets |
+| 4 | Row click behavior | Drill-through slide-over panels (surgeon detail, case detail, room detail) |
+| 5 | Current flags page | Full replace — was a copy/paste mistake |
+| 6 | KPI card pattern | Custom `FlagKPICard` component matching design spec |
+| 7 | Migration scope | Same branch, split by page (one phase per page) |
+| 8 | Branch | `feature/flags-analytics-recharts-migration` |
 
 ## Affected Systems
 
-### Database
-- `cases.anesthesiologist_id` column (to drop)
-- `create_case_with_milestones` RPC (remove `p_anesthesiologist_id` param)
-- `finalize_draft_case` RPC (remove `p_anesthesiologist_id` param)
-- `get_anesthesiologist_block_stats` RPC (drop entirely)
-- Surgeon scorecard function (joins on `cases.anesthesiologist_id`)
+### Database (read-only — no migrations needed)
+- `case_flags` — main data source (threshold + delay flags)
+- `flag_rules` — rule names, categories, severity
+- `delay_types` — delay type display names
+- `cases` — case metadata (date, surgeon, room, procedure)
+- `users` (surgeons) — surgeon names for flag distribution
+- `or_rooms` — room names for room analysis
 
-### Web App
-- `components/cases/CaseForm.tsx` — dedicated dropdown, form state, RPC calls
-- `components/cases/CaseSummary.tsx` — reads anesthesiologist as separate prop
-- `components/cases/CompletedCaseView.tsx` — reads anesthesiologist as separate prop
-- `components/cases/StaffMultiSelect.tsx` — already has "Anesthesiologists" section
-- `components/ui/AnesthesiaPopover.tsx` — dead code, delete
-- `app/cases/[id]/page.tsx` — FK join for anesthesiologist display
-- `app/settings/users/page.tsx` — Dr. prefix for anesthesiologist
-- `lib/validation/schemas.ts` — `anesthesiologist_id` field
-- `lib/demo-data-generator.ts` — dual-write logic
+### Web App — New Files
+- `types/flag-analytics.ts` — TypeScript interfaces
+- `lib/hooks/useFlagAnalytics.ts` — data fetching hook
+- `lib/flagPatternDetection.ts` — pattern detection engine
+- `components/analytics/flags/FlagKPICard.tsx` — custom KPI cards with sparklines
+- `components/analytics/flags/SeverityStrip.tsx` — proportional severity strip
+- `components/analytics/flags/FlagTrendChart.tsx` — Recharts stacked area chart
+- `components/analytics/flags/DayHeatmap.tsx` — CSS grid heatmap
+- `components/analytics/flags/HorizontalBarList.tsx` — reusable bar breakdown
+- `components/analytics/flags/SurgeonFlagTable.tsx` — surgeon flag distribution table
+- `components/analytics/flags/RoomAnalysisCards.tsx` — room analysis cards
+- `components/analytics/flags/PatternInsightCards.tsx` — pattern insight cards
+- `components/analytics/flags/RecentFlaggedCases.tsx` — recent flagged cases list
+- `components/analytics/flags/FlagDrillThrough.tsx` — slide-over drill-through panels
 
-### iOS App
-- `Repositories/CaseRepository.swift` — FK join query
-- `Models/SurgeonDay.swift` — anesthesiologist property on case model
-- `Features/SurgeonHome/SurgeonHomeViewModel.swift` — "most common anesthesiologist" insight
-- `Features/SurgeonHome/Components/SurgeonCaseDetailSheet.swift` — display
-- `Features/Cases/CaseManagementSections.swift` — color mapping (keep)
+### Web App — Modified Files
+- `app/analytics/flags/page.tsx` — full replace
+- `app/analytics/page.tsx` — Tremor → Recharts migration
+- `app/analytics/surgeons/page.tsx` — Tremor → Recharts migration
+- `app/analytics/block-utilization/page.tsx` — Tremor → Recharts migration
+- `lib/analyticsV2.ts` — remove Tremor `Color` type import
+- `package.json` — remove `@tremor/react`
 
 ---
 
-## Phase 1: Data Migration (Small)
+## Phase 1: Data Layer — Hook + Query Infrastructure (Medium)
 
-**Goal:** Ensure every `cases.anesthesiologist_id` value has a corresponding `case_staff` row, so nothing is lost when we switch readers.
+**Goal:** Create the `useFlagAnalytics` hook and TypeScript interfaces that power the entire page.
 
-### 1.1 — Create migration
+### 1.1 — TypeScript interfaces
 
-**File:** `supabase/migrations/20260219100000_migrate_anesthesiologist_to_case_staff.sql`
+**File:** `types/flag-analytics.ts`
 
-```sql
--- Migrate cases.anesthesiologist_id → case_staff rows
--- Idempotent: skips cases that already have an anesthesiologist in case_staff
+Define interfaces for:
+- `FlagAnalyticsData` — top-level shape returned by the hook
+- `FlagSummaryKPIs` — totalCases, flaggedCases, flagRate, flagRateTrend, delayedCases, delayRate, delayRateTrend, criticalCount, warningCount, infoCount, totalFlags, avgFlagsPerCase
+- `FlagRuleBreakdownItem` — name, count, severity, pct
+- `DelayTypeBreakdownItem` — name, count, pct, avgDuration, color
+- `WeeklyTrendPoint` — week label, threshold count, delay count, total
+- `DayOfWeekRow` — day, fcots, timing, turnover, delay, total
+- `SurgeonFlagRow` — name, surgeonId, cases, flags, rate, trend, topFlag
+- `RoomFlagRow` — room, roomId, cases, flags, rate, topIssue, topDelay
+- `RecentFlaggedCase` — caseNum, caseId, date, surgeon, procedure, flags[]
+- `DetectedPattern` — type, title, desc, severity, metric
 
-INSERT INTO public.case_staff (case_id, user_id, role_id)
-SELECT
-  c.id AS case_id,
-  c.anesthesiologist_id AS user_id,
-  ur.id AS role_id
-FROM public.cases c
-JOIN public.user_roles ur ON ur.name = 'anesthesiologist'
-WHERE c.anesthesiologist_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM public.case_staff cs
-    WHERE cs.case_id = c.id
-      AND cs.user_id = c.anesthesiologist_id
-      AND cs.role_id = ur.id
-      AND cs.removed_at IS NULL
-  );
-```
+### 1.2 — Data fetching hook
 
-### 1.2 — Apply & verify
+**File:** `lib/hooks/useFlagAnalytics.ts`
 
-- Run `supabase db push`
-- Verify row counts match: `SELECT COUNT(*) FROM cases WHERE anesthesiologist_id IS NOT NULL` ≈ new `case_staff` rows created
+- Use `useSupabaseQuery` to fetch `case_flags` with joins to `flag_rules`, `delay_types`, and `cases` (including surgeon + room + procedure joins)
+- Accept `facilityId` and date range params
+- Compute all aggregate stats client-side from the raw flags:
+  - KPI values (flag rate, delay rate, severity counts)
+  - Sparkline data (12-week rolling flag rate)
+  - Flag rule breakdown (group by `flag_rule.name`, count, sort desc)
+  - Delay type breakdown (group by `delay_type.display_name`, count, avg duration)
+  - Weekly trend (group by ISO week, split threshold vs delay)
+  - Day-of-week heatmap (group by `scheduled_date` day, categorize by `flag_rules.category`)
+  - Surgeon rollup (group by `surgeon_id`, compute flag rate, trend, top flag)
+  - Room rollup (group by `or_room_id`, compute flag rate, top issue/delay)
+  - Recent flagged cases (dedupe by case, sort by date desc, take 5)
+- Also fetch total case count for the period (for flag rate denominator)
+- Fetch previous period flag data for trend comparison
+- Return typed `FlagAnalyticsData` object
 
 ### Phase 1 Commit
-`feat(db): phase 1 - migrate anesthesiologist_id data to case_staff`
+`feat(analytics): phase 1 - flag analytics data layer and hook`
 
 ### Phase 1 Test Gate
-1. **Unit:** Migration SQL is idempotent (running twice produces no duplicates)
-2. **Integration:** `case_staff` rows exist for every case that had an `anesthesiologist_id`
-3. **Workflow:** Existing app still works — column still exists, RPCs unchanged
+1. **Unit:** Hook returns correctly typed data, handles loading/error/empty states, computations are accurate for known inputs
+2. **Integration:** Query returns real data from `case_flags` with all joins populated
+3. **Workflow:** Hook responds to date range changes and facility scoping correctly
 
 ---
 
-## Phase 2: Web App — CaseForm & Data Layer (Medium)
+## Phase 2: Page Shell + KPI Strip + Severity Strip (Medium)
 
-**Goal:** Stop writing `anesthesiologist_id` on cases. The `StaffMultiSelect` already handles anesthesiologist selection — just remove the dedicated dropdown and RPC parameter.
+**Goal:** Replace the entire `analytics/flags/page.tsx` with the new page skeleton. Build custom KPI cards and severity strip.
 
-### 2.1 — CaseForm.tsx
+### 2.1 — Page skeleton
 
-- Remove `anesthesiologist_id: string` from `FormData` interface (line 50)
-- Remove `anesthesiologist_id: ''` from initial state (line 92)
-- Remove `const [anesthesiologists, setAnesthesiologists] = useState(...)` (line 127)
-- Remove the `useEffect` that fetches anesthesiologist users (lines 365-376)
-- Remove `p_anesthesiologist_id` from all 3 RPC calls (lines 607, 733, 839)
-- Remove `anesthesiologist_id` from the direct update object (line 709)
-- Remove the dedicated `SearchableDropdown` for "Anesthesiologist" (section 8, lines 1372-1380)
-- Remove `anesthesiologist_id` from edit mode population (line 431)
-- In edit mode: load existing `case_staff` anesthesiologist entries into `selectedStaff` initial state
-- Update `excludeUserIds` on StaffMultiSelect to also exclude surgeon (already done)
-- Remove Dr. prefix from StaffMultiSelect anesthesiologist display (if present)
+**File:** `app/analytics/flags/page.tsx` (full replace)
 
-### 2.2 — Validation schemas
+- Standard analytics page pattern: `DashboardLayout`, `AnalyticsPageHeader`, `DateRangeSelector`
+- Permission guard: `can('analytics.view')`
+- `useUser()` for facility scoping, `useFlagAnalytics()` for data
+- Loading skeleton
+- Content layout: `space-y-8` sections
 
-**File:** `lib/validation/schemas.ts`
+### 2.2 — Custom FlagKPICard component
 
-- Remove `anesthesiologist_id: z.string().optional().or(z.literal(''))` from `createCaseSchema` (line 54)
-- Remove same from `draftCaseSchema` (line 86)
+**File:** `components/analytics/flags/FlagKPICard.tsx`
 
-### 2.3 — Settings users page
+- Match design spec: status dot, uppercase label, large monospace value + unit, sparkline (Recharts mini AreaChart), trend badge, detail text
+- Props: `label, value, unit?, trend?, trendInverse?, sparkData?, sparkColor?, status?, detail?`
+- Inline MiniSparkline using Recharts `AreaChart` + `Area` (no axes, gradient fill)
+- TrendBadge sub-component: directional arrow + percentage + color based on good/bad
 
-**File:** `app/settings/users/page.tsx`
+### 2.3 — Severity strip
 
-- Line 631: Remove `|| roleName === 'anesthesiologist'` from the "Dr." prefix condition
+**File:** `components/analytics/flags/SeverityStrip.tsx`
+
+- Proportional flex strip showing critical/warning/info with counts and percentages
+- Each segment uses severity-appropriate bg/border/text colors
+- Flex basis proportional to count
+
+### 2.4 — Wire into page
+
+- 4 KPI cards in `grid-cols-4`: Flagged Cases (%), Delay Rate (%), Critical Flags (count), Total Flags (count)
+- Severity strip below KPIs
 
 ### Phase 2 Commit
-`feat(cases): phase 2 - remove dedicated anesthesiologist form field, use StaffMultiSelect`
+`feat(analytics): phase 2 - flags page shell, KPI cards, severity strip`
 
 ### Phase 2 Test Gate
-1. **Unit:** `npx tsc --noEmit` — clean compile, validation schemas pass
-2. **Integration:** Create a case with anesthesiologist via StaffMultiSelect → verify `case_staff` row created
-3. **Workflow:** Edit existing case → anesthesiologist appears in staff multi-select, not as separate field
+1. **Unit:** KPI cards render correct values, trend badges, sparklines; severity strip proportions are accurate
+2. **Integration:** Page loads with real data, date filtering updates KPIs
+3. **Workflow:** Navigate from analytics hub → flags page → KPIs populated with real numbers
 
 ---
 
-## Phase 3: Web App — Display Components & Cleanup (Medium)
+## Phase 3: Charts — Flag Trend + Day-of-Week Heatmap (Medium)
 
-**Goal:** Switch all readers from `cases.anesthesiologist_id` FK join to `case_staff` join. Delete dead code.
+**Goal:** Build the flag trend stacked area chart and the day-of-week category heatmap.
 
-### 3.1 — Case detail page
+### 3.1 — Flag trend chart
 
-**File:** `app/cases/[id]/page.tsx`
+**File:** `components/analytics/flags/FlagTrendChart.tsx`
 
-- Remove `anesthesiologist:users!cases_anesthesiologist_id_fkey (id, first_name, last_name)` from query (line 201)
-- Remove `anesthesiologist` type from the interface (line 81)
-- Remove `const anesthesiologist = getJoinedValue(caseData?.anesthesiologist)` (line 996)
-- Update team count: remove `+ (anesthesiologist ? 1 : 0)` (line 1483)
-- Remove the dedicated `<TeamMember>` render for anesthesiologist (line 1487)
-- The anesthesiologist will now appear naturally in the `assignedStaff` list from `case_staff`
+- Recharts `AreaChart` inside `ResponsiveContainer`
+- Stacked areas: "Auto-detected" (violet) + "User-reported" (orange)
+- Linear gradient fills, custom tooltip, legend
+- X-axis: week labels, Y-axis: flag count
+- Data from `useFlagAnalytics().weeklyTrend`
 
-### 3.2 — CaseSummary.tsx
+### 3.2 — Day-of-week heatmap
 
-- Remove `anesthesiologist` from props interface (line 45)
-- Remove the anesthesiologist conditional render block (lines 357-375)
-- Anesthesiologist will appear in the regular staff list from `case_staff`
+**File:** `components/analytics/flags/DayHeatmap.tsx`
 
-### 3.3 — CompletedCaseView.tsx
+- Custom CSS grid (not chart library)
+- Rows: FCOTS, Timing, Turnover, Delays + Total row
+- Columns: Mon–Fri
+- Cell background intensity based on value relative to max
+- Category colors: rose (FCOTS), amber (Timing), violet (Turnover), orange (Delays)
 
-- Remove `anesthesiologist` from props (line 91)
-- Remove case header "Anesthesiologist" row (lines 704-708)
-- Remove surgical team panel anesthesiologist section (lines 871-881)
-- Anesthesiologist will appear in the staff list naturally
+### 3.3 — Wire into page
 
-### 3.4 — Delete dead code
-
-- Delete `components/ui/AnesthesiaPopover.tsx` entirely
-
-### 3.5 — Demo data generator
-
-**File:** `lib/demo-data-generator.ts`
-
-- Remove `anesthesiologist_id` from `CaseRecord` interface (line 67)
-- Remove `anesthesiologist_id: anesId` from case data (line 831)
-- Keep writing to `case_staff` (already does this — line 898)
-- Remove the `skipAnes` logic for 30% of hand/wrist cases (the staff assignment path handles it)
+- Two-column grid: trend chart (left) + heatmap (right)
+- Both wrapped in Card components with SectionHeader
 
 ### Phase 3 Commit
-`feat(cases): phase 3 - read anesthesiologist from case_staff, remove FK display logic`
+`feat(analytics): phase 3 - flag trend chart and day-of-week heatmap`
 
 ### Phase 3 Test Gate
-1. **Unit:** `npx tsc --noEmit` — clean compile
-2. **Integration:** Case detail page shows anesthesiologist in staff list from case_staff
-3. **Workflow:** View completed case → anesthesiologist appears in team section via staff assignments
+1. **Unit:** Chart renders with mock data, handles empty/single-week edge cases; heatmap renders all 5 days
+2. **Integration:** Charts populate from real flag data grouped by week/day
+3. **Workflow:** Change date range → both charts update; hover tooltip shows correct values
 
 ---
 
-## Phase 4: iOS App (Medium)
+## Phase 4: Breakdowns + Surgeon Table + Room Cards (Large)
 
-**Goal:** Update all iOS code to read anesthesiologist from `case_staff` instead of `cases.anesthesiologist_id`.
+**Goal:** Build the flag rule breakdown, delay type breakdown, surgeon flag distribution table, and room analysis cards.
 
-### 4.1 — CaseRepository.swift
+### 4.1 — Horizontal bar list
 
-- Remove `anesthesiologist:users!cases_anesthesiologist_id_fkey(first_name, last_name)` from query (line 184)
-- Add `case_staff(user_id, role_id, user_roles(name), users(first_name, last_name))` join if not already present
-- Filter for role name `'anesthesiologist'` in the results
+**File:** `components/analytics/flags/HorizontalBarList.tsx`
 
-### 4.2 — SurgeonDay.swift
+- Reusable for both flag rule and delay type breakdowns
+- Props: `items[]` with `name, count, pct, severity?, color?, avgDuration?`
+- Each row: dot, name, count (monospace), percentage, thin progress bar
 
-- Remove `anesthesiologist: StaffInfo?` property from `SurgeonCase` (line 104)
-- Add computed property that finds anesthesiologist(s) from a `staff` array
-- Update `CodingKeys`, `init(from:)`, and manual init
-- Update `anesthesiologistName` computed property
+### 4.2 — Flag rule & delay type sections
 
-### 4.3 — SurgeonHomeViewModel.swift
+- Two-column grid: Auto-detected flags (left) + Reported delays (right)
+- Both use `HorizontalBarList` with different data
 
-- Update "most common anesthesiologist" insight (lines 135-136) to read from staff array instead of `case.anesthesiologistName`
+### 4.3 — Surgeon flag distribution table
 
-### 4.4 — SurgeonCaseDetailSheet.swift
+**File:** `components/analytics/flags/SurgeonFlagTable.tsx`
 
-- Update display (line 140) to read from staff array
-- Update preview data (line 259)
+- Plain `<table>` — dataset is small
+- Columns: Surgeon, Cases, Flags, Flag Rate (color-coded), Trend, Top Flag
+- Hover highlighting, click → triggers drill-through (Phase 5)
 
-### 4.5 — CaseManagementSections.swift
+### 4.4 — Room analysis cards
 
-- Keep `"anesthesiologist": .orbitOrange` color mapping — no change needed
+**File:** `components/analytics/flags/RoomAnalysisCards.tsx`
+
+- Grid of cards (one per room), responsive columns
+- Each card: room name, flag rate badge, progress bar, counts, top flag, top delay
+- Click → triggers drill-through (Phase 5)
 
 ### Phase 4 Commit
-`feat(ios): phase 4 - read anesthesiologist from case_staff instead of cases column`
+`feat(analytics): phase 4 - flag breakdowns, surgeon table, room analysis`
 
 ### Phase 4 Test Gate
-1. **Unit:** Xcode build succeeds, no compile errors
-2. **Integration:** Surgeon home shows anesthesiologist name from case_staff data
-3. **Workflow:** Case detail sheet displays anesthesiologist correctly
+1. **Unit:** Bar lists render sorted data; surgeon table renders; room cards show correct color thresholds
+2. **Integration:** Breakdowns show real flag rule names and delay type display_names from DB
+3. **Workflow:** Surgeon table flag rates match KPI totals; room percentages are consistent
 
 ---
 
-## Phase 5: Database Cleanup (Medium)
+## Phase 5: Pattern Insights + Recent Cases + Drill-Through (Large)
 
-**Goal:** Drop the column, update all RPCs, remove dead functions. This is the point of no return.
+**Goal:** Build computed pattern detection, recent flagged cases list, and drill-through slide-over panels.
 
-### 5.1 — Migration
+### 5.1 — Pattern detection engine
 
-**File:** `supabase/migrations/20260219200000_drop_anesthesiologist_id.sql`
+**File:** `lib/flagPatternDetection.ts`
 
-```sql
--- 1. Drop the get_anesthesiologist_block_stats function (dead code)
-DROP FUNCTION IF EXISTS public.get_anesthesiologist_block_stats(uuid, date, date);
+Detects patterns from raw flag analytics data:
+- **Day-of-week spike:** Any day >50% more flags than daily average
+- **Equipment cascade:** Delay flags correlating with subsequent threshold flags in same room/day
+- **Trend improvement:** Flag category declining >20% over recent 4 weeks
+- **Trend deterioration:** Flag category increasing >20%
+- **Room concentration:** Room with >35% of flags but <30% of cases
+- **Recurring surgeon pattern:** Surgeon flag rate >2x facility average
 
--- 2. Recreate create_case_with_milestones WITHOUT p_anesthesiologist_id
--- (full function body, dropping the param and removing the column from INSERT)
+Returns `DetectedPattern[]` sorted by severity.
 
--- 3. Recreate finalize_draft_case WITHOUT p_anesthesiologist_id
--- (full function body, dropping the param and removing the column from UPDATE)
+### 5.2 — Pattern insight cards
 
--- 4. Update surgeon scorecard function to join through case_staff
--- instead of cases.anesthesiologist_id
+**File:** `components/analytics/flags/PatternInsightCards.tsx`
 
--- 5. Drop the column
-ALTER TABLE public.cases DROP COLUMN IF EXISTS anesthesiologist_id;
-```
+- 2-column grid of pattern cards
+- Each: left color border, icon, title, metric badge, description
+- Severity colors: critical → rose, warning → amber, good → emerald
 
-### 5.2 — Apply & verify
+### 5.3 — Recent flagged cases
 
-- Run `supabase db push`
-- Verify column is gone: `SELECT anesthesiologist_id FROM cases LIMIT 1` → error
-- Verify RPCs work: create a test case via RPC without `p_anesthesiologist_id`
+**File:** `components/analytics/flags/RecentFlaggedCases.tsx`
+
+- Card with header + "View All →" button (links to `/cases`)
+- Row per case: case number, date, surgeon, procedure, flag badges
+- Flag badges: severity-colored with icon (⚡ threshold, ◷ delay)
+
+### 5.4 — Drill-through slide-over
+
+**File:** `components/analytics/flags/FlagDrillThrough.tsx`
+
+- Radix Dialog slide-over (640px, right) — matches InsightSlideOver pattern
+- Three modes: surgeon detail, room detail, case detail
+- Each shows all flags for that entity, grouped and sorted
 
 ### Phase 5 Commit
-`feat(db): phase 5 - drop cases.anesthesiologist_id column, clean up RPCs`
+`feat(analytics): phase 5 - pattern detection, recent cases, drill-through panels`
 
 ### Phase 5 Test Gate
-1. **Unit:** `npx tsc --noEmit` — clean compile (no code references the column)
-2. **Integration:** `supabase db push` succeeds, RPCs callable without anesthesiologist param
-3. **Workflow:** Full create → view → complete case flow works end-to-end
+1. **Unit:** Pattern detection identifies day spikes, trends, room concentrations correctly; handles edge cases
+2. **Integration:** Patterns render from real data; drill-through shows correct detail
+3. **Workflow:** Click surgeon → slide-over → close → click case → slide-over → page state preserved
 
 ---
 
-## Files Involved
+## Phase 6: Tremor → Recharts — Analytics Hub (Small)
 
-### Modified Files (Web)
-- `components/cases/CaseForm.tsx`
-- `components/cases/CaseSummary.tsx`
-- `components/cases/CompletedCaseView.tsx`
-- `app/cases/[id]/page.tsx`
-- `app/settings/users/page.tsx`
-- `lib/validation/schemas.ts`
-- `lib/demo-data-generator.ts`
+**Goal:** Migrate `app/analytics/page.tsx` from `@tremor/react` to Recharts.
 
-### Deleted Files (Web)
-- `components/ui/AnesthesiaPopover.tsx`
+### What to migrate
+- `AreaChart` → Recharts `AreaChart` + `ResponsiveContainer` + `Area` + axes + tooltip
+- `Legend` → Recharts `Legend` or custom legend div
+- Remove `type Color` import
 
-### New Files
-- `supabase/migrations/20260219100000_migrate_anesthesiologist_to_case_staff.sql`
-- `supabase/migrations/20260219200000_drop_anesthesiologist_id.sql`
+### Files touched
+- MODIFY: `app/analytics/page.tsx`
 
-### Modified Files (iOS)
-- `Repositories/CaseRepository.swift`
-- `Models/SurgeonDay.swift`
-- `Features/SurgeonHome/SurgeonHomeViewModel.swift`
-- `Features/SurgeonHome/Components/SurgeonCaseDetailSheet.swift`
+### Phase 6 Commit
+`refactor(analytics): phase 6 - migrate hub page from Tremor to Recharts`
 
-### Test Files (may need updates)
-- `lib/validation/__tests__/schemas.test.ts`
-- `lib/dal/__tests__/cases.test.ts`
+### Phase 6 Test Gate
+1. **Unit:** Charts render with same data shapes, no TS errors
+2. **Integration:** Hub page loads and displays all charts correctly
+3. **Workflow:** Visual check — charts look equivalent
+
+**Complexity:** Small
+
+---
+
+## Phase 7: Tremor → Recharts — Surgeons Page (Small)
+
+**Goal:** Migrate `app/analytics/surgeons/page.tsx` from `@tremor/react` to Recharts.
+
+### What to migrate
+- `AreaChart` → Recharts equivalents
+- `BarChart` → Recharts equivalents
+
+### Files touched
+- MODIFY: `app/analytics/surgeons/page.tsx`
+
+### Phase 7 Commit
+`refactor(analytics): phase 7 - migrate surgeons page from Tremor to Recharts`
+
+### Phase 7 Test Gate
+1. **Unit:** Charts render with same data shapes
+2. **Integration:** Page loads with all visualizations
+3. **Workflow:** Visual regression check
+
+**Complexity:** Small
+
+---
+
+## Phase 8: Tremor → Recharts — Block Utilization Page (Small)
+
+**Goal:** Migrate `app/analytics/block-utilization/page.tsx` from `@tremor/react` to Recharts.
+
+### What to migrate
+- `AreaChart` → Recharts equivalents
+- `BarChart` → Recharts equivalents
+
+### Files touched
+- MODIFY: `app/analytics/block-utilization/page.tsx`
+
+### Phase 8 Commit
+`refactor(analytics): phase 8 - migrate block-utilization page from Tremor to Recharts`
+
+### Phase 8 Test Gate
+1. **Unit:** Charts render with same data shapes
+2. **Integration:** Page loads with all visualizations
+3. **Workflow:** Visual regression check
+
+**Complexity:** Small
+
+---
+
+## Phase 9: Remove @tremor/react Dependency (Small)
+
+**Goal:** Remove `@tremor/react` from the project entirely.
+
+### What to do
+- Remove `@tremor/react` from `package.json`
+- Update `lib/analyticsV2.ts`: replace `import { type Color } from '@tremor/react'` with local type
+- Grep for any remaining `@tremor` references
+- Run `npm install` to update lockfile
+- Verify `npm run build` succeeds
+
+### Files touched
+- MODIFY: `package.json`
+- MODIFY: `lib/analyticsV2.ts`
+
+### Phase 9 Commit
+`chore: phase 9 - remove @tremor/react dependency`
+
+### Phase 9 Test Gate
+1. **Unit:** `npx tsc --noEmit` — clean compile, no Tremor references
+2. **Integration:** `npm run build` succeeds
+3. **Workflow:** All analytics pages render correctly
+
+**Complexity:** Small
+
+---
+
+## Phase Dependency Chain
+```
+Phase 1 (data layer) → Phase 2 (page + KPIs) → Phase 3 (charts)
+                                               → Phase 4 (tables)
+                                               → Phase 5 (patterns + drill-through)
+Phase 6–8 (Tremor migration — independent of each other and of 1–5)
+Phase 6 + 7 + 8 → Phase 9 (remove Tremor)
+```
