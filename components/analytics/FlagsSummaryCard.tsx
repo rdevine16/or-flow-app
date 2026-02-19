@@ -12,13 +12,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import {
-  FlagIcon,
-  ArrowRightIcon,
-  ExclamationTriangleIcon,
-  ExclamationCircleIcon,
-  InformationCircleIcon,
-} from '@heroicons/react/24/outline'
+import { Flag, ArrowRight, AlertTriangle, AlertCircle, Info } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -64,7 +58,7 @@ interface FlagsSummaryCardProps {
 const SEVERITY = {
   critical: {
     label: 'Critical',
-    icon: ExclamationCircleIcon,
+    icon: AlertCircle,
     bg: 'bg-red-50',
     text: 'text-red-600',
     ring: 'ring-red-200',
@@ -72,7 +66,7 @@ const SEVERITY = {
   },
   warning: {
     label: 'Warning',
-    icon: ExclamationTriangleIcon,
+    icon: AlertTriangle,
     bg: 'bg-amber-50',
     text: 'text-amber-700',
     ring: 'ring-amber-200',
@@ -80,7 +74,7 @@ const SEVERITY = {
   },
   info: {
     label: 'Info',
-    icon: InformationCircleIcon,
+    icon: Info,
     bg: 'bg-blue-50',
     text: 'text-blue-700',
     ring: 'ring-blue-200',
@@ -219,14 +213,14 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
       <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
-            <FlagIcon className="w-5 h-5 text-slate-400" />
+            <Flag className="w-5 h-5 text-slate-400" />
             <h3 className="text-base font-semibold text-slate-900">Case Flags</h3>
           </div>
           <p className="text-sm text-slate-500 mt-0.5">Auto-detected anomalies and reported delays</p>
         </div>
         <div className="p-8 text-center">
           <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <FlagIcon className="w-6 h-6 text-green-500" />
+            <Flag className="w-6 h-6 text-green-500" />
           </div>
           <p className="text-sm font-medium text-slate-700">No flags in this period</p>
           <p className="text-xs text-slate-400 mt-1">All cases within expected thresholds</p>
@@ -242,7 +236,7 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <FlagIcon className="w-5 h-5 text-slate-400" />
+              <Flag className="w-5 h-5 text-slate-400" />
               <h3 className="text-base font-semibold text-slate-900">Case Flags</h3>
               <span className="px-2 py-0.5 text-xs font-semibold bg-slate-100 text-slate-600 rounded-full">
                 {stats.totalFlags}
@@ -257,7 +251,7 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
             className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
           >
             View all
-            <ArrowRightIcon className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
       </div>
@@ -337,7 +331,7 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
                     <span className="text-xs text-slate-400 font-medium">
                       {c.count} flag{c.count !== 1 ? 's' : ''}
                     </span>
-                    <ArrowRightIcon className="w-3.5 h-3.5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                    <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-blue-500 transition-colors" />
                   </div>
                 </Link>
               ))}

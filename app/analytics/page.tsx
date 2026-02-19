@@ -12,14 +12,21 @@ import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
 import { getLocalDateString } from '@/lib/date-utils'
 
-// Tremor components
+// Recharts
 import {
   BarChart,
-  DonutChart,
+  Bar,
   AreaChart,
-  Legend,
-  type Color,
-} from '@tremor/react'
+  Area,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
 
 // Analytics functions
 import {
@@ -238,6 +245,61 @@ function SectionHeader({
         {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
       </div>
       {action}
+    </div>
+  )
+}
+
+// ============================================
+// CHART TOOLTIPS
+// ============================================
+
+interface ChartTooltipPayload {
+  name: string
+  value: number
+  color?: string
+  fill?: string
+}
+
+function CaseVolumeTooltip({ active, payload, label }: { active?: boolean; payload?: ChartTooltipPayload[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 shadow-lg">
+      <p className="text-[11px] font-semibold text-slate-500 mb-1">{label}</p>
+      <p className="text-xs text-slate-700">
+        <span className="font-semibold">{payload[0].value}</span> completed cases
+      </p>
+    </div>
+  )
+}
+
+function CategoryTooltip({ active, payload }: { active?: boolean; payload?: ChartTooltipPayload[] }) {
+  if (!active || !payload?.length) return null
+  const item = payload[0]
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 shadow-lg">
+      <div className="flex items-center gap-1.5">
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
+        <span className="text-xs text-slate-700">
+          {item.name}: <span className="font-semibold">{item.value} cases</span>
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function ComparisonTooltip({ active, payload, label }: { active?: boolean; payload?: ChartTooltipPayload[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 shadow-lg">
+      <p className="text-[11px] font-semibold text-slate-500 mb-1.5">{label}</p>
+      {payload.map(entry => (
+        <div key={entry.name} className="flex items-center gap-1.5 mb-0.5 last:mb-0">
+          <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: entry.color || entry.fill }} />
+          <span className="text-xs text-slate-700">
+            {entry.name}: <span className="font-semibold">{entry.value} min</span>
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -583,7 +645,7 @@ case_milestones (
       .slice(0, 8) // Top 8 categories
   }, [cases])
 
-  const categoryChartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet', 'fuchsia', 'pink', 'green', 'amber']
+  const categoryChartColors = ['#3b82f6', '#06b6d4', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#22c55e', '#f59e0b']
 
   // Helper to get surgical time from milestones
   const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
@@ -879,17 +941,15 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     </div>
                     <div className="p-6">
                       {dailyCaseTrendData.length > 0 ? (
-                        <BarChart
-                          className="h-64"
-                          data={dailyCaseTrendData}
-                          index="date"
-                          categories={['Completed Cases']}
-                          colors={['blue']}
-                          valueFormatter={(v) => v.toString()}
-                          yAxisWidth={40}
-                          showAnimation={true}
-                          showLegend={false}
-                        />
+                        <ResponsiveContainer width="100%" height={256}>
+                          <BarChart data={dailyCaseTrendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                            <Tooltip content={<CaseVolumeTooltip />} />
+                            <Bar dataKey="Completed Cases" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
                       ) : (
                         <div className="flex items-center justify-center h-64 text-slate-400">
                           <div className="text-center">
@@ -910,21 +970,42 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     <div className="p-6">
                       {procedureCategoryData.length > 0 ? (
                         <div className="flex flex-col items-center">
-                          <DonutChart
-                            className="h-52"
-                            data={procedureCategoryData}
-                            index="name"
-                            category="cases"
-                            colors={categoryChartColors}
-                            valueFormatter={(v) => `${v} cases`}
-                            showAnimation={true}
-                            label={`${procedureCategoryData.reduce((sum, d) => sum + d.cases, 0)} total`}
-                          />
-                          <Legend
-                            className="mt-4"
-                            categories={procedureCategoryData.map(d => d.name)}
-                            colors={categoryChartColors.slice(0, procedureCategoryData.length)}
-                          />
+                          <div className="relative w-full">
+                            <ResponsiveContainer width="100%" height={208}>
+                              <PieChart>
+                                <Pie
+                                  data={procedureCategoryData}
+                                  cx="50%"
+                                  cy="50%"
+                                  innerRadius={55}
+                                  outerRadius={80}
+                                  dataKey="cases"
+                                  stroke="none"
+                                >
+                                  {procedureCategoryData.map((entry, i) => (
+                                    <Cell key={entry.name} fill={categoryChartColors[i % categoryChartColors.length]} />
+                                  ))}
+                                </Pie>
+                                <Tooltip content={<CategoryTooltip />} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <span className="text-sm font-semibold text-slate-600">
+                                {procedureCategoryData.reduce((sum, d) => sum + d.cases, 0)} total
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center mt-3">
+                            {procedureCategoryData.map((d, i) => (
+                              <span key={d.name} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                <span
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: categoryChartColors[i % categoryChartColors.length] }}
+                                />
+                                {d.name}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       ) : (
                         <div className="flex items-center justify-center h-64 text-slate-400">
@@ -970,17 +1051,38 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       </div>
                       <div className="p-6">
                         {kneeComparisonData.length > 0 ? (
-                          <AreaChart
-                            className="h-56"
-                            data={kneeComparisonData}
-                            index="date"
-                            categories={['Robotic (Mako)', 'Traditional']}
-                            colors={['cyan', 'slate']}
-                            valueFormatter={(v) => `${v} min`}
-                            yAxisWidth={48}
-                            showAnimation={true}
-                            connectNulls={true}
-                          />
+                          <div>
+                            <ResponsiveContainer width="100%" height={224}>
+                              <AreaChart data={kneeComparisonData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
+                                <defs>
+                                  <linearGradient id="gradCyanKnee" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.15} />
+                                    <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.02} />
+                                  </linearGradient>
+                                  <linearGradient id="gradSlateKnee" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#64748b" stopOpacity={0.15} />
+                                    <stop offset="100%" stopColor="#64748b" stopOpacity={0.02} />
+                                  </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                <Tooltip content={<ComparisonTooltip />} />
+                                <Area type="monotone" dataKey="Robotic (Mako)" stroke="#06b6d4" fill="url(#gradCyanKnee)" strokeWidth={2} connectNulls />
+                                <Area type="monotone" dataKey="Traditional" stroke="#64748b" fill="url(#gradSlateKnee)" strokeWidth={2} connectNulls />
+                              </AreaChart>
+                            </ResponsiveContainer>
+                            <div className="flex gap-4 mt-2 justify-center">
+                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#06b6d4' }} />
+                                Robotic (Mako)
+                              </span>
+                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#64748b' }} />
+                                Traditional
+                              </span>
+                            </div>
+                          </div>
                         ) : (
                           <div className="flex items-center justify-center h-56 text-slate-400">
                             <div className="text-center">
@@ -1000,17 +1102,38 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       </div>
                       <div className="p-6">
                         {hipComparisonData.length > 0 ? (
-                          <AreaChart
-                            className="h-56"
-                            data={hipComparisonData}
-                            index="date"
-                            categories={['Robotic (Mako)', 'Traditional']}
-                            colors={['cyan', 'slate']}
-                            valueFormatter={(v) => `${v} min`}
-                            yAxisWidth={48}
-                            showAnimation={true}
-                            connectNulls={true}
-                          />
+                          <div>
+                            <ResponsiveContainer width="100%" height={224}>
+                              <AreaChart data={hipComparisonData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
+                                <defs>
+                                  <linearGradient id="gradCyanHip" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.15} />
+                                    <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.02} />
+                                  </linearGradient>
+                                  <linearGradient id="gradSlateHip" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#64748b" stopOpacity={0.15} />
+                                    <stop offset="100%" stopColor="#64748b" stopOpacity={0.02} />
+                                  </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                <Tooltip content={<ComparisonTooltip />} />
+                                <Area type="monotone" dataKey="Robotic (Mako)" stroke="#06b6d4" fill="url(#gradCyanHip)" strokeWidth={2} connectNulls />
+                                <Area type="monotone" dataKey="Traditional" stroke="#64748b" fill="url(#gradSlateHip)" strokeWidth={2} connectNulls />
+                              </AreaChart>
+                            </ResponsiveContainer>
+                            <div className="flex gap-4 mt-2 justify-center">
+                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#06b6d4' }} />
+                                Robotic (Mako)
+                              </span>
+                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#64748b' }} />
+                                Traditional
+                              </span>
+                            </div>
+                          </div>
                         ) : (
                           <div className="flex items-center justify-center h-56 text-slate-400">
                             <div className="text-center">
