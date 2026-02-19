@@ -1,799 +1,113 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import Link from 'next/link'
-import { createClient } from '@/lib/supabase'
+import { useState, useCallback } from 'react'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import DateFilter from '@/components/ui/DateFilter'
-import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
-import { useToast } from '@/components/ui/Toast/ToastProvider'
-
-// Tremor components
-import {
-  Text,
-  Tracker,
-  BarChart,
-  DonutChart,
-  Legend,
-  type Color,
-} from '@tremor/react'
-
-// Analytics functions
-import {
-  calculateAnalyticsOverview,
-  formatMinutes,
-  type CaseWithMilestonesAndSurgeon,
-  type RoomHoursMap,
-  type SurgeonIdleSummary,
-} from '@/lib/analyticsV2'
-import { useAnalyticsConfig } from '@/lib/hooks/useAnalyticsConfig'
-import { getLocalDateString } from '@/lib/date-utils'
-
-import { AlertTriangle, ArrowRight, BarChart3, CalendarDays, CheckCircle2, Clock, Info, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
+import DateRangeSelector, { getPresetDates } from '@/components/ui/DateRangeSelector'
+import { useFlagAnalytics } from '@/lib/hooks/useFlagAnalytics'
+import { flagChartColors } from '@/lib/design-tokens'
+import FlagKPICard from '@/components/analytics/flags/FlagKPICard'
+import SeverityStrip from '@/components/analytics/flags/SeverityStrip'
+import { Flag, BarChart3 } from 'lucide-react'
 
 // ============================================
-// TYPES
+// Loading skeleton (page-specific)
 // ============================================
 
-interface KPIData {
-  value: number
-  displayValue: string
-  subtitle: string
-  target?: number
-  targetMet?: boolean
-  delta?: number
-  deltaType?: 'increase' | 'decrease' | 'unchanged'
-  dailyData?: Array<{ color: Color; tooltip: string }>
-}
-
-// ============================================
-// ENTERPRISE KPI CARD
-// ============================================
-
-function KPICard({ 
-  title, 
-  kpi, 
-  icon: Icon,
-  accentColor = 'blue',
-  showTracker = true,
-  onClick,
-  invertDelta = false,
-  tooltip,
-}: { 
-  title: string
-  kpi: KPIData
-  icon?: React.ComponentType<{ className?: string }>
-  accentColor?: 'blue' | 'green' | 'amber' | 'rose' | 'violet'
-  showTracker?: boolean
-  onClick?: () => void
-  invertDelta?: boolean
-  tooltip?: string
-}) {
-  const [showTooltip, setShowTooltip] = useState(false)
-
-  const getDeltaType = () => {
-    if (!kpi.deltaType || kpi.deltaType === 'unchanged') return 'unchanged'
-    if (invertDelta) {
-      return kpi.deltaType === 'decrease' ? 'increase' : 'decrease'
-    }
-    return kpi.deltaType
-  }
-
-  const accentColors = {
-    blue: {
-      iconBg: 'bg-blue-50',
-      iconColor: 'text-blue-600',
-      ring: 'ring-blue-500/20',
-      metricColor: 'text-slate-900',
-    },
-    green: {
-      iconBg: 'bg-green-50',
-      iconColor: 'text-green-600',
-      ring: 'ring-green-500/20',
-      metricColor: 'text-slate-900',
-    },
-    amber: {
-      iconBg: 'bg-amber-50',
-      iconColor: 'text-amber-600',
-      ring: 'ring-amber-500/20',
-      metricColor: 'text-slate-900',
-    },
-    rose: {
-      iconBg: 'bg-rose-50',
-      iconColor: 'text-rose-600',
-      ring: 'ring-rose-500/20',
-      metricColor: 'text-slate-900',
-    },
-    violet: {
-      iconBg: 'bg-violet-50',
-      iconColor: 'text-violet-600',
-      ring: 'ring-violet-500/20',
-      metricColor: 'text-slate-900',
-    },
-  }
-
-  const colors = accentColors[accentColor]
-
+function FlagsPageSkeleton() {
   return (
-    <div 
-      className={`
-        relative bg-white rounded-xl border border-slate-200/60 
-        shadow-sm hover:shadow-md transition-all duration-200
-        ${onClick ? 'cursor-pointer hover:border-slate-300' : ''}
-      `}
-      onClick={onClick}
-    >
-      {/* Subtle top accent line */}
-      <div className={`absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-${accentColor}-500/40 to-transparent`} />
-      
-      <div className="p-4">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            {Icon && (
-              <div className={`p-2 rounded-lg ${colors.iconBg}`}>
-                <Icon className={`w-4 h-4 ${colors.iconColor}`} />
-              </div>
-            )}
-            <div className="flex items-center gap-1.5">
-              <Text className="font-medium text-slate-600">{title}</Text>
-              {tooltip && (
-                <div className="relative">
-                  <Info 
-                    className="w-4 h-4 text-slate-400 hover:text-slate-600 cursor-help transition-colors" 
-                    onMouseEnter={() => setShowTooltip(true)}
-                    onMouseLeave={() => setShowTooltip(false)}
-                  />
-                  {showTooltip && (
-                    <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 bg-slate-800 text-white text-xs leading-relaxed rounded-lg shadow-lg pointer-events-none">
-                      {tooltip}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                        <div className="w-2 h-2 bg-slate-800 rotate-45" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+    <div className="space-y-6 animate-pulse">
+      {/* KPI cards skeleton */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 h-[120px]">
+            <div className="h-3 w-20 bg-slate-200 rounded mb-3" />
+            <div className="h-8 w-16 bg-slate-200 rounded mb-2" />
+            <div className="h-3 w-32 bg-slate-100 rounded" />
           </div>
-          {kpi.delta !== undefined && kpi.deltaType && kpi.deltaType !== 'unchanged' && (
-            <div className={`
-              flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium
-              ${getDeltaType() === 'increase' 
-                ? 'bg-green-50 text-green-600' 
-                : 'bg-rose-50 text-rose-700'
-              }
-            `}>
-              {getDeltaType() === 'increase' ? (
-                <TrendingUp className="w-3 h-3" />
-              ) : (
-                <TrendingDown className="w-3 h-3" />
-              )}
-              {Math.abs(kpi.delta)}%
-            </div>
-          )}
-        </div>
-
-        {/* Metric */}
-        <div className="mb-2">
-          <span className={`text-3xl font-semibold tracking-tight ${colors.metricColor}`}>
-            {kpi.displayValue}
-          </span>
-        </div>
-
-        {/* Target indicator */}
-        {kpi.target !== undefined && (
-          <div className="flex items-center gap-2 mb-3">
-            <div className={`
-              flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium
-              ${kpi.targetMet 
-                ? 'bg-green-50 text-green-600 border border-green-200/60' 
-                : 'bg-amber-50 text-amber-700 border border-amber-200/60'
-              }
-            `}>
-              {kpi.targetMet ? (
-                <CheckCircle2 className="w-3.5 h-3.5" />
-              ) : (
-                <AlertTriangle className="w-3.5 h-3.5" />
-              )}
-              Target: {title.includes('Cancellation') ? `<${kpi.target}%` : 
-                       title.includes('Same-Room') || title.includes('Flip Room') ? `≤${kpi.target} min` :
-                       `${kpi.target}%`}
-            </div>
-          </div>
-        )}
-
-        {/* Subtitle */}
-        {kpi.subtitle && (
-          <Text className="text-slate-500 text-sm">{kpi.subtitle}</Text>
-        )}
-
-        {/* Tracker */}
-        {showTracker && kpi.dailyData && kpi.dailyData.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-slate-100">
-            <div className="flex justify-between items-center mb-2">
-              <Text className="text-xs text-slate-400 font-medium uppercase tracking-wide">
-                Daily Trend
-              </Text>
-              <Text className="text-xs text-slate-400">
-                {kpi.dailyData.length} days
-              </Text>
-            </div>
-            <Tracker data={kpi.dailyData} className="h-8" />
-          </div>
-        )}
-
-        {/* Click indicator */}
-        {onClick && (
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center text-xs font-medium text-blue-600 hover:text-blue-700">
-            View details
-            <ArrowRight className="w-3 h-3 ml-1" />
-          </div>
-        )}
+        ))}
       </div>
+
+      {/* Severity strip skeleton */}
+      <div className="flex gap-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div
+            key={i}
+            className="bg-slate-100 rounded-lg h-12"
+            style={{ flex: `${3 - i} 0 0`, minWidth: 100 }}
+          />
+        ))}
+      </div>
+
+      {/* Chart placeholders */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 h-72" />
+        <div className="bg-white rounded-xl border border-slate-200 h-72" />
+      </div>
+
+      {/* Table placeholder */}
+      <div className="bg-white rounded-xl border border-slate-200 h-64" />
     </div>
   )
 }
 
 // ============================================
-// SURGEON IDLE TIME CARD (Per-Surgeon Summary)
+// Empty state
 // ============================================
 
-function SurgeonIdleTimeCard({
-  combined,
-  flipKpi,
-  sameRoomKpi,
-  summaries,
-  // onClick
-}: {
-  combined: KPIData
-  flipKpi: KPIData
-  sameRoomKpi: KPIData
-  summaries: SurgeonIdleSummary[]
-  onClick?: () => void
-}) {
-  const statusConfig = {
-    on_track: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200', dot: 'bg-green-500' },
-    call_sooner: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
-    call_later: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
-    turnover_only: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', dot: 'bg-slate-400' },
-  }
-
-  // Separate surgeons with flip data (callback-relevant) from same-room only
-  const flipSurgeons = summaries.filter(s => s.hasFlipData)
-  const turnoverOnlySurgeons = summaries.filter(s => !s.hasFlipData)
-
+function FlagsEmptyState() {
   return (
-    <div 
-      className="relative bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden col-span-1 md:col-span-3"
-    >
-      {/* Decorative elements */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -translate-y-1/2 translate-x-1/2" />
-      <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-500/5 rounded-full translate-y-1/2 -translate-x-1/2" />
-      
-      <div className="relative p-4">
-        {/* Header with badge */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-100">
-              <Sparkles className="w-4 h-4 text-blue-600" />
-            </div>
-            <div>
-              <Text className="font-medium text-slate-700">Surgeon Callback Optimization</Text>
-              <Text className="text-xs text-slate-500">Flip room callback timing &amp; idle analysis</Text>
-            </div>
-          </div>
-          <span className="px-2.5 py-1 text-xs font-semibold bg-blue-600 text-white rounded-full shadow-sm">
-            AI Insight
-          </span>
-        </div>
-
-        {/* Summary row */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
-            <Text className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Overall Median</Text>
-            <div className="text-2xl font-semibold text-blue-900">{combined.displayValue}</div>
-            <Text className="text-xs text-slate-500 mt-0.5">{summaries.length} surgeons analyzed</Text>
-          </div>
-          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
-            <div className="flex items-center gap-1.5 mb-1">
-              <ArrowRight className="w-3 h-3 text-violet-500" />
-              <Text className="text-xs font-medium text-slate-500 uppercase tracking-wide">Flip Room Idle</Text>
-            </div>
-            <div className="text-2xl font-semibold text-violet-700">{flipKpi.displayValue}</div>
-            <Text className="text-xs text-slate-500 mt-0.5">{flipSurgeons.length} surgeons w/ flips</Text>
-          </div>
-          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Clock className="w-3 h-3 text-amber-500" />
-              <Text className="text-xs font-medium text-slate-500 uppercase tracking-wide">Same Room Idle</Text>
-            </div>
-            <div className="text-2xl font-semibold text-amber-700">{sameRoomKpi.displayValue}</div>
-            <Text className="text-xs text-slate-500 mt-0.5">{turnoverOnlySurgeons.length} same-room only</Text>
-          </div>
-        </div>
-
-        {/* Per-surgeon table — Flip room surgeons (callback-relevant) */}
-        {flipSurgeons.length > 0 && (
-          <div className="bg-white/70 backdrop-blur-sm rounded-lg border border-blue-200/40 overflow-hidden mb-3">
-            {/* Section label */}
-            <div className="px-4 py-2 bg-violet-50/50 border-b border-blue-100/60">
-              <div className="flex items-center gap-2">
-                <ArrowRight className="w-3.5 h-3.5 text-violet-500" />
-                <Text className="text-xs font-semibold text-violet-700 uppercase tracking-wide">
-                  Flip Room Surgeons — Callback Optimization
-                </Text>
-              </div>
-            </div>
-            
-            {/* Table header */}
-            <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-white/50 border-b border-blue-100/60 text-xs font-medium text-slate-500 uppercase tracking-wide">
-              <div className="col-span-3">Surgeon</div>
-              <div className="col-span-1 text-center">Cases</div>
-              <div className="col-span-2 text-center">Flip Idle</div>
-              <div className="col-span-2 text-center">Callback Δ</div>
-              <div className="col-span-2 text-center">Same Rm Idle</div>
-              <div className="col-span-2 text-center">Callback</div>
-            </div>
-
-            {/* Surgeon rows */}
-            <div className="divide-y divide-blue-100/40 max-h-[240px] overflow-y-auto">
-              {flipSurgeons.map((surgeon) => {
-                const sc = statusConfig[surgeon.status]
-                return (
-                  <div key={surgeon.surgeonId} className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-white/40 transition-colors">
-                    <div className="col-span-3">
-                      <p className="font-medium text-slate-900 text-sm truncate">{surgeon.surgeonName}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-xs text-violet-600 bg-violet-50 px-1 py-0.5 rounded">
-                          {surgeon.flipGapCount} flip{surgeon.flipGapCount !== 1 ? 's' : ''}
-                        </span>
-                        {surgeon.sameRoomGapCount > 0 && (
-                          <span className="text-xs text-amber-700 bg-amber-50 px-1 py-0.5 rounded">
-                            {surgeon.sameRoomGapCount} same
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="col-span-1 text-center">
-                      <span className="text-sm font-medium text-slate-700">{surgeon.caseCount}</span>
-                    </div>
-                    <div className="col-span-2 text-center">
-                      <span className={`text-sm font-semibold ${
-                        surgeon.medianFlipIdle > 15 ? 'text-rose-600' : 
-                        surgeon.medianFlipIdle > 10 ? 'text-amber-700' : 
-                        'text-slate-700'
-                      }`}>
-                        {Math.round(surgeon.medianFlipIdle)} min
-                      </span>
-                    </div>
-                    <div className="col-span-2 text-center">
-                      <span className={`text-sm font-medium ${
-                        surgeon.medianCallbackDelta > 5 ? 'text-blue-700' : 'text-slate-500'
-                      }`}>
-                        {surgeon.medianCallbackDelta > 0 ? `${Math.round(surgeon.medianCallbackDelta)} min` : '—'}
-                      </span>
-                    </div>
-                    <div className="col-span-2 text-center">
-                      <span className="text-sm text-slate-500">
-                        {surgeon.sameRoomGapCount > 0 ? `${Math.round(surgeon.medianSameRoomIdle)} min` : '—'}
-                      </span>
-                    </div>
-                    <div className="col-span-2 flex justify-center">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${sc.bg} ${sc.text} border ${sc.border}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                        {surgeon.statusLabel}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Same-room only surgeons (no callback optimization possible) */}
-        {turnoverOnlySurgeons.length > 0 && (
-          <div className="bg-white/50 backdrop-blur-sm rounded-lg border border-slate-200/40 overflow-hidden">
-            {/* Section label */}
-            <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-100/60">
-              <div className="flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  Same-Room Only — Callback N/A (turnover-driven)
-                </Text>
-              </div>
-            </div>
-
-            {/* Compact list */}
-            <div className="divide-y divide-slate-100/40 max-h-[160px] overflow-y-auto">
-              {turnoverOnlySurgeons.map((surgeon) => (
-                <div key={surgeon.surgeonId} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/40 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <p className="font-medium text-slate-700 text-sm">{surgeon.surgeonName}</p>
-                    <span className="text-xs text-amber-700 bg-amber-50 px-1 py-0.5 rounded">
-                      {surgeon.sameRoomGapCount} gap{surgeon.sameRoomGapCount !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <span className="text-sm font-medium text-slate-600">{Math.round(surgeon.medianSameRoomIdle)} min</span>
-                      <span className="text-xs text-slate-400 ml-1">idle</span>
-                    </div>
-                    <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                      {surgeon.caseCount} cases
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* No data state */}
-        {summaries.length === 0 && (
-          <div className="p-4 bg-white/50 rounded-lg border border-blue-200/40 text-center">
-            <Text className="text-sm text-slate-500">No multi-case surgeon days in this period</Text>
-          </div>
-        )}
-
-        {/* Insight box */}
-        {summaries.length > 0 && (() => {
-          const callSoonerCount = flipSurgeons.filter(s => s.status === 'call_sooner').length
-          const onTrackCount = flipSurgeons.filter(s => s.status === 'on_track').length
-          const callLaterCount = flipSurgeons.filter(s => s.status === 'call_later').length
-          
-          if (callSoonerCount > 0) {
-            return (
-              <div className="mt-4 p-3 bg-amber-50/80 backdrop-blur-sm rounded-lg border border-amber-200/40">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                  <Text className="text-amber-800 text-sm font-medium">
-                    {callSoonerCount} surgeon{callSoonerCount > 1 ? 's' : ''} with flip rooms could benefit from earlier patient callbacks — potential to recover {
-                      Math.round(flipSurgeons.filter(s => s.status === 'call_sooner').reduce((sum, s) => sum + s.medianCallbackDelta, 0))
-                    } min of idle time per day
-                  </Text>
-                </div>
-              </div>
-            )
-          } else if (callLaterCount > 0) {
-            return (
-              <div className="mt-4 p-3 bg-blue-50/80 backdrop-blur-sm rounded-lg border border-blue-200/40">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                  <Text className="text-blue-800 text-sm font-medium">
-                    {callLaterCount} surgeon{callLaterCount > 1 ? 's' : ''} arriving before flip rooms are ready — consider delaying callbacks slightly
-                  </Text>
-                </div>
-              </div>
-            )
-          } else if (flipSurgeons.length > 0) {
-            return (
-              <div className="mt-4 p-3 bg-green-50/80 backdrop-blur-sm rounded-lg border border-green-200/40">
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5" />
-                  <Text className="text-green-800 text-sm font-medium">
-                    All {onTrackCount} flip room surgeon{onTrackCount !== 1 ? 's have' : ' has'} well-timed callbacks
-                  </Text>
-                </div>
-              </div>
-            )
-          } else {
-            return (
-              <div className="mt-4 p-3 bg-slate-50/80 backdrop-blur-sm rounded-lg border border-slate-200/40">
-                <div className="flex items-start gap-2">
-                  <Clock className="w-4 h-4 text-slate-500 mt-0.5" />
-                  <Text className="text-slate-700 text-sm font-medium">
-                    No flip room transitions this period — all idle time is turnover-driven (same room)
-                  </Text>
-                </div>
-              </div>
-            )
-          }
-        })()}
+    <div className="space-y-6">
+      {/* KPI cards with zeroed values */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <FlagKPICard label="Flagged Cases" value="0" unit="%" detail="0 of 0 cases" />
+        <FlagKPICard label="Delay Rate" value="0" unit="%" detail="0 user-reported delays" />
+        <FlagKPICard label="Critical Flags" value={0} detail="0 warnings · 0 info" />
+        <FlagKPICard label="Total Flags" value={0} detail="0 avg per flagged case" />
       </div>
+
+      {/* Centered empty state message */}
+      <EmptyState
+        icon={<Flag className="w-10 h-10 text-slate-400" />}
+        title="No flags detected for this period"
+        description="Try expanding the date range or check that cases have been completed and validated."
+      />
     </div>
   )
 }
 
 // ============================================
-// TIME METRIC CARD (Compact)
+// Main page component
 // ============================================
 
-function TimeMetricCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-}: {
-  title: string
-  value: string
-  subtitle: string
-  icon?: React.ComponentType<{ className?: string }>
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-4 hover:shadow-md transition-shadow duration-200">
-      <div className="flex items-center gap-2 mb-2">
-        {Icon && (
-          <div className="p-1.5 rounded-md bg-slate-100">
-            <Icon className="w-3.5 h-3.5 text-slate-600" />
-          </div>
-        )}
-        <Text className="text-slate-600 font-medium text-sm">{title}</Text>
-      </div>
-      <div className="text-2xl font-semibold text-slate-900 mb-1">{value}</div>
-      <Text className="text-slate-400 text-xs">{subtitle}</Text>
-    </div>
-  )
-}
-
-// ============================================
-// CHART CARD WRAPPER
-// ============================================
-
-function ChartCard({
-  title,
-  subtitle,
-  children,
-  action,
-}: {
-  title: string
-  subtitle: string
-  children: React.ReactNode
-  action?: React.ReactNode
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-100">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-            <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>
-          </div>
-          {action}
-        </div>
-      </div>
-      <div className="p-6">
-        {children}
-      </div>
-    </div>
-  )
-}
-
-// ============================================
-// SECTION HEADER
-// ============================================
-
-function SectionHeader({
-  title,
-  subtitle,
-  badge,
-}: {
-  title: string
-  subtitle: string
-  badge?: string
-}) {
-  return (
-    <div className="mb-4">
-      <div className="flex items-center gap-2 mb-1">
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-        {badge && (
-          <span className="px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 rounded-full">
-            {badge}
-          </span>
-        )}
-      </div>
-      <p className="text-sm text-slate-500">{subtitle}</p>
-    </div>
-  )
-}
-
-// ============================================
-// MAIN PAGE COMPONENT
-// ============================================
-
-export default function AnalyticsOverviewPage() {
-  const supabase = createClient()
+export default function CaseFlagsAnalyticsPage() {
   const { loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
-  const { showToast } = useToast()
-  
-  const [cases, setCases] = useState<CaseWithMilestonesAndSurgeon[]>([])
-  const [previousPeriodCases, setPreviousPeriodCases] = useState<CaseWithMilestonesAndSurgeon[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [dateFilter, setDateFilter] = useState('month')
-  
-  const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
-  const { config } = useAnalyticsConfig()
 
-  // Fetch room available hours when facility changes
-  useEffect(() => {
-    if (!effectiveFacilityId) return
+  // Date range state — default to last 30 days per Q15
+  const [dateRange, setDateRange] = useState('last_30')
+  const [startDate, setStartDate] = useState(() => getPresetDates('last_30').start)
+  const [endDate, setEndDate] = useState(() => getPresetDates('last_30').end)
 
-    const fetchRoomHours = async () => {
-      const { data } = await supabase
-        .from('or_rooms')
-        .select('id, available_hours')
-        .eq('facility_id', effectiveFacilityId)
-        .is('deleted_at', null)
-      if (data) {
-        const map: RoomHoursMap = {}
-        data.forEach((r: { id: string; available_hours?: number }) => {
-          if (r.available_hours) map[r.id] = r.available_hours
-        })
-        setRoomHoursMap(map)
-      }
-    }
+  const handleDateRangeChange = useCallback((range: string, start: string, end: string) => {
+    setDateRange(range)
+    setStartDate(start)
+    setEndDate(end)
+  }, [])
 
-    fetchRoomHours()
-  }, [effectiveFacilityId, supabase])
+  // Data fetching
+  const { data, loading, error } = useFlagAnalytics({
+    facilityId: effectiveFacilityId,
+    startDate,
+    endDate,
+    enabled: !!effectiveFacilityId,
+  })
 
-  // Fetch data
-  const fetchData = useCallback(async (startDate?: string, endDate?: string) => {
-    if (!effectiveFacilityId) return
+  const summary = data?.summary
 
-    setLoading(true)
-    setError(null)
-
-    try {
-    let query = supabase
-      .from('cases')
-      .select(`
-        id,
-        case_number,
-        facility_id,
-        scheduled_date,
-        start_time,
-        surgeon_id,
-        or_room_id,
-        status_id,
-        surgeon_left_at,
-        cancelled_at,
-        is_excluded_from_metrics,
-        surgeon:users!cases_surgeon_id_fkey (
-          id,
-          first_name,
-          last_name,
-          closing_workflow,
-          closing_handoff_minutes
-        ),
-        procedure_types (id, name),
-        or_rooms (id, name),
-        case_statuses (name),
-        case_milestones (
-          facility_milestone_id,
-          recorded_at,
-          facility_milestones (name)
-        )
-      `)
-      .eq('facility_id', effectiveFacilityId)
-      .order('scheduled_date', { ascending: false })
-
-    if (startDate && endDate) {
-      query = query.gte('scheduled_date', startDate).lte('scheduled_date', endDate)
-    }
-
-    const { data: casesData } = await query
-
-    // Transform: Extract surgeon_profile from the joined surgeon data
-    const transformedCases = ((casesData || []) as unknown[]).map((c: unknown) => {
-      const caseObj = c as Record<string, unknown>
-      const surgeon = caseObj.surgeon as Record<string, unknown> | null | undefined
-      return {
-        ...caseObj,
-        surgeon_profile: surgeon ? {
-          id: surgeon.id,
-          closing_workflow: surgeon.closing_workflow || 'surgeon_closes',
-          closing_handoff_minutes: surgeon.closing_handoff_minutes || 0,
-        } : null,
-      }
-    })
-    setCases(transformedCases as unknown as CaseWithMilestonesAndSurgeon[])
-    
-    // Fetch previous period for comparison
-    if (startDate && endDate) {
-      const start = new Date(startDate)
-      const end = new Date(endDate)
-      const periodLength = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-      
-      const prevEnd = new Date(start)
-      prevEnd.setDate(prevEnd.getDate() - 1)
-      const prevStart = new Date(prevEnd)
-      prevStart.setDate(prevStart.getDate() - periodLength)
-      
-      const { data: prevData } = await supabase
-        .from('cases')
-        .select(`
-          id,
-          case_number,
-          facility_id,
-          scheduled_date,
-          start_time,
-          surgeon_id,
-          or_room_id,
-          status_id,
-          surgeon_left_at,
-          cancelled_at,
-          is_excluded_from_metrics,
-          surgeon:users!cases_surgeon_id_fkey (
-            id,
-            first_name,
-            last_name,
-            closing_workflow,
-            closing_handoff_minutes
-          ),
-          procedure_types (id, name),
-          or_rooms (id, name),
-          case_statuses (name),
-          case_milestones (
-            facility_milestone_id,
-            recorded_at,
-            facility_milestones (name)
-          )
-        `)
-        .eq('facility_id', effectiveFacilityId)
-        .gte('scheduled_date', getLocalDateString(prevStart))
-        .lte('scheduled_date', getLocalDateString(prevEnd))
-
-      const transformedPrev = ((prevData || []) as unknown[]).map((c: unknown) => {
-        const caseObj = c as Record<string, unknown>
-        const surgeon = caseObj.surgeon as Record<string, unknown> | null | undefined
-        return {
-          ...caseObj,
-          surgeon_profile: surgeon ? {
-            id: surgeon.id,
-            closing_workflow: surgeon.closing_workflow || 'surgeon_closes',
-            closing_handoff_minutes: surgeon.closing_handoff_minutes || 0,
-          } : null,
-        }
-      })
-      setPreviousPeriodCases(transformedPrev as unknown as CaseWithMilestonesAndSurgeon[])
-    }
-    } catch (err) {
-      setError('Failed to load KPI data. Please try again.')
-      showToast({
-        type: 'error',
-        title: 'Failed to load analytics',
-        message: err instanceof Error ? err.message : 'Please try again'
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [effectiveFacilityId, supabase, showToast])
-
-  useEffect(() => {
-    if (!effectiveFacilityId) return
-    const today = new Date()
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-    fetchData(getLocalDateString(monthStart), getLocalDateString(today))
-  }, [effectiveFacilityId, fetchData])
-
-  const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {
-    setDateFilter(filter)
-    fetchData(startDate, endDate)
-  }
-
-  // Calculate all analytics
-  const analytics = useMemo(() => {
-    return calculateAnalyticsOverview(cases, previousPeriodCases, config, roomHoursMap)
-  }, [cases, previousPeriodCases, config, roomHoursMap])
-
-  // Chart data
-  const phaseChartData = [
-    { name: 'Pre-Op', minutes: Math.round(analytics.avgPreOpTime) },
-    { name: 'Surgical', minutes: Math.round(analytics.avgSurgicalTime) },
-    { name: 'Closing', minutes: Math.round(analytics.avgClosingTime) },
-    { name: 'Emergence', minutes: Math.round(analytics.avgEmergenceTime) },
-  ].filter(d => d.minutes > 0)
-
-  const totalPhaseTime = phaseChartData.reduce((sum, d) => sum + d.minutes, 0)
-
-  // Chart colors - professional blue palette
-  const chartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet']
+  // ========== Render guards ==========
 
   // Permission guard
   if (!userLoading && !can('analytics.view')) {
@@ -804,299 +118,135 @@ export default function AnalyticsOverviewPage() {
     )
   }
 
-  // Loading state
+  // Loading (user auth)
   if (userLoading) {
     return (
       <DashboardLayout>
-        <PageLoader message="Loading analytics..." />
+        <FlagsPageSkeleton />
       </DashboardLayout>
     )
   }
 
-  // No facility selected (global admin)
+  // No facility selected (global admin without impersonation)
   if (!effectiveFacilityId && isGlobalAdmin) {
     return (
       <DashboardLayout>
-        <Container className="py-12">
-          <div className="max-w-md mx-auto text-center">
-            <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <BarChart3 className="w-8 h-8 text-blue-600" />
-            </div>
-            <h2 className="text-xl font-semibold text-slate-900 mb-2">No Facility Selected</h2>
-            <p className="text-slate-500 mb-6">Select a facility to view analytics and performance metrics.</p>
-            <Link
-              href="/admin/facilities"
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              View Facilities
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </Container>
+        <AnalyticsPageHeader
+          title="Case & Flag Analytics"
+          description="Auto-detected anomalies and reported delays"
+        />
+        <EmptyState
+          icon={<BarChart3 className="w-10 h-10 text-slate-400" />}
+          title="No Facility Selected"
+          description="Select a facility from the sidebar to view flag analytics."
+        />
       </DashboardLayout>
     )
   }
 
+  // ========== Determine KPI status colors ==========
+
+  function getFlagRateStatus(rate: number): 'good' | 'neutral' | 'bad' {
+    if (rate > 30) return 'bad'
+    if (rate > 20) return 'neutral'
+    return 'good'
+  }
+
+  function getDelayRateStatus(rate: number): 'good' | 'neutral' | 'bad' {
+    if (rate > 20) return 'bad'
+    if (rate > 15) return 'neutral'
+    return 'good'
+  }
+
+  // ========== Main render ==========
+
+  const hasFlags = summary && summary.totalFlags > 0
+  const caseCountLabel = summary
+    ? `${summary.totalCases} cases · ${summary.flaggedCases} flagged`
+    : undefined
+
   return (
     <DashboardLayout>
-          {/* Error Banner */}
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      {/* Page header with date selector */}
+      <AnalyticsPageHeader
+        title="Case & Flag Analytics"
+        description={
+          caseCountLabel
+            ? `Auto-detected anomalies and reported delays · ${caseCountLabel}`
+            : 'Auto-detected anomalies and reported delays'
+        }
+        actions={
+          <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
+        }
+      />
 
-          {/* Page Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-900">Case Flags</h1>
-              <p className="text-slate-500 text-sm mt-1">
-                Auto-detected anomalies and reported delays
-                {analytics.completedCases > 0 && (
-                  <span className="text-slate-400"> · {analytics.completedCases} cases analyzed</span>
-                )}
-              </p>
-            </div>
-            <DateFilter selectedFilter={dateFilter} onFilterChange={handleFilterChange} />
+      {/* Error state */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Loading state */}
+      {loading && <FlagsPageSkeleton />}
+
+      {/* Empty state — data loaded but no flags */}
+      {!loading && !error && summary && !hasFlags && <FlagsEmptyState />}
+
+      {/* Main content — data loaded with flags */}
+      {!loading && !error && summary && hasFlags && (
+        <div className="space-y-6">
+          {/* KPI Strip — 4 cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <FlagKPICard
+              label="Flagged Cases"
+              value={summary.flagRate.toFixed(1)}
+              unit="%"
+              trend={summary.flagRateTrend}
+              trendInverse
+              sparkData={data.sparklineData.flagRate}
+              sparkColor={flagChartColors.critical}
+              status={getFlagRateStatus(summary.flagRate)}
+              detail={`${summary.flaggedCases} of ${summary.totalCases} cases`}
+            />
+            <FlagKPICard
+              label="Delay Rate"
+              value={summary.delayRate.toFixed(1)}
+              unit="%"
+              trend={summary.delayRateTrend}
+              trendInverse
+              sparkData={data.sparklineData.delayRate}
+              sparkColor={flagChartColors.warning}
+              status={getDelayRateStatus(summary.delayRate)}
+              detail={`${summary.delayedCases} user-reported delays`}
+            />
+            <FlagKPICard
+              label="Critical Flags"
+              value={summary.criticalCount}
+              status="bad"
+              detail={`${summary.warningCount} warnings · ${summary.infoCount} info`}
+            />
+            <FlagKPICard
+              label="Total Flags"
+              value={summary.totalFlags}
+              detail={`${summary.avgFlagsPerCase.toFixed(1)} avg per flagged case`}
+            />
           </div>
 
-          {loading ? (
-            <PageLoader message="Calculating metrics..." />
-          ) : (
-            <div className="space-y-8">
-              {/* ROW 1: KEY PERFORMANCE INDICATORS */}
-              <section>
-                <SectionHeader
-                  title="Key Performance Indicators"
-                  subtitle="Primary metrics for OR efficiency"
-                  badge="Core KPIs"
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <KPICard 
-                    title="First Case On-Time" 
-                    kpi={analytics.fcots}
-                    icon={Clock}
-                    accentColor="blue"
-                    tooltip="Percentage of first cases per room per day that started on time within the configured grace period."
-                  />
-                  <KPICard 
-                    title="OR Utilization" 
-                    kpi={analytics.orUtilization}
-                    icon={BarChart3}
-                    accentColor="violet"
-                    tooltip="Percentage of available OR hours used for patient care (Patient In to Patient Out)."
-                  />
-                  <KPICard 
-                    title="Case Volume" 
-                    kpi={analytics.caseVolume}
-                    icon={CalendarDays}
-                    accentColor="amber"
-                    showTracker={false}
-                    tooltip="Total number of cases in the selected date range, compared to the equivalent previous period."
-                  />
-                  <KPICard 
-                    title="Same-Day Cancellation" 
-                    kpi={analytics.cancellationRate}
-                    icon={AlertTriangle}
-                    accentColor="rose"
-                    tooltip="Percentage of cases cancelled on the same day they were scheduled. Lower is better."
-                  />
-                </div>
-              </section>
+          {/* Severity strip */}
+          <SeverityStrip
+            criticalCount={summary.criticalCount}
+            warningCount={summary.warningCount}
+            infoCount={summary.infoCount}
+            totalFlags={summary.totalFlags}
+          />
 
-              {/* ROW 2: TURNOVER METRICS (2x2 + 1) */}
-              <section>
-                <SectionHeader
-                  title="Turnover Metrics"
-                  subtitle="Room and surgeon transition efficiency"
-                />
-                <div className="space-y-4">
-                  {/* Row 1: Room Turnovers (facility perspective) */}
-                  <div>
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Room Turnovers</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <KPICard
-                        title="Same-Room Turnover"
-                        kpi={analytics.sameRoomTurnover}
-                        icon={Clock}
-                        accentColor="green"
-                        tooltip="Time from Patient Out (Case A) to Patient In (Case B) in the same room. Measures room cleaning and prep efficiency."
-                      />
-                      <KPICard
-                        title="Flip-Room Turnover"
-                        kpi={analytics.flipRoomTurnover}
-                        icon={ArrowRight}
-                        accentColor="green"
-                        tooltip="Time from Patient Out (previous case in Room Y) to Patient In (surgeon's flip case in Room Y). Measures how quickly the destination room was prepared for a flip."
-                      />
-                    </div>
-                  </div>
-                  {/* Row 2: Surgical Turnovers (surgeon perspective) */}
-                  <div>
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Surgical Turnovers</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <KPICard
-                        title="Same-Room Surgical"
-                        kpi={analytics.sameRoomSurgicalTurnover}
-                        icon={Clock}
-                        accentColor="blue"
-                        tooltip="Time from Surgeon Done (Case A) to Incision (Case B) for the same surgeon in the same room. Measures how long the surgeon waits between cuts."
-                      />
-                      <KPICard
-                        title="Flip-Room Surgical"
-                        kpi={analytics.flipRoomSurgicalTurnover}
-                        icon={ArrowRight}
-                        accentColor="violet"
-                        tooltip="Time from Surgeon Done (Case A) to Incision (Case B) when the surgeon moves to a different room. Measures flip room transition efficiency."
-                      />
-                    </div>
-                  </div>
-                  {/* Row 3: Non-Operative Time */}
-                  <div>
-                    <KPICard
-                      title="Non-Operative Time"
-                      kpi={analytics.nonOperativeTime}
-                      icon={Clock}
-                      accentColor="amber"
-                      showTracker={false}
-                      invertDelta={true}
-                      tooltip="Average time the patient is in the OR but not being operated on. Includes Pre-Op (Patient In → Incision) and Post-Op (Closing Complete → Patient Out)."
-                    />
-                  </div>
-                </div>
-              </section>
-
-              {/* ROW 3: SURGEON CALLBACK OPTIMIZATION */}
-              <section>
-                <SectionHeader
-                  title="Surgeon Callback Optimization"
-                  subtitle="Per-surgeon idle time analysis and callback timing recommendations"
-                />
-                <div className="grid grid-cols-1 gap-4">
-                  <SurgeonIdleTimeCard 
-                    combined={analytics.surgeonIdleTime}
-                    flipKpi={analytics.surgeonIdleFlip}
-                    sameRoomKpi={analytics.surgeonIdleSameRoom}
-                    summaries={analytics.surgeonIdleSummaries}
-                  />
-                </div>
-              </section>
-
-              {/* ROW 4: TIME BREAKDOWN */}
-              <section>
-                <SectionHeader
-                  title="Time Breakdown"
-                  subtitle="Average durations across all completed cases"
-                />
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                  <TimeMetricCard
-                    title="Total Case Time"
-                    value={formatMinutes(analytics.avgTotalCaseTime)}
-                    subtitle="Patient In → Out"
-                    icon={Clock}
-                  />
-                  <TimeMetricCard
-                    title="Surgical Time"
-                    value={formatMinutes(analytics.avgSurgicalTime)}
-                    subtitle="Incision → Closing"
-                    icon={Clock}
-                  />
-                  <TimeMetricCard
-                    title="Pre-Op Time"
-                    value={formatMinutes(analytics.avgPreOpTime)}
-                    subtitle="Patient In → Incision"
-                    icon={Clock}
-                  />
-                  <TimeMetricCard
-                    title="Anesthesia Time"
-                    value={formatMinutes(analytics.avgAnesthesiaTime)}
-                    subtitle="Anes Start → End"
-                    icon={Clock}
-                  />
-                  <TimeMetricCard
-                    title="Closing Time"
-                    value={formatMinutes(analytics.avgClosingTime)}
-                    subtitle="Closing → Complete"
-                    icon={Clock}
-                  />
-                  <TimeMetricCard
-                    title="Emergence"
-                    value={formatMinutes(analytics.avgEmergenceTime)}
-                    subtitle="Close → Patient Out"
-                    icon={Clock}
-                  />
-                </div>
-              </section>
-
-              {/* ROW 5: CHARTS */}
-              <section>
-                <SectionHeader
-                  title="Visual Analytics"
-                  subtitle="Time distribution and phase analysis"
-                />
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Bar Chart */}
-                  <ChartCard
-                    title="Average Time by Phase"
-                    subtitle="Minutes spent in each surgical phase"
-                  >
-                    {phaseChartData.length > 0 ? (
-                      <BarChart
-                        className="h-72"
-                        data={phaseChartData}
-                        index="name"
-                        categories={['minutes']}
-                        colors={['blue']}
-                        valueFormatter={(v) => `${v} min`}
-                        yAxisWidth={48}
-                        showAnimation={true}
-                        showGridLines={true}
-                        showLegend={false}
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-72 text-slate-400">
-                        <div className="text-center">
-                          <BarChart3 className="w-12 h-12 mx-auto mb-2 text-slate-300" />
-                          <p>No data available</p>
-                        </div>
-                      </div>
-                    )}
-                  </ChartCard>
-
-                  {/* Donut Chart */}
-                  <ChartCard
-                    title="Time Distribution"
-                    subtitle="Proportion of case time by phase"
-                  >
-                    {phaseChartData.length > 0 ? (
-                      <div className="flex flex-col items-center">
-                        <DonutChart
-                          className="h-60"
-                          data={phaseChartData}
-                          index="name"
-                          category="minutes"
-                          colors={chartColors}
-                          valueFormatter={(v) => `${v} min`}
-                          showAnimation={true}
-                          showTooltip={true}
-                          label={`${totalPhaseTime} min`}
-                        />
-                        <Legend
-                          className="mt-4"
-                          categories={phaseChartData.map(d => d.name)}
-                          colors={chartColors}
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-72 text-slate-400">
-                        <div className="text-center">
-                          <BarChart3 className="w-12 h-12 mx-auto mb-2 text-slate-300" />
-                          <p>No data available</p>
-                        </div>
-                      </div>
-                    )}
-                  </ChartCard>
-                </div>
-              </section>
-
-            </div>
-          )}
+          {/* Placeholder sections for Phases 3-5 */}
+          {/* Phase 3: Flag trend chart + day-of-week heatmap */}
+          {/* Phase 4: Flag rule breakdown + delay type breakdown + surgeon table + room cards */}
+          {/* Phase 5: Pattern insight cards + recent flagged cases + drill-through */}
+        </div>
+      )}
     </DashboardLayout>
   )
 }
