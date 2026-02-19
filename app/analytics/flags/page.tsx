@@ -11,7 +11,11 @@ import { useFlagAnalytics } from '@/lib/hooks/useFlagAnalytics'
 import { flagChartColors } from '@/lib/design-tokens'
 import FlagKPICard from '@/components/analytics/flags/FlagKPICard'
 import SeverityStrip from '@/components/analytics/flags/SeverityStrip'
-import { Flag, BarChart3 } from 'lucide-react'
+import FlagTrendChart from '@/components/analytics/flags/FlagTrendChart'
+import DayHeatmap from '@/components/analytics/flags/DayHeatmap'
+import { SectionHeader } from '@/components/analytics/AnalyticsComponents'
+import { Card } from '@/components/ui/CardEnhanced'
+import { Flag, BarChart3, TrendingUp, Grid3x3 } from 'lucide-react'
 
 // ============================================
 // Loading skeleton (page-specific)
@@ -241,8 +245,37 @@ export default function CaseFlagsAnalyticsPage() {
             totalFlags={summary.totalFlags}
           />
 
-          {/* Placeholder sections for Phases 3-5 */}
-          {/* Phase 3: Flag trend chart + day-of-week heatmap */}
+          {/* Two-column: Trend chart + Heatmap */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card padding="none">
+              <Card.Content>
+                <SectionHeader
+                  title="Flag Trend"
+                  subtitle="Weekly auto-detected vs. user-reported"
+                  icon={<TrendingUp className="w-4 h-4" />}
+                  accentColor="violet"
+                />
+                <div className="mt-4">
+                  <FlagTrendChart data={data.weeklyTrend} />
+                </div>
+              </Card.Content>
+            </Card>
+
+            <Card padding="none">
+              <Card.Content>
+                <SectionHeader
+                  title="Day of Week Heatmap"
+                  subtitle="Flag distribution by day and category"
+                  icon={<Grid3x3 className="w-4 h-4" />}
+                  accentColor="amber"
+                />
+                <div className="mt-4">
+                  <DayHeatmap data={data.dayOfWeekHeatmap} />
+                </div>
+              </Card.Content>
+            </Card>
+          </div>
+
           {/* Phase 4: Flag rule breakdown + delay type breakdown + surgeon table + room cards */}
           {/* Phase 5: Pattern insight cards + recent flagged cases + drill-through */}
         </div>
