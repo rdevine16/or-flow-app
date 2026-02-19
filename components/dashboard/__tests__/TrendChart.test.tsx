@@ -13,10 +13,11 @@ vi.mock('@/lib/hooks/useTrendData', () => ({
   ],
 }))
 
-// Mock recharts to avoid canvas rendering issues in test env
+// Mock recharts to avoid canvas rendering issues in test env.
+// Phase 6 uses AreaChart + Area (converted from LineChart + Line).
 vi.mock('recharts', () => ({
-  LineChart: ({ children }: { children: React.ReactNode }) => <div data-testid="line-chart">{children}</div>,
-  Line: () => <div data-testid="line" />,
+  AreaChart: ({ children }: { children: React.ReactNode }) => <div data-testid="area-chart">{children}</div>,
+  Area: () => <div data-testid="area" />,
   XAxis: () => <div data-testid="x-axis" />,
   YAxis: () => <div data-testid="y-axis" />,
   CartesianGrid: () => <div data-testid="grid" />,
@@ -52,16 +53,20 @@ describe('TrendChart', () => {
     expect(screen.getByText('30-Day Trend')).toBeTruthy()
   })
 
-  it('renders default metric label in dropdown', () => {
+  it('renders all metric toggle buttons upfront (segmented control, not dropdown)', () => {
     mockUseTrendData.mockReturnValue({
       data: [{ date: '2026-01-15', value: 42 }],
       loading: false,
     })
     render(<TrendChart />)
+    // All four buttons should be visible without any click — segmented toggle, not a dropdown
     expect(screen.getByText('OR Utilization')).toBeTruthy()
+    expect(screen.getByText('Median Turnover')).toBeTruthy()
+    expect(screen.getByText('Case Volume')).toBeTruthy()
+    expect(screen.getByText('Facility Score')).toBeTruthy()
   })
 
-  it('renders recharts components when data exists', () => {
+  it('renders AreaChart (not LineChart) when data exists', () => {
     mockUseTrendData.mockReturnValue({
       data: [
         { date: '2026-01-15', value: 65 },
@@ -71,45 +76,56 @@ describe('TrendChart', () => {
     })
     render(<TrendChart />)
     expect(screen.getByTestId('responsive-container')).toBeTruthy()
-    expect(screen.getByTestId('line-chart')).toBeTruthy()
+    expect(screen.getByTestId('area-chart')).toBeTruthy()
+    expect(screen.getByTestId('area')).toBeTruthy()
+    // LineChart must not be present — this was the old chart type
+    expect(screen.queryByTestId('line-chart')).toBeNull()
   })
 
-  it('opens dropdown and shows all metric options', () => {
+  it('changes metric when segmented toggle button clicked', () => {
     mockUseTrendData.mockReturnValue({
       data: [{ date: '2026-01-15', value: 42 }],
       loading: false,
     })
     render(<TrendChart />)
 
-    // Click the dropdown button
-    fireEvent.click(screen.getByText('OR Utilization'))
-
-    // All options should be visible
-    expect(screen.getByText('Median Turnover')).toBeTruthy()
-    expect(screen.getByText('Case Volume')).toBeTruthy()
-    expect(screen.getByText('Facility Score')).toBeTruthy()
-  })
-
-  it('changes metric when dropdown option clicked', () => {
-    mockUseTrendData.mockReturnValue({
-      data: [{ date: '2026-01-15', value: 42 }],
-      loading: false,
-    })
-    render(<TrendChart />)
-
-    // Open dropdown
-    fireEvent.click(screen.getByText('OR Utilization'))
-
-    // Select "Case Volume"
+    // Click "Case Volume" directly — no dropdown open step needed
     fireEvent.click(screen.getByText('Case Volume'))
 
-    // useTrendData should have been called with the new metric
     expect(mockUseTrendData).toHaveBeenCalledWith('caseVolume')
   })
 
-  it('calls useTrendData with default utilization metric', () => {
+  it('changes metric to Median Turnover when toggle clicked', () => {
+    mockUseTrendData.mockReturnValue({
+      data: [{ date: '2026-01-15', value: 42 }],
+      loading: false,
+    })
+    render(<TrendChart />)
+
+    fireEvent.click(screen.getByText('Median Turnover'))
+
+    expect(mockUseTrendData).toHaveBeenCalledWith('turnover')
+  })
+
+  it('calls useTrendData with default utilization metric on mount', () => {
     mockUseTrendData.mockReturnValue({ data: null, loading: true })
     render(<TrendChart />)
     expect(mockUseTrendData).toHaveBeenCalledWith('utilization')
+  })
+
+  it('active metric button has dark background class', () => {
+    mockUseTrendData.mockReturnValue({
+      data: [{ date: '2026-01-15', value: 42 }],
+      loading: false,
+    })
+    render(<TrendChart />)
+
+    const utilizationBtn = screen.getByText('OR Utilization').closest('button')
+    expect(utilizationBtn?.className).toContain('bg-slate-800')
+    expect(utilizationBtn?.className).toContain('text-white')
+
+    // Inactive buttons should not have the active class
+    const turnoverBtn = screen.getByText('Median Turnover').closest('button')
+    expect(turnoverBtn?.className).not.toContain('bg-slate-800')
   })
 })

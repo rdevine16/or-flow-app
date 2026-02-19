@@ -1,20 +1,19 @@
 // components/dashboard/TrendChart.tsx
-// 30-day trend line chart with metric selector dropdown.
-// Uses recharts for rendering. Fetches data independently via useTrendData.
+// 30-day trend area chart with segmented metric toggle.
+// Uses recharts AreaChart with gradient fill. Fetches data independently via useTrendData.
 
 'use client'
 
 import { useState } from 'react'
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { ChevronDown } from 'lucide-react'
 import {
   useTrendData,
   TREND_METRIC_OPTIONS,
@@ -91,7 +90,7 @@ function TrendChartSkeleton() {
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="h-5 w-40 bg-slate-200 rounded animate-pulse" />
-        <div className="h-8 w-36 bg-slate-200 rounded animate-pulse" />
+        <div className="h-8 w-80 bg-slate-200 rounded animate-pulse" />
       </div>
       <div className="h-[280px] bg-slate-50 rounded-lg animate-pulse" />
     </div>
@@ -104,11 +103,10 @@ function TrendChartSkeleton() {
 
 export function TrendChart() {
   const [metric, setMetric] = useState<TrendMetric>('utilization')
-  const [dropdownOpen, setDropdownOpen] = useState(false)
   const { data: trendData, loading } = useTrendData(metric)
 
-  const selectedOption = TREND_METRIC_OPTIONS.find((o) => o.value === metric)!
   const color = getMetricColor(metric)
+  const gradientId = `trendGradient-${metric}`
 
   if (loading) return <TrendChartSkeleton />
 
@@ -123,49 +121,34 @@ export function TrendChart() {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-base font-semibold text-slate-900">30-Day Trend</h2>
 
-        {/* Metric selector */}
-        <div className="relative">
-          <button
-            onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
-          >
-            {selectedOption.label}
-            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
-          </button>
-
-          {dropdownOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setDropdownOpen(false)}
-              />
-              <div className="absolute right-0 top-full mt-1 z-20 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[180px]">
-                {TREND_METRIC_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => {
-                      setMetric(option.value)
-                      setDropdownOpen(false)
-                    }}
-                    className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                      option.value === metric
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+        {/* Segmented metric toggle */}
+        <div className="flex items-center border border-slate-200 rounded-md p-0.5">
+          {TREND_METRIC_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => setMetric(option.value)}
+              className={`px-3 py-1 text-xs font-medium rounded transition-colors duration-150 ${
+                option.value === metric
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Chart */}
       {chartData.length > 0 ? (
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+          <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={color} stopOpacity={0.12} />
+                <stop offset="100%" stopColor={color} stopOpacity={0} />
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis
               dataKey="dateLabel"
@@ -181,15 +164,16 @@ export function TrendChart() {
               width={45}
             />
             <Tooltip content={<CustomChartTooltip metric={metric} />} />
-            <Line
+            <Area
               type="monotone"
               dataKey="value"
               stroke={color}
               strokeWidth={2.5}
+              fill={`url(#${gradientId})`}
               dot={false}
               activeDot={{ r: 5, strokeWidth: 2, fill: '#fff', stroke: color }}
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       ) : (
         <div className="flex items-center justify-center h-[280px] text-sm text-slate-400">

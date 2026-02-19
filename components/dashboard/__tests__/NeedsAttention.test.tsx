@@ -78,7 +78,7 @@ describe('NeedsAttention', () => {
     expect(hrefs).toContain('/cases?filter=stale')
   })
 
-  it('truncates to 6 items and shows View All link', () => {
+  it('truncates to 6 items and shows overflow link', () => {
     const manyAlerts: DashboardAlert[] = Array.from({ length: 8 }, (_, i) => ({
       id: `alert-${i}`,
       type: 'validation' as const,
@@ -91,20 +91,62 @@ describe('NeedsAttention', () => {
 
     render(<NeedsAttention alerts={manyAlerts} />)
 
-    // Should show 6 alert items + 1 "View all" link
+    // Should show 6 alert items, not the 7th or 8th
     expect(screen.getByText('Alert 1')).toBeTruthy()
     expect(screen.getByText('Alert 6')).toBeTruthy()
     expect(screen.queryByText('Alert 7')).toBeNull()
-    expect(screen.getByText('View all (8) items')).toBeTruthy()
+    // Overflow link shows the remaining count
+    expect(screen.getByText('+2 more')).toBeTruthy()
   })
 
-  it('does not show View All when 6 or fewer items', () => {
+  it('shows "View all" header link when alerts are present', () => {
     render(<NeedsAttention alerts={mockAlerts} />)
-    expect(screen.queryByText(/View all/)).toBeNull()
+    expect(screen.getByText('View all')).toBeTruthy()
+  })
+
+  it('does not show "View all" header link when no alerts', () => {
+    render(<NeedsAttention alerts={[]} />)
+    expect(screen.queryByText('View all')).toBeNull()
+  })
+
+  it('does not show overflow link when 6 or fewer items', () => {
+    render(<NeedsAttention alerts={mockAlerts} />)
+    expect(screen.queryByText(/\+\d+ more/)).toBeNull()
   })
 
   it('does not show count badge when no alerts', () => {
     render(<NeedsAttention alerts={[]} />)
     expect(screen.queryByText('0 items')).toBeNull()
+  })
+
+  // Phase 6: urgent count badge (red pill)
+  it('shows red urgent badge when high-priority alerts exist', () => {
+    // mockAlerts[0] is priority 'high' — one urgent alert
+    render(<NeedsAttention alerts={mockAlerts} />)
+    const badge = screen.getByText('1')
+    expect(badge.className).toContain('bg-red-500')
+    expect(badge.className).toContain('text-white')
+  })
+
+  it('does not show urgent badge when no high-priority alerts', () => {
+    const noHighAlerts: DashboardAlert[] = [
+      { ...mockAlerts[1] }, // medium
+      { ...mockAlerts[2] }, // low
+    ]
+    render(<NeedsAttention alerts={noHighAlerts} />)
+    // The red pill must not appear — only the slate count badge should
+    const redBadges = document.querySelectorAll('.bg-red-500')
+    expect(redBadges.length).toBe(0)
+  })
+
+  it('urgent badge count reflects only high-priority alerts', () => {
+    const multiHighAlerts: DashboardAlert[] = [
+      { ...mockAlerts[0], id: 'h1' },                           // high
+      { ...mockAlerts[0], id: 'h2', title: 'Second urgent' },   // high
+      { ...mockAlerts[1] },                                       // medium — must not count
+    ]
+    render(<NeedsAttention alerts={multiHighAlerts} />)
+    const badge = screen.getByText('2')
+    expect(badge.className).toContain('bg-red-500')
   })
 })

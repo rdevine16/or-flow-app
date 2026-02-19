@@ -1,6 +1,7 @@
 // app/dashboard/page.tsx
 // Facility admin dashboard — operational command center.
-// Phase 5: AI Insights section with lazy loading.
+// Layout: Live Pulse → KPI Row → Gantt → Alerts+Insights → Rooms+Surgeons → Trend → Quick Access
+// Time range toggle affects KPI cards + Trend chart only. Everything else = always "today".
 
 'use client'
 
