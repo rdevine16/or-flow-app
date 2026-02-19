@@ -9,6 +9,7 @@ import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Check, Clock } from 'lucide-react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 // =====================================================
 // TYPES
@@ -132,13 +133,13 @@ export default function SubscriptionPage() {
           .from('cases')
           .select('id', { count: 'exact', head: true })
           .eq('facility_id', effectiveFacilityId)
-          .gte('scheduled_date', firstOfMonth.toISOString().split('T')[0]),
+          .gte('scheduled_date', getLocalDateString(firstOfMonth)),
         supabase
           .from('cases')
           .select('id', { count: 'exact', head: true })
           .eq('facility_id', effectiveFacilityId)
-          .gte('scheduled_date', firstOfLastMonth.toISOString().split('T')[0])
-          .lte('scheduled_date', lastOfLastMonth.toISOString().split('T')[0]),
+          .gte('scheduled_date', getLocalDateString(firstOfLastMonth))
+          .lte('scheduled_date', getLocalDateString(lastOfLastMonth)),
         supabase
           .from('users')
           .select('id', { count: 'exact', head: true })

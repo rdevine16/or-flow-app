@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { extractName } from '@/lib/formatters'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Building2, ClipboardList, Folder, Search, User, Zap } from 'lucide-react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 // ============================================================================
 // TYPES
@@ -224,7 +225,7 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
             surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
           `)
           .eq('facility_id', facilityId)
-          .gte('scheduled_date', thirtyDaysAgo.toISOString().split('T')[0])
+          .gte('scheduled_date', getLocalDateString(thirtyDaysAgo))
           .order('scheduled_date', { ascending: false })
           .limit(100),
         

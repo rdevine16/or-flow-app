@@ -25,6 +25,7 @@ import {
 } from '@/components/analytics/financials/types'
 import { useFinancialsMetrics } from '@/components/analytics/financials/useFinancialsMetrics'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
+import { getLocalDateString } from '@/lib/date-utils'
 import OverviewTab from '@/components/analytics/financials/OverviewTab'
 import ProcedureTab from '@/components/analytics/financials/ProcedureTab'
 import SurgeonTab from '@/components/analytics/financials/SurgeonTab'
@@ -64,8 +65,8 @@ export default function FinancialsAnalyticsPage() {
     // Get date range
     const today = new Date()
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-    const start = startDate || monthStart.toISOString().split('T')[0]
-    const end = endDate || today.toISOString().split('T')[0]
+    const start = startDate || getLocalDateString(monthStart)
+    const end = endDate || getLocalDateString(today)
 
     try {
       // -------------------------------------------------------

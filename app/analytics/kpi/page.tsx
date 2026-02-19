@@ -22,6 +22,7 @@ import {
   type KPIResult,
 } from '@/lib/analyticsV2'
 import { useAnalyticsConfig } from '@/lib/hooks/useAnalyticsConfig'
+import { getLocalDateString } from '@/lib/date-utils'
 
 import { ArrowRight, BarChart3, ChevronRight, Download, Check } from 'lucide-react'
 import { exportInsightPanel } from '@/lib/insightExports'
@@ -327,8 +328,8 @@ export default function AnalyticsOverviewPage() {
           )
         `)
         .eq('facility_id', effectiveFacilityId)
-        .gte('scheduled_date', prevStart.toISOString().split('T')[0])
-        .lte('scheduled_date', prevEnd.toISOString().split('T')[0])
+        .gte('scheduled_date', getLocalDateString(prevStart))
+        .lte('scheduled_date', getLocalDateString(prevEnd))
 
       const transformedPrev = ((prevData || []) as unknown[]).map((c: unknown) => {
         const caseObj = c as Record<string, unknown>
@@ -353,7 +354,7 @@ export default function AnalyticsOverviewPage() {
     const today = new Date()
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchData(monthStart.toISOString().split('T')[0], today.toISOString().split('T')[0])
+    fetchData(getLocalDateString(monthStart), getLocalDateString(today))
   }, [effectiveFacilityId, fetchData])
 
   const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {

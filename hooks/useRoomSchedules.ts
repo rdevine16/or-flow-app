@@ -5,6 +5,7 @@ import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { roomScheduleAudit } from '@/lib/audit-logger'
 import { logger } from '@/lib/logger'
+import { getLocalDateString } from '@/lib/date-utils'
 
 const log = logger('useRoomSchedules')
 
@@ -69,7 +70,7 @@ export function useRoomSchedules({ facilityId }: UseRoomSchedulesOptions) {
     if (!facilityId) return getDefaultWeekSchedule()
 
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const today = getLocalDateString()
 
       const { data, error: fetchError } = await supabase
         .from('room_schedules')
@@ -123,7 +124,7 @@ export function useRoomSchedules({ facilityId }: UseRoomSchedulesOptions) {
     if (!facilityId) return new Map()
 
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const today = getLocalDateString()
 
       const { data, error: fetchError } = await supabase
         .from('room_schedules')
@@ -187,10 +188,10 @@ export function useRoomSchedules({ facilityId }: UseRoomSchedulesOptions) {
     setError(null)
 
     try {
-      const effDate = effectiveDate || new Date().toISOString().split('T')[0]
+      const effDate = effectiveDate || getLocalDateString()
       const yesterday = new Date()
       yesterday.setDate(yesterday.getDate() - 1)
-      const yesterdayStr = yesterday.toISOString().split('T')[0]
+      const yesterdayStr = getLocalDateString(yesterday)
 
       // Capture the old schedule BEFORE we overwrite it (for audit logging)
       const oldSchedule = await fetchRoomSchedule(roomId)

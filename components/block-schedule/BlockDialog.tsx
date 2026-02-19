@@ -14,6 +14,7 @@ import {
   formatTime12Hour,
 } from "@/types/block-scheduling"
 import { logger } from "@/lib/logger"
+import { getLocalDateString } from '@/lib/date-utils'
 
 const log = logger("BlockDialog")
 
@@ -65,7 +66,7 @@ export function BlockDialog({
   const [endTime, setEndTime] = useState<string>('15:00:00')
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('weekly')
   const [effectiveStart, setEffectiveStart] = useState<string>(
-    new Date().toISOString().split('T')[0]
+    getLocalDateString()
   )
   const [effectiveEnd, setEffectiveEnd] = useState<string>('')
   const [hasEndDate, setHasEndDate] = useState(false)
@@ -90,7 +91,7 @@ export function BlockDialog({
         setStartTime(initialStartTime || '07:00:00')
         setEndTime(initialEndTime || '15:00:00')
         setRecurrenceType('weekly')
-        setEffectiveStart(new Date().toISOString().split('T')[0])
+        setEffectiveStart(getLocalDateString())
         setEffectiveEnd('')
         setHasEndDate(false)
       }

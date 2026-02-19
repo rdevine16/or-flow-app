@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ChevronDown, Download, FileText, Info, Loader2, Search } from 'lucide-react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 interface AuditLogEntry {
   id: string
@@ -202,7 +203,7 @@ export default function AuditLogPage() {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = `audit-log-${new Date().toISOString().split('T')[0]}.csv`
+    link.download = `audit-log-${getLocalDateString()}.csv`
     link.click()
   }
 

@@ -14,6 +14,7 @@ import { checkinAudit } from '@/lib/audit-logger'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { formatDisplayTime, formatTimestamp } from '@/lib/formatters'
+import { getLocalDateString } from '@/lib/date-utils'
 
 // =====================================================
 // TYPES
@@ -519,8 +520,7 @@ export default function CheckInPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const today = new Date()
-    return today.toISOString().split('T')[0]
+    return getLocalDateString()
   })
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [selectedCheckin, setSelectedCheckin] = useState<CheckinRecord | null>(null)
@@ -837,9 +837,9 @@ export default function CheckInPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                const date = new Date(selectedDate)
+                const date = new Date(selectedDate + 'T00:00:00')
                 date.setDate(date.getDate() - 1)
-                setSelectedDate(date.toISOString().split('T')[0])
+                setSelectedDate(getLocalDateString(date))
               }}
               className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
             >
@@ -855,9 +855,9 @@ export default function CheckInPage() {
             />
             <button
               onClick={() => {
-                const date = new Date(selectedDate)
+                const date = new Date(selectedDate + 'T00:00:00')
                 date.setDate(date.getDate() + 1)
-                setSelectedDate(date.toISOString().split('T')[0])
+                setSelectedDate(getLocalDateString(date))
               }}
               className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
             >
@@ -866,7 +866,7 @@ export default function CheckInPage() {
               </svg>
             </button>
             <button
-              onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+              onClick={() => setSelectedDate(getLocalDateString())}
               className="px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
             >
               Today

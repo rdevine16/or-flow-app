@@ -33,6 +33,7 @@ import {
   ChevronRight as ChevronRightIcon,
   Ban,
   Download,
+  Pencil,
 } from 'lucide-react'
 
 // ============================================
@@ -534,6 +535,16 @@ export default function CasesTable({
         const isCancellable = statusName === 'scheduled' || statusName === 'in_progress'
         return (
           <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
+            {can('cases.edit') && (
+              <Link
+                href={`/cases/${row.original.id}/edit`}
+                onClick={(e) => e.stopPropagation()}
+                className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                title="Edit case"
+              >
+                <Pencil className="w-4 h-4" />
+              </Link>
+            )}
             {isCancellable && can('cases.delete') && (
               <button
                 onClick={(e) => {

@@ -12,6 +12,7 @@ import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { AlertTriangle, ClipboardList, ExternalLink, Info, Pencil, X } from 'lucide-react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 
 // Types
@@ -250,7 +251,7 @@ export default function ProcedurePricingPage() {
           procedure_type_id: selectedProcedure.id,
           payer_id: null,
           reimbursement: defaultReimbursement,
-          effective_date: new Date().toISOString().split('T')[0],
+          effective_date: getLocalDateString(),
         })
       }
 
@@ -262,7 +263,7 @@ export default function ProcedurePricingPage() {
             procedure_type_id: selectedProcedure.id,
             payer_id: payerId,
             reimbursement: amount,
-            effective_date: new Date().toISOString().split('T')[0],
+            effective_date: getLocalDateString(),
           })
         }
       })

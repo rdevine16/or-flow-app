@@ -18,6 +18,7 @@ import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { Calculator, ExternalLink, Info, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 interface Surgeon {
   id: string
@@ -64,13 +65,13 @@ interface SurgeonProcedureOverride {
 }
 
 // Helper to get today's date in YYYY-MM-DD format
-const getTodayDate = () => new Date().toISOString().split('T')[0]
+const getTodayDate = () => getLocalDateString()
 
 // Helper to get yesterday's date in YYYY-MM-DD format
 const getYesterdayDate = () => {
   const d = new Date()
   d.setDate(d.getDate() - 1)
-  return d.toISOString().split('T')[0]
+  return getLocalDateString(d)
 }
 
 export default function SurgeonVariancePage() {

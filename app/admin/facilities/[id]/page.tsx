@@ -23,6 +23,7 @@ import FacilityLogoUpload from '@/components/FacilityLogoUpload'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Building2, CheckCircle2, ChevronLeft, ClipboardList, Clock, Eye, FlaskConical, Plus, Trash2, TrendingUp, UserPlus, Users } from 'lucide-react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 type TabType = 'overview' | 'users' | 'rooms' | 'procedures' | 'subscription' | 'audit'
 
@@ -324,14 +325,14 @@ export default function FacilityDetailPage() {
           .from('cases')
           .select('id', { count: 'exact', head: true })
           .eq('facility_id', facilityId)
-          .gte('scheduled_date', firstOfMonth.toISOString().split('T')[0]),
+          .gte('scheduled_date', getLocalDateString(firstOfMonth)),
         // Cases last month
         supabase
           .from('cases')
           .select('id', { count: 'exact', head: true })
           .eq('facility_id', facilityId)
-          .gte('scheduled_date', firstOfLastMonth.toISOString().split('T')[0])
-          .lte('scheduled_date', lastOfLastMonth.toISOString().split('T')[0]),
+          .gte('scheduled_date', getLocalDateString(firstOfLastMonth))
+          .lte('scheduled_date', getLocalDateString(lastOfLastMonth)),
         // All time cases
         supabase
           .from('cases')
@@ -354,7 +355,7 @@ export default function FacilityDetailPage() {
           .select('id, case_statuses!inner(name)', { count: 'exact', head: true })
           .eq('facility_id', facilityId)
           .eq('case_statuses.name', 'completed')
-          .gte('scheduled_date', thirtyDaysAgo.toISOString().split('T')[0]),
+          .gte('scheduled_date', getLocalDateString(thirtyDaysAgo)),
         // Last activity
         supabase
           .from('audit_log')

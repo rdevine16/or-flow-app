@@ -8,6 +8,12 @@ interface DatePickerCalendarProps {
   onChange: (date: string) => void
   highlightedDates?: Set<string> // Set of "YYYY-MM-DD" strings to show a dot indicator
   className?: string
+  /** 'compact' = small chip (default), 'form' = full-width form field */
+  variant?: 'compact' | 'form'
+  label?: string
+  required?: boolean
+  error?: string
+  onBlur?: () => void
 }
 
 const DAYS_OF_WEEK = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
@@ -52,7 +58,7 @@ function formatDisplayDate(dateStr: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-export default function DatePickerCalendar({ value, onChange, highlightedDates, className }: DatePickerCalendarProps) {
+export default function DatePickerCalendar({ value, onChange, highlightedDates, className, variant = 'compact', label, required, error, onBlur }: DatePickerCalendarProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   // Internal view state — month navigation never triggers onChange
@@ -81,13 +87,14 @@ export default function DatePickerCalendar({ value, onChange, highlightedDates, 
     function handleClickOutside(event: MouseEvent) {
       if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
         setIsOpen(false)
+        onBlur?.()
       }
     }
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [isOpen])
+  }, [isOpen, onBlur])
 
   // Escape key close
   useEffect(() => {
@@ -142,20 +149,51 @@ export default function DatePickerCalendar({ value, onChange, highlightedDates, 
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
+  const isForm = variant === 'form'
+
   return (
     <div className={`relative ${className ?? ''}`} ref={popoverRef}>
+      {/* Label for form variant */}
+      {isForm && label && (
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          {label} {required && <span className="text-red-600">*</span>}
+        </label>
+      )}
+
       {/* Trigger button */}
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="h-7 flex items-center gap-1.5 px-2.5 border border-slate-200 rounded-md text-xs text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+        className={isForm
+          ? `w-full px-4 py-3 text-left bg-white border rounded-xl flex items-center justify-between transition-all duration-200 ${
+              error
+                ? 'border-red-400 ring-2 ring-red-500/20'
+                : isOpen
+                  ? 'border-blue-500 ring-2 ring-blue-500/20'
+                  : 'border-slate-200 hover:border-slate-300'
+            }`
+          : 'h-7 flex items-center gap-1.5 px-2.5 border border-slate-200 rounded-md text-xs text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer'
+        }
       >
-        <Calendar className="w-3 h-3 text-slate-400" />
-        <span>{formatDisplayDate(value)}</span>
+        {isForm ? (
+          <>
+            <span className="text-slate-900 font-medium">{formatDisplayDate(value)}</span>
+            <Calendar className="w-4 h-4 text-slate-400" />
+          </>
+        ) : (
+          <>
+            <Calendar className="w-3 h-3 text-slate-400" />
+            <span>{formatDisplayDate(value)}</span>
+          </>
+        )}
       </button>
+
+      {/* Error message for form variant */}
+      {isForm && error && <p className="text-red-600 text-xs mt-1">{error}</p>}
 
       {/* Popover panel */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-1.5 w-[280px] bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+        <div className={`absolute top-full mt-1.5 w-[280px] bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden ${isForm ? 'left-0' : 'right-0'}`}>
           {/* Month/year header */}
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100">
             <button

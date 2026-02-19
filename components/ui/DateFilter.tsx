@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 interface DateFilterProps {
   selectedFilter: string
@@ -28,25 +29,25 @@ export default function DateFilter({ selectedFilter, onFilterChange }: DateFilte
 
     switch (filterId) {
       case 'today':
-        startDate = today.toISOString().split('T')[0]
+        startDate = getLocalDateString(today)
         endDate = startDate
         break
       case 'yesterday':
         const yesterday = new Date(today)
         yesterday.setDate(yesterday.getDate() - 1)
-        startDate = yesterday.toISOString().split('T')[0]
+        startDate = getLocalDateString(yesterday)
         endDate = startDate
         break
       case 'week':
         const weekStart = new Date(today)
         weekStart.setDate(today.getDate() - today.getDay())
-        startDate = weekStart.toISOString().split('T')[0]
-        endDate = today.toISOString().split('T')[0]
+        startDate = getLocalDateString(weekStart)
+        endDate = getLocalDateString(today)
         break
       case 'month':
         const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-        startDate = monthStart.toISOString().split('T')[0]
-        endDate = today.toISOString().split('T')[0]
+        startDate = getLocalDateString(monthStart)
+        endDate = getLocalDateString(today)
         break
       case 'all':
         startDate = undefined

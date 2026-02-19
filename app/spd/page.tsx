@@ -209,14 +209,14 @@ function getDateRange(filter: DateFilter): { start: string; end: string } {
     case 'tomorrow': {
       const tomorrow = new Date(todayDate)
       tomorrow.setDate(tomorrow.getDate() + 1)
-      const tomorrowStr = tomorrow.toISOString().split('T')[0]
+      const tomorrowStr = getLocalDateString(tomorrow)
       return { start: tomorrowStr, end: tomorrowStr }
     }
     case '3days':
     default: {
       const threeDays = new Date(todayDate)
       threeDays.setDate(threeDays.getDate() + 2)
-      return { start: today, end: threeDays.toISOString().split('T')[0] }
+      return { start: today, end: getLocalDateString(threeDays) }
     }
   }
 }

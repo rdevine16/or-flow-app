@@ -7,6 +7,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
+import { getLocalDateString } from '@/lib/date-utils'
 
 const log = logger('stale-case-detection')
 
@@ -178,7 +179,7 @@ async function detectAbandonedScheduled(
   supabase: SupabaseClient,
   facilityId: string
 ): Promise<StaleCase[]> {
-  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const twoDaysAgo = getLocalDateString(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000))
   
   // Get scheduled status ID
   const { data: statusData } = await supabase

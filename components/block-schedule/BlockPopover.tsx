@@ -18,6 +18,7 @@ import {
 } from '@/types/block-scheduling'
 import { surgeonPalette } from '@/lib/design-tokens'
 import { CustomRecurrenceModal, CustomRecurrenceConfig, getCustomRecurrenceDescription } from './CustomRecurrenceModal'
+import { getLocalDateString } from '@/lib/date-utils'
 
 interface Surgeon {
   id: string
@@ -63,7 +64,7 @@ function getDateForDayInWeek(weekStart: Date, dayOfWeek: number): string {
   const offset = dayOfWeek - weekStartDay
   const target = new Date(weekStart)
   target.setDate(weekStart.getDate() + offset)
-  return target.toISOString().split('T')[0]
+  return getLocalDateString(target)
 }
 
 function timesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
@@ -143,7 +144,7 @@ export function BlockPopover({
   const [startTime, setStartTime] = useState<string>('07:00:00')
   const [endTime, setEndTime] = useState<string>('15:00:00')
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('weekly')
-  const [effectiveStart, setEffectiveStart] = useState<string>(new Date().toISOString().split('T')[0])
+  const [effectiveStart, setEffectiveStart] = useState<string>(getLocalDateString())
   const [effectiveEnd, setEffectiveEnd] = useState<string>('')
   const [hasEndDate, setHasEndDate] = useState(false)
   const [notes, setNotes] = useState<string>('')
@@ -217,7 +218,7 @@ export function BlockPopover({
         if (currentWeekStart && initialDayOfWeek !== undefined) {
           setEffectiveStart(getDateForDayInWeek(currentWeekStart, initialDayOfWeek))
         } else {
-          setEffectiveStart(new Date().toISOString().split('T')[0])
+          setEffectiveStart(getLocalDateString())
         }
         setEffectiveEnd('')
         setHasEndDate(false)

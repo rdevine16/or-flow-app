@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { ChevronUp, ChevronDown } from 'lucide-react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 interface CustomRecurrenceModalProps {
   open: boolean
@@ -51,7 +52,7 @@ export function CustomRecurrenceModal({
       const defaultEndDate = initialConfig.endDate || (() => {
         const date = new Date()
         date.setMonth(date.getMonth() + 3)
-        return date.toISOString().split('T')[0]
+        return getLocalDateString(date)
       })()
       setEndDate(defaultEndDate)
       setEndAfterOccurrences(initialConfig.endAfterOccurrences || 13)
@@ -62,7 +63,7 @@ export function CustomRecurrenceModal({
       setEndType('never')
       const date = new Date()
       date.setMonth(date.getMonth() + 3)
-      setEndDate(date.toISOString().split('T')[0])
+      setEndDate(getLocalDateString(date))
       setEndAfterOccurrences(13)
     }
   }, [open, initialConfig, initialDayOfWeek])

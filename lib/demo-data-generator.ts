@@ -8,6 +8,7 @@
 // Users are NEVER deleted — purge only touches case-level records.
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { getLocalDateString } from '@/lib/date-utils'
 
 // =====================================================
 // TYPES
@@ -242,9 +243,9 @@ function formatTime(d: Date, tz?: string): string {
   }
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
 }
-function isHoliday(d: Date): boolean { return HOLIDAYS.has(d.toISOString().split('T')[0]) }
+function isHoliday(d: Date): boolean { return HOLIDAYS.has(getLocalDateString(d)) }
 function isWeekend(d: Date): boolean { const dow = d.getUTCDay(); return dow === 0 || dow === 6 }
-function dateKey(d: Date): string { return d.toISOString().split('T')[0] }
+function dateKey(d: Date): string { return getLocalDateString(d) }
 
 // Build a Date in UTC that represents a specific local time at the facility.
 // E.g., facilityDate('2026-01-15', 7, 30, 'America/New_York') → UTC Date for 7:30 AM ET on Jan 15.

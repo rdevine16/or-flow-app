@@ -49,6 +49,7 @@ import {
 import {
   type CaseWithMilestones,
 } from '@/lib/analyticsV2'
+import { getLocalDateString } from '@/lib/date-utils'
 
 import {
   SectionHeader,
@@ -1277,9 +1278,9 @@ export default function BlockUtilizationPage() {
   const [selectedSurgeonId, setSelectedSurgeonId] = useState<string>('all')
 const [dateRange, setDateRange] = useState('last_30')
 const [dateStart, setDateStart] = useState(() => {
-const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0]
+const d = new Date(); d.setDate(d.getDate() - 30); return getLocalDateString(d)
 })
-const [dateEnd, setDateEnd] = useState(() => new Date().toISOString().split('T')[0])  
+const [dateEnd, setDateEnd] = useState(() => getLocalDateString())  
 const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<'block' | 'room'>('block')
 

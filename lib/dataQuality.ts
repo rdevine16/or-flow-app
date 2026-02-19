@@ -7,6 +7,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
+import { getLocalDateString } from '@/lib/date-utils'
 
 const log = logger('dataQuality')
 
@@ -443,7 +444,7 @@ export async function runDetectionForFacility(
     .from('cases')
     .select('id')
     .eq('facility_id', facilityId)
-    .gte('scheduled_date', startDate.toISOString().split('T')[0])
+    .gte('scheduled_date', getLocalDateString(startDate))
 
   if (casesError || !cases) {
     log.error('Error fetching cases:', casesError)
@@ -628,7 +629,7 @@ async function detectAbandonedScheduled(
   supabase: SupabaseClient,
   facilityId: string
 ): Promise<StaleCase[]> {
-  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const twoDaysAgo = getLocalDateString(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000))
   
   // Get scheduled status ID
   const { data: statusData } = await supabase

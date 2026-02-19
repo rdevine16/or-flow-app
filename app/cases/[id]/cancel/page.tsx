@@ -12,6 +12,7 @@ import { caseAudit } from '@/lib/audit-logger'
 import { extractName } from '@/lib/formatters'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { AlertCircle, AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 // ============================================================================
 // TYPES
@@ -111,7 +112,7 @@ export default function CancelCasePage() {
   // ============================================================================
 
   const calculateMetrics = useCallback(async (caseResult: CaseData) => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = getLocalDateString()
     const monthStart = new Date()
     monthStart.setDate(1)
 
@@ -121,12 +122,12 @@ export default function CancelCasePage() {
       .select('id', { count: 'exact', head: true })
       .eq('facility_id', caseResult.facility_id)
       .not('cancelled_at', 'is', null)
-      .gte('cancelled_at', monthStart.toISOString().split('T')[0])
+      .gte('cancelled_at', getLocalDateString(monthStart))
 
     // Surgeon rate (90 days)
     let surgeonRate: number | null = null
     if (caseResult.surgeon_id) {
-      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      const ninetyDaysAgo = getLocalDateString(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000))
 
       const { count: total } = await supabase
         .from('cases')

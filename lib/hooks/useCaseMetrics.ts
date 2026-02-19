@@ -6,6 +6,7 @@
 
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import type { AnySupabaseClient, CasesPageTab } from '@/lib/dal'
+import { getLocalDateString } from '@/lib/date-utils'
 import type { metricColors } from '@/lib/design-tokens'
 
 // ============================================
@@ -64,7 +65,7 @@ export function useCaseMetrics(
       if (!facilityId || !statusIdsReady) return []
 
       // Today tab overrides date range to just today
-      const today = new Date().toISOString().split('T')[0]
+      const today = getLocalDateString()
       const start = activeTab === 'today' ? today : dateRange.start
       const end = activeTab === 'today' ? today : dateRange.end
 

@@ -28,6 +28,7 @@ import { PageLoader } from '@/components/ui/Loading'
 import { Toggle } from '@/components/ui/Toggle'
 import { Button } from '@/components/ui/Button'
 import { logger } from '@/lib/logger'
+import { getLocalDateString } from '@/lib/date-utils'
 
 const log = logger('page')
 
@@ -199,7 +200,7 @@ export default function FacilityClosuresPage() {
   const inactiveHolidays = holidays.filter(h => !h.is_active)
 
   // Separate past and future closures
-  const today = new Date().toISOString().split('T')[0]
+  const today = getLocalDateString()
   const upcomingClosures = closures.filter(c => c.closure_date >= today)
   const pastClosures = closures.filter(c => c.closure_date < today)
 
@@ -866,7 +867,7 @@ function ClosureDialog({ open, onClose, onSave, loading }: ClosureDialogProps) {
                 type="date"
                 value={closureDate}
                 onChange={e => setClosureDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
+                min={getLocalDateString()}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               />

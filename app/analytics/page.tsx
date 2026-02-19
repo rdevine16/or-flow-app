@@ -10,6 +10,7 @@ import Container from '@/components/ui/Container'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
+import { getLocalDateString } from '@/lib/date-utils'
 
 // Tremor components
 import {
@@ -490,8 +491,8 @@ case_milestones (
           )
         `)
         .eq('facility_id', effectiveFacilityId)
-        .gte('scheduled_date', prevStart.toISOString().split('T')[0])
-        .lte('scheduled_date', prevEnd.toISOString().split('T')[0])
+        .gte('scheduled_date', getLocalDateString(prevStart))
+        .lte('scheduled_date', getLocalDateString(prevEnd))
       
       setPreviousPeriodCases((prevData as unknown as CaseWithMilestones[]) || [])
     }
@@ -503,8 +504,8 @@ case_milestones (
     if (!effectiveFacilityId) return
     const today = new Date()
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-    const start = monthStart.toISOString().split('T')[0]
-    const end = today.toISOString().split('T')[0]
+    const start = getLocalDateString(monthStart)
+    const end = getLocalDateString(today)
     // eslint-disable-next-line
     setCurrentStartDate(start)
     setCurrentEndDate(end)

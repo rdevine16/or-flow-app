@@ -7,6 +7,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import SurgeonAvatar from '../ui/SurgeonAvatar'
 import { extractName } from '@/lib/formatters'
+import { getLocalDateString } from '@/lib/date-utils'
 
 interface Case {
   id: string
@@ -114,7 +115,7 @@ const getStatusConfig = (status: string | null) => {
 
 // Filter cases to hide completed cases from previous days
 function filterVisibleCases(cases: Case[], selectedDate?: string): Case[] {
-  const today = new Date().toISOString().split('T')[0]
+  const today = getLocalDateString()
   
   return cases.filter(caseItem => {
     const status = extractName(caseItem.case_statuses)

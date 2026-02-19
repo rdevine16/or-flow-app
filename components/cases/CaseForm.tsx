@@ -13,6 +13,8 @@ import { createClient } from '@/lib/supabase'
 import SearchableDropdown from '../ui/SearchableDropdown'
 import { getLocalDateString } from '@/lib/date-utils'
 import { caseAudit, caseDeviceAudit } from '@/lib/audit-logger'
+import TimePicker from '../ui/TimePicker'
+import DatePickerCalendar from '../ui/DatePickerCalendar'
 import ImplantCompanySelect from '../cases/ImplantCompanySelect'
 import SurgeonPreferenceSelect from '../cases/SurgeonPreferenceSelect'
 import CaseComplexitySelector from '../cases/CaseComplexitySelector'
@@ -1094,42 +1096,29 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
 
       {/* 1. Date & Time */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Scheduled Date <span className="text-red-600">*</span>
-          </label>
-          <input
-            type="date"
-            value={formData.scheduled_date}
-            onChange={(e) => {
-              setFormData({ ...formData, scheduled_date: e.target.value })
-              clearFieldError('scheduled_date')
-            }}
-            onBlur={() => handleFieldBlur('scheduled_date')}
-            className={`w-full px-4 py-3 rounded-xl border ${fieldErrors.scheduled_date ? 'border-red-400 ring-2 ring-red-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
-          />
-          {fieldErrors.scheduled_date && (
-            <p className="text-red-600 text-xs mt-1">{fieldErrors.scheduled_date}</p>
-          )}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Start Time <span className="text-red-600">*</span>
-          </label>
-          <input
-            type="time"
-            value={formData.start_time}
-            onChange={(e) => {
-              setFormData({ ...formData, start_time: e.target.value })
-              clearFieldError('start_time')
-            }}
-            onBlur={() => handleFieldBlur('start_time')}
-            className={`w-full px-4 py-3 rounded-xl border ${fieldErrors.start_time ? 'border-red-400 ring-2 ring-red-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
-          />
-          {fieldErrors.start_time && (
-            <p className="text-red-600 text-xs mt-1">{fieldErrors.start_time}</p>
-          )}
-        </div>
+        <DatePickerCalendar
+          variant="form"
+          label="Scheduled Date"
+          required
+          value={formData.scheduled_date}
+          onChange={(date) => {
+            setFormData({ ...formData, scheduled_date: date })
+            clearFieldError('scheduled_date')
+          }}
+          onBlur={() => handleFieldBlur('scheduled_date')}
+          error={fieldErrors.scheduled_date}
+        />
+        <TimePicker
+          label="Start Time"
+          required
+          value={formData.start_time}
+          onChange={(val) => {
+            setFormData({ ...formData, start_time: val })
+            clearFieldError('start_time')
+          }}
+          onBlur={() => handleFieldBlur('start_time')}
+          error={fieldErrors.start_time}
+        />
       </div>
 
       {/* 2. Surgeon — with preference quick-fill below */}

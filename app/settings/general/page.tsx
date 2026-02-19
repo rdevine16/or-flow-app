@@ -12,6 +12,7 @@ import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { Building2, CalendarDays, Check, ClipboardList, Copy, LayoutDashboard, Lock, Pencil, UsersRound } from 'lucide-react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 // =====================================================
 // TYPES
@@ -184,7 +185,7 @@ export default function GeneralOverviewPage() {
         sb.from('users').select('id', { count: 'exact', head: true }).eq('facility_id', effectiveFacilityId!).eq('is_active', true),
         sb.from('or_rooms').select('id', { count: 'exact', head: true }).eq('facility_id', effectiveFacilityId!).is('deleted_at', null),
         sb.from('cases').select('id', { count: 'exact', head: true }).eq('facility_id', effectiveFacilityId!)
-          .gte('scheduled_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]),
+          .gte('scheduled_date', getLocalDateString(new Date(new Date().getFullYear(), new Date().getMonth(), 1))),
       ])
       return {
         totalCases: casesRes.count || 0,

@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { facilityHolidayAudit, facilityClosureAudit } from '@/lib/audit-logger'
 import { logger } from '@/lib/logger'
+import { getLocalDateString } from '@/lib/date-utils'
 
 const log = logger('useFacilityClosures')
 import {
@@ -356,7 +357,7 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
 
   const isDateClosed = useCallback(
     (date: Date): boolean => {
-      const dateStr = date.toISOString().split('T')[0]
+      const dateStr = getLocalDateString(date)
 
       // Check one-off closures
       if (closures.some(c => c.closure_date === dateStr)) {

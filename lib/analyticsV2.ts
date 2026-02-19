@@ -6,6 +6,7 @@
 // ============================================
 
 import type { Color } from '@tremor/react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 // ============================================
 // TYPES
@@ -864,7 +865,7 @@ export function getDateRange(startDate: Date, endDate: Date): string[] {
   const dates: string[] = []
   const current = new Date(startDate)
   while (current <= endDate) {
-    dates.push(current.toISOString().split('T')[0])
+    dates.push(getLocalDateString(current))
     current.setDate(current.getDate() + 1)
   }
   return dates
@@ -1812,7 +1813,7 @@ export function calculateCaseVolume(
     const date = new Date(c.scheduled_date)
     const weekStart = new Date(date)
     weekStart.setDate(date.getDate() - date.getDay())
-    const weekKey = weekStart.toISOString().split('T')[0]
+    const weekKey = getLocalDateString(weekStart)
     weeklyVolume.set(weekKey, (weeklyVolume.get(weekKey) || 0) + 1)
   })
   

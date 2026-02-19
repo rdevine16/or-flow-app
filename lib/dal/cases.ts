@@ -5,6 +5,7 @@
  */
 
 import type { AnySupabaseClient, DALResult, DALListResult, DateRange, PaginationParams, SortParams } from './index'
+import { getLocalDateString } from '@/lib/date-utils'
 
 // ============================================
 // TYPES
@@ -361,8 +362,7 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
 
     // Date range — "today" tab overrides to today's date, "data_quality" has no date filter
     if (tab === 'today') {
-      const today = new Date().toISOString().split('T')[0]
-      query = query.eq('scheduled_date', today)
+      query = query.eq('scheduled_date', getLocalDateString())
     } else if (tab !== 'data_quality') {
       query = query
         .gte('scheduled_date', dateRange.start)
@@ -432,7 +432,7 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
     statusIds: Record<string, string>,
     filters?: CasesFilterParams,
   ): Promise<{ data: Record<CasesPageTab, number>; error: PostgrestError | null }> {
-    const today = new Date().toISOString().split('T')[0]
+    const today = getLocalDateString()
 
     const baseFilter = () => {
       let q = supabase

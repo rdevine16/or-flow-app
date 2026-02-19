@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { Input, Label } from '@/components/ui/Input'
 import { Plus, Pencil, Trash2, X, ChevronRight, ChevronDown } from 'lucide-react'
+import { getLocalDateString } from '@/lib/date-utils'
 
 // =====================================================
 // TYPES
@@ -365,7 +366,7 @@ export default function FinancialsSettingsPage() {
         if (existingDefault) {
           const { error: updateErr } = await supabase
             .from('procedure_reimbursements')
-            .update({ reimbursement: defaultReimbursement, effective_date: new Date().toISOString().split('T')[0] })
+            .update({ reimbursement: defaultReimbursement, effective_date: getLocalDateString() })
             .eq('id', existingDefault.id)
           if (updateErr) throw updateErr
         } else {
@@ -375,7 +376,7 @@ export default function FinancialsSettingsPage() {
               procedure_type_id: selectedProcedure.id,
               payer_id: null,
               reimbursement: defaultReimbursement,
-              effective_date: new Date().toISOString().split('T')[0],
+              effective_date: getLocalDateString(),
             })
           if (insertErr) throw insertErr
         }
@@ -398,7 +399,7 @@ export default function FinancialsSettingsPage() {
           if (existingPayerRate) {
             const { error: updateErr } = await supabase
               .from('procedure_reimbursements')
-              .update({ reimbursement: reimbursementValue, effective_date: new Date().toISOString().split('T')[0] })
+              .update({ reimbursement: reimbursementValue, effective_date: getLocalDateString() })
               .eq('id', existingPayerRate.id)
             if (updateErr) throw updateErr
           } else {
@@ -408,7 +409,7 @@ export default function FinancialsSettingsPage() {
                 procedure_type_id: selectedProcedure.id,
                 payer_id: payerRate.payer_id,
                 reimbursement: reimbursementValue,
-                effective_date: new Date().toISOString().split('T')[0],
+                effective_date: getLocalDateString(),
               })
             if (insertErr) throw insertErr
           }

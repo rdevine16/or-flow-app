@@ -25,6 +25,7 @@ import {
   type ImprovementRecommendation,
 } from '@/lib/orbitScoreEngine'
 import { chartHex } from '@/lib/design-tokens'
+import { getLocalDateString } from '@/lib/date-utils'
 import { ScoreRing } from '@/components/ui/ScoreRing'
 
 // ─── DATA FETCHING ────────────────────────────────────────────
@@ -552,8 +553,8 @@ export default function ORbitScorePage() {
       const prevData = await fetchScorecardData(
         supabase,
         effectiveFacilityId,
-        prevStart.toISOString().split('T')[0],
-        prevEnd.toISOString().split('T')[0],
+        getLocalDateString(prevStart),
+        getLocalDateString(prevEnd),
       )
 
       const results = calculateORbitScores({

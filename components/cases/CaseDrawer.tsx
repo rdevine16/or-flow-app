@@ -23,6 +23,7 @@ import { fetchMetricIssues, type MetricIssue } from '@/lib/dataQuality'
 import {
   X,
   Ban,
+  Pencil,
 } from 'lucide-react'
 
 // ============================================
@@ -274,13 +275,24 @@ export default function CaseDrawer({
 
                 {/* Open full detail link + conditional Cancel Case */}
                 <div className="flex items-center justify-between px-4 pt-2 pb-3">
-                  <Link
-                    href={`/cases/${caseDetail.id}`}
-                    className="inline-flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 transition-colors"
-                  >
-                    Open full detail
-                    <span aria-hidden="true">&rarr;</span>
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/cases/${caseDetail.id}`}
+                      className="inline-flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 transition-colors"
+                    >
+                      Open full detail
+                      <span aria-hidden="true">&rarr;</span>
+                    </Link>
+                    {can('cases.edit') && (
+                      <Link
+                        href={`/cases/${caseDetail.id}/edit`}
+                        className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Edit
+                      </Link>
+                    )}
+                  </div>
                   {displayStatus === 'scheduled' && onCancelCase && can('cases.delete') && (
                     <button
                       className="inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition-colors"

@@ -31,6 +31,7 @@ import {
   type SurgeonIdleSummary,
 } from '@/lib/analyticsV2'
 import { useAnalyticsConfig } from '@/lib/hooks/useAnalyticsConfig'
+import { getLocalDateString } from '@/lib/date-utils'
 
 import { AlertTriangle, ArrowRight, BarChart3, CalendarDays, CheckCircle2, Clock, Info, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
 
@@ -735,8 +736,8 @@ export default function AnalyticsOverviewPage() {
           )
         `)
         .eq('facility_id', effectiveFacilityId)
-        .gte('scheduled_date', prevStart.toISOString().split('T')[0])
-        .lte('scheduled_date', prevEnd.toISOString().split('T')[0])
+        .gte('scheduled_date', getLocalDateString(prevStart))
+        .lte('scheduled_date', getLocalDateString(prevEnd))
 
       const transformedPrev = ((prevData || []) as unknown[]).map((c: unknown) => {
         const caseObj = c as Record<string, unknown>
@@ -768,7 +769,7 @@ export default function AnalyticsOverviewPage() {
     if (!effectiveFacilityId) return
     const today = new Date()
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-    fetchData(monthStart.toISOString().split('T')[0], today.toISOString().split('T')[0])
+    fetchData(getLocalDateString(monthStart), getLocalDateString(today))
   }, [effectiveFacilityId, fetchData])
 
   const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {
