@@ -49,6 +49,8 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       roomBreakdown: [],
       roomsWithRealHours: 0,
       roomsWithDefaultHours: 0,
+      scheduledValue: 0,
+      actualValue: 0,
     } as ORUtilizationResult,
     caseVolume: { ...makeKPI(), weeklyVolume: [] } as CaseVolumeResult,
     cancellationRate: {

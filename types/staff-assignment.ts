@@ -34,8 +34,8 @@ export interface CaseStaffAssignment {
   }
 }
 
-// For the staff panel
-export type StaffRoleFilter = 'all' | 'nurse' | 'tech' | 'anesthesiologist'
+// For the staff panel — 'all' plus any role name from the DB
+export type StaffRoleFilter = string
 
 // Drag-and-drop related types
 export interface DragData {

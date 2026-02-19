@@ -101,6 +101,8 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       roomBreakdown: [],
       roomsWithRealHours: 2,
       roomsWithDefaultHours: 1,
+      scheduledValue: 0,
+      actualValue: 0,
     } as ORUtilizationResult,
     caseVolume: {
       ...makeKPI({ value: 100, displayValue: '100' }),
@@ -308,6 +310,8 @@ describe('exportUtilizationBreakdown', () => {
       ],
       roomsWithRealHours: 0,
       roomsWithDefaultHours: 1,
+      scheduledValue: 0,
+      actualValue: 0,
     }
 
     exportUtilizationBreakdown(utilization)
@@ -428,6 +432,8 @@ describe('exportSchedulingData', () => {
       roomBreakdown: [],
       roomsWithRealHours: 0,
       roomsWithDefaultHours: 0,
+      scheduledValue: 0,
+      actualValue: 0,
     }
 
     exportSchedulingData(caseVolume, utilization)

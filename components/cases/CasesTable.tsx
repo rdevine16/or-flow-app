@@ -543,7 +543,7 @@ export default function CasesTable({
         const isCancellable = statusName === 'scheduled' || statusName === 'in_progress'
         return (
           <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
-            {can('cases.edit') && (
+            {can('cases.edit') && statusName !== 'completed' && (
               <Link
                 href={`/cases/${row.original.id}/edit`}
                 onClick={(e) => e.stopPropagation()}

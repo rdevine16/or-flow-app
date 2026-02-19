@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Clock } from 'lucide-react'
+import { Clock, LogOut, Phone } from 'lucide-react'
 import { formatTimestamp } from '@/lib/formatters'
 import FlagBadge from './FlagBadge'
 import DelayNode from './DelayNode'
@@ -59,6 +59,15 @@ export interface MilestoneTimelineProps {
   onRemoveDelay?: (flagId: string) => void
   canCreateFlags?: boolean
   currentUserId?: string | null
+  // Surgeon left
+  surgeonLeftAt?: string | null
+  onRecordSurgeonLeft?: () => void
+  onClearSurgeonLeft?: () => void
+  canRecordSurgeonLeft?: boolean
+  // Next patient callback
+  nextPatientCalledBackAt?: string | null
+  nextPatientInfo?: { caseNumber: string; roomName: string } | null
+  onUndoNextPatientCallback?: () => void
 }
 
 // ============================================================================
@@ -132,6 +141,13 @@ export default function MilestoneTimelineV2({
   onRemoveDelay,
   canCreateFlags = false,
   currentUserId = null,
+  surgeonLeftAt,
+  onRecordSurgeonLeft,
+  onClearSurgeonLeft,
+  canRecordSurgeonLeft = false,
+  nextPatientCalledBackAt,
+  nextPatientInfo,
+  onUndoNextPatientCallback,
 }: MilestoneTimelineProps) {
   const [openDelayFormMilestoneId, setOpenDelayFormMilestoneId] = useState<string | null>(null)
 
@@ -165,6 +181,22 @@ export default function MilestoneTimelineV2({
     setOpenDelayFormMilestoneId(prev => (prev === milestoneId ? null : milestoneId))
   }
 
+  // Determine which milestone the "next patient called back" node should appear after
+  // by finding the last completed milestone recorded before the callback timestamp
+  const callbackAfterMilestoneId: string | null = (() => {
+    if (!nextPatientCalledBackAt) return null
+    const callbackTime = new Date(nextPatientCalledBackAt).getTime()
+    let lastBeforeId: string | null = null
+    for (const mt of milestoneTypes) {
+      const rec = getRecorded(mt.id)
+      if (rec?.recorded_at && new Date(rec.recorded_at).getTime() <= callbackTime) {
+        lastBeforeId = mt.id
+      }
+    }
+    // If no milestone was recorded before the callback, attach to the first milestone
+    return lastBeforeId ?? milestoneTypes[0]?.id ?? null
+  })()
+
   return (
     <div className="relative">
       {milestoneTypes.map((mt, index) => {
@@ -177,6 +209,7 @@ export default function MilestoneTimelineV2({
         const thresholdFlags = getThresholdFlags(mt.id)
         const delayFlags = getDelayFlags(mt.id)
         const showDelayForm = openDelayFormMilestoneId === mt.id
+        const hasCallbackNode = mt.id === callbackAfterMilestoneId && !!nextPatientCalledBackAt
 
         // Determine connecting line style
         const nextMt = !isLast ? milestoneTypes[index + 1] : null
@@ -193,6 +226,10 @@ export default function MilestoneTimelineV2({
         // Can log delay on completed or next milestones
         const canLogDelay = canCreateFlags && (state === 'completed' || state === 'next') && onAddDelay && delayTypes.length > 0
 
+        // Show connecting line if there's content below (next milestone, delays, surgeon left, or callback node)
+        const hasSurgeonLeftContent = mt.name === 'closing' && (surgeonLeftAt || (canRecordSurgeonLeft && onRecordSurgeonLeft))
+        const hasContentBelow = !isLast || delayFlags.length > 0 || hasSurgeonLeftContent || hasCallbackNode
+
         return (
           <div key={mt.id}>
             {/* Milestone row */}
@@ -200,8 +237,8 @@ export default function MilestoneTimelineV2({
               {/* Left column: node + connecting line */}
               <div className="flex flex-col items-center w-10 flex-shrink-0">
                 <TimelineNode state={state} milestoneName={mt.display_name} />
-                {(!isLast || delayFlags.length > 0) && (
-                  <div className={`w-0.5 flex-1 min-h-[16px] ${isLast && delayFlags.length > 0 ? 'bg-slate-200/40' : lineClass}`} />
+                {hasContentBelow && (
+                  <div className={`w-0.5 flex-1 min-h-[16px] ${isLast && (delayFlags.length > 0 || (mt.name === 'closing' && surgeonLeftAt) || hasCallbackNode) ? 'bg-slate-200/40' : lineClass}`} />
                 )}
               </div>
 
@@ -346,6 +383,110 @@ export default function MilestoneTimelineV2({
                 onRemove={onRemoveDelay}
               />
             ))}
+
+            {/* Next Patient Called Back — inline node after the milestone it chronologically follows */}
+            {hasCallbackNode && nextPatientCalledBackAt && (
+              <div className="flex gap-4 relative group" role="listitem" aria-label={`Next patient called back at ${nextPatientCalledBackAt}`}>
+                {/* Left column: teal node + dashed connecting lines */}
+                <div className="flex flex-col items-center w-10 flex-shrink-0">
+                  <div className="w-0.5 h-2 border-l-2 border-dashed border-teal-300" />
+                  <div className="w-6 h-6 rounded-full bg-teal-100 border-2 border-dashed border-teal-400 flex items-center justify-center flex-shrink-0 z-10">
+                    <Phone className="w-3 h-3 text-teal-600" aria-hidden="true" />
+                  </div>
+                  <div className="w-0.5 flex-1 min-h-[8px] border-l-2 border-dashed border-teal-300" />
+                </div>
+
+                {/* Right column: callback info + undo back-arrow */}
+                <div className="flex-1 flex items-center gap-2 py-1 min-h-[32px]">
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 bg-teal-50 border border-teal-200 rounded-lg text-xs min-w-0">
+                    <span className="font-semibold text-teal-800 truncate">Next Patient Called</span>
+                    {nextPatientInfo && (
+                      <span className="text-teal-600 flex-shrink-0">
+                        {nextPatientInfo.caseNumber} &middot; {nextPatientInfo.roomName}
+                      </span>
+                    )}
+                    <span className="text-teal-600 font-mono tabular-nums flex-shrink-0">
+                      {formatTimestamp(nextPatientCalledBackAt, { timeZone })}
+                    </span>
+                  </div>
+
+                  {canManage && onUndoNextPatientCallback && (
+                    <button
+                      onClick={onUndoNextPatientCallback}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all flex-shrink-0"
+                      title="Undo patient callback"
+                      aria-label="Undo patient callback"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Surgeon Left — inline after closing milestone */}
+            {mt.name === 'closing' && surgeonLeftAt && (
+              <div className="flex gap-4 relative group" role="listitem" aria-label={`Surgeon left at ${surgeonLeftAt}`}>
+                {/* Left column: orange node + dashed connecting lines */}
+                <div className="flex flex-col items-center w-10 flex-shrink-0">
+                  <div className="w-0.5 h-2 border-l-2 border-dashed border-orange-300" />
+                  <div className="w-6 h-6 rounded-full bg-orange-100 border-2 border-orange-400 flex items-center justify-center flex-shrink-0 z-10">
+                    <LogOut className="w-3 h-3 text-orange-600" aria-hidden="true" />
+                  </div>
+                  <div className="w-0.5 flex-1 min-h-[8px] border-l-2 border-dashed border-orange-300" />
+                </div>
+
+                {/* Right column: surgeon left info + undo back-arrow */}
+                <div className="flex-1 flex items-center gap-2 py-1 min-h-[32px]">
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 bg-orange-50 border border-orange-200 rounded-lg text-xs">
+                    <span className="font-semibold text-orange-800">Surgeon Left</span>
+                    <span className="text-orange-600 font-mono tabular-nums flex-shrink-0">
+                      {formatTimestamp(surgeonLeftAt, { timeZone })}
+                    </span>
+                  </div>
+
+                  {canManage && onClearSurgeonLeft && (
+                    <button
+                      onClick={onClearSurgeonLeft}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all flex-shrink-0"
+                      title="Undo surgeon left"
+                      aria-label="Undo surgeon left"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Surgeon Left OR button — inline after closing, when not yet recorded */}
+            {mt.name === 'closing' && !surgeonLeftAt && canRecordSurgeonLeft && onRecordSurgeonLeft && (
+              <div className="flex gap-4 relative group" role="listitem" aria-label="Record surgeon left">
+                {/* Left column: dashed node */}
+                <div className="flex flex-col items-center w-10 flex-shrink-0">
+                  <div className="w-0.5 h-2 border-l-2 border-dashed border-orange-200" />
+                  <div className="w-6 h-6 rounded-full border-2 border-dashed border-orange-300 flex items-center justify-center flex-shrink-0 z-10 bg-white">
+                    <LogOut className="w-3 h-3 text-orange-400" aria-hidden="true" />
+                  </div>
+                  <div className="w-0.5 flex-1 min-h-[8px] border-l-2 border-dashed border-orange-200" />
+                </div>
+
+                {/* Right column: record button */}
+                <div className="flex-1 flex items-center py-1 min-h-[32px]">
+                  <button
+                    onClick={onRecordSurgeonLeft}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-orange-600 border border-orange-200 rounded-lg hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700 transition-all"
+                  >
+                    <LogOut className="w-3 h-3" aria-hidden="true" />
+                    Surgeon Left OR
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )
       })}

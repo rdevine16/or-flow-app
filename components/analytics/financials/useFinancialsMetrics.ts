@@ -220,15 +220,27 @@ export function useFinancialsMetrics(
 
         // Procedure-adjusted duration efficiency
         let weightedDurationDiff = 0
-        let weightedCases = 0
+        let weightedDurationCases = 0
         procedureBreakdown.forEach(pb => {
           if (pb.facilityMedianDuration !== null) {
             weightedDurationDiff += pb.durationVsFacility * pb.caseCount
-            weightedCases += pb.caseCount
+            weightedDurationCases += pb.caseCount
           }
         })
-        const procedureAdjustedDuration = weightedCases > 0 
-          ? weightedDurationDiff / weightedCases : 0
+        const procedureAdjustedDuration = weightedDurationCases > 0
+          ? weightedDurationDiff / weightedDurationCases : 0
+
+        // Procedure-adjusted profit efficiency
+        let weightedProfitDiff = 0
+        let weightedProfitCases = 0
+        procedureBreakdown.forEach(pb => {
+          if (pb.facilityMedianProfit !== null) {
+            weightedProfitDiff += pb.profitVsFacility * pb.caseCount
+            weightedProfitCases += pb.caseCount
+          }
+        })
+        const procedureAdjustedProfit = weightedProfitCases > 0
+          ? weightedProfitDiff / weightedProfitCases : 0
 
         return {
           surgeonId, surgeonName,
@@ -248,7 +260,7 @@ export function useFinancialsMetrics(
           stddevDurationMinutes: stddevDurationVal,
           totalORMinutes,
           durationVsFacilityMinutes: procedureAdjustedDuration,
-          profitVsFacility: 0,
+          profitVsFacility: procedureAdjustedProfit,
           profitImpact: -procedureAdjustedDuration * costPerMinute,
           consistencyRating,
           medianSurgicalTurnover: null,
@@ -322,6 +334,9 @@ export function useFinancialsMetrics(
             const surgeonStddevDuration = stddev(surgeonDurations)
             const durationVsFacility = surgeonMedianDuration !== null && facilityStats?.median_duration
               ? surgeonMedianDuration - facilityStats.median_duration : 0
+            const surgeonMedianProfitVal = median(surgeonProfits)
+            const profitVsFacility = surgeonMedianProfitVal !== null && facilityStats?.median_profit
+              ? surgeonMedianProfitVal - facilityStats.median_profit : 0
 
             const surgeonORHours = surgeonTotalORMinutes / 60
 
@@ -349,7 +364,7 @@ export function useFinancialsMetrics(
               stddevDurationMinutes: surgeonStddevDuration,
               totalORMinutes: surgeonTotalORMinutes,
               durationVsFacilityMinutes: durationVsFacility,
-              profitVsFacility: 0,
+              profitVsFacility,
               profitImpact: -durationVsFacility * costPerMinute,
               consistencyRating: getConsistencyRating(surgeonMedianDuration, surgeonStddevDuration),
               medianSurgicalTurnover: null,

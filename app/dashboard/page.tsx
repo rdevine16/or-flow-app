@@ -5,8 +5,9 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import { useUser } from '@/lib/UserContext'
 import { LivePulseBanner } from '@/components/dashboard/LivePulseBanner'
 import { DashboardKpiCard } from '@/components/dashboard/DashboardKpiCard'
 import { FacilityScoreMini } from '@/components/dashboard/FacilityScoreMini'
@@ -47,14 +48,32 @@ function targetPct(value: number, target: number | undefined, lowerIsBetter = fa
   return Math.round((value / target) * 100)
 }
 
+function getGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
+function formatTodayDate(): string {
+  return new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
 export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>('today')
   const { data: kpis, loading, error } = useDashboardKPIs(timeRange)
   const { data: alerts, loading: alertsLoading } = useDashboardAlerts()
   const { data: todayStatus, loading: todayStatusLoading } = useTodayStatus()
   const { data: timeline, loading: timelineLoading } = useScheduleTimeline()
+  const { userData } = useUser()
 
   const trendLabel = getTrendLabel(timeRange)
+  const greeting = useMemo(() => getGreeting(), [])
+  const todayDate = useMemo(() => formatTodayDate(), [])
 
   return (
     <DashboardLayout>
@@ -62,8 +81,14 @@ export default function DashboardPage() {
         {/* Header + Time toggle */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Dashboard</h1>
-            <p className="text-sm text-slate-500 mt-1">Facility operations overview</p>
+            <h1 className="text-2xl font-semibold text-slate-900">
+              {greeting}{userData.firstName ? `, ${userData.firstName}` : ''}
+            </h1>
+            <p className="text-sm text-slate-400 mt-0.5">
+              {userData.facilityName ?? 'Facility operations overview'}
+              {' · '}
+              {todayDate}
+            </p>
           </div>
 
           <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
@@ -97,14 +122,15 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <DashboardKpiCard
             title="OR Utilization"
-            value={kpis ? `${kpis.utilization.value.toFixed(1)}%` : '—'}
+            value={kpis ? `${kpis.utilization.scheduledValue.toFixed(1)}%` : '—'}
+            secondaryValue={kpis ? `Actual: ${kpis.utilization.actualValue.toFixed(1)}%` : undefined}
             trendPct={kpis?.utilization.delta !== undefined ? Math.abs(kpis.utilization.delta) : undefined}
             trendDir={kpis?.utilization.deltaType}
             sparkData={kpis?.utilization.dailyData?.map(d => ({ v: d.numericValue }))}
             sparkColor="#3b82f6"
             target={kpis?.utilization.target ? {
-              pct: targetPct(kpis.utilization.value, kpis.utilization.target),
-              label: `${kpis.utilization.target}% target`,
+              pct: targetPct(kpis.utilization.actualValue, kpis.utilization.target),
+              label: `${kpis.utilization.actualValue.toFixed(1)}% of ${kpis.utilization.target}% target`,
             } : undefined}
             loading={loading}
           />

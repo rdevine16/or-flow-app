@@ -25,6 +25,8 @@ interface DashboardKpiCardProps {
   trendDir?: 'up' | 'down' | 'increase' | 'decrease' | 'unchanged'
   /** Whether an increase is good (true) or bad (false, e.g. turnover time) */
   increaseIsGood?: boolean
+  /** Secondary value shown below the primary value (e.g., "Actual: 42%") */
+  secondaryValue?: string
   subtitle?: string
   sparkData?: SparkPoint[]
   sparkColor?: string
@@ -51,6 +53,7 @@ export function DashboardKpiCard({
   trendPct,
   trendDir,
   increaseIsGood = true,
+  secondaryValue,
   subtitle,
   sparkData,
   sparkColor = '#3b82f6',
@@ -125,6 +128,11 @@ export function DashboardKpiCard({
           </span>
         )}
       </div>
+
+      {/* Secondary value */}
+      {secondaryValue && (
+        <p className="text-sm font-medium text-slate-500 mb-1">{secondaryValue}</p>
+      )}
 
       {/* Subtitle */}
       {subtitle && (

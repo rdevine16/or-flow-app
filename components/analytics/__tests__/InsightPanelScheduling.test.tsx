@@ -49,6 +49,8 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       roomBreakdown: [],
       roomsWithRealHours: 0,
       roomsWithDefaultHours: 0,
+      scheduledValue: 0,
+      actualValue: 0,
     } as ORUtilizationResult,
     caseVolume: {
       ...makeKPI({ value: 96, displayValue: '96', delta: 15, deltaType: 'increase' }),
@@ -213,6 +215,8 @@ describe('InsightPanelScheduling — volume vs utilization', () => {
         roomBreakdown: [],
         roomsWithRealHours: 0,
         roomsWithDefaultHours: 0,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
     render(<InsightPanelScheduling analytics={analytics} />)
@@ -231,6 +235,8 @@ describe('InsightPanelScheduling — volume vs utilization', () => {
         roomBreakdown: [],
         roomsWithRealHours: 0,
         roomsWithDefaultHours: 0,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
     render(<InsightPanelScheduling analytics={analytics} />)
@@ -279,6 +285,8 @@ describe('InsightPanelScheduling — workflow', () => {
         roomBreakdown: [],
         roomsWithRealHours: 0,
         roomsWithDefaultHours: 0,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
     render(<InsightPanelScheduling analytics={analytics} />)

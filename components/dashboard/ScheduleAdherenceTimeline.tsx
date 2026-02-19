@@ -9,7 +9,6 @@ import { Clock, CheckCircle2, AlertTriangle, CalendarClock } from 'lucide-react'
 import type {
   ScheduleTimelineData,
   TimelineCase,
-  TimelineCaseStatus,
 } from '@/lib/hooks/useScheduleTimeline'
 
 // ============================================
@@ -33,29 +32,6 @@ const LANE_HEIGHT = 48    // px per room lane
 const LANE_GAP = 4        // px gap between lanes
 const BAR_HEIGHT = 24     // px bar thickness
 const BAR_RADIUS = 4      // px border radius
-
-// ============================================
-// Color helpers
-// ============================================
-
-function getBarFill(status: TimelineCaseStatus, isGhost: boolean): string {
-  if (isGhost) return '#e2e8f0'  // slate-200
-  switch (status) {
-    case 'completed':
-    case 'in_progress':
-      return '#10b981'  // emerald-500
-    case 'late':
-      return '#f43f5e'  // rose-500
-    case 'upcoming':
-      return '#94a3b8'  // slate-400
-  }
-}
-
-function getBarOpacity(status: TimelineCaseStatus, isGhost: boolean): number {
-  if (isGhost) return 0.5
-  if (status === 'upcoming') return 0.4
-  return 0.75
-}
 
 // ============================================
 // Time formatting
@@ -101,6 +77,21 @@ function GanttTooltip({ tooltip }: { tooltip: TooltipState }) {
     : caseData.status === 'completed' ? 'text-emerald-600'
     : 'text-slate-500'
 
+  // Drift calculation (minutes)
+  const driftMinutes = caseData.actualStart !== null
+    ? Math.round((caseData.actualStart - caseData.scheduledStart) * 60)
+    : null
+  const driftLabel = driftMinutes !== null && driftMinutes !== 0
+    ? driftMinutes > 0
+      ? `+${driftMinutes} min late`
+      : `${driftMinutes} min early`
+    : null
+
+  // Projected end (for in_progress)
+  const projectedEndHour = caseData.actualStart !== null && caseData.durationMinutes !== null && caseData.actualEnd === null
+    ? caseData.actualStart + caseData.durationMinutes / 60
+    : null
+
   return (
     <div
       className="absolute z-50 bg-white rounded-lg shadow-lg border border-slate-200 px-3 py-2.5 pointer-events-none min-w-[200px]"
@@ -126,6 +117,16 @@ function GanttTooltip({ tooltip }: { tooltip: TooltipState }) {
             Actual: {formatTimeDetailed(caseData.actualStart)}
             {caseData.actualEnd !== null ? ` - ${formatTimeDetailed(caseData.actualEnd)}` : ' - ongoing'}
           </span>
+        </div>
+      )}
+      {driftLabel && (
+        <div className={`text-xs font-medium mt-0.5 ${driftMinutes! > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+          {driftLabel}
+        </div>
+      )}
+      {projectedEndHour !== null && (
+        <div className="text-xs text-slate-400 mt-0.5">
+          Projected end: {formatTimeDetailed(projectedEndHour)}
         </div>
       )}
       <div className={`text-xs font-medium mt-1 ${statusColor}`}>
@@ -242,22 +243,43 @@ function GanttChart({ data }: GanttChartProps) {
 
               {/* Cases */}
               {room.cases.map((c) => {
-                const ghostStartX = hourToX(c.scheduledStart)
-                const ghostWidth = c.scheduledEnd !== null
-                  ? hourToX(c.scheduledEnd) - ghostStartX
+                // === Position calculations ===
+                const scheduledStartX = hourToX(c.scheduledStart)
+                const scheduledWidth = c.scheduledEnd !== null
+                  ? hourToX(c.scheduledEnd) - scheduledStartX
                   : 0
 
-                // Actual bar
                 const hasActual = c.actualStart !== null
+                const isLate = c.status === 'late'
+                const isCompleted = c.actualEnd !== null
+                const isInProgress = hasActual && !isCompleted
+                const fillColor = isLate ? '#f43f5e' : '#10b981'
+
+                // Actual bar positions
                 const actualStartX = hasActual ? hourToX(c.actualStart!) : 0
-                const actualEndHour = c.actualEnd !== null
-                  ? c.actualEnd
-                  : c.status === 'in_progress'
-                    ? nowHours  // In progress: extend to now
+                const actualEndHour = isCompleted
+                  ? c.actualEnd!
+                  : isInProgress
+                    ? nowHours
                     : null
-                const actualWidth = hasActual && actualEndHour !== null
-                  ? hourToX(actualEndHour) - actualStartX
+                const actualEndX = actualEndHour !== null ? hourToX(actualEndHour) : null
+                const actualWidth = hasActual && actualEndX !== null
+                  ? Math.max(actualEndX - actualStartX, 2)
                   : 0
+
+                // Projected duration pill (full expected duration from actual start)
+                const projectedEndHour = isInProgress && c.durationMinutes !== null
+                  ? c.actualStart! + c.durationMinutes / 60
+                  : null
+                const projectedEndX = projectedEndHour !== null ? hourToX(projectedEndHour) : null
+                const projectedWidth = isInProgress && projectedEndX !== null
+                  ? Math.max(projectedEndX - actualStartX, 2)
+                  : 0
+                const showProjectedPill = isInProgress && projectedWidth > 0
+
+                // Label: use projected pill (in_progress), actual bar (completed), or scheduled (upcoming)
+                const labelBarX = showProjectedPill ? actualStartX : hasActual ? actualStartX : scheduledStartX
+                const labelBarWidth = showProjectedPill ? projectedWidth : hasActual ? actualWidth : scheduledWidth
 
                 return (
                   <g
@@ -281,53 +303,38 @@ function GanttChart({ data }: GanttChartProps) {
                     onMouseLeave={() => setTooltip(null)}
                     className="cursor-pointer"
                   >
-                    {/* Ghost (scheduled) bar */}
-                    {ghostWidth > 0 && (
-                      <rect
-                        x={ghostStartX}
-                        y={barY}
-                        width={Math.max(ghostWidth, 2)}
-                        height={BAR_HEIGHT}
-                        fill={getBarFill(c.status, true)}
-                        opacity={getBarOpacity(c.status, true)}
-                        rx={BAR_RADIUS}
-                      />
+                    {/* ── UPCOMING: dashed outline at scheduled position ── */}
+                    {!hasActual && scheduledWidth > 0 && (
+                      <>
+                        <rect
+                          x={scheduledStartX}
+                          y={barY}
+                          width={Math.max(scheduledWidth, 2)}
+                          height={BAR_HEIGHT}
+                          fill="#e2e8f0"
+                          opacity={0.3}
+                          rx={BAR_RADIUS}
+                        />
+                        <rect
+                          x={scheduledStartX}
+                          y={barY}
+                          width={Math.max(scheduledWidth, 2)}
+                          height={BAR_HEIGHT}
+                          fill="none"
+                          stroke="#94a3b8"
+                          strokeWidth={1.5}
+                          strokeDasharray="4 3"
+                          rx={BAR_RADIUS}
+                        />
+                      </>
                     )}
 
-                    {/* Actual bar (overlays ghost) */}
-                    {hasActual && actualWidth > 0 && (
-                      <rect
-                        x={actualStartX}
-                        y={barY}
-                        width={Math.max(actualWidth, 2)}
-                        height={BAR_HEIGHT}
-                        fill={getBarFill(c.status, false)}
-                        opacity={getBarOpacity(c.status, false)}
-                        rx={BAR_RADIUS}
-                      />
-                    )}
-
-                    {/* Upcoming: dashed outline */}
-                    {c.status === 'upcoming' && ghostWidth > 0 && (
-                      <rect
-                        x={ghostStartX}
-                        y={barY}
-                        width={Math.max(ghostWidth, 2)}
-                        height={BAR_HEIGHT}
-                        fill="none"
-                        stroke="#94a3b8"
-                        strokeWidth={1.5}
-                        strokeDasharray="4 3"
-                        rx={BAR_RADIUS}
-                      />
-                    )}
-
-                    {/* Scheduled start marker (small tick) for cases without duration */}
-                    {ghostWidth === 0 && (
+                    {/* UPCOMING: tick for cases with no duration */}
+                    {!hasActual && scheduledWidth === 0 && (
                       <line
-                        x1={ghostStartX}
+                        x1={scheduledStartX}
                         y1={barY}
-                        x2={ghostStartX}
+                        x2={scheduledStartX}
                         y2={barY + BAR_HEIGHT}
                         stroke="#94a3b8"
                         strokeWidth={2}
@@ -335,19 +342,43 @@ function GanttChart({ data }: GanttChartProps) {
                       />
                     )}
 
-                    {/* Procedure label inside bar */}
-                    {ghostWidth > 30 && (() => {
-                      const padding = 12  // 6px each side
-                      const charWidth = 6  // approx px per char at 10px font
-                      const maxChars = Math.floor((ghostWidth - padding) / charWidth)
+                    {/* ── IN PROGRESS: projected duration pill at 70% opacity ── */}
+                    {showProjectedPill && (
+                      <rect
+                        x={actualStartX}
+                        y={barY}
+                        width={projectedWidth}
+                        height={BAR_HEIGHT}
+                        fill={fillColor}
+                        opacity={0.7}
+                        rx={BAR_RADIUS}
+                      />
+                    )}
+
+                    {/* ── STARTED: actual progress bar at full opacity ── */}
+                    {hasActual && actualWidth > 0 && (
+                      <rect
+                        x={actualStartX}
+                        y={barY}
+                        width={actualWidth}
+                        height={BAR_HEIGHT}
+                        fill={fillColor}
+                        rx={BAR_RADIUS}
+                      />
+                    )}
+
+                    {/* ── Procedure label ── */}
+                    {labelBarWidth > 30 && (() => {
+                      const padding = 12
+                      const charWidth = 6
+                      const maxChars = Math.floor((labelBarWidth - padding) / charWidth)
                       const label = c.procedureName.length > maxChars
                         ? c.procedureName.slice(0, Math.max(maxChars - 1, 1)) + '…'
                         : c.procedureName
-                      const hasColoredBar = hasActual && actualWidth > 0
-                      const textFill = hasColoredBar ? '#ffffff' : '#334155' // white on colored, slate-700 on ghost
+                      const textFill = hasActual ? '#ffffff' : '#334155'
                       return (
                         <text
-                          x={ghostStartX + ghostWidth / 2}
+                          x={labelBarX + labelBarWidth / 2}
                           y={barY + BAR_HEIGHT / 2}
                           textAnchor="middle"
                           dominantBaseline="central"
@@ -465,15 +496,11 @@ function GanttLegend() {
   return (
     <div className="flex items-center gap-4 text-xs text-slate-500">
       <span className="flex items-center gap-1.5">
-        <span className="w-3 h-2 rounded-sm bg-slate-200 opacity-60" />
-        Scheduled
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span className="w-3 h-2 rounded-sm bg-emerald-500 opacity-75" />
+        <span className="w-3 h-2 rounded-sm bg-emerald-500" />
         On-time
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="w-3 h-2 rounded-sm bg-rose-500 opacity-75" />
+        <span className="w-3 h-2 rounded-sm bg-rose-500" />
         Late
       </span>
       <span className="flex items-center gap-1.5">

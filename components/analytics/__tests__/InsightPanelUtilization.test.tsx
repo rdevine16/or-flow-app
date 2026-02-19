@@ -54,6 +54,8 @@ function makeORUtilResult(rooms: RoomUtilizationDetail[]): ORUtilizationResult {
     roomBreakdown: rooms,
     roomsWithRealHours: rooms.filter(r => r.usingRealHours).length,
     roomsWithDefaultHours: rooms.filter(r => !r.usingRealHours).length,
+    scheduledValue: 0,
+    actualValue: 0,
   }
 }
 

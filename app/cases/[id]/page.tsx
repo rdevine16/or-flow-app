@@ -36,7 +36,7 @@ import {
 } from '@/lib/formatters'
 import { useMilestoneRealtime } from '@/lib/hooks/useMilestoneRealtime'
 import { type SurgeonMilestoneStats } from '@/types/pace'
-import { TimerChip, ProgressChip } from '@/components/cases/TimerChip'
+import { TimerChip, ProgressChip, type PaceInfo } from '@/components/cases/TimerChip'
 import { checkMilestoneOrder } from '@/lib/milestone-order'
 import { useFlipRoom } from '@/lib/hooks/useFlipRoom'
 import FlipRoomCard from '@/components/cases/FlipRoomCard'
@@ -156,6 +156,8 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [activeTab, setActiveTab] = useState<'milestones' | 'implants'>('milestones')
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [surgeonLeftAt, setSurgeonLeftAt] = useState<string | null>(null)
+  const [surgeonClosingWorkflow, setSurgeonClosingWorkflow] = useState<'surgeon_closes' | 'pa_closes'>('surgeon_closes')
+  const [surgeonHandoffMinutes, setSurgeonHandoffMinutes] = useState(0)
   const [isPiPOpen, setIsPiPOpen] = useState(false)
 
   // Milestone recording in-flight state (debounce protection)
@@ -412,6 +414,20 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         }
       }
 
+      // Fetch surgeon closing workflow preferences (for auto-record surgeon left)
+      if (surgeon) {
+        const { data: surgeonPrefs } = await supabase
+          .from('users')
+          .select('closing_workflow, closing_handoff_minutes')
+          .eq('id', surgeon.id)
+          .single()
+
+        if (surgeonPrefs) {
+          setSurgeonClosingWorkflow((surgeonPrefs.closing_workflow as 'surgeon_closes' | 'pa_closes') || 'surgeon_closes')
+          setSurgeonHandoffMinutes(surgeonPrefs.closing_handoff_minutes ?? 0)
+        }
+      }
+
       // Case sequence — "Case 3 of 5 today"
       if (surgeon && caseResult?.scheduled_date) {
         const { data: daysCases } = await supabase
@@ -557,6 +573,16 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         // Auto-update case status
         if (milestoneType?.name === 'patient_in') {
           await updateCaseStatus('in_progress')
+        } else if (milestoneType?.name === 'closing') {
+          // Auto-record surgeon left if surgeon has PA-closes workflow
+          if (surgeonClosingWorkflow === 'pa_closes' && !surgeonLeftAt) {
+            const closingMs = new Date(timestamp).getTime()
+            const autoLeftAt = new Date(closingMs + surgeonHandoffMinutes * 60000).toISOString()
+            const { error: slError } = await supabase.from('cases').update({ surgeon_left_at: autoLeftAt }).eq('id', id)
+            if (!slError) {
+              setSurgeonLeftAt(autoLeftAt)
+            }
+          }
         } else if (milestoneType?.name === 'patient_out') {
           await updateCaseStatus('completed')
 
@@ -641,6 +667,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
       if (milestoneType?.name === 'patient_in') {
         await updateCaseStatus('scheduled')
+      } else if (milestoneType?.name === 'closing') {
+        // If closing is undone, also clear surgeon left (it depends on closing)
+        if (surgeonLeftAt) {
+          await supabase.from('cases').update({ surgeon_left_at: null }).eq('id', id)
+          setSurgeonLeftAt(null)
+        }
       } else if (milestoneType?.name === 'patient_out') {
         await updateCaseStatus('in_progress')
       }
@@ -1029,6 +1061,50 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     ? Math.round(closingStats.median_minutes_from_start - incisionStats.median_minutes_from_start)
     : null
 
+  // Pace-based progress for Total Time chip (milestone position + ahead/behind)
+  const totalTimePaceInfo: PaceInfo | null = (() => {
+    if (!procedureStats || !patientInTime || milestoneStats.length === 0) return null
+
+    // Find the most recently completed milestone (highest display_order with a recorded_at)
+    const completedWithOrder = milestoneTypes
+      .map(mt => ({ mt, cm: getMilestoneByTypeId(mt.id) }))
+      .filter(({ cm }) => cm?.recorded_at)
+      .sort((a, b) => a.mt.display_order - b.mt.display_order)
+
+    const lastCompleted = completedWithOrder[completedWithOrder.length - 1]
+    if (!lastCompleted) return null
+
+    const milestoneName = lastCompleted.mt.name
+    const msStats = milestoneStats.find(ms => ms.milestone_name === milestoneName)
+
+    // For patient_in (first milestone), progress is 0
+    const expectedMinutesToMilestone = msStats?.median_minutes_from_start ?? 0
+    const progress = procedureStats.medianDuration > 0
+      ? Math.min(expectedMinutesToMilestone / procedureStats.medianDuration, 1.0)
+      : 0
+
+    // Pace: how far ahead/behind based on actual time to reach this milestone vs expected
+    const milestoneRecordedAt = new Date(lastCompleted.cm!.recorded_at!).getTime()
+    const patientInMs = new Date(patientInTime).getTime()
+    const actualMinutesToMilestone = (milestoneRecordedAt - patientInMs) / 60000
+    const paceMinutes = expectedMinutesToMilestone - actualMinutesToMilestone // positive = ahead
+
+    let status: PaceInfo['status']
+    if (paceMinutes >= 5) status = 'ahead'
+    else if (paceMinutes >= -5) status = 'onPace'
+    else if (paceMinutes >= -15) status = 'slightlyBehind'
+    else status = 'behind'
+
+    return {
+      progress,
+      paceMinutes,
+      status,
+      expectedTotalMinutes: procedureStats.medianDuration,
+      p25Total: procedureStats.p25Duration,
+      p75Total: procedureStats.p75Duration,
+    }
+  })()
+
   const completedMilestones = caseMilestones.filter(cm => cm.recorded_at !== null).length
   const totalMilestoneCount = milestoneTypes.length
   const closingStarted = !!closingTime
@@ -1261,6 +1337,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 isRunning={!isCompleted && !!patientInTime && !patientOutTime}
                 color="indigo"
                 ratio={medianTotalMinutes !== null && medianTotalMinutes > 0 ? totalTimeMs / (medianTotalMinutes * 60000) : null}
+                paceInfo={totalTimePaceInfo}
               />
               <TimerChip
                 label="Surgical Time"
@@ -1352,29 +1429,16 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                     onRemoveDelay={handleRemoveDelay}
                     canCreateFlags={canCreateFlags}
                     currentUserId={userData.userId}
+                    surgeonLeftAt={surgeonLeftAt}
+                    onRecordSurgeonLeft={canManage ? recordSurgeonLeft : undefined}
+                    onClearSurgeonLeft={canManage ? clearSurgeonLeft : undefined}
+                    canRecordSurgeonLeft={canManage && closingStarted && !patientOutRecorded}
+                    nextPatientCalledBackAt={flipRoom?.calledBackAt ?? null}
+                    nextPatientInfo={flipRoom ? { caseNumber: flipRoom.caseNumber, roomName: flipRoom.roomName } : null}
+                    onUndoNextPatientCallback={canManage && flipRoom?.calledBackAt ? undoCallBackFlipRoom : undefined}
                   />
                 )}
 
-                {/* Surgeon Left Confirmation */}
-                {surgeonLeftAt && !patientOutRecorded && (
-                  <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-orange-500" />
-                          <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
-                        </div>
-                        <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt, { timeZone: userData.facilityTimezone })}</p>
-                      </div>
-                      <button
-                        onClick={clearSurgeonLeft}
-                        className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
-                      >
-                        Undo
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -1432,7 +1496,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               </div>
             )}
 
-            {/* SURGEON LEFT — moved above team per user preference */}
+            {/* SURGEON LEFT — sidebar button + status */}
             <div className="rounded-[14px] border border-slate-100 overflow-hidden">
               <div className="px-4 py-3">
                 <h3 className="text-[13px] font-bold text-slate-900">Surgeon Status</h3>

@@ -20,6 +20,7 @@ export interface CaseWithMilestones {
   start_time: string | null // Scheduled start time (e.g., "07:30:00")
   surgeon_id: string | null
   or_room_id: string | null
+  procedure_type_id?: string | null
   status_id: string
   // Columns fetched directly from cases table
   surgeon_left_at?: string | null       // FIX: Source of truth for surgeon departure
@@ -113,8 +114,15 @@ export interface RoomUtilizationDetail {
   usingRealHours: boolean   // true = from or_rooms.available_hours, false = default
 }
 
+// Scheduled duration map: case ID → expected duration in minutes
+export type ScheduledDurationMap = Map<string, number>
+
 // Extended OR Utilization result with room breakdown
 export interface ORUtilizationResult extends KPIResult {
+  /** Scheduled utilization % — sum of expected procedure durations / total available capacity */
+  scheduledValue: number
+  /** Actual utilization % — sum of patient_in→patient_out durations / total available capacity */
+  actualValue: number
   roomBreakdown: RoomUtilizationDetail[]
   roomsWithRealHours: number
   roomsWithDefaultHours: number
@@ -1629,16 +1637,55 @@ export function calculateORUtilization(
   defaultHours: number = 10,
   previousPeriodCases?: CaseWithMilestones[],
   roomHoursMap?: RoomHoursMap,
-  config?: { utilizationTargetPercent?: number }
+  config?: { utilizationTargetPercent?: number },
+  scheduledDurations?: ScheduledDurationMap
 ): ORUtilizationResult {
-  // Track per room-day: minutes used, room metadata
-  const roomDays = new Map<string, { minutes: number; roomId: string; roomName: string; caseCount: number }>()
-  
+  const utilizationTarget = config?.utilizationTargetPercent ?? ANALYTICS_CONFIG_DEFAULTS.utilizationTargetPercent
+
+  // ── Facility-level aggregate utilization ──
+  // Denominator: total available minutes per day across ALL rooms in the map
+  const totalAvailMinPerDay = roomHoursMap
+    ? Object.values(roomHoursMap).reduce((sum, h) => sum + (h || defaultHours) * 60, 0)
+    : 0
+
+  // Count operating days from cases with scheduled dates
+  const operatingDates = new Set(cases.map(c => c.scheduled_date))
+  const operatingDays = operatingDates.size || 1
+  const totalAvailableMinutes = totalAvailMinPerDay * operatingDays
+
+  // Scheduled utilization: sum of expected procedure durations
+  let scheduledMinutes = 0
+  if (scheduledDurations) {
+    cases.forEach(c => {
+      const dur = scheduledDurations.get(c.id)
+      if (dur && dur > 0) scheduledMinutes += dur
+    })
+  }
+
+  // Actual utilization: sum of patient_in → patient_out
+  let actualMinutes = 0
   cases.forEach(c => {
     if (!c.or_room_id) return
     const milestones = getMilestoneMap(c)
     const caseMinutes = getTimeDiffMinutes(milestones.patient_in, milestones.patient_out)
-    
+    if (caseMinutes !== null && caseMinutes > 0) actualMinutes += caseMinutes
+  })
+
+  const scheduledValue = totalAvailableMinutes > 0
+    ? Math.min((scheduledMinutes / totalAvailableMinutes) * 100, 150)
+    : 0
+  const actualValue = totalAvailableMinutes > 0
+    ? Math.min((actualMinutes / totalAvailableMinutes) * 100, 150)
+    : 0
+
+  // ── Per room-day breakdown (kept for InsightPanelUtilization) ──
+  const roomDays = new Map<string, { minutes: number; roomId: string; roomName: string; caseCount: number }>()
+
+  cases.forEach(c => {
+    if (!c.or_room_id) return
+    const milestones = getMilestoneMap(c)
+    const caseMinutes = getTimeDiffMinutes(milestones.patient_in, milestones.patient_out)
+
     if (caseMinutes !== null && caseMinutes > 0) {
       const key = `${c.scheduled_date}|${c.or_room_id}`
       const existing = roomDays.get(key) || {
@@ -1652,8 +1699,7 @@ export function calculateORUtilization(
       roomDays.set(key, existing)
     }
   })
-  
-  // Aggregate per-room across all days
+
   const roomAgg = new Map<string, {
     roomId: string
     roomName: string
@@ -1662,15 +1708,14 @@ export function calculateORUtilization(
     daysActive: number
     dailyUtils: number[]
   }>()
-  
-  const dailyResults = new Map<string, number[]>()
-  
+
+  const dailyActualMinutes = new Map<string, number>()
+
   roomDays.forEach(({ minutes, roomId, roomName, caseCount }, key) => {
     const date = key.split('|')[0]
     const availableHours = roomHoursMap?.[roomId] ?? defaultHours
-    const utilization = Math.min((minutes / (availableHours * 60)) * 100, 150) // Cap at 150% for sanity
-    
-    // Aggregate by room
+    const utilization = Math.min((minutes / (availableHours * 60)) * 100, 150)
+
     const agg = roomAgg.get(roomId) || {
       roomId,
       roomName,
@@ -1684,19 +1729,17 @@ export function calculateORUtilization(
     agg.daysActive++
     agg.dailyUtils.push(utilization)
     roomAgg.set(roomId, agg)
-    
-    // Daily tracker
-    const dayUtils = dailyResults.get(date) || []
-    dayUtils.push(utilization)
-    dailyResults.set(date, dayUtils)
+
+    // Track daily actual minutes for sparkline (aggregate per day)
+    dailyActualMinutes.set(date, (dailyActualMinutes.get(date) || 0) + minutes)
   })
-  
+
   // Build per-room breakdown
   const roomBreakdown: RoomUtilizationDetail[] = Array.from(roomAgg.values()).map(agg => {
     const usingRealHours = roomHoursMap?.[agg.roomId] !== undefined
     const availableHours = roomHoursMap?.[agg.roomId] ?? defaultHours
     const avgUtilization = calculateAverage(agg.dailyUtils)
-    
+
     return {
       roomId: agg.roomId,
       roomName: agg.roomName,
@@ -1707,80 +1750,69 @@ export function calculateORUtilization(
       daysActive: agg.daysActive,
       usingRealHours
     }
-  }).sort((a, b) => a.utilization - b.utilization) // Lowest first = action items
-  
-  // Overall average utilization
-  const allDailyUtils = Array.from(roomAgg.values()).flatMap(a => a.dailyUtils)
-  const avgUtilization = calculateAverage(allDailyUtils)
-  
-  const utilizationTarget = config?.utilizationTargetPercent ?? ANALYTICS_CONFIG_DEFAULTS.utilizationTargetPercent
+  }).sort((a, b) => a.utilization - b.utilization)
 
   const roomsWithRealHours = roomBreakdown.filter(r => r.usingRealHours).length
   const roomsWithDefaultHours = roomBreakdown.filter(r => !r.usingRealHours).length
   const totalRooms = roomBreakdown.length
   const roomsAboveTarget = roomBreakdown.filter(r => r.utilization >= utilizationTarget).length
-  
-  // Previous period delta
-  let previousAvg: number | undefined
+
+  // ── Previous period delta (uses aggregate ratio for consistency) ──
+  let previousActual: number | undefined
   if (previousPeriodCases && previousPeriodCases.length > 0) {
-    const prevRoomDays = new Map<string, { minutes: number; roomId: string }>()
+    let prevActualMinutes = 0
+    const prevDates = new Set<string>()
     previousPeriodCases.forEach(c => {
       if (!c.or_room_id) return
+      prevDates.add(c.scheduled_date)
       const milestones = getMilestoneMap(c)
       const caseMinutes = getTimeDiffMinutes(milestones.patient_in, milestones.patient_out)
-      if (caseMinutes !== null && caseMinutes > 0) {
-        const key = `${c.scheduled_date}|${c.or_room_id}`
-        const existing = prevRoomDays.get(key) || { minutes: 0, roomId: c.or_room_id }
-        existing.minutes += caseMinutes
-        prevRoomDays.set(key, existing)
-      }
+      if (caseMinutes !== null && caseMinutes > 0) prevActualMinutes += caseMinutes
     })
-    
-    const prevUtilizations: number[] = []
-    prevRoomDays.forEach(({ minutes, roomId }) => {
-      const availableHours = roomHoursMap?.[roomId] ?? defaultHours
-      const utilization = Math.min((minutes / (availableHours * 60)) * 100, 150)
-      prevUtilizations.push(utilization)
-    })
-    
-    if (prevUtilizations.length > 0) {
-      previousAvg = calculateAverage(prevUtilizations)
+
+    const prevDayCount = prevDates.size || 1
+    const prevAvailable = totalAvailMinPerDay * prevDayCount
+    if (prevAvailable > 0) {
+      previousActual = Math.min((prevActualMinutes / prevAvailable) * 100, 150)
     }
   }
-  
-  const { delta, deltaType } = calculateDelta(avgUtilization, previousAvg)
-  
-  // Daily tracker
-  const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
+
+  const { delta, deltaType } = calculateDelta(actualValue, previousActual)
+
+  // ── Daily sparkline (aggregate actual per day) ──
+  const dailyData: DailyTrackerData[] = Array.from(dailyActualMinutes.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-30)
-    .map(([date, dayUtils]) => {
-      const dayAvg = calculateAverage(dayUtils)
+    .map(([date, mins]) => {
+      const dayUtil = totalAvailMinPerDay > 0
+        ? Math.min((mins / totalAvailMinPerDay) * 100, 150)
+        : 0
       return {
         date,
-        color: getTargetRelativeColor(dayAvg, utilizationTarget, false),
-        tooltip: `${date}: ${Math.round(dayAvg)}% utilization`,
-        numericValue: dayAvg
+        color: getTargetRelativeColor(dayUtil, utilizationTarget, false),
+        tooltip: `${date}: ${Math.round(dayUtil)}% utilization`,
+        numericValue: dayUtil
       }
     })
-  
+
   // Build subtitle
   const hoursNote = roomsWithDefaultHours > 0 && roomsWithRealHours > 0
     ? ` · ${roomsWithDefaultHours} using default hours`
     : roomsWithDefaultHours === totalRooms && totalRooms > 0
     ? ' · All rooms using default hours'
     : ''
-  
+
   return {
-    value: Math.round(avgUtilization),
-    displayValue: `${Math.round(avgUtilization)}%`,
+    value: Math.round(actualValue),
+    scheduledValue: Math.round(scheduledValue * 10) / 10,
+    actualValue: Math.round(actualValue * 10) / 10,
+    displayValue: `${Math.round(actualValue)}%`,
     subtitle: `${roomsAboveTarget}/${totalRooms} rooms above ${utilizationTarget}% target${hoursNote}`,
     target: utilizationTarget,
-    targetMet: avgUtilization >= utilizationTarget,
+    targetMet: actualValue >= utilizationTarget,
     delta,
     deltaType,
     dailyData,
-    // Extended fields
     roomBreakdown,
     roomsWithRealHours,
     roomsWithDefaultHours

@@ -17,6 +17,7 @@ import {
   type ORUtilizationResult,
   type CancellationResult,
   type RoomHoursMap,
+  type ScheduledDurationMap,
 } from '@/lib/analyticsV2'
 import { mapRowToConfig } from '@/lib/hooks/useAnalyticsConfig'
 import { computeFacilityScore, type FacilityScoreResult } from '@/lib/facilityScoreStub'
@@ -104,6 +105,7 @@ const DASHBOARD_CASE_SELECT = `
   scheduled_date,
   start_time,
   surgeon_id,
+  procedure_type_id,
   or_room_id,
   status_id,
   surgeon_left_at,
@@ -129,8 +131,8 @@ export function useDashboardKPIs(timeRange: TimeRange) {
 
   return useSupabaseQuery<DashboardKPIs>(
     async (supabase) => {
-      // Fetch cases, analytics settings, and facility hourly rate in parallel
-      const [currentResult, previousResult, settingsResult, facilityResult, roomsResult] = await Promise.all([
+      // Fetch cases, analytics settings, facility hourly rate, rooms, and procedure durations in parallel
+      const [currentResult, previousResult, settingsResult, facilityResult, roomsResult, procedureResult, overrideResult] = await Promise.all([
         supabase
           .from('cases')
           .select(DASHBOARD_CASE_SELECT)
@@ -160,6 +162,16 @@ export function useDashboardKPIs(timeRange: TimeRange) {
           .select('id, available_hours')
           .eq('facility_id', effectiveFacilityId!)
           .eq('is_active', true),
+        supabase
+          .from('procedure_types')
+          .select('id, expected_duration_minutes')
+          .eq('facility_id', effectiveFacilityId!)
+          .eq('is_active', true),
+        supabase
+          .from('surgeon_procedure_duration')
+          .select('surgeon_id, procedure_type_id, expected_duration_minutes')
+          .eq('facility_id', effectiveFacilityId!)
+          .eq('is_active', true),
       ])
 
       if (currentResult.error) throw currentResult.error
@@ -172,11 +184,24 @@ export function useDashboardKPIs(timeRange: TimeRange) {
           : settingsResult.data
       if (facilityResult.error) throw facilityResult.error
       if (roomsResult.error) throw roomsResult.error
+      // Procedure duration queries are non-critical — use empty arrays on error
+      const procedures = (procedureResult.data ?? []) as { id: string; expected_duration_minutes: number | null }[]
+      const overrides = (overrideResult.data ?? []) as { surgeon_id: string; procedure_type_id: string; expected_duration_minutes: number }[]
 
       // Build room hours map for accurate utilization calculation
       const roomHoursMap: RoomHoursMap = {}
       for (const room of (roomsResult.data as { id: string; available_hours: number }[])) {
         roomHoursMap[room.id] = room.available_hours
+      }
+
+      // Build procedure duration lookup maps
+      const procedureMap = new Map<string, number>()
+      for (const p of procedures) {
+        if (p.expected_duration_minutes) procedureMap.set(p.id, p.expected_duration_minutes)
+      }
+      const overrideMap = new Map<string, number>()
+      for (const o of overrides) {
+        overrideMap.set(`${o.surgeon_id}::${o.procedure_type_id}`, o.expected_duration_minutes)
       }
 
       // Build facility analytics config
@@ -194,10 +219,26 @@ export function useDashboardKPIs(timeRange: TimeRange) {
         (c) => c.case_statuses?.name === 'completed'
       ).length
 
+      // Build scheduled duration map: case ID → expected minutes
+      // Resolution: surgeon-specific override > procedure base > skip
+      const scheduledDurations: ScheduledDurationMap = new Map()
+      for (const c of cases) {
+        let duration: number | null = null
+        if (c.surgeon_id && c.procedure_type_id) {
+          duration = overrideMap.get(`${c.surgeon_id}::${c.procedure_type_id}`) ?? null
+        }
+        if (duration === null && c.procedure_type_id) {
+          duration = procedureMap.get(c.procedure_type_id) ?? null
+        }
+        if (duration !== null && duration > 0) {
+          scheduledDurations.set(c.id, duration)
+        }
+      }
+
       // Calculate KPIs using analyticsV2 functions with facility config
       const utilization = calculateORUtilization(cases, 10, prevCases, roomHoursMap, {
         utilizationTargetPercent: config.utilizationTargetPercent,
-      })
+      }, scheduledDurations)
       const medianTurnover = calculateTurnoverTime(cases, prevCases, {
         turnoverThresholdMinutes: config.turnoverThresholdMinutes,
         turnoverComplianceTarget: config.turnoverComplianceTarget,

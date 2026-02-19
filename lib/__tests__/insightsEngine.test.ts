@@ -57,6 +57,8 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       roomBreakdown: [],
       roomsWithRealHours: 0,
       roomsWithDefaultHours: 0,
+      scheduledValue: 0,
+      actualValue: 0,
     } as ORUtilizationResult,
     caseVolume: {
       ...makeKPI({ value: 100, displayValue: '100' }),
@@ -269,6 +271,8 @@ describe('InsightsConfig: operatingDaysPerYear threading', () => {
         ],
         roomsWithRealHours: 1,
         roomsWithDefaultHours: 0,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
 
@@ -364,6 +368,8 @@ describe('Target-relative insight body text', () => {
         ],
         roomsWithRealHours: 1,
         roomsWithDefaultHours: 0,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
 
@@ -455,6 +461,8 @@ describe('generateInsights: config defaults and merging', () => {
         roomBreakdown: [{ roomId: 'r1', roomName: 'OR-1', utilization: 42, usedMinutes: 1000, availableHours: 10, caseCount: 20, daysActive: 10, usingRealHours: false }],
         roomsWithRealHours: 0,
         roomsWithDefaultHours: 1,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
 
@@ -701,6 +709,8 @@ describe('Insight.drillThroughType field', () => {
         ],
         roomsWithRealHours: 1,
         roomsWithDefaultHours: 0,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
     const insights = generateInsights(analytics)
@@ -727,6 +737,8 @@ describe('Insight.drillThroughType field', () => {
         ],
         roomsWithRealHours: 1,
         roomsWithDefaultHours: 0,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
     const insights = generateInsights(analytics)
@@ -800,6 +812,8 @@ describe('Insight.drillThroughType field', () => {
         roomBreakdown: [],
         roomsWithRealHours: 0,
         roomsWithDefaultHours: 0,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
     const insights = generateInsights(analytics)
@@ -834,6 +848,8 @@ describe('Insight.drillThroughType field', () => {
         roomBreakdown: [{ roomId: 'r1', roomName: 'OR-1', utilization: 42, usedMinutes: 2520, availableHours: 10, caseCount: 20, daysActive: 21, usingRealHours: true }],
         roomsWithRealHours: 1,
         roomsWithDefaultHours: 0,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
     const insights = generateInsights(analytics)

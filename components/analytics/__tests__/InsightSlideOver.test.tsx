@@ -75,6 +75,8 @@ const mockAnalytics: AnalyticsOverview = {
     roomBreakdown: [],
     roomsWithRealHours: 0,
     roomsWithDefaultHours: 0,
+    scheduledValue: 0,
+    actualValue: 0,
   } as ORUtilizationResult,
   caseVolume: {
     ...makeKPI({ value: 100, displayValue: '100' }),

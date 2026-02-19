@@ -231,7 +231,7 @@ function KPICard({
         {tooltip && (
           <div className="group relative">
             <Info className="w-4 h-4 text-slate-400 cursor-help" />
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal z-10 max-w-xs text-center">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal z-50 min-w-[200px] max-w-xs text-center shadow-lg">
               {tooltip}
             </div>
           </div>

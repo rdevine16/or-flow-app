@@ -73,6 +73,8 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       roomBreakdown: [],
       roomsWithRealHours: 0,
       roomsWithDefaultHours: 0,
+      scheduledValue: 0,
+      actualValue: 0,
     } as ORUtilizationResult,
     caseVolume: {
       ...makeKPIResult({ value: 100, displayValue: '100' }),
@@ -188,6 +190,8 @@ describe('Action Items', () => {
         roomBreakdown: [],
         roomsWithRealHours: 0,
         roomsWithDefaultHours: 0,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
     const items = computeActionItems(analytics)
@@ -231,6 +235,8 @@ describe('Action Items', () => {
         roomBreakdown: [],
         roomsWithRealHours: 0,
         roomsWithDefaultHours: 0,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
       surgeonIdleSummaries: [
         makeSurgeonSummary({ status: 'call_sooner', hasFlipData: true }),
@@ -361,6 +367,8 @@ describe('Insights Integration', () => {
         roomBreakdown: [{ roomId: 'r1', roomName: 'OR-1', utilization: 42, usedMinutes: 1000, availableHours: 10, caseCount: 20, daysActive: 10, usingRealHours: false }],
         roomsWithRealHours: 0,
         roomsWithDefaultHours: 1,
+        scheduledValue: 0,
+        actualValue: 0,
       } as ORUtilizationResult,
     })
     const insights = generateInsights(analytics, { maxInsights: 2 })

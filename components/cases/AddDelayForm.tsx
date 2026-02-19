@@ -33,7 +33,19 @@ export default function AddDelayForm({
   const [duration, setDuration] = useState('')
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  const [openAbove, setOpenAbove] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
+  // Auto-detect whether to open above or below
+  useEffect(() => {
+    if (!ref.current) return
+    const rect = ref.current.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    // If the form overflows below the viewport, flip it above
+    if (spaceBelow < 0 && rect.top > rect.height) {
+      setOpenAbove(true)
+    }
+  }, [])
 
   // Close on click outside
   useEffect(() => {
@@ -78,7 +90,9 @@ export default function AddDelayForm({
       ref={ref}
       role="dialog"
       aria-label={`Log delay at ${milestoneName}`}
-      className="absolute left-0 top-full mt-1.5 z-50 bg-white rounded-[14px] border border-slate-200/50 shadow-[0_12px_40px_rgba(0,0,0,0.1),0_2px_8px_rgba(0,0,0,0.04)] p-3.5 space-y-3 w-[280px]"
+      className={`absolute left-0 z-50 bg-white rounded-[14px] border border-slate-200/50 shadow-[0_12px_40px_rgba(0,0,0,0.1),0_2px_8px_rgba(0,0,0,0.04)] p-3.5 space-y-3 w-[280px] ${
+        openAbove ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+      }`}
     >
       {/* Header */}
       <div className="flex items-center justify-between">

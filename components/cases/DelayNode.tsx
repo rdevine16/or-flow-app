@@ -22,9 +22,9 @@ export default function DelayNode({
   const ariaLabel = `Delay: ${delayTypeName}${durationMinutes !== null ? `, ${durationMinutes} minutes` : ''}${note ? `, note: ${note}` : ''}`
 
   return (
-    <div className="flex gap-3 relative group delay-slide-in" role="listitem" aria-label={ariaLabel}>
+    <div className="flex gap-4 relative group delay-slide-in" role="listitem" aria-label={ariaLabel}>
       {/* Left column: amber node + dashed connecting lines */}
-      <div className="flex flex-col items-center w-8 flex-shrink-0">
+      <div className="flex flex-col items-center w-10 flex-shrink-0">
         <div className="w-0.5 h-2 border-l-2 border-dashed border-amber-300" />
         <div className="w-6 h-6 rounded-full bg-amber-100 border-2 border-dashed border-amber-400 flex items-center justify-center flex-shrink-0 z-10">
           <Clock className="w-3 h-3 text-amber-600" aria-hidden="true" />

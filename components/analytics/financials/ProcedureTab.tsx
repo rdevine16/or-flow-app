@@ -110,8 +110,8 @@ function ProcedureDetail({
         {/* Typical Profit with IQR */}
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center gap-1 mb-1">
-            <p className="text-sm font-semibold text-slate-500">Typical Profit</p>
-            <Tooltip text={`Median profit · Avg: ${formatCurrency(proc.avgProfit)}`} />
+            <p className="text-sm font-semibold text-slate-500">Median Profit</p>
+            <Tooltip text={`Median profit per case · Avg: ${formatCurrency(proc.avgProfit)}`} />
           </div>
           <p className="text-xl font-bold text-slate-900">
             {proc.medianProfit !== null ? formatCurrency(proc.medianProfit) : formatCurrency(proc.avgProfit)}
@@ -255,25 +255,30 @@ function SurgeonBreakdownTable({ proc }: { proc: ProcedureStats }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200">
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold text-slate-900">Surgeon Breakdown</h3>
           <Tooltip text="Each surgeon compared to facility median for this same procedure" />
         </div>
       </div>
-      <div className="overflow-x-auto">
+      <div>
         <table className="w-full">
           <thead className="bg-slate-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Surgeon</th>
               <SortTH label="Cases" sortKey="caseCount" current={sortKey} dir={sortDir} onClick={toggleSort} align="center" />
-              <SortTH label="Typical Profit" sortKey="totalProfit" current={sortKey} dir={sortDir} onClick={toggleSort} />
+              <SortTH label="Median Profit" sortKey="totalProfit" current={sortKey} dir={sortDir} onClick={toggleSort} />
+              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Impact</th>
               <SortTH label="$/OR Hr" sortKey="profitPerORHour" current={sortKey} dir={sortDir} onClick={toggleSort} />
               <SortTH label="Typical Time" sortKey="medianDurationMinutes" current={sortKey} dir={sortDir} onClick={toggleSort} />
               <SortTH label="vs Facility" sortKey="durationVsFacilityMinutes" current={sortKey} dir={sortDir} onClick={toggleSort} />
-              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Impact</th>
-              <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Consistency</th>
+              <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">
+                <span className="inline-flex items-center gap-1">
+                  Consistency
+                  <Tooltip text="Based on variation in case durations. High means predictable times, Low means wide swings between cases." align="right" />
+                </span>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -288,33 +293,28 @@ function SurgeonBreakdownTable({ proc }: { proc: ProcedureStats }) {
                 <td className="px-6 py-4 text-center text-slate-600">{surgeon.caseCount}</td>
                 <td className="px-6 py-4 text-right">
                   <span className="font-medium text-green-600">
-                    {surgeon.medianProfit !== null 
-                      ? formatCurrency(surgeon.medianProfit) 
+                    {surgeon.medianProfit !== null
+                      ? formatCurrency(surgeon.medianProfit)
                       : formatCurrency(surgeon.avgProfit)
                     }
                   </span>
-                  {surgeon.profitVsFacility !== 0 && (
-                    <span className={`ml-2 text-xs ${surgeon.profitVsFacility >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                      ({surgeon.profitVsFacility >= 0 ? '+' : ''}{formatCurrency(surgeon.profitVsFacility)})
-                    </span>
-                  )}
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <ImpactBadge value={surgeon.profitImpact} />
                 </td>
                 <td className="px-6 py-4 text-right tabular-nums">
-                  <span className="font-medium text-blue-700">
+                  <span className="font-medium text-slate-900">
                     {surgeon.profitPerORHour !== null ? formatCurrency(surgeon.profitPerORHour) : '—'}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right text-slate-600 tabular-nums">
-                  {surgeon.medianDurationMinutes !== null 
+                  {surgeon.medianDurationMinutes !== null
                     ? `${Math.round(surgeon.medianDurationMinutes)} min`
                     : `${Math.round(surgeon.avgDurationMinutes)} min`
                   }
                 </td>
                 <td className="px-6 py-4 text-right">
                   <DurationDiff minutes={surgeon.durationVsFacilityMinutes} />
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <ImpactBadge value={surgeon.profitImpact} />
                 </td>
                 <td className="px-6 py-4 text-center">
                   <ConsistencyBadge rating={surgeon.consistencyRating} />
@@ -372,15 +372,15 @@ function AllProceduresTable({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="overflow-x-auto">
+    <div className="bg-white rounded-xl border border-slate-200">
+      <div className="overflow-x-auto rounded-xl">
         <table className="w-full">
           <thead className="bg-slate-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Procedure</th>
               <SortTH label="Cases" sortKey="caseCount" current={sortKey} dir={sortDir} onClick={toggleSort} align="center" />
               <SortTH label="Total Profit" sortKey="totalProfit" current={sortKey} dir={sortDir} onClick={toggleSort} />
-              <SortTH label="Typical Profit" sortKey="medianProfit" current={sortKey} dir={sortDir} onClick={toggleSort} />
+              <SortTH label="Median Profit" sortKey="medianProfit" current={sortKey} dir={sortDir} onClick={toggleSort} />
               <SortTH label="$/OR Hr" sortKey="profitPerORHour" current={sortKey} dir={sortDir} onClick={toggleSort} />
               <SortTH label="Typical Time" sortKey="medianDurationMinutes" current={sortKey} dir={sortDir} onClick={toggleSort} />
               <SortTH label="Margin" sortKey="avgMarginPercent" current={sortKey} dir={sortDir} onClick={toggleSort} />
@@ -439,6 +439,7 @@ function SortTH<T extends string>({
   dir,
   onClick,
   align = 'right',
+  tooltip,
 }: {
   label: string
   sortKey: T
@@ -446,19 +447,19 @@ function SortTH<T extends string>({
   dir: SortDir
   onClick: (key: T) => void
   align?: 'left' | 'center' | 'right'
+  tooltip?: string
 }) {
   const isActive = current === sortKey
   const alignClass = align === 'center' ? 'text-center' : align === 'left' ? 'text-left' : 'text-right'
 
   return (
     <th
-      className={`px-6 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-slate-700 transition-colors ${alignClass} ${
-        isActive ? 'text-slate-700' : 'text-slate-500'
-      }`}
+      className={`px-6 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-slate-700 transition-colors text-slate-500 ${alignClass}`}
       onClick={() => onClick(sortKey)}
     >
       <span className="inline-flex items-center gap-1">
         {label}
+        {tooltip && <Tooltip text={tooltip} />}
         {isActive && (
           dir === 'desc'
             ? <ChevronDownIcon className="w-3 h-3" />
@@ -469,11 +470,15 @@ function SortTH<T extends string>({
   )
 }
 
-function Tooltip({ text }: { text: string }) {
+function Tooltip({ text, align = 'center' }: { text: string; align?: 'center' | 'right' }) {
+  const positionClass = align === 'right'
+    ? 'right-0'
+    : 'left-1/2 -translate-x-1/2'
+
   return (
-    <div className="group relative">
+    <div className="group relative" onClick={(e) => e.stopPropagation()}>
       <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal z-10 max-w-xs text-center">
+      <div className={`absolute bottom-full ${positionClass} mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal z-50 min-w-[200px] max-w-xs text-center shadow-lg normal-case tracking-normal font-normal`}>
         {text}
       </div>
     </div>

@@ -283,7 +283,7 @@ export default function CaseDrawer({
                       Open full detail
                       <span aria-hidden="true">&rarr;</span>
                     </Link>
-                    {can('cases.edit') && (
+                    {can('cases.edit') && displayStatus !== 'completed' && (
                       <Link
                         href={`/cases/${caseDetail.id}/edit`}
                         className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"

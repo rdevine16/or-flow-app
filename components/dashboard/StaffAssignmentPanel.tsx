@@ -17,13 +17,19 @@ interface StaffAssignmentPanelProps {
   loading?: boolean
 }
 
-// Role filter options
-const ROLE_FILTERS: { value: StaffRoleFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'nurse', label: 'Nurses' },
-  { value: 'tech', label: 'Techs' },
-  { value: 'anesthesiologist', label: 'Anesthesia' }
-]
+// Format a role name from the DB into a display label
+// e.g. "nurse" → "Nurses", "tech" → "Techs", "anesthesiologist" → "Anesthesia"
+const ROLE_DISPLAY_OVERRIDES: Record<string, string> = {
+  anesthesiologist: 'Anesthesia',
+}
+
+function formatRoleLabel(roleName: string): string {
+  const lower = roleName.toLowerCase()
+  if (ROLE_DISPLAY_OVERRIDES[lower]) return ROLE_DISPLAY_OVERRIDES[lower]
+  // Capitalize + simple pluralize
+  const capitalized = lower.charAt(0).toUpperCase() + lower.slice(1)
+  return capitalized.endsWith('s') ? capitalized : `${capitalized}s`
+}
 
 export default function StaffAssignmentPanel({
   staff,
@@ -32,25 +38,43 @@ export default function StaffAssignmentPanel({
 }: StaffAssignmentPanelProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<StaffRoleFilter>('all')
-  
+
+  // Derive role filters from actual staff data (exclude surgeons)
+  const roleFilters = useMemo(() => {
+    const roles = new Map<string, string>()
+    for (const member of staff) {
+      const roleName = member.user_roles?.name?.toLowerCase()
+      if (!roleName || roleName === 'surgeon') continue
+      if (!roles.has(roleName)) {
+        roles.set(roleName, formatRoleLabel(roleName))
+      }
+    }
+    // Sort alphabetically by label, prepend "All"
+    const sorted = [...roles.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+    return [
+      { value: 'all', label: 'All' },
+      ...sorted.map(([value, label]) => ({ value, label })),
+    ]
+  }, [staff])
+
   // Filter staff based on search and role
   const filteredStaff = useMemo(() => {
     return staff.filter((member) => {
       // Role filter - exclude surgeons (they're assigned at case creation)
       const roleName = member.user_roles?.name?.toLowerCase() || ''
       if (roleName === 'surgeon') return false
-      
+
       if (roleFilter !== 'all' && roleName !== roleFilter) {
         return false
       }
-      
+
       // Search filter
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
         const fullName = `${member.first_name} ${member.last_name}`.toLowerCase()
         return fullName.includes(query)
       }
-      
+
       return true
     })
   }, [staff, searchQuery, roleFilter])
@@ -109,7 +133,7 @@ export default function StaffAssignmentPanel({
       <div className="px-4 py-3">
         {/* Role Filter Chips */}
         <div className="flex items-center gap-2 mb-3">
-          {ROLE_FILTERS.map((filter) => (
+          {roleFilters.map((filter) => (
             <button
               key={filter.value}
               onClick={() => setRoleFilter(filter.value)}
