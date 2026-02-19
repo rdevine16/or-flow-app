@@ -45,7 +45,7 @@ interface DateRangePair {
   previous: { start: string; end: string }
 }
 
-function getDateRanges(timeRange: TimeRange): DateRangePair {
+export function getDateRanges(timeRange: TimeRange): DateRangePair {
   const today = new Date()
   const todayStr = getLocalDateString(today)
 

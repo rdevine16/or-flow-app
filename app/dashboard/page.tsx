@@ -1,6 +1,6 @@
 // app/dashboard/page.tsx
 // Facility admin dashboard — operational command center.
-// Phase 4: Schedule Adherence Timeline (Gantt) with 60s polling.
+// Phase 5: AI Insights section with lazy loading.
 
 'use client'
 
@@ -11,6 +11,7 @@ import { DashboardKpiCard } from '@/components/dashboard/DashboardKpiCard'
 import { FacilityScoreMini } from '@/components/dashboard/FacilityScoreMini'
 import { ScheduleAdherenceTimeline } from '@/components/dashboard/ScheduleAdherenceTimeline'
 import { NeedsAttention } from '@/components/dashboard/NeedsAttention'
+import { InsightsSection } from '@/components/dashboard/InsightsSection'
 import { RoomStatusCard, RoomStatusCardSkeleton } from '@/components/dashboard/RoomStatusCard'
 import { TodaysSurgeons } from '@/components/dashboard/TodaysSurgeons'
 import { TrendChart } from '@/components/dashboard/TrendChart'
@@ -150,44 +151,43 @@ export default function DashboardPage() {
         {/* Schedule Adherence Timeline (Gantt) — full width, 60s polling */}
         <ScheduleAdherenceTimeline data={timeline ?? null} loading={timelineLoading} />
 
-        {/* Two-column layout: Needs Attention (left) + Room Status & Surgeons (right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className="lg:col-span-3">
-            <NeedsAttention
-              alerts={alerts ?? []}
-              loading={alertsLoading}
-            />
-          </div>
-          <div className="lg:col-span-2 space-y-6">
-            {/* Room Status Cards */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-              <h2 className="text-base font-semibold text-slate-900 mb-4">Room Status</h2>
-              {todayStatusLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <RoomStatusCardSkeleton key={i} />
-                  ))}
-                </div>
-              ) : todayStatus && todayStatus.rooms.length > 0 ? (
-                <div className="space-y-3">
-                  {todayStatus.rooms.map((room) => (
-                    <RoomStatusCard key={room.roomId} room={room} />
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <p className="text-sm text-slate-400">No rooms with cases today</p>
-                </div>
-              )}
-            </div>
+        {/* Alerts + Insights (50/50) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <NeedsAttention
+            alerts={alerts ?? []}
+            loading={alertsLoading}
+          />
+          <InsightsSection timeRange={timeRange} />
+        </div>
 
-            {/* Today's Surgeons */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-              <TodaysSurgeons
-                surgeons={todayStatus?.surgeons ?? []}
-                loading={todayStatusLoading}
-              />
-            </div>
+        {/* Room Status + Surgeons */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+            <h2 className="text-base font-semibold text-slate-900 mb-4">Room Status</h2>
+            {todayStatusLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <RoomStatusCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : todayStatus && todayStatus.rooms.length > 0 ? (
+              <div className="space-y-3">
+                {todayStatus.rooms.map((room) => (
+                  <RoomStatusCard key={room.roomId} room={room} />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <p className="text-sm text-slate-400">No rooms with cases today</p>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+            <TodaysSurgeons
+              surgeons={todayStatus?.surgeons ?? []}
+              loading={todayStatusLoading}
+            />
           </div>
         </div>
 
