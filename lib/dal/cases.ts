@@ -27,8 +27,8 @@ export interface CaseListItem {
   surgeon?: { first_name: string; last_name: string } | null
   or_room?: { name: string } | null
   case_status?: { name: string } | null
-  scheduled_duration_minutes: number | null
-  procedure_type?: { id: string; name: string; procedure_category_id: string | null } | null
+  procedure_type?: { id: string; name: string; procedure_category_id: string | null; expected_duration_minutes: number | null } | null
+  case_completion_stats?: { total_duration_minutes: number | null } | null
 }
 
 /** Tab identifiers for the cases page status tabs */
@@ -55,7 +55,6 @@ export interface CaseDetail extends CaseListItem {
   patient_phone: string | null
   laterality: string | null
   anesthesia_type: string | null
-  scheduled_duration_minutes: number | null
   notes: string | null
   rep_required_override: boolean | null
   called_back_at: string | null
@@ -126,11 +125,12 @@ export interface CaseForAnalytics {
 const CASE_LIST_SELECT = `
   id, case_number,
   scheduled_date, start_time, status_id, data_validated, or_room_id, surgeon_id, facility_id,
-  scheduled_duration_minutes, created_at, created_by,
+  created_at, created_by,
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
   or_room:or_rooms(name),
   case_status:case_statuses(name),
-  procedure_type:procedure_types(id, name, procedure_category_id)
+  procedure_type:procedure_types(id, name, procedure_category_id, expected_duration_minutes),
+  case_completion_stats(total_duration_minutes)
 ` as const
 
 const CASE_DETAIL_SELECT = `
@@ -138,7 +138,7 @@ const CASE_DETAIL_SELECT = `
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
   or_room:or_rooms(name),
   case_status:case_statuses(name),
-  procedure_type:procedure_types(id, name, procedure_category_id),
+  procedure_type:procedure_types(id, name, procedure_category_id, expected_duration_minutes),
   case_milestones(id, case_id, facility_milestone_id, recorded_at, recorded_by,
     facility_milestone:facility_milestones(name, display_name, display_order)
   ),
@@ -627,7 +627,7 @@ const SORT_COLUMN_MAP: Record<string, string> = {
   date: 'scheduled_date',
   surgeon: 'surgeon_id',
   procedure: 'procedure_type_id',
-  duration: 'scheduled_duration_minutes',
+
   room: 'or_room_id',
   case_number: 'case_number',
   start_time: 'start_time',

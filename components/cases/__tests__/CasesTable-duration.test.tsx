@@ -40,11 +40,11 @@ function makeCaseItem(overrides: Partial<CaseListItem> = {}): CaseListItem {
     facility_id: 'facility-1',
     created_at: '2026-02-14T00:00:00Z',
     created_by: 'user-1',
-    scheduled_duration_minutes: 120,
     surgeon: { first_name: 'John', last_name: 'Smith' },
     or_room: { name: 'OR-1' },
     case_status: { name: 'Completed' },
-    procedure_type: { id: 'proc-1', name: 'Total Hip', procedure_category_id: null },
+    procedure_type: { id: 'proc-1', name: 'Total Hip', procedure_category_id: null, expected_duration_minutes: 90 },
+    case_completion_stats: { total_duration_minutes: 120 },
     ...overrides,
   }
 }
@@ -83,22 +83,22 @@ function renderTable(cases: CaseListItem[]) {
 // ============================================
 
 describe('CasesTable — Duration column', () => {
-  it('shows formatted duration for completed case with scheduled_duration_minutes', () => {
-    const cases = [makeCaseItem({ scheduled_duration_minutes: 135 })]
+  it('shows actual duration for completed case from case_completion_stats', () => {
+    const cases = [makeCaseItem({ case_completion_stats: { total_duration_minutes: 135 } })]
     renderTable(cases)
 
     expect(screen.getByText('2h 15m')).toBeInTheDocument()
   })
 
   it('shows minutes-only format for durations under 1 hour', () => {
-    const cases = [makeCaseItem({ scheduled_duration_minutes: 45 })]
+    const cases = [makeCaseItem({ case_completion_stats: { total_duration_minutes: 45 } })]
     renderTable(cases)
 
     expect(screen.getByText('45m')).toBeInTheDocument()
   })
 
-  it('shows dash for completed case with null scheduled_duration_minutes', () => {
-    const cases = [makeCaseItem({ scheduled_duration_minutes: null })]
+  it('shows dash for completed case with null case_completion_stats', () => {
+    const cases = [makeCaseItem({ case_completion_stats: null })]
     const { container } = renderTable(cases)
 
     // Duration cell should have a dash (em-dash)
@@ -107,17 +107,31 @@ describe('CasesTable — Duration column', () => {
     expect(hasDash).toBe(true)
   })
 
-  it('shows dash for scheduled cases', () => {
-    const cases = [makeCaseItem({ case_status: { name: 'Scheduled' }, scheduled_duration_minutes: null })]
+  it('shows expected duration for scheduled cases with procedure type', () => {
+    const cases = [makeCaseItem({
+      case_status: { name: 'Scheduled' },
+      procedure_type: { id: 'proc-1', name: 'Total Hip', procedure_category_id: null, expected_duration_minutes: 90 },
+      case_completion_stats: null,
+    })]
     renderTable(cases)
 
-    // Should not show any time value
+    expect(screen.getByText('1h 30m')).toBeInTheDocument()
+  })
+
+  it('shows dash for scheduled cases with no expected duration', () => {
+    const cases = [makeCaseItem({
+      case_status: { name: 'Scheduled' },
+      procedure_type: { id: 'proc-1', name: 'Total Hip', procedure_category_id: null, expected_duration_minutes: null },
+      case_completion_stats: null,
+    })]
+    renderTable(cases)
+
     expect(screen.queryByText(/\d+h/)).not.toBeInTheDocument()
     expect(screen.queryByText(/\d+m$/)).not.toBeInTheDocument()
   })
 
   it('shows dash for cancelled cases', () => {
-    const cases = [makeCaseItem({ case_status: { name: 'Cancelled' }, scheduled_duration_minutes: null })]
+    const cases = [makeCaseItem({ case_status: { name: 'Cancelled' }, case_completion_stats: null })]
     renderTable(cases)
 
     expect(screen.queryByText(/\d+h/)).not.toBeInTheDocument()
@@ -125,23 +139,19 @@ describe('CasesTable — Duration column', () => {
   })
 
   it('shows elapsed time in green for in-progress cases', () => {
-    // Set "now" to a known time so elapsed is deterministic
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-02-14T10:30:00'))
 
-    // DB stores status names in snake_case (e.g. "in_progress", not "In Progress")
     const cases = [makeCaseItem({
       case_status: { name: 'in_progress' },
       start_time: '08:00:00',
       scheduled_date: '2026-02-14',
-      scheduled_duration_minutes: null,
+      case_completion_stats: null,
     })]
     renderTable(cases)
 
-    // Elapsed should be 150 minutes = 2h 30m
     const durationEl = screen.getByText('2h 30m')
     expect(durationEl).toBeInTheDocument()
-    // Should be green text (tabular-nums distinguishes it from the status badge)
     expect(durationEl.className).toContain('text-green-600')
     expect(durationEl.className).toContain('tabular-nums')
 
@@ -149,16 +159,19 @@ describe('CasesTable — Duration column', () => {
   })
 
   it('shows exact hours for round-hour durations', () => {
-    const cases = [makeCaseItem({ scheduled_duration_minutes: 120 })]
+    const cases = [makeCaseItem({ case_completion_stats: { total_duration_minutes: 120 } })]
     renderTable(cases)
 
     expect(screen.getByText('2h 0m')).toBeInTheDocument()
   })
 
-  it('shows Duration column header', () => {
+  it('shows Duration column header as plain label (non-sortable)', () => {
     const cases = [makeCaseItem()]
     renderTable(cases)
 
     expect(screen.getByText('Duration')).toBeInTheDocument()
+    // Should not be inside a button (non-sortable)
+    const durationHeader = screen.getByText('Duration')
+    expect(durationHeader.closest('button')).toBeNull()
   })
 })

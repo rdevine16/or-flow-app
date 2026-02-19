@@ -60,7 +60,6 @@ interface CaseRecord {
   procedure_type_id: string | null
   payer_id: string | null
   status_id: string
-  scheduled_duration_minutes: number | null
   created_at?: string
   created_by: string
   called_next_case_id?: string | null
@@ -392,7 +391,7 @@ export async function generateDemoData(
       }
     }
 
-    const { data: procedureTypes } = await supabase.from('procedure_types').select('id, name').eq('facility_id', facilityId).eq('is_active', true)
+    const { data: procedureTypes } = await supabase.from('procedure_types').select('id, name, expected_duration_minutes').eq('facility_id', facilityId).eq('is_active', true)
     if (!procedureTypes?.length) return { success: false, casesGenerated: 0, error: 'No procedure types' }
 
     let milestoneTypes: { id: string; name: string; source_milestone_type_id: string | null }[] = []
@@ -712,7 +711,7 @@ function generateSurgeonCases(
   surgeon: ResolvedSurgeon,
   startDate: Date,
   endDate: Date,
-  allProcedureTypes: { id: string; name: string }[],
+  allProcedureTypes: { id: string; name: string; expected_duration_minutes: number | null }[],
   milestoneTypes: { id: string; name: string; source_milestone_type_id: string | null }[],
   procMilestoneMap: Map<string, Set<string>>,
   payers: { id: string; name: string }[],
@@ -777,9 +776,22 @@ function generateSurgeonCases(
         roomId = primaryRoom
       }
 
-      // Surgical time
-      const override = PROCEDURE_SURGICAL_TIMES[proc.name]
-      const surgicalTime = override ? randomInt(override.min, override.max) : randomInt(speedCfg.surgicalTime.min, speedCfg.surgicalTime.max)
+      // Surgical time: derive from expected_duration_minutes when available
+      // Overhead constants from milestone templates:
+      //   joint: incision(28) + exit(12) = ~40 min overhead
+      //   spine: incision(32) + exit(20) = ~48 min overhead
+      //   hand:  incision(18) + exit(10) = ~28 min overhead (use 30)
+      const SURGICAL_OVERHEAD: Record<string, number> = { joint: 40, spine: 48, hand_wrist: 30 }
+      const overhead = SURGICAL_OVERHEAD[surgeon.specialty] ?? 40
+
+      let surgicalTime: number
+      if (proc.expected_duration_minutes != null) {
+        const derived = Math.max(15, proc.expected_duration_minutes - overhead)
+        surgicalTime = derived + randomInt(-5, 5) // ±5 min jitter for realism
+      } else {
+        const override = PROCEDURE_SURGICAL_TIMES[proc.name]
+        surgicalTime = override ? randomInt(override.min, override.max) : randomInt(speedCfg.surgicalTime.min, speedCfg.surgicalTime.max)
+      }
 
       // Start variance: 80% on time (±10min), 20% late
       const variance = Math.random() < 0.8 ? randomInt(-5, 10) : randomInt(10, 30)
@@ -802,13 +814,6 @@ function generateSurgeonCases(
       const callTimeOffset = i === 0 ? randomInt(30, 45) : randomInt(15, 25)
       const callTime = addMinutes(scheduledStart, -callTimeOffset)
 
-      // Scheduled duration: expected total case time (patient_in → patient_out)
-      const scheduledDuration = surgeon.specialty === 'hand_wrist'
-        ? surgicalTime + randomInt(25, 35)    // hand: surgical + prep/close overhead
-        : surgeon.specialty === 'spine'
-        ? surgicalTime + randomInt(45, 60)    // spine: longer setup
-        : surgicalTime + randomInt(35, 50)    // joint: anesthesia + prep + close
-
       const caseData: CaseRecord = {
         id: caseId,
         facility_id: surgeon.facilityId,
@@ -825,7 +830,6 @@ function generateSurgeonCases(
           : Math.random() < 0.08 ? 'bilateral' : randomChoice(['left', 'right']),
         anesthesiologist_id: anesId,
         call_time: isFuture ? null : callTime.toISOString(),
-        scheduled_duration_minutes: scheduledDuration,
         is_excluded_from_metrics: false,
         surgeon_left_at: null,
         created_by: createdByUserId!,
@@ -912,7 +916,8 @@ function generateSurgeonCases(
 
       // Advance time
       if (flipRoom && speedCfg.flipInterval > 0) {
-        currentTime = addMinutes(currentTime, speedCfg.flipInterval)
+        const interval = proc.expected_duration_minutes ?? speedCfg.flipInterval
+        currentTime = addMinutes(currentTime, interval > 0 ? interval : 90)
         roomIdx++
       } else {
         const poMs = milestones.filter(ms => ms.case_id === caseId).find(ms =>

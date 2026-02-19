@@ -158,30 +158,47 @@ async function queryBehindSchedule(
 
   if (!statusData) return null
 
-  // Fetch today's in-progress cases with their scheduled duration and start milestone
-  const { data: cases, error } = await supabase
-    .from('cases')
-    .select(`
-      id,
-      or_room_id,
-      start_time,
-      scheduled_duration_minutes,
-      or_rooms (name),
-      case_milestones (
-        recorded_at,
-        facility_milestones (name)
-      )
-    `)
-    .eq('facility_id', facilityId)
-    .eq('scheduled_date', todayStr)
-    .eq('status_id', statusData.id)
+  // Fetch today's in-progress cases with procedure type duration and start milestone
+  const [casesResult, overridesResult] = await Promise.all([
+    supabase
+      .from('cases')
+      .select(`
+        id,
+        or_room_id,
+        start_time,
+        procedure_type_id,
+        surgeon_id,
+        procedure_types(expected_duration_minutes),
+        or_rooms (name),
+        case_milestones (
+          recorded_at,
+          facility_milestones (name)
+        )
+      `)
+      .eq('facility_id', facilityId)
+      .eq('scheduled_date', todayStr)
+      .eq('status_id', statusData.id),
+    supabase
+      .from('surgeon_procedure_duration')
+      .select('surgeon_id, procedure_type_id, expected_duration_minutes')
+      .eq('facility_id', facilityId),
+  ])
 
-  if (error) {
-    log.error('Failed to query behind schedule', { error: error.message })
+  if (casesResult.error) {
+    log.error('Failed to query behind schedule', { error: casesResult.error.message })
     return null
   }
 
+  const cases = casesResult.data
   if (!cases || cases.length === 0) return null
+
+  // Build surgeon override map
+  const overrideMap = new Map<string, number>()
+  if (overridesResult.data) {
+    for (const o of overridesResult.data as Array<{ surgeon_id: string; procedure_type_id: string; expected_duration_minutes: number }>) {
+      overrideMap.set(`${o.surgeon_id}::${o.procedure_type_id}`, o.expected_duration_minutes)
+    }
+  }
 
   const now = new Date()
   const GRACE_MINUTES = 15
@@ -199,7 +216,10 @@ async function queryBehindSchedule(
 
     if (!patientIn?.recorded_at) continue
 
-    const estimatedDuration = (c as unknown as { scheduled_duration_minutes: number | null }).scheduled_duration_minutes ?? 120
+    const overrideKey = `${(c as unknown as { surgeon_id: string | null }).surgeon_id}::${(c as unknown as { procedure_type_id: string | null }).procedure_type_id}`
+    const surgeonDuration = overrideMap.get(overrideKey) ?? null
+    const procDuration = ((c as unknown as { procedure_types: { expected_duration_minutes: number | null } | null }).procedure_types)?.expected_duration_minutes ?? null
+    const estimatedDuration = surgeonDuration ?? procDuration ?? 120
     const startTime = new Date(patientIn.recorded_at)
     const expectedEnd = new Date(startTime.getTime() + (estimatedDuration + GRACE_MINUTES) * 60000)
 
