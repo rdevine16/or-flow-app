@@ -159,6 +159,7 @@ export function buildBaselines(
     anesthesia_time: { start: 'anes_start', end: 'anes_end' },
     closing_time: { start: 'closing', end: 'closing_complete' },
     emergence_time: { start: 'closing_complete', end: 'patient_out' },
+    surgeon_readiness_gap: { start: 'prep_drape_complete', end: 'incision' },
   }
 
   historicalCases.forEach(c => {
