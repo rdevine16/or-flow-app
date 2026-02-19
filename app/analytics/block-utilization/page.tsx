@@ -14,7 +14,18 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 
 import { useSurgeons } from '@/hooks'
-import { AreaChart, BarChart } from '@tremor/react'
+// Recharts
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -216,6 +227,34 @@ interface WeeklyTrend {
   utilization: number
   blockHours: number
   usedHours: number
+}
+
+interface ChartTooltipPayload {
+  name: string
+  value: number
+  color: string
+}
+
+function UtilizationTooltip({ active, payload, label }: { active?: boolean; payload?: ChartTooltipPayload[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2 text-xs">
+      <p className="font-medium text-slate-700 mb-1">{label}</p>
+      <p className="text-blue-600">{payload[0].value}% utilization</p>
+    </div>
+  )
+}
+
+function HoursTooltip({ active, payload, label }: { active?: boolean; payload?: ChartTooltipPayload[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2 text-xs">
+      <p className="font-medium text-slate-700 mb-1">{label}</p>
+      {payload.map((entry) => (
+        <p key={entry.name} style={{ color: entry.color }}>{entry.name}: {entry.value}h</p>
+      ))}
+    </div>
+  )
 }
 
 
@@ -1921,34 +1960,41 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                     <div>
                       <SectionHeader title="Utilization Trend" subtitle="Weekly block utilization over time" icon={<TrendingUp className="w-4 h-4" />} accentColor="blue" />
                       <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-                        <AreaChart
-                          className="h-56"
-                          data={filteredTrends}
-                          index="week"
-                          categories={['utilization']}
-                          colors={['blue']}
-                          valueFormatter={(v) => `${v}%`}
-                          showLegend={false}
-                          showGridLines={true}
-                          curveType="monotone"
-                          yAxisWidth={48}
-                          minValue={0}
-                          maxValue={100}
-                          showAnimation={true}
-                        />
+                        <ResponsiveContainer width="100%" height={224}>
+                          <AreaChart data={filteredTrends} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                            <defs>
+                              <linearGradient id="gradBlueUtil" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.15} />
+                                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <XAxis dataKey="week" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
+                            <Tooltip content={<UtilizationTooltip />} />
+                            <Area type="monotone" dataKey="utilization" stroke="#3b82f6" fill="url(#gradBlueUtil)" strokeWidth={2} />
+                          </AreaChart>
+                        </ResponsiveContainer>
                         <div className="mt-4 pt-4 border-t border-slate-100">
-                          <BarChart
-                            className="h-40"
-                            data={filteredTrends}
-                            index="week"
-                            categories={['usedHours', 'blockHours']}
-                            colors={['blue', 'slate']}
-                            valueFormatter={(v) => `${v}h`}
-                            showLegend={true}
-                            showGridLines={false}
-                            yAxisWidth={48}
-                            showAnimation={true}
-                          />
+                          <ResponsiveContainer width="100%" height={160}>
+                            <BarChart data={filteredTrends} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                              <XAxis dataKey="week" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}h`} />
+                              <Tooltip content={<HoursTooltip />} />
+                              <Bar dataKey="usedHours" name="Used Hours" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                              <Bar dataKey="blockHours" name="Block Hours" fill="#94a3b8" radius={[3, 3, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                          <div className="flex gap-4 mt-2 justify-center">
+                            <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                              <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
+                              Used Hours
+                            </span>
+                            <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                              <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#94a3b8' }} />
+                              Block Hours
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
