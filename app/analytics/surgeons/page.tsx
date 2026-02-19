@@ -15,11 +15,18 @@ import DateRangeSelector, { getPresetDates, getPrevPeriodDates } from '@/compone
 import DatePickerCalendar from '@/components/ui/DatePickerCalendar'
 
 
-// Tremor components
+// Recharts
 import {
-  AreaChart,
   BarChart,
-} from '@tremor/react'
+  Bar,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
 
 import {
   getMilestoneMap,
@@ -170,6 +177,46 @@ function MiniUptimeRing({ percent }: { percent: number }) {
 }
 
 // ============================================
+// CHART TOOLTIPS
+// ============================================
+
+interface ChartTooltipPayload {
+  name: string
+  value: number
+  color?: string
+  fill?: string
+}
+
+function CaseVolumeTooltip({ active, payload, label }: { active?: boolean; payload?: ChartTooltipPayload[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 shadow-lg">
+      <p className="text-[11px] font-semibold text-slate-500 mb-1">{label}</p>
+      <p className="text-xs text-slate-700">
+        <span className="font-semibold">{payload[0].value}</span> cases
+      </p>
+    </div>
+  )
+}
+
+function ComparisonTooltip({ active, payload, label }: { active?: boolean; payload?: ChartTooltipPayload[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 shadow-lg">
+      <p className="text-[11px] font-semibold text-slate-500 mb-1.5">{label}</p>
+      {payload.map(entry => (
+        <div key={entry.name} className="flex items-center gap-1.5 mb-0.5 last:mb-0">
+          <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: entry.color || entry.fill }} />
+          <span className="text-xs text-slate-700">
+            {entry.name}: <span className="font-semibold">{entry.value} min</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ============================================
 // MAIN PAGE COMPONENT
 // ============================================
 
@@ -276,17 +323,17 @@ export default function SurgeonPerformancePage() {
 
   // Fetch distinct case dates for the selected surgeon (for calendar dot indicators)
   useEffect(() => {
-    if (!selectedSurgeon || !effectiveFacilityId) {
-      setSurgeonCaseDates(new Set())
-      return
-    }
-
     async function fetchCaseDates() {
+      if (!selectedSurgeon || !effectiveFacilityId) {
+        setSurgeonCaseDates(new Set())
+        return
+      }
+
       const { data } = await supabase
         .from('cases')
         .select('scheduled_date')
-        .eq('facility_id', effectiveFacilityId!)
-        .eq('surgeon_id', selectedSurgeon!)
+        .eq('facility_id', effectiveFacilityId)
+        .eq('surgeon_id', selectedSurgeon)
 
       if (data) {
         setSurgeonCaseDates(new Set(data.map(r => r.scheduled_date)))
@@ -1135,17 +1182,17 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                           <BarChart3 className="w-4 h-4" />
                         }
                       />
-                      <BarChart
-                        className="h-48 mt-4"
-                        data={dailyTrendData}
-                        index="date"
-                        categories={['Cases']}
-                        colors={['blue']}
-                        valueFormatter={(v: number) => v.toString()}
-                        yAxisWidth={32}
-                        showLegend={false}
-                        showAnimation={true}
-                      />
+                      <div className="h-48 mt-4">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={dailyTrendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                            <Tooltip content={<CaseVolumeTooltip />} />
+                            <Bar dataKey="Cases" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
                   )}
 
@@ -1207,18 +1254,38 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                             <TrendingUp className="w-4 h-4" />
                           }
                         />
-                        <AreaChart
-                          className="h-52 mt-4"
-                          data={tkaComparisonData}
-                          index="date"
-                          categories={['Robotic (Mako)', 'Traditional']}
-                          colors={['cyan', 'rose']}
-                          valueFormatter={(v) => v.toString()}
-                          yAxisWidth={40}
-                          showAnimation={true}
-                          connectNulls={true}
-                          showLegend={true}
-                        />
+                        <div className="h-52 mt-4">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={tkaComparisonData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
+                              <defs>
+                                <linearGradient id="gradCyanTKA" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.15} />
+                                  <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.02} />
+                                </linearGradient>
+                                <linearGradient id="gradSlateTKA" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#f43f5e" stopOpacity={0.15} />
+                                  <stop offset="100%" stopColor="#f43f5e" stopOpacity={0.02} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                              <Tooltip content={<ComparisonTooltip />} />
+                              <Area type="monotone" dataKey="Robotic (Mako)" stroke="#06b6d4" fill="url(#gradCyanTKA)" strokeWidth={2} connectNulls />
+                              <Area type="monotone" dataKey="Traditional" stroke="#f43f5e" fill="url(#gradSlateTKA)" strokeWidth={2} connectNulls />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex gap-4 mt-2 justify-center">
+                          <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#06b6d4' }} />
+                            Robotic (Mako)
+                          </span>
+                          <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#f43f5e' }} />
+                            Traditional
+                          </span>
+                        </div>
                       </div>
                     )}
 
@@ -1233,18 +1300,38 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                             <TrendingUp className="w-4 h-4" />
                           }
                         />
-                        <AreaChart
-                          className="h-52 mt-4"
-                          data={thaComparisonData}
-                          index="date"
-                          categories={['Robotic (Mako)', 'Traditional']}
-                          colors={['cyan', 'rose']}
-                          valueFormatter={(v) => v.toString()}
-                          yAxisWidth={40}
-                          showAnimation={true}
-                          connectNulls={true}
-                          showLegend={true}
-                        />
+                        <div className="h-52 mt-4">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={thaComparisonData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
+                              <defs>
+                                <linearGradient id="gradCyanTHA" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.15} />
+                                  <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.02} />
+                                </linearGradient>
+                                <linearGradient id="gradSlateTHA" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#f43f5e" stopOpacity={0.15} />
+                                  <stop offset="100%" stopColor="#f43f5e" stopOpacity={0.02} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                              <Tooltip content={<ComparisonTooltip />} />
+                              <Area type="monotone" dataKey="Robotic (Mako)" stroke="#06b6d4" fill="url(#gradCyanTHA)" strokeWidth={2} connectNulls />
+                              <Area type="monotone" dataKey="Traditional" stroke="#f43f5e" fill="url(#gradSlateTHA)" strokeWidth={2} connectNulls />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex gap-4 mt-2 justify-center">
+                          <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#06b6d4' }} />
+                            Robotic (Mako)
+                          </span>
+                          <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#f43f5e' }} />
+                            Traditional
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
