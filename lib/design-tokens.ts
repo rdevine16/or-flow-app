@@ -649,6 +649,29 @@ export const chartHex = {
 } as const
 
 // ============================================
+// FLAG ANALYTICS CHART COLORS
+// Used by flag analytics page charts, heatmap, and breakdowns
+// ============================================
+export const flagChartColors = {
+  /** Stacked area: auto-detected threshold flags */
+  autoDetected: '#8b5cf6',  // violet-500
+  /** Stacked area: user-reported delay flags */
+  delays: '#f97316',        // orange-500
+  /** Severity: critical flags */
+  critical: '#ef4444',      // red-500
+  /** Severity: warning flags */
+  warning: '#f59e0b',       // amber-500
+  /** Severity: info flags */
+  info: '#3b82f6',          // blue-500
+  /** Heatmap: FCOTS category */
+  fcots: '#f43f5e',         // rose-500
+  /** Heatmap: Timing category */
+  timing: '#f59e0b',        // amber-500
+  /** Heatmap: Turnover category */
+  turnover: '#8b5cf6',      // violet-500
+} as const
+
+// ============================================
 // INPUT COLORS
 // ============================================
 export const inputColors = {

@@ -16,6 +16,7 @@ import {
   trayStatusColors,
   varianceColors,
   chartHex,
+  flagChartColors,
   components,
   a11y,
   zIndex,
@@ -494,5 +495,65 @@ describe('getVarianceColors', () => {
   it('respects custom thresholds', () => {
     const result = getVarianceColors(50, 55, { good: 10, warning: 20 })
     expect(result.color).toBe('good')
+  })
+})
+
+// ============================================
+// FLAG CHART COLORS (Phase 1b — flag analytics)
+// ============================================
+describe('flagChartColors', () => {
+  it('is exported and defined', () => {
+    expect(flagChartColors).toBeDefined()
+  })
+
+  it('has all required keys', () => {
+    expect(flagChartColors.autoDetected).toBeDefined()
+    expect(flagChartColors.delays).toBeDefined()
+    expect(flagChartColors.critical).toBeDefined()
+    expect(flagChartColors.warning).toBeDefined()
+    expect(flagChartColors.info).toBeDefined()
+    expect(flagChartColors.fcots).toBeDefined()
+    expect(flagChartColors.timing).toBeDefined()
+    expect(flagChartColors.turnover).toBeDefined()
+  })
+
+  it('all values are valid 6-digit hex colors', () => {
+    for (const [key, hex] of Object.entries(flagChartColors)) {
+      expect(hex, `flagChartColors.${key} should be valid hex`).toMatch(/^#[0-9A-Fa-f]{6}$/)
+    }
+  })
+
+  it('uses violet-500 (#8b5cf6) for autoDetected', () => {
+    expect(flagChartColors.autoDetected).toBe('#8b5cf6')
+  })
+
+  it('uses orange-500 (#f97316) for delays', () => {
+    expect(flagChartColors.delays).toBe('#f97316')
+  })
+
+  it('uses red-500 (#ef4444) for critical', () => {
+    expect(flagChartColors.critical).toBe('#ef4444')
+  })
+
+  it('uses amber-500 (#f59e0b) for warning', () => {
+    expect(flagChartColors.warning).toBe('#f59e0b')
+  })
+
+  it('uses blue-500 (#3b82f6) for info', () => {
+    expect(flagChartColors.info).toBe('#3b82f6')
+  })
+
+  it('uses rose-500 (#f43f5e) for fcots heatmap', () => {
+    expect(flagChartColors.fcots).toBe('#f43f5e')
+  })
+
+  it('severity colors are semantically distinct (critical != warning != info)', () => {
+    expect(flagChartColors.critical).not.toBe(flagChartColors.warning)
+    expect(flagChartColors.warning).not.toBe(flagChartColors.info)
+    expect(flagChartColors.critical).not.toBe(flagChartColors.info)
+  })
+
+  it('chart series colors are distinct (autoDetected != delays)', () => {
+    expect(flagChartColors.autoDetected).not.toBe(flagChartColors.delays)
   })
 })
