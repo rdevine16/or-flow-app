@@ -6,13 +6,13 @@
 --------------------------------------------------------------------------------
 
 ALTER TABLE public.procedure_types
-    ADD COLUMN expected_duration_minutes INTEGER;
+    ADD COLUMN IF NOT EXISTS expected_duration_minutes INTEGER;
 
 --------------------------------------------------------------------------------
 -- 2. surgeon_procedure_duration — surgeon-specific procedure duration overrides
 --------------------------------------------------------------------------------
 
-CREATE TABLE public.surgeon_procedure_duration (
+CREATE TABLE IF NOT EXISTS public.surgeon_procedure_duration (
     id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     facility_id               UUID NOT NULL REFERENCES public.facilities(id) ON DELETE CASCADE,
     surgeon_id                UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -26,45 +26,56 @@ CREATE TABLE public.surgeon_procedure_duration (
 );
 
 -- Indexes
-CREATE INDEX idx_surgeon_procedure_duration_facility
+CREATE INDEX IF NOT EXISTS idx_surgeon_procedure_duration_facility
     ON public.surgeon_procedure_duration USING btree (facility_id);
 
-CREATE INDEX idx_surgeon_procedure_duration_facility_surgeon
+CREATE INDEX IF NOT EXISTS idx_surgeon_procedure_duration_facility_surgeon
     ON public.surgeon_procedure_duration USING btree (facility_id, surgeon_id);
 
-CREATE INDEX idx_surgeon_procedure_duration_facility_procedure
+CREATE INDEX IF NOT EXISTS idx_surgeon_procedure_duration_facility_procedure
     ON public.surgeon_procedure_duration USING btree (facility_id, procedure_type_id);
 
 -- Enable RLS
 ALTER TABLE public.surgeon_procedure_duration ENABLE ROW LEVEL SECURITY;
 
--- Facility admins can manage their own facility's surgeon procedure durations
-CREATE POLICY "Facility admins can manage own facility surgeon_procedure_dur"
-    ON public.surgeon_procedure_duration
-    USING (
-        (public.get_my_access_level() = 'facility_admin'::text)
-        AND (facility_id = public.get_my_facility_id())
-    );
+-- Policies and trigger — idempotent via DO blocks
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Facility admins can manage own facility surgeon_procedure_dur' AND tablename = 'surgeon_procedure_duration') THEN
+    CREATE POLICY "Facility admins can manage own facility surgeon_procedure_dur"
+      ON public.surgeon_procedure_duration
+      USING ((public.get_my_access_level() = 'facility_admin'::text) AND (facility_id = public.get_my_facility_id()));
+  END IF;
+END $$;
 
--- Global admins can manage all surgeon procedure durations
-CREATE POLICY "Global admins can manage all surgeon_procedure_duration"
-    ON public.surgeon_procedure_duration
-    USING (public.get_my_access_level() = 'global_admin'::text);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Global admins can manage all surgeon_procedure_duration' AND tablename = 'surgeon_procedure_duration') THEN
+    CREATE POLICY "Global admins can manage all surgeon_procedure_duration"
+      ON public.surgeon_procedure_duration
+      USING (public.get_my_access_level() = 'global_admin'::text);
+  END IF;
+END $$;
 
--- Global admins can view all surgeon procedure durations
-CREATE POLICY "Global admins can view all surgeon_procedure_duration"
-    ON public.surgeon_procedure_duration
-    FOR SELECT
-    USING (public.get_my_access_level() = 'global_admin'::text);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Global admins can view all surgeon_procedure_duration' AND tablename = 'surgeon_procedure_duration') THEN
+    CREATE POLICY "Global admins can view all surgeon_procedure_duration"
+      ON public.surgeon_procedure_duration FOR SELECT
+      USING (public.get_my_access_level() = 'global_admin'::text);
+  END IF;
+END $$;
 
--- Users can view their own facility's surgeon procedure durations
-CREATE POLICY "Users can view own facility surgeon_procedure_duration"
-    ON public.surgeon_procedure_duration
-    FOR SELECT
-    USING (facility_id = public.get_my_facility_id());
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view own facility surgeon_procedure_duration' AND tablename = 'surgeon_procedure_duration') THEN
+    CREATE POLICY "Users can view own facility surgeon_procedure_duration"
+      ON public.surgeon_procedure_duration FOR SELECT
+      USING (facility_id = public.get_my_facility_id());
+  END IF;
+END $$;
 
 -- Soft-delete trigger: keeps is_active and deleted_at in sync
-CREATE TRIGGER sync_soft_delete_surgeon_procedure_duration
-    BEFORE UPDATE ON public.surgeon_procedure_duration
-    FOR EACH ROW
-    EXECUTE FUNCTION public.sync_soft_delete_columns();
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'sync_soft_delete_surgeon_procedure_duration') THEN
+    CREATE TRIGGER sync_soft_delete_surgeon_procedure_duration
+      BEFORE UPDATE ON public.surgeon_procedure_duration
+      FOR EACH ROW EXECUTE FUNCTION public.sync_soft_delete_columns();
+  END IF;
+END $$;

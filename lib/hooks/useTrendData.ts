@@ -11,6 +11,7 @@ import {
   calculateCancellationRate,
   calculateFCOTS,
   type CaseWithMilestones,
+  type RoomHoursMap,
 } from '@/lib/analyticsV2'
 import { computeFacilityScore } from '@/lib/facilityScoreStub'
 
@@ -89,11 +90,12 @@ export function groupCasesByDate(cases: CaseWithMilestones[]): Map<string, CaseW
 /** @internal Exported for testing */
 export function computeDailyMetric(
   metric: TrendMetric,
-  dailyCases: CaseWithMilestones[]
+  dailyCases: CaseWithMilestones[],
+  roomHoursMap?: RoomHoursMap
 ): number {
   switch (metric) {
     case 'utilization': {
-      const result = calculateORUtilization(dailyCases, 10)
+      const result = calculateORUtilization(dailyCases, 10, undefined, roomHoursMap)
       return result.value
     }
     case 'turnover': {
@@ -106,7 +108,7 @@ export function computeDailyMetric(
       ).length
     }
     case 'facilityScore': {
-      const util = calculateORUtilization(dailyCases, 10)
+      const util = calculateORUtilization(dailyCases, 10, undefined, roomHoursMap)
       const turnover = calculateTurnoverTime(dailyCases)
       const fcots = calculateFCOTS(dailyCases)
       const cancellation = calculateCancellationRate(dailyCases)
@@ -131,17 +133,31 @@ export function useTrendData(metric: TrendMetric) {
 
   return useSupabaseQuery<TrendDataPoint[]>(
     async (supabase) => {
-      const { data, error } = await supabase
-        .from('cases')
-        .select(TREND_CASE_SELECT)
-        .eq('facility_id', effectiveFacilityId!)
-        .gte('scheduled_date', range.start)
-        .lte('scheduled_date', range.end)
-        .order('scheduled_date', { ascending: true })
+      const [casesResult, roomsResult] = await Promise.all([
+        supabase
+          .from('cases')
+          .select(TREND_CASE_SELECT)
+          .eq('facility_id', effectiveFacilityId!)
+          .gte('scheduled_date', range.start)
+          .lte('scheduled_date', range.end)
+          .order('scheduled_date', { ascending: true }),
+        supabase
+          .from('or_rooms')
+          .select('id, available_hours')
+          .eq('facility_id', effectiveFacilityId!)
+          .eq('is_active', true),
+      ])
 
-      if (error) throw error
+      if (casesResult.error) throw casesResult.error
+      if (roomsResult.error) throw roomsResult.error
 
-      const cases = (data as unknown as CaseWithMilestones[]) ?? []
+      // Build room hours map for accurate utilization calculation
+      const roomHoursMap: RoomHoursMap = {}
+      for (const room of (roomsResult.data as { id: string; available_hours: number }[])) {
+        roomHoursMap[room.id] = room.available_hours
+      }
+
+      const cases = (casesResult.data as unknown as CaseWithMilestones[]) ?? []
       const grouped = groupCasesByDate(cases)
 
       // Build data points for each day that has cases
@@ -150,7 +166,7 @@ export function useTrendData(metric: TrendMetric) {
 
       for (const date of sortedDates) {
         const dailyCases = grouped.get(date)!
-        const value = computeDailyMetric(metric, dailyCases)
+        const value = computeDailyMetric(metric, dailyCases, roomHoursMap)
         points.push({ date, value })
       }
 

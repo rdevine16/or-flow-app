@@ -138,7 +138,6 @@ const TIMELINE_CASE_SELECT = `
   facility_id,
   scheduled_date,
   start_time,
-  scheduled_duration_minutes,
   surgeon_id,
   or_room_id,
   status_id,
@@ -213,7 +212,6 @@ async function fetchScheduleTimeline(
   }
 
   const cases = (casesResult.data as unknown as (CaseWithMilestones & {
-    scheduled_duration_minutes: number | null
     procedure_type_id: string | null
   })[]) || []
   const rooms = (roomsResult.data as unknown as RoomData[]) || []
@@ -280,12 +278,11 @@ async function fetchScheduleTimeline(
         if (scheduledStartHours === null) continue
 
         // Duration resolution chain:
-        // 1. cases.scheduled_duration_minutes
-        // 2. surgeon override
-        // 3. procedure base
-        // 4. null (no bar)
-        let durationMinutes: number | null = c.scheduled_duration_minutes ?? null
-        if (durationMinutes === null && c.surgeon_id && c.procedure_type_id) {
+        // 1. surgeon override
+        // 2. procedure base
+        // 3. null (no bar)
+        let durationMinutes: number | null = null
+        if (c.surgeon_id && c.procedure_type_id) {
           const key = `${c.surgeon_id}::${c.procedure_type_id}`
           durationMinutes = overrideMap.get(key) ?? null
         }

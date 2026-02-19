@@ -21,6 +21,7 @@ import { generateInsights, type Insight } from '@/lib/insightsEngine'
 
 export interface DashboardInsightsResult {
   insights: Insight[]
+  usingDefaultFinancials: boolean
 }
 
 // ============================================
@@ -125,7 +126,8 @@ export function useDashboardInsights(timeRange: TimeRange, enabled: boolean) {
         operatingDaysPerYear: config.operatingDaysPerYear,
       })
 
-      return { insights }
+      const orHourlyRate = (facilityResult.data as { or_hourly_rate: number | null }).or_hourly_rate
+      return { insights, usingDefaultFinancials: orHourlyRate == null }
     },
     {
       deps: [timeRange, effectiveFacilityId, ranges.current.start, ranges.current.end],

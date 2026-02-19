@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useSearchParams, useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
+
 import { dataQualityAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -1063,7 +1063,6 @@ function DataQualityContent() {
 
   return (
     <DashboardLayout>
-      <Container>
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">Data Quality</h1>
@@ -2014,7 +2013,6 @@ function DataQualityContent() {
             </div>
           </div>
         )}
-      </Container>
     </DashboardLayout>
   )
 }

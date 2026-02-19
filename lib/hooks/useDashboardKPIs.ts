@@ -16,6 +16,7 @@ import {
   type KPIResult,
   type ORUtilizationResult,
   type CancellationResult,
+  type RoomHoursMap,
 } from '@/lib/analyticsV2'
 import { mapRowToConfig } from '@/lib/hooks/useAnalyticsConfig'
 import { computeFacilityScore, type FacilityScoreResult } from '@/lib/facilityScoreStub'
@@ -129,7 +130,7 @@ export function useDashboardKPIs(timeRange: TimeRange) {
   return useSupabaseQuery<DashboardKPIs>(
     async (supabase) => {
       // Fetch cases, analytics settings, and facility hourly rate in parallel
-      const [currentResult, previousResult, settingsResult, facilityResult] = await Promise.all([
+      const [currentResult, previousResult, settingsResult, facilityResult, roomsResult] = await Promise.all([
         supabase
           .from('cases')
           .select(DASHBOARD_CASE_SELECT)
@@ -154,6 +155,11 @@ export function useDashboardKPIs(timeRange: TimeRange) {
           .select('or_hourly_rate')
           .eq('id', effectiveFacilityId!)
           .single(),
+        supabase
+          .from('or_rooms')
+          .select('id, available_hours')
+          .eq('facility_id', effectiveFacilityId!)
+          .eq('is_active', true),
       ])
 
       if (currentResult.error) throw currentResult.error
@@ -165,6 +171,13 @@ export function useDashboardKPIs(timeRange: TimeRange) {
           ? (() => { throw settingsResult.error })()
           : settingsResult.data
       if (facilityResult.error) throw facilityResult.error
+      if (roomsResult.error) throw roomsResult.error
+
+      // Build room hours map for accurate utilization calculation
+      const roomHoursMap: RoomHoursMap = {}
+      for (const room of (roomsResult.data as { id: string; available_hours: number }[])) {
+        roomHoursMap[room.id] = room.available_hours
+      }
 
       // Build facility analytics config
       const config: FacilityAnalyticsConfig = mapRowToConfig(
@@ -182,7 +195,7 @@ export function useDashboardKPIs(timeRange: TimeRange) {
       ).length
 
       // Calculate KPIs using analyticsV2 functions with facility config
-      const utilization = calculateORUtilization(cases, 10, prevCases, undefined, {
+      const utilization = calculateORUtilization(cases, 10, prevCases, roomHoursMap, {
         utilizationTargetPercent: config.utilizationTargetPercent,
       })
       const medianTurnover = calculateTurnoverTime(cases, prevCases, {

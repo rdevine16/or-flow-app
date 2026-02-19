@@ -5,6 +5,7 @@
 
 import Link from 'next/link'
 import { Stethoscope } from 'lucide-react'
+import { ScoreRing } from '@/components/ui/ScoreRing'
 import type { TodaySurgeonData } from '@/lib/hooks/useTodayStatus'
 
 // ============================================
@@ -74,16 +75,13 @@ function SurgeonRow({ surgeon }: { surgeon: TodaySurgeonData }) {
         </p>
       </div>
 
-      {/* Grade badge */}
-      {surgeon.grade ? (
-        <span
-          className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-bold shrink-0"
-          style={{ color: surgeon.grade.text, backgroundColor: surgeon.grade.bg }}
-        >
-          {surgeon.grade.letter}
-        </span>
+      {/* Score ring */}
+      {surgeon.compositeScore != null ? (
+        <div className="shrink-0">
+          <ScoreRing score={Math.round(surgeon.compositeScore)} size={36} ringWidth={4} />
+        </div>
       ) : (
-        <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-medium text-slate-400 bg-slate-50 shrink-0">
+        <span className="inline-flex items-center justify-center w-9 h-9 rounded-full text-xs font-medium text-slate-400 bg-slate-50 shrink-0">
           —
         </span>
       )}

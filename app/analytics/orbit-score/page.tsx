@@ -570,6 +570,28 @@ export default function ORbitScorePage() {
       setScorecards(results)
       setFacilitySettings(data.settings)
 
+      // Cache scores to surgeon_scorecards for dashboard display
+      if (results.length > 0) {
+        const rows = results.map(sc => ({
+          facility_id: effectiveFacilityId,
+          surgeon_id: sc.surgeonId,
+          composite_score: sc.composite,
+          profitability_score: sc.pillars.profitability,
+          consistency_score: sc.pillars.consistency,
+          sched_adherence_score: sc.pillars.schedAdherence,
+          availability_score: sc.pillars.availability,
+          case_count: sc.caseCount,
+          trend: sc.trend,
+          previous_composite: sc.previousComposite,
+          period_start: currentStartDate,
+          period_end: currentEndDate,
+        }))
+        // Fire-and-forget — don't block the UI
+        supabase.from('surgeon_scorecards').insert(rows).then(({ error: cacheErr }) => {
+          if (cacheErr) console.warn('Failed to cache surgeon scorecards:', cacheErr.message)
+        })
+      }
+
       // Track surgeons below threshold
       const allSurgeonCases: Record<string, { name: string; count: number }> = {}
       for (const c of data.cases) {

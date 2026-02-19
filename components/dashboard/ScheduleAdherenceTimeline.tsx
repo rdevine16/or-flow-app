@@ -334,6 +334,30 @@ function GanttChart({ data }: GanttChartProps) {
                         strokeLinecap="round"
                       />
                     )}
+
+                    {/* Procedure label inside bar */}
+                    {ghostWidth > 30 && (() => {
+                      const padding = 12  // 6px each side
+                      const charWidth = 6  // approx px per char at 10px font
+                      const maxChars = Math.floor((ghostWidth - padding) / charWidth)
+                      const label = c.procedureName.length > maxChars
+                        ? c.procedureName.slice(0, Math.max(maxChars - 1, 1)) + '…'
+                        : c.procedureName
+                      const hasColoredBar = hasActual && actualWidth > 0
+                      const textFill = hasColoredBar ? '#ffffff' : '#334155' // white on colored, slate-700 on ghost
+                      return (
+                        <text
+                          x={ghostStartX + ghostWidth / 2}
+                          y={barY + BAR_HEIGHT / 2}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fill={textFill}
+                          className="text-[10px] font-bold pointer-events-none select-none"
+                        >
+                          {label}
+                        </text>
+                      )
+                    })()}
                   </g>
                 )
               })}

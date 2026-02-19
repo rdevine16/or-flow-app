@@ -149,14 +149,26 @@ async function queryBehindSchedule(
 ): Promise<DashboardAlert | null> {
   const todayStr = getLocalDateString()
 
-  // Get in_progress status
-  const { data: statusData } = await supabase
-    .from('case_statuses')
-    .select('id')
-    .eq('name', 'in_progress')
-    .single()
+  // Get in_progress status and behind-schedule grace setting in parallel
+  const [statusResult, settingsResult] = await Promise.all([
+    supabase
+      .from('case_statuses')
+      .select('id')
+      .eq('name', 'in_progress')
+      .single(),
+    supabase
+      .from('facility_analytics_settings')
+      .select('behind_schedule_grace_minutes')
+      .eq('facility_id', facilityId)
+      .single(),
+  ])
 
+  const statusData = statusResult.data
   if (!statusData) return null
+
+  // Use configured grace or default to 15 minutes
+  const GRACE_MINUTES = (settingsResult.data as { behind_schedule_grace_minutes?: number } | null)
+    ?.behind_schedule_grace_minutes ?? 15
 
   // Fetch today's in-progress cases with procedure type duration and start milestone
   const [casesResult, overridesResult] = await Promise.all([
@@ -201,7 +213,6 @@ async function queryBehindSchedule(
   }
 
   const now = new Date()
-  const GRACE_MINUTES = 15
   const behindRooms: Array<{ roomName: string; minutesBehind: number }> = []
 
   for (const c of cases) {

@@ -30,6 +30,8 @@ interface AnalyticsSettings {
   tardiness_target_minutes: number
   non_op_warn_minutes: number
   non_op_bad_minutes: number
+  // Dashboard Alerts
+  behind_schedule_grace_minutes: number
   // Operational
   operating_days_per_year: number
   // Case Financials
@@ -65,6 +67,8 @@ const DEFAULT_SETTINGS: Omit<AnalyticsSettings, 'id' | 'facility_id'> = {
   tardiness_target_minutes: 45,
   non_op_warn_minutes: 20,
   non_op_bad_minutes: 30,
+  // Dashboard Alerts
+  behind_schedule_grace_minutes: 15,
   // Operational
   operating_days_per_year: 250,
   // Case Financials
@@ -169,6 +173,8 @@ export default function AnalyticsSettingsPage() {
     tardiness_target_minutes: '45',
     non_op_warn_minutes: '20',
     non_op_bad_minutes: '30',
+    // Dashboard Alerts
+    behind_schedule_grace_minutes: '15',
     // Operational
     operating_days_per_year: '250',
     // Case Financials
@@ -208,6 +214,8 @@ export default function AnalyticsSettingsPage() {
       tardiness_target_minutes: String(settings.tardiness_target_minutes ?? 45),
       non_op_warn_minutes: String(settings.non_op_warn_minutes ?? 20),
       non_op_bad_minutes: String(settings.non_op_bad_minutes ?? 30),
+      // Dashboard Alerts
+      behind_schedule_grace_minutes: String(settings.behind_schedule_grace_minutes ?? 15),
       // Operational
       operating_days_per_year: String(settings.operating_days_per_year ?? 250),
       // Case Financials
@@ -254,6 +262,8 @@ export default function AnalyticsSettingsPage() {
       tardiness_target_minutes: parseFloat(form.tardiness_target_minutes) || 45,
       non_op_warn_minutes: parseFloat(form.non_op_warn_minutes) || 20,
       non_op_bad_minutes: parseFloat(form.non_op_bad_minutes) || 30,
+      // Dashboard Alerts
+      behind_schedule_grace_minutes: parseInt(form.behind_schedule_grace_minutes) || 15,
       // Operational
       operating_days_per_year: parseInt(form.operating_days_per_year) || 250,
       // Case Financials
@@ -314,6 +324,8 @@ export default function AnalyticsSettingsPage() {
       tardiness_target_minutes: String(DEFAULT_SETTINGS.tardiness_target_minutes),
       non_op_warn_minutes: String(DEFAULT_SETTINGS.non_op_warn_minutes),
       non_op_bad_minutes: String(DEFAULT_SETTINGS.non_op_bad_minutes),
+      // Dashboard Alerts
+      behind_schedule_grace_minutes: String(DEFAULT_SETTINGS.behind_schedule_grace_minutes),
       // Operational
       operating_days_per_year: String(DEFAULT_SETTINGS.operating_days_per_year),
       // Case Financials
@@ -598,7 +610,27 @@ export default function AnalyticsSettingsPage() {
               </div>
             </div>
 
-            {/* Section 7: Operational */}
+            {/* Section 7: Dashboard Alerts */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <SectionHeader
+                title="Dashboard Alerts"
+                description="Configure thresholds for the Needs Attention alerts on the dashboard"
+              />
+              <div className="p-6">
+                <div className="max-w-xs">
+                  <SettingsNumberField
+                    label="Behind Schedule Grace (minutes)"
+                    value={form.behind_schedule_grace_minutes}
+                    onChange={(v) => setForm({ ...form, behind_schedule_grace_minutes: v })}
+                    min="0"
+                    max="60"
+                    helpText="Extra minutes after estimated duration before a room is flagged as behind schedule"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 8: Operational */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <SectionHeader
                 title="Operational"

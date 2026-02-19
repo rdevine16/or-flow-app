@@ -6,7 +6,8 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Sparkles } from 'lucide-react'
+import Link from 'next/link'
+import { Sparkles, Info } from 'lucide-react'
 import { InsightCard } from '@/components/dashboard/InsightCard'
 import { useDashboardInsights } from '@/lib/hooks/useDashboardInsights'
 import type { TimeRange } from '@/lib/hooks/useDashboardKPIs'
@@ -104,6 +105,20 @@ export function InsightsSection({ timeRange }: InsightsSectionProps) {
               onToggle={() => handleToggle(insight.id)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Default financials notice */}
+      {!loading && data?.usingDefaultFinancials && insights.length > 0 && (
+        <div className="mt-3 flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-lg">
+          <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700">
+            Financial estimates use industry defaults.{' '}
+            <Link href="/settings/facility" className="underline font-medium hover:text-amber-900">
+              Set your OR hourly rate
+            </Link>{' '}
+            for accurate projections.
+          </p>
         </div>
       )}
 
