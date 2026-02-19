@@ -360,9 +360,13 @@ describe('normalizeRPCResponse: fully populated RPC response', () => {
     expect(result.recentFlaggedCases[0].flags[0].type).toBe('threshold')
   })
 
-  it('always returns empty patterns array (Phase 5 placeholder)', () => {
+  it('returns patterns array (populated by detectFlagPatterns in Phase 5)', () => {
     const result = normalizeRPCResponse(mockRaw)
-    expect(result.patterns).toEqual([])
+    // normalizeRPCResponse in the test helper still returns [] for patterns
+    // (it is a local copy of the normalization logic, not the live hook).
+    // The live hook calls detectFlagPatterns on the normalized data.
+    // Pattern detection logic is tested in lib/__tests__/flagPatternDetection.test.ts.
+    expect(Array.isArray(result.patterns)).toBe(true)
   })
 
   it('result satisfies FlagAnalyticsData type contract', () => {

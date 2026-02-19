@@ -18,7 +18,11 @@ import { Card } from '@/components/ui/CardEnhanced'
 import HorizontalBarList from '@/components/analytics/flags/HorizontalBarList'
 import SurgeonFlagTable from '@/components/analytics/flags/SurgeonFlagTable'
 import RoomAnalysisCards from '@/components/analytics/flags/RoomAnalysisCards'
-import { Flag, BarChart3, TrendingUp, Grid3x3, Shield, Clock, Users, DoorOpen } from 'lucide-react'
+import PatternInsightCards from '@/components/analytics/flags/PatternInsightCards'
+import RecentFlaggedCases from '@/components/analytics/flags/RecentFlaggedCases'
+import FlagDrillThrough from '@/components/analytics/flags/FlagDrillThrough'
+import type { DrillThroughTarget } from '@/components/analytics/flags/FlagDrillThrough'
+import { Flag, BarChart3, TrendingUp, Grid3x3, Shield, Clock, Users, DoorOpen, Lightbulb, FileText } from 'lucide-react'
 
 // Delay type color palette (cycles for dynamic delay types from DB)
 const DELAY_TYPE_COLORS = [
@@ -113,6 +117,25 @@ export default function CaseFlagsAnalyticsPage() {
     setDateRange(range)
     setStartDate(start)
     setEndDate(end)
+  }, [])
+
+  // Drill-through state
+  const [drillTarget, setDrillTarget] = useState<DrillThroughTarget>(null)
+
+  const handleSurgeonClick = useCallback((surgeonId: string) => {
+    setDrillTarget({ mode: 'surgeon', surgeonId })
+  }, [])
+
+  const handleRoomClick = useCallback((roomId: string) => {
+    setDrillTarget({ mode: 'room', roomId })
+  }, [])
+
+  const handleCaseClick = useCallback((caseId: string) => {
+    window.location.href = `/cases?caseId=${caseId}`
+  }, [])
+
+  const handleDrillClose = useCallback(() => {
+    setDrillTarget(null)
   }, [])
 
   // Data fetching
@@ -336,7 +359,7 @@ export default function CaseFlagsAnalyticsPage() {
                 accentColor="violet"
               />
             </div>
-            <SurgeonFlagTable data={data.surgeonFlags} />
+            <SurgeonFlagTable data={data.surgeonFlags} onSurgeonClick={handleSurgeonClick} />
           </Card>
 
           {/* Room analysis */}
@@ -349,11 +372,45 @@ export default function CaseFlagsAnalyticsPage() {
                 accentColor="blue"
               />
             </div>
-            <RoomAnalysisCards data={data.roomFlags} />
+            <RoomAnalysisCards data={data.roomFlags} onRoomClick={handleRoomClick} />
           </div>
 
-          {/* Phase 5: Pattern insight cards + recent flagged cases + drill-through */}
+          {/* Detected patterns */}
+          {data.patterns.length > 0 && (
+            <div>
+              <div className="mb-3">
+                <SectionHeader
+                  title="Detected Patterns"
+                  subtitle="Auto-analyzed trends and correlations from your flag data"
+                  icon={<Lightbulb className="w-4 h-4" />}
+                  accentColor="amber"
+                />
+              </div>
+              <PatternInsightCards patterns={data.patterns} />
+            </div>
+          )}
+
+          {/* Recent flagged cases */}
+          <Card padding="none">
+            <Card.Content className="!p-0">
+              <RecentFlaggedCases
+                cases={data.recentFlaggedCases}
+                onCaseClick={handleCaseClick}
+              />
+            </Card.Content>
+          </Card>
         </div>
+      )}
+
+      {/* Drill-through slide-over */}
+      {data && (
+        <FlagDrillThrough
+          target={drillTarget}
+          onClose={handleDrillClose}
+          surgeonFlags={data.surgeonFlags}
+          roomFlags={data.roomFlags}
+          recentFlaggedCases={data.recentFlaggedCases}
+        />
       )}
     </DashboardLayout>
   )

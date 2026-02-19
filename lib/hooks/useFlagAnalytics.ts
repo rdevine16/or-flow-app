@@ -11,6 +11,7 @@ import type {
   FlagSummaryKPIs,
   FlagSparklineData,
 } from '@/types/flag-analytics'
+import { detectFlagPatterns } from '@/lib/flagPatternDetection'
 
 // ============================================
 // Types
@@ -94,10 +95,7 @@ export function useFlagAnalytics(options: UseFlagAnalyticsOptions): UseFlagAnaly
 
       return {
         ...normalized,
-        // Pattern detection is computed client-side in Phase 5.
-        // Placeholder empty array for now — the patterns field exists
-        // in the type so consuming components can reference it.
-        patterns: [],
+        patterns: detectFlagPatterns(normalized),
       }
     },
     { deps: [facilityId, startDate, endDate], enabled: canFetch }
