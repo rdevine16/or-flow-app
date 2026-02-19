@@ -1,241 +1,303 @@
-# Feature: Remove `cases.scheduled_duration_minutes`
+# Feature: Unify Anesthesiologist as Regular Staff Assignment
 
 ## Goal
 
-Remove the `cases.scheduled_duration_minutes` column and migrate all consumers to use the correct sources: `surgeon_procedure_duration.expected_duration_minutes` → `procedure_types.expected_duration_minutes` → fallback. Update the demo data generator to use procedure type durations for case spacing and milestone generation.
+Remove the dedicated `cases.anesthesiologist_id` column and treat anesthesiologists as regular staff members via the `case_staff` join table — same as nurses, techs, and any other non-surgeon role. This applies to both the web app and iOS app.
 
 ## Background
 
-The `cases` table has a `scheduled_duration_minutes` column populated by the demo data generator with random values (35–96 min). Two newer, properly-configured duration sources exist:
+The codebase currently has a **dual-track system** for anesthesiologists:
 
-- `procedure_types.expected_duration_minutes` — base template set via Settings > Procedures (THA=90, TKA=90; 74 others null)
-- `surgeon_procedure_duration.expected_duration_minutes` — surgeon-specific override (currently empty)
+1. **`cases.anesthesiologist_id`** — a dedicated FK column on the `cases` table pointing to `users.id`
+2. **`case_staff` join table** — generic staff assignments (nurses, techs, anesthesiologists)
 
-The schedule timeline has a 3-level fallback: case → surgeon_override → procedure_type. Since the case-level field is always populated (randomly), the configured values are never used. The user sees incorrect durations (88, 91, 89, 100 min) instead of the configured 90 min.
+The demo generator dual-writes to both. The `CaseForm` has a dedicated `SearchableDropdown` for anesthesiologist separate from the `StaffMultiSelect`. Multiple RPCs accept `p_anesthesiologist_id`. The iOS app joins on the FK to display anesthesiologist names.
+
+This complexity is unnecessary. Anesthesiologists should be assigned through `case_staff` like any other staff member.
 
 ## Key Decisions
 
 | # | Decision | Answer |
 |---|---|---|
-| 1 | Schedule Timeline | surgeon_override → procedure_types (drop case-level) |
-| 2 | Dashboard Alerts (behind-schedule) | surgeon_override → procedure_types → 120 min fallback |
-| 3 | Dashboard Metrics (median duration) | Use actual `case_completion_stats.total_duration_minutes` |
-| 4 | Cases Table Duration column | Actual duration for completed, expected for scheduled |
-| 5 | Case Drawer Financial Comparison | Use procedure_types expected duration as fallback |
-| 6 | Database column | Drop entirely via migration |
-| 7 | Duration column sort | Remove server-side sort (replace with plain label) |
+| 1 | Dashboard assignment | Drag-and-drop like other staff (StaffAssignmentPanel) |
+| 2 | Cardinality | Allow multiple anesthesiologists per case (no limit) |
+| 3 | Amber color theme | Keep — distinct clinical role still deserves visual distinction |
+| 4 | "Dr." prefix | Remove — only surgeons get "Dr." prefix |
+| 5 | `get_anesthesiologist_block_stats` RPC | Drop — dead code, nothing calls it |
+| 6 | `AnesthesiaPopover.tsx` | Delete — already dead code, not imported anywhere |
+| 7 | iOS app | Update in same feature branch |
+| 8 | Active feature file | Overwrite previous plan (scheduled_duration work is done) |
 
-## Database Context
+## Affected Systems
 
-- `case_completion_stats.total_duration_minutes` = actual elapsed minutes from patient_in → patient_out (computed by trigger)
-- `case_completion_stats` has FK + UNIQUE on `case_id` → PostgREST supports to-one left join via `case_completion_stats(total_duration_minutes)`
-- Latest migration: `20260219000011_procedure_duration_config.sql`
+### Database
+- `cases.anesthesiologist_id` column (to drop)
+- `create_case_with_milestones` RPC (remove `p_anesthesiologist_id` param)
+- `finalize_draft_case` RPC (remove `p_anesthesiologist_id` param)
+- `get_anesthesiologist_block_stats` RPC (drop entirely)
+- Surgeon scorecard function (joins on `cases.anesthesiologist_id`)
 
----
+### Web App
+- `components/cases/CaseForm.tsx` — dedicated dropdown, form state, RPC calls
+- `components/cases/CaseSummary.tsx` — reads anesthesiologist as separate prop
+- `components/cases/CompletedCaseView.tsx` — reads anesthesiologist as separate prop
+- `components/cases/StaffMultiSelect.tsx` — already has "Anesthesiologists" section
+- `components/ui/AnesthesiaPopover.tsx` — dead code, delete
+- `app/cases/[id]/page.tsx` — FK join for anesthesiologist display
+- `app/settings/users/page.tsx` — Dr. prefix for anesthesiologist
+- `lib/validation/schemas.ts` — `anesthesiologist_id` field
+- `lib/demo-data-generator.ts` — dual-write logic
 
-## Phase 1: Replace All Code References
-
-**Goal:** Every consumer switches to the correct data source. The DB column still exists but is no longer read.
-
-### 1.1 — Types & Data Layer
-
-**File:** `lib/dal/cases.ts`
-
-**`CaseListItem` interface (line 30):**
-- Remove `scheduled_duration_minutes: number | null`
-- Add `expected_duration_minutes: number | null` to the `procedure_type` shape
-- Add `case_completion_stats?: { total_duration_minutes: number | null } | null`
-
-**`CaseDetail` interface (line 58):**
-- Remove duplicate `scheduled_duration_minutes: number | null` declaration
-
-**`CASE_LIST_SELECT` (lines 126–134):**
-- Remove `scheduled_duration_minutes` from select
-- Change `procedure_type:procedure_types(id, name, procedure_category_id)` → `procedure_type:procedure_types(id, name, procedure_category_id, expected_duration_minutes)`
-- Add `case_completion_stats(total_duration_minutes)` join
-
-**`CASE_DETAIL_SELECT` (lines 136–151):**
-- Uses `*` so column removal is handled by migration
-- Add `expected_duration_minutes` to `procedure_types(...)` join
-
-**`SORT_COLUMN_MAP` (line 630):**
-- Remove `duration: 'scheduled_duration_minutes'` entry
-
-### 1.2 — Schedule Timeline
-
-**File:** `lib/hooks/useScheduleTimeline.ts`
-
-- Remove `scheduled_duration_minutes` from `TIMELINE_CASE_SELECT` (line 141)
-- Remove from inline type cast (line 216)
-- Duration chain (lines 283–294): Remove step 1 (`c.scheduled_duration_minutes`). Chain becomes:
-  ```
-  let durationMinutes: number | null = null
-  // 1. surgeon override
-  if (c.surgeon_id && c.procedure_type_id) {
-    durationMinutes = overrideMap.get(`${c.surgeon_id}::${c.procedure_type_id}`) ?? null
-  }
-  // 2. procedure base
-  if (durationMinutes === null && c.procedure_type_id) {
-    durationMinutes = procedureMap.get(c.procedure_type_id) ?? null
-  }
-  ```
-
-### 1.3 — Dashboard Alerts
-
-**File:** `lib/hooks/useDashboardAlerts.ts`
-
-- Remove `scheduled_duration_minutes` from select (line 168)
-- Add `procedure_type_id, surgeon_id, procedure_types(expected_duration_minutes)` to query
-- Add parallel fetch of `surgeon_procedure_duration` overrides (same pattern as useScheduleTimeline)
-- Build overrideMap, then replace line 202:
-  ```
-  // WAS: const estimatedDuration = c.scheduled_duration_minutes ?? 120
-  // NOW:
-  const overrideKey = `${c.surgeon_id}::${c.procedure_type_id}`
-  const surgeonDuration = overrideMap.get(overrideKey) ?? null
-  const procDuration = c.procedure_types?.expected_duration_minutes ?? null
-  const estimatedDuration = surgeonDuration ?? procDuration ?? 120
-  ```
-
-### 1.4 — Dashboard Metrics
-
-**File:** `lib/hooks/useCaseMetrics.ts`
-
-**Median duration (lines 127–152):**
-- Switch from `cases.scheduled_duration_minutes` to `case_completion_stats.total_duration_minutes`
-- Query `case_completion_stats` for completed cases in date range:
-  ```
-  supabase.from('case_completion_stats')
-    .select('total_duration_minutes')
-    .eq('facility_id', facilityId)
-    .gte('case_date', start).lte('case_date', end)
-    .not('total_duration_minutes', 'is', null)
-  ```
-- Update downstream median computation to use `total_duration_minutes`
-
-**Total scheduled hours (lines 266–278):**
-- Add `procedure_types(expected_duration_minutes)` join to cases query
-- Add parallel `surgeon_procedure_duration` fetch
-- Apply surgeon_override → procedure_types → 0 fallback when computing totalMinutes
-
-### 1.5 — Cases Table
-
-**File:** `components/cases/CasesTable.tsx`
-
-**Duration column cell (line 487):**
-- Completed: `row.original.case_completion_stats?.total_duration_minutes` (actual)
-- Scheduled: `row.original.procedure_type?.expected_duration_minutes` (expected, may be null)
-- In-progress: unchanged (elapsed from start_time)
-
-**Duration column header:**
-- Remove `SortableHeader` wrapper, replace with plain `<span>` label (no server-side sort)
-
-### 1.6 — Case Drawer
-
-**File:** `components/cases/CaseDrawer.tsx`
-
-- Line 174: `caseDetail?.scheduled_duration_minutes ?? null` → `caseDetail?.procedure_type?.expected_duration_minutes ?? null`
-
-### 1.7 — Tests
-
-| File | Change |
-|------|--------|
-| `lib/dal/__tests__/cases.test.ts` | Remove `scheduled_duration_minutes` from fixtures (lines 24, 46, 65, 123). Add `case_completion_stats: null` + `procedure_type.expected_duration_minutes: null` |
-| `components/cases/__tests__/CasesTable-duration.test.tsx` | Rewrite: completed → test `case_completion_stats.total_duration_minutes`, scheduled → test `procedure_type.expected_duration_minutes`, null cases → dash |
-| `components/cases/__tests__/CaseDrawer.test.tsx` | Remove `scheduled_duration_minutes: 95` (line 122). Add `procedure_type.expected_duration_minutes: 90` |
-| `components/cases/__tests__/CasesTable-validation.test.tsx` | Remove `scheduled_duration_minutes: 120` (line 43). Add new fields |
-| `lib/hooks/__tests__/useScheduleTimeline.test.ts` | Remove "Level 1: cases.scheduled_duration_minutes" test (line 197). Renumber remaining levels. Update comments (lines 45–64) |
-
-### Phase 1 Verification
-
-1. `npx tsc --noEmit` — clean compile
-2. `npx vitest run` — all tests pass
-3. Manual: Cases page Duration column shows actual time for completed cases, schedule timeline shows 90 min for THA/TKA
+### iOS App
+- `Repositories/CaseRepository.swift` — FK join query
+- `Models/SurgeonDay.swift` — anesthesiologist property on case model
+- `Features/SurgeonHome/SurgeonHomeViewModel.swift` — "most common anesthesiologist" insight
+- `Features/SurgeonHome/Components/SurgeonCaseDetailSheet.swift` — display
+- `Features/Cases/CaseManagementSections.swift` — color mapping (keep)
 
 ---
 
-## Phase 2: Database Drop + Demo Generator
+## Phase 1: Data Migration (Small)
 
-### 2.1 — Migration
+**Goal:** Ensure every `cases.anesthesiologist_id` value has a corresponding `case_staff` row, so nothing is lost when we switch readers.
 
-**File:** `supabase/migrations/20260219000012_drop_scheduled_duration_minutes.sql`
+### 1.1 — Create migration
+
+**File:** `supabase/migrations/20260219100000_migrate_anesthesiologist_to_case_staff.sql`
 
 ```sql
--- Drop cases.scheduled_duration_minutes
--- All application code now reads surgeon_procedure_duration and
--- procedure_types.expected_duration_minutes directly.
-ALTER TABLE cases DROP COLUMN IF EXISTS scheduled_duration_minutes;
+-- Migrate cases.anesthesiologist_id → case_staff rows
+-- Idempotent: skips cases that already have an anesthesiologist in case_staff
+
+INSERT INTO public.case_staff (case_id, user_id, role_id)
+SELECT
+  c.id AS case_id,
+  c.anesthesiologist_id AS user_id,
+  ur.id AS role_id
+FROM public.cases c
+JOIN public.user_roles ur ON ur.name = 'anesthesiologist'
+WHERE c.anesthesiologist_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM public.case_staff cs
+    WHERE cs.case_id = c.id
+      AND cs.user_id = c.anesthesiologist_id
+      AND cs.role_id = ur.id
+      AND cs.removed_at IS NULL
+  );
 ```
 
-Apply: `supabase db push --workdir /Users/ryandevine/Desktop/ORbit/apps/web/or-flow-app`
+### 1.2 — Apply & verify
 
-### 2.2 — Demo Generator
+- Run `supabase db push`
+- Verify row counts match: `SELECT COUNT(*) FROM cases WHERE anesthesiologist_id IS NOT NULL` ≈ new `case_staff` rows created
+
+### Phase 1 Commit
+`feat(db): phase 1 - migrate anesthesiologist_id data to case_staff`
+
+### Phase 1 Test Gate
+1. **Unit:** Migration SQL is idempotent (running twice produces no duplicates)
+2. **Integration:** `case_staff` rows exist for every case that had an `anesthesiologist_id`
+3. **Workflow:** Existing app still works — column still exists, RPCs unchanged
+
+---
+
+## Phase 2: Web App — CaseForm & Data Layer (Medium)
+
+**Goal:** Stop writing `anesthesiologist_id` on cases. The `StaffMultiSelect` already handles anesthesiologist selection — just remove the dedicated dropdown and RPC parameter.
+
+### 2.1 — CaseForm.tsx
+
+- Remove `anesthesiologist_id: string` from `FormData` interface (line 50)
+- Remove `anesthesiologist_id: ''` from initial state (line 92)
+- Remove `const [anesthesiologists, setAnesthesiologists] = useState(...)` (line 127)
+- Remove the `useEffect` that fetches anesthesiologist users (lines 365-376)
+- Remove `p_anesthesiologist_id` from all 3 RPC calls (lines 607, 733, 839)
+- Remove `anesthesiologist_id` from the direct update object (line 709)
+- Remove the dedicated `SearchableDropdown` for "Anesthesiologist" (section 8, lines 1372-1380)
+- Remove `anesthesiologist_id` from edit mode population (line 431)
+- In edit mode: load existing `case_staff` anesthesiologist entries into `selectedStaff` initial state
+- Update `excludeUserIds` on StaffMultiSelect to also exclude surgeon (already done)
+- Remove Dr. prefix from StaffMultiSelect anesthesiologist display (if present)
+
+### 2.2 — Validation schemas
+
+**File:** `lib/validation/schemas.ts`
+
+- Remove `anesthesiologist_id: z.string().optional().or(z.literal(''))` from `createCaseSchema` (line 54)
+- Remove same from `draftCaseSchema` (line 86)
+
+### 2.3 — Settings users page
+
+**File:** `app/settings/users/page.tsx`
+
+- Line 631: Remove `|| roleName === 'anesthesiologist'` from the "Dr." prefix condition
+
+### Phase 2 Commit
+`feat(cases): phase 2 - remove dedicated anesthesiologist form field, use StaffMultiSelect`
+
+### Phase 2 Test Gate
+1. **Unit:** `npx tsc --noEmit` — clean compile, validation schemas pass
+2. **Integration:** Create a case with anesthesiologist via StaffMultiSelect → verify `case_staff` row created
+3. **Workflow:** Edit existing case → anesthesiologist appears in staff multi-select, not as separate field
+
+---
+
+## Phase 3: Web App — Display Components & Cleanup (Medium)
+
+**Goal:** Switch all readers from `cases.anesthesiologist_id` FK join to `case_staff` join. Delete dead code.
+
+### 3.1 — Case detail page
+
+**File:** `app/cases/[id]/page.tsx`
+
+- Remove `anesthesiologist:users!cases_anesthesiologist_id_fkey (id, first_name, last_name)` from query (line 201)
+- Remove `anesthesiologist` type from the interface (line 81)
+- Remove `const anesthesiologist = getJoinedValue(caseData?.anesthesiologist)` (line 996)
+- Update team count: remove `+ (anesthesiologist ? 1 : 0)` (line 1483)
+- Remove the dedicated `<TeamMember>` render for anesthesiologist (line 1487)
+- The anesthesiologist will now appear naturally in the `assignedStaff` list from `case_staff`
+
+### 3.2 — CaseSummary.tsx
+
+- Remove `anesthesiologist` from props interface (line 45)
+- Remove the anesthesiologist conditional render block (lines 357-375)
+- Anesthesiologist will appear in the regular staff list from `case_staff`
+
+### 3.3 — CompletedCaseView.tsx
+
+- Remove `anesthesiologist` from props (line 91)
+- Remove case header "Anesthesiologist" row (lines 704-708)
+- Remove surgical team panel anesthesiologist section (lines 871-881)
+- Anesthesiologist will appear in the staff list naturally
+
+### 3.4 — Delete dead code
+
+- Delete `components/ui/AnesthesiaPopover.tsx` entirely
+
+### 3.5 — Demo data generator
 
 **File:** `lib/demo-data-generator.ts`
 
-**Remove column references:**
-- Remove `scheduled_duration_minutes` from `CaseRecord` interface (line 63)
-- Remove `scheduled_duration_minutes: scheduledDuration` assignment (line 828)
-- Remove `scheduledDuration` variable computation (lines 805–810)
+- Remove `anesthesiologist_id` from `CaseRecord` interface (line 67)
+- Remove `anesthesiologist_id: anesId` from case data (line 831)
+- Keep writing to `case_staff` (already does this — line 898)
+- Remove the `skipAnes` logic for 30% of hand/wrist cases (the staff assignment path handles it)
 
-**Fetch procedure durations:**
-- Update procedure_types select (line 395): `select('id, name, expected_duration_minutes')`
-- Update `allProcedureTypes` type throughout: `{ id: string; name: string; expected_duration_minutes: number | null }[]`
-- Pass through to `generateSurgeonCases` function signature
+### Phase 3 Commit
+`feat(cases): phase 3 - read anesthesiologist from case_staff, remove FK display logic`
 
-**Use expected_duration_minutes for surgicalTime:**
-- When `proc.expected_duration_minutes` is set, derive surgicalTime from it:
-  ```
-  // Overhead constants from milestone templates:
-  //   joint: incision(28) + exit(12) = ~40 min overhead
-  //   spine: incision(32) + exit(20) = ~48 min overhead
-  //   hand:  incision(18) + exit(10) = ~28 min overhead (use 30)
-  const SURGICAL_OVERHEAD: Record<string, number> = { joint: 40, spine: 48, hand_wrist: 30 }
-  const overhead = SURGICAL_OVERHEAD[surgeon.specialty] ?? 40
+### Phase 3 Test Gate
+1. **Unit:** `npx tsc --noEmit` — clean compile
+2. **Integration:** Case detail page shows anesthesiologist in staff list from case_staff
+3. **Workflow:** View completed case → anesthesiologist appears in team section via staff assignments
 
-  let surgicalTime: number
-  if (proc.expected_duration_minutes != null) {
-    const derived = Math.max(15, proc.expected_duration_minutes - overhead)
-    surgicalTime = derived + randomInt(-5, 5) // ±5 min jitter for realism
-  } else if (PROCEDURE_SURGICAL_TIMES[proc.name]) {
-    surgicalTime = randomInt(override.min, override.max)
-  } else {
-    surgicalTime = randomInt(speedCfg.surgicalTime.min, speedCfg.surgicalTime.max)
-  }
-  ```
+---
 
-**Use expected_duration_minutes for flip-room spacing:**
-- Line 914: When `proc.expected_duration_minutes` is set, use it as `flipInterval` instead of `speedCfg.flipInterval`
-  ```
-  const interval = proc.expected_duration_minutes ?? speedCfg.flipInterval
-  currentTime = addMinutes(currentTime, interval > 0 ? interval : 90)
-  ```
+## Phase 4: iOS App (Medium)
 
-### Phase 2 Verification
+**Goal:** Update all iOS code to read anesthesiologist from `case_staff` instead of `cases.anesthesiologist_id`.
 
-1. `npx tsc --noEmit` — clean compile
-2. `supabase db push` — column dropped successfully
-3. Generate demo data → verify cases insert without errors
-4. Schedule timeline shows correct 90 min durations for THA/TKA cases
-5. `npx vitest run` — all tests pass
+### 4.1 — CaseRepository.swift
+
+- Remove `anesthesiologist:users!cases_anesthesiologist_id_fkey(first_name, last_name)` from query (line 184)
+- Add `case_staff(user_id, role_id, user_roles(name), users(first_name, last_name))` join if not already present
+- Filter for role name `'anesthesiologist'` in the results
+
+### 4.2 — SurgeonDay.swift
+
+- Remove `anesthesiologist: StaffInfo?` property from `SurgeonCase` (line 104)
+- Add computed property that finds anesthesiologist(s) from a `staff` array
+- Update `CodingKeys`, `init(from:)`, and manual init
+- Update `anesthesiologistName` computed property
+
+### 4.3 — SurgeonHomeViewModel.swift
+
+- Update "most common anesthesiologist" insight (lines 135-136) to read from staff array instead of `case.anesthesiologistName`
+
+### 4.4 — SurgeonCaseDetailSheet.swift
+
+- Update display (line 140) to read from staff array
+- Update preview data (line 259)
+
+### 4.5 — CaseManagementSections.swift
+
+- Keep `"anesthesiologist": .orbitOrange` color mapping — no change needed
+
+### Phase 4 Commit
+`feat(ios): phase 4 - read anesthesiologist from case_staff instead of cases column`
+
+### Phase 4 Test Gate
+1. **Unit:** Xcode build succeeds, no compile errors
+2. **Integration:** Surgeon home shows anesthesiologist name from case_staff data
+3. **Workflow:** Case detail sheet displays anesthesiologist correctly
+
+---
+
+## Phase 5: Database Cleanup (Medium)
+
+**Goal:** Drop the column, update all RPCs, remove dead functions. This is the point of no return.
+
+### 5.1 — Migration
+
+**File:** `supabase/migrations/20260219200000_drop_anesthesiologist_id.sql`
+
+```sql
+-- 1. Drop the get_anesthesiologist_block_stats function (dead code)
+DROP FUNCTION IF EXISTS public.get_anesthesiologist_block_stats(uuid, date, date);
+
+-- 2. Recreate create_case_with_milestones WITHOUT p_anesthesiologist_id
+-- (full function body, dropping the param and removing the column from INSERT)
+
+-- 3. Recreate finalize_draft_case WITHOUT p_anesthesiologist_id
+-- (full function body, dropping the param and removing the column from UPDATE)
+
+-- 4. Update surgeon scorecard function to join through case_staff
+-- instead of cases.anesthesiologist_id
+
+-- 5. Drop the column
+ALTER TABLE public.cases DROP COLUMN IF EXISTS anesthesiologist_id;
+```
+
+### 5.2 — Apply & verify
+
+- Run `supabase db push`
+- Verify column is gone: `SELECT anesthesiologist_id FROM cases LIMIT 1` → error
+- Verify RPCs work: create a test case via RPC without `p_anesthesiologist_id`
+
+### Phase 5 Commit
+`feat(db): phase 5 - drop cases.anesthesiologist_id column, clean up RPCs`
+
+### Phase 5 Test Gate
+1. **Unit:** `npx tsc --noEmit` — clean compile (no code references the column)
+2. **Integration:** `supabase db push` succeeds, RPCs callable without anesthesiologist param
+3. **Workflow:** Full create → view → complete case flow works end-to-end
+
+---
 
 ## Files Involved
 
-### Modified Files
-- `lib/dal/cases.ts` — Types, select strings, sort map
-- `lib/hooks/useScheduleTimeline.ts` — Duration resolution chain
-- `lib/hooks/useDashboardAlerts.ts` — Behind-schedule detection
-- `lib/hooks/useCaseMetrics.ts` — Median duration + total hours
-- `components/cases/CasesTable.tsx` — Duration column display + sort
-- `components/cases/CaseDrawer.tsx` — Financial comparison param
-- `lib/demo-data-generator.ts` — Stop writing column, use procedure durations
+### Modified Files (Web)
+- `components/cases/CaseForm.tsx`
+- `components/cases/CaseSummary.tsx`
+- `components/cases/CompletedCaseView.tsx`
+- `app/cases/[id]/page.tsx`
+- `app/settings/users/page.tsx`
+- `lib/validation/schemas.ts`
+- `lib/demo-data-generator.ts`
+
+### Deleted Files (Web)
+- `components/ui/AnesthesiaPopover.tsx`
 
 ### New Files
-- `supabase/migrations/20260219000012_drop_scheduled_duration_minutes.sql`
+- `supabase/migrations/20260219100000_migrate_anesthesiologist_to_case_staff.sql`
+- `supabase/migrations/20260219200000_drop_anesthesiologist_id.sql`
 
-### Test Files
+### Modified Files (iOS)
+- `Repositories/CaseRepository.swift`
+- `Models/SurgeonDay.swift`
+- `Features/SurgeonHome/SurgeonHomeViewModel.swift`
+- `Features/SurgeonHome/Components/SurgeonCaseDetailSheet.swift`
+
+### Test Files (may need updates)
+- `lib/validation/__tests__/schemas.test.ts`
 - `lib/dal/__tests__/cases.test.ts`
-- `components/cases/__tests__/CasesTable-duration.test.tsx`
-- `components/cases/__tests__/CaseDrawer.test.tsx`
-- `components/cases/__tests__/CasesTable-validation.test.tsx`
-- `lib/hooks/__tests__/useScheduleTimeline.test.ts`
