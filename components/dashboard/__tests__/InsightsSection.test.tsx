@@ -47,11 +47,19 @@ function makeInsight(overrides: Partial<Insight> = {}): Insight {
     severity: 'critical',
     title: 'First cases starting late',
     body: 'Your FCOTS rate is 31%, well below the 85% target.',
+    action: 'Review FCOTS details',
     financialImpact: '$48K estimated annual impact.',
     drillThroughType: 'fcots',
     metadata: {},
     ...overrides,
   }
+}
+
+/** Build a mock return matching UseSupabaseQueryReturn shape */
+const noopRefetch = vi.fn().mockResolvedValue(undefined)
+const noopSetData = vi.fn()
+function mockReturn(overrides: { data: unknown; loading: boolean; error: string | null }) {
+  return { ...overrides, refetch: noopRefetch, setData: noopSetData } as ReturnType<typeof useDashboardInsights>
 }
 
 // ============================================
@@ -62,7 +70,7 @@ beforeEach(() => {
   lastObserverCallback = null
   vi.stubGlobal('IntersectionObserver', MockIntersectionObserver)
   // Default state: not loading, no data (component just mounted, not scrolled into view)
-  mockUseDashboardInsights.mockReturnValue({ data: null, loading: false, error: null })
+  mockUseDashboardInsights.mockReturnValue(mockReturn({ data: null, loading: false, error: null }))
 })
 
 afterEach(() => {
@@ -97,14 +105,14 @@ describe('InsightsSection: pre-scroll placeholder', () => {
 
 describe('InsightsSection: loading skeleton', () => {
   it('renders three skeleton rows while loading=true', () => {
-    mockUseDashboardInsights.mockReturnValue({ data: null, loading: true, error: null })
+    mockUseDashboardInsights.mockReturnValue(mockReturn({ data: null, loading: true, error: null }))
     const { container } = render(<InsightsSection timeRange="week" />)
     const skeletonRows = container.querySelectorAll('.animate-pulse')
     expect(skeletonRows.length).toBe(3)
   })
 
   it('does not show insight cards while loading', () => {
-    mockUseDashboardInsights.mockReturnValue({ data: null, loading: true, error: null })
+    mockUseDashboardInsights.mockReturnValue(mockReturn({ data: null, loading: true, error: null }))
     render(<InsightsSection timeRange="week" />)
     // No insight titles
     expect(screen.queryByText('First cases starting late')).toBeNull()
@@ -117,32 +125,32 @@ describe('InsightsSection: loading skeleton', () => {
 
 describe('InsightsSection: empty state', () => {
   it('shows "Looking good" when data is loaded with zero insights', () => {
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: [] },
       loading: false,
       error: null,
-    })
+    }))
     render(<InsightsSection timeRange="month" />)
     expect(screen.getByText('Looking good')).toBeTruthy()
     expect(screen.getByText('No actionable insights for this period.')).toBeTruthy()
   })
 
   it('does not render the insight count badge when empty', () => {
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: [] },
       loading: false,
       error: null,
-    })
+    }))
     render(<InsightsSection timeRange="today" />)
     expect(screen.queryByText(/\d+ insight/)).toBeNull()
   })
 
   it('does not show placeholder or skeleton in empty state', () => {
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: [] },
       loading: false,
       error: null,
-    })
+    }))
     const { container } = render(<InsightsSection timeRange="today" />)
     expect(container.querySelector('.animate-pulse')).toBeNull()
   })
@@ -165,11 +173,11 @@ describe('InsightsSection: populated with insights', () => {
   ]
 
   it('renders all insight card titles', () => {
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: twoInsights },
       loading: false,
       error: null,
-    })
+    }))
     render(<InsightsSection timeRange="week" />)
 
     expect(screen.getByText('FCOTS issues detected')).toBeTruthy()
@@ -177,31 +185,31 @@ describe('InsightsSection: populated with insights', () => {
   })
 
   it('shows insight count badge with correct count for 2 insights', () => {
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: twoInsights },
       loading: false,
       error: null,
-    })
+    }))
     render(<InsightsSection timeRange="week" />)
     expect(screen.getByText('2 insights')).toBeTruthy()
   })
 
   it('uses singular "insight" label for exactly 1 insight', () => {
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: [makeInsight()] },
       loading: false,
       error: null,
-    })
+    }))
     render(<InsightsSection timeRange="today" />)
     expect(screen.getByText('1 insight')).toBeTruthy()
   })
 
   it('renders rank badge numbers starting from 1', () => {
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: twoInsights },
       loading: false,
       error: null,
-    })
+    }))
     render(<InsightsSection timeRange="week" />)
     expect(screen.getByText('1')).toBeTruthy()
     expect(screen.getByText('2')).toBeTruthy()
@@ -212,11 +220,11 @@ describe('InsightsSection: populated with insights', () => {
     // visible state (IntersectionObserver), not by data presence. In a real browser,
     // once the component scrolls into view, visible becomes true and the placeholder hides.
     // Here we verify the loading and empty states are absent when data is populated.
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: twoInsights },
       loading: false,
       error: null,
-    })
+    }))
     const { container } = render(<InsightsSection timeRange="week" />)
     expect(container.querySelector('.animate-pulse')).toBeNull()
     expect(screen.queryByText('Looking good')).toBeNull()
@@ -246,11 +254,11 @@ describe('InsightsSection: accordion behavior', () => {
   ]
 
   it('starts with all cards collapsed (no financial impact visible)', () => {
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: twoInsights },
       loading: false,
       error: null,
-    })
+    }))
     render(<InsightsSection timeRange="week" />)
     expect(screen.queryByText('$48K estimated annual impact.')).toBeNull()
     expect(screen.queryByText('$20K impact')).toBeNull()
@@ -258,11 +266,11 @@ describe('InsightsSection: accordion behavior', () => {
 
   it('expands first card when clicked and shows its financial impact', async () => {
     const user = userEvent.setup()
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: twoInsights },
       loading: false,
       error: null,
-    })
+    }))
     render(<InsightsSection timeRange="week" />)
 
     const buttons = screen.getAllByRole('button')
@@ -274,11 +282,11 @@ describe('InsightsSection: accordion behavior', () => {
 
   it('collapses first card when clicked again (toggle off)', async () => {
     const user = userEvent.setup()
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: twoInsights },
       loading: false,
       error: null,
-    })
+    }))
     render(<InsightsSection timeRange="week" />)
 
     const buttons = screen.getAllByRole('button')
@@ -290,11 +298,11 @@ describe('InsightsSection: accordion behavior', () => {
 
   it('clicking second card collapses first (accordion: one open at a time)', async () => {
     const user = userEvent.setup()
-    mockUseDashboardInsights.mockReturnValue({
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
       data: { insights: twoInsights },
       loading: false,
       error: null,
-    })
+    }))
     render(<InsightsSection timeRange="week" />)
 
     const buttons = screen.getAllByRole('button')

@@ -75,7 +75,7 @@ export function QuickAccessCards() {
           <Link
             key={item.href}
             href={item.href}
-            className="group bg-white rounded-xl shadow-sm border border-slate-100 p-5 hover:shadow-md hover:border-slate-200 transition-all duration-200"
+            className="group bg-white rounded-xl shadow-sm border border-slate-100 p-5 hover:shadow-md hover:border-slate-200 hover:-translate-y-0.5 transition-all duration-200"
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="flex-shrink-0 text-slate-400 group-hover:text-blue-600 transition-colors">

@@ -20,6 +20,7 @@ function makeInsight(overrides: Partial<Insight> = {}): Insight {
     severity: 'warning',
     title: 'First case starts are late',
     body: 'Your FCOTS rate is 65%, below the 85% target. 5 of 16 first cases started late.',
+    action: 'Review FCOTS details',
     financialImpact: 'Estimated $12K annual impact.',
     drillThroughType: 'fcots',
     metadata: {},
