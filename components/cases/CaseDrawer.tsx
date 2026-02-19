@@ -170,7 +170,7 @@ export default function CaseDrawer({
     caseDetail?.facility_id ?? null,
     caseDetail?.surgeon_id ?? null,
     caseDetail?.procedure_type?.id ?? null,
-    caseDetail?.scheduled_duration_minutes ?? null,
+    caseDetail?.procedure_type?.expected_duration_minutes ?? null,
     caseDetail?.scheduled_date ?? null,
     surgeonName,
     activeTab === 'financials' && !!caseDetail,

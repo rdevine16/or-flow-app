@@ -476,14 +476,14 @@ export default function CasesTable({
     {
       id: 'duration',
       header: () => (
-        <SortableHeader label="Duration" columnKey="duration" currentSort={sort} onSort={onSortChange} />
+        <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Duration</span>
       ),
       cell: ({ row }) => {
         const status = row.original.case_status?.name?.toLowerCase()
         if (status === 'completed') {
           return (
             <span className="text-sm text-slate-600 tabular-nums">
-              {formatDuration(row.original.scheduled_duration_minutes)}
+              {formatDuration(row.original.case_completion_stats?.total_duration_minutes ?? null)}
             </span>
           )
         }
@@ -492,6 +492,14 @@ export default function CasesTable({
           return (
             <span className="text-sm text-green-600 tabular-nums">
               {formatDuration(elapsed)}
+            </span>
+          )
+        }
+        if (status === 'scheduled') {
+          const expected = row.original.procedure_type?.expected_duration_minutes ?? null
+          return (
+            <span className="text-sm text-slate-400 tabular-nums">
+              {expected != null ? formatDuration(expected) : '\u2014'}
             </span>
           )
         }

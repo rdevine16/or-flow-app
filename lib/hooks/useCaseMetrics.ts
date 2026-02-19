@@ -121,15 +121,12 @@ async function fetchAllTodayMetrics(
           .gte('scheduled_date', start).lte('scheduled_date', end)
           .eq('status_id', statusIds.scheduled)
       : Promise.resolve({ count: 0, error: null }),
-    // Completed case durations for median calculation
-    (() => {
-      let q = supabase.from('cases').select('scheduled_duration_minutes')
-        .eq('facility_id', facilityId)
-        .gte('scheduled_date', start).lte('scheduled_date', end)
-        .not('scheduled_duration_minutes', 'is', null)
-      if (statusIds.completed) q = q.eq('status_id', statusIds.completed)
-      return q
-    })(),
+    // Completed case durations from case_completion_stats
+    supabase.from('case_completion_stats')
+      .select('total_duration_minutes')
+      .eq('facility_id', facilityId)
+      .gte('case_date', start).lte('case_date', end)
+      .not('total_duration_minutes', 'is', null),
     // On-time start data (scheduled vs actual patient-in)
     (() => {
       let q = supabase.from('cases').select('scheduled_date, start_time, patient_in_at')
@@ -146,8 +143,8 @@ async function fetchAllTodayMetrics(
   const scheduledCount = (scheduledR.count ?? 0) as number
 
   // Median duration
-  const durations = ((durationsR.data ?? []) as Array<{ scheduled_duration_minutes: number }>)
-    .map(d => d.scheduled_duration_minutes)
+  const durations = ((durationsR.data ?? []) as Array<{ total_duration_minutes: number }>)
+    .map(d => d.total_duration_minutes)
   const medianDuration = computeMedian(durations)
 
   // On-Time Start %: patient arrived within 15 min of scheduled start
@@ -262,18 +259,37 @@ async function fetchScheduledMetrics(
     ]
   }
 
-  const casesR = await supabase.from('cases')
-    .select('surgeon_id, scheduled_duration_minutes')
-    .eq('facility_id', facilityId)
-    .gte('scheduled_date', start).lte('scheduled_date', end)
-    .eq('status_id', statusIds.scheduled)
+  const [casesR, overridesR] = await Promise.all([
+    supabase.from('cases')
+      .select('surgeon_id, procedure_type_id, procedure_types(expected_duration_minutes)')
+      .eq('facility_id', facilityId)
+      .gte('scheduled_date', start).lte('scheduled_date', end)
+      .eq('status_id', statusIds.scheduled),
+    supabase.from('surgeon_procedure_duration')
+      .select('surgeon_id, procedure_type_id, expected_duration_minutes')
+      .eq('facility_id', facilityId),
+  ])
 
-  const cases = (casesR.data ?? []) as Array<{
+  const cases = (casesR.data ?? []) as unknown as Array<{
     surgeon_id: string | null
-    scheduled_duration_minutes: number | null
+    procedure_type_id: string | null
+    procedure_types: { expected_duration_minutes: number | null } | null
   }>
+
+  // Build surgeon override map
+  const overrideMap = new Map<string, number>()
+  if (overridesR.data) {
+    for (const o of overridesR.data as Array<{ surgeon_id: string; procedure_type_id: string; expected_duration_minutes: number }>) {
+      overrideMap.set(`${o.surgeon_id}::${o.procedure_type_id}`, o.expected_duration_minutes)
+    }
+  }
+
   const totalScheduled = cases.length
-  const totalMinutes = cases.reduce((sum, c) => sum + (c.scheduled_duration_minutes ?? 0), 0)
+  const totalMinutes = cases.reduce((sum, c) => {
+    const surgeonOverride = (c.surgeon_id && c.procedure_type_id) ? overrideMap.get(`${c.surgeon_id}::${c.procedure_type_id}`) ?? null : null
+    const procDuration = c.procedure_types?.expected_duration_minutes ?? null
+    return sum + (surgeonOverride ?? procDuration ?? 0)
+  }, 0)
   const totalHours = Math.round((totalMinutes / 60) * 10) / 10
   const uniqueSurgeons = new Set(cases.map(c => c.surgeon_id).filter(Boolean)).size
 
