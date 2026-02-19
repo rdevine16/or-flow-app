@@ -1,247 +1,241 @@
-# Feature: Dashboard Revamp
+# Feature: Remove `cases.scheduled_duration_minutes`
 
 ## Goal
 
-Revamp the facility admin dashboard from a static KPI overview into a real-time operational command center. Add a live status banner, schedule adherence Gantt chart, AI-generated insights, KPI sparklines with target bars, and restructure the layout for better information hierarchy.
+Remove the `cases.scheduled_duration_minutes` column and migrate all consumers to use the correct sources: `surgeon_procedure_duration.expected_duration_minutes` → `procedure_types.expected_duration_minutes` → fallback. Update the demo data generator to use procedure type durations for case spacing and milestone generation.
 
 ## Background
 
-The current dashboard shows 5 KPI cards, an alerts list, room status, surgeon list, trend chart, and quick-access nav. It's informative but passive — the admin has to mentally connect dots between KPIs, alerts, and room status.
+The `cases` table has a `scheduled_duration_minutes` column populated by the demo data generator with random values (35–96 min). Two newer, properly-configured duration sources exist:
 
-The new design (mockup: `docs/dashboard-improved.jsx`) transforms the dashboard into a "control tower" view:
-1. **Live Pulse Banner** — instant situational awareness (how many rooms active, cases completed)
-2. **Schedule Adherence Timeline** — the visual gut-punch that makes schedule drift undeniable
-3. **AI Insights** — "What should we fix?" ranked by recoverable OR time
-4. **KPI sparklines + target bars** — trend context without leaving the card
-5. **Layout restructure** — better information grouping (alerts ↔ insights, rooms ↔ surgeons)
+- `procedure_types.expected_duration_minutes` — base template set via Settings > Procedures (THA=90, TKA=90; 74 others null)
+- `surgeon_procedure_duration.expected_duration_minutes` — surgeon-specific override (currently empty)
 
-## Requirements
+The schedule timeline has a 3-level fallback: case → surgeon_override → procedure_type. Since the case-level field is always populated (randomly), the configured values are never used. The user sees incorrect durations (88, 91, 89, 100 min) instead of the configured 90 min.
 
-### 1. Database: Procedure Duration Config
+## Key Decisions
 
-Add expected duration per procedure type with surgeon override capability.
-
-**New column on `procedure_types`:**
-- `expected_duration_minutes` (integer, nullable) — base expected OR time for this procedure
-
-**New table: `surgeon_procedure_duration`**
-- `id` (uuid PK)
-- `facility_id` (uuid FK → facilities)
-- `surgeon_id` (uuid FK → users)
-- `procedure_type_id` (uuid FK → procedure_types)
-- `expected_duration_minutes` (integer NOT NULL)
-- UNIQUE(facility_id, surgeon_id, procedure_type_id)
-- RLS: facility admins only (+ global admin view)
-
-**Duration resolution order for Gantt:**
-1. `cases.scheduled_duration_minutes` (if set by scheduler)
-2. `surgeon_procedure_duration.expected_duration_minutes` (surgeon-specific override)
-3. `procedure_types.expected_duration_minutes` (procedure base)
-4. No bar shown (case has no estimable duration)
-
-### 2. Procedure Duration Settings UI
-
-Add duration configuration to the existing Procedures settings page (`app/settings/procedures/`):
-- Add "Expected Duration" column/field to the procedure list/detail
-- Add surgeon override capability (button or inline per procedure → shows surgeon list with override durations)
-
-### 3. Live Pulse Banner
-
-Full-width banner below the header showing:
-- Pulsing green "Live" indicator
-- Status chips: `X In Surgery · Y Turnover · Z Pre-Op · W Available`
-- Case progress: `N / M cases completed · Next: OR X @ HH:MM`
-- Data source: existing `useTodayStatus()` hook — no new queries needed
-
-### 4. KPI Card Enhancement
-
-Modify existing `MetricCard` component to support:
-- Optional sparkline mini-chart (recharts `AreaChart`, ~72×28px)
-- Optional target progress bar with label (e.g., `71%` bar with `80%` target marker)
-- Status dot color derived from target achievement
-- Data source: `useDashboardKPIs().dailyData[].numericValue` for sparklines, existing target values from `facility_analytics_settings`
-
-### 5. Schedule Adherence Timeline (Gantt)
-
-Full-width horizontal Gantt chart below KPI row:
-- Each OR room = one swim lane, time axis 7a–5p (configurable from OR hours)
-- Per case: faded gray ghost bar (scheduled) + solid overlay (actual: green=on-time, rose=late)
-- Upcoming cases: dashed outline
-- Blue vertical "now" marker
-- Summary badges: "X on time · Y late · avg drift Z min · W upcoming"
-- 60-second polling for live updates
-- New hook: `useScheduleTimeline()` — fetches today's cases with milestone data + procedure durations
-
-### 6. AI Insights Section ("What should we fix?")
-
-Side-by-side with Needs Attention (50/50 split):
-- Ranked insight cards with priority badges and pillar tags
-- Click to expand: full analysis, projected impact callout, recommended action
-- Lazy-loaded on scroll (IntersectionObserver)
-- New hook: `useDashboardInsights()` — wraps `calculateAnalyticsOverview()` → `generateInsights()`
-- Data source: existing `insightsEngine.ts` (7 insight categories already implemented)
-
-### 7. Layout Restructure
-
-| Current | New |
-|---|---|
-| Needs Attention (3/5 cols) + Room Status & Surgeons (2/5) | Needs Attention (1/2) + AI Insights (1/2) |
-| — | Room Status (1/2) + Today's Surgeons (1/2) |
-| LineChart trend | AreaChart trend with gradient fill |
-| 5-col quick access | 5-col quick access (restyled) |
-
-### 8. Trend Chart Restyle
-
-Convert existing `TrendChart` from recharts `LineChart` to `AreaChart` with gradient fill. Replace dropdown metric selector with inline button toggle. Match mockup styling.
+| # | Decision | Answer |
+|---|---|---|
+| 1 | Schedule Timeline | surgeon_override → procedure_types (drop case-level) |
+| 2 | Dashboard Alerts (behind-schedule) | surgeon_override → procedure_types → 120 min fallback |
+| 3 | Dashboard Metrics (median duration) | Use actual `case_completion_stats.total_duration_minutes` |
+| 4 | Cases Table Duration column | Actual duration for completed, expected for scheduled |
+| 5 | Case Drawer Financial Comparison | Use procedure_types expected duration as fallback |
+| 6 | Database column | Drop entirely via migration |
+| 7 | Duration column sort | Remove server-side sort (replace with plain label) |
 
 ## Database Context
 
-### New Migration Required
-- Add `expected_duration_minutes` column to `procedure_types`
-- Create `surgeon_procedure_duration` table with RLS policies
-- No changes to existing tables or triggers
+- `case_completion_stats.total_duration_minutes` = actual elapsed minutes from patient_in → patient_out (computed by trigger)
+- `case_completion_stats` has FK + UNIQUE on `case_id` → PostgREST supports to-one left join via `case_completion_stats(total_duration_minutes)`
+- Latest migration: `20260219000011_procedure_duration_config.sql`
 
-### Existing Tables Used
-- `cases` — `start_time`, `scheduled_duration_minutes`, `or_room_id`
-- `case_milestones` — `recorded_at` for actual start/end times
-- `facility_milestones` — milestone name lookups (`patient_in`, `patient_out`)
-- `or_rooms` — room names, display order
-- `procedure_types` — procedure names + new `expected_duration_minutes`
-- `facility_analytics_settings` — KPI targets for target bars
+---
 
-## Files Likely Involved
+## Phase 1: Replace All Code References
 
-### Database
-- New migration: `supabase/migrations/YYYYMMDD_procedure_duration.sql`
+**Goal:** Every consumer switches to the correct data source. The DB column still exists but is no longer read.
 
-### Settings
-- `app/settings/procedures/page.tsx` — add duration field + surgeon override
+### 1.1 — Types & Data Layer
 
-### Dashboard Page
-- `app/dashboard/page.tsx` — layout restructure, new component imports
+**File:** `lib/dal/cases.ts`
 
-### New Components
-- `components/dashboard/LivePulseBanner.tsx`
-- `components/dashboard/ScheduleAdherenceTimeline.tsx`
-- `components/dashboard/InsightsSection.tsx`
-- `components/dashboard/InsightCard.tsx`
+**`CaseListItem` interface (line 30):**
+- Remove `scheduled_duration_minutes: number | null`
+- Add `expected_duration_minutes: number | null` to the `procedure_type` shape
+- Add `case_completion_stats?: { total_duration_minutes: number | null } | null`
 
-### Modified Components
-- `components/ui/MetricCard.tsx` — add sparkline + target bar props
-- `components/dashboard/TrendChart.tsx` — LineChart → AreaChart
-- `components/dashboard/QuickAccessCards.tsx` — visual restyle
+**`CaseDetail` interface (line 58):**
+- Remove duplicate `scheduled_duration_minutes: number | null` declaration
 
-### New Hooks
-- `lib/hooks/useScheduleTimeline.ts`
-- `lib/hooks/useDashboardInsights.ts`
+**`CASE_LIST_SELECT` (lines 126–134):**
+- Remove `scheduled_duration_minutes` from select
+- Change `procedure_type:procedure_types(id, name, procedure_category_id)` → `procedure_type:procedure_types(id, name, procedure_category_id, expected_duration_minutes)`
+- Add `case_completion_stats(total_duration_minutes)` join
 
-### Existing Hooks (consumed, not modified)
-- `lib/hooks/useDashboardKPIs.ts` — sparkline data from `dailyData`
-- `lib/hooks/useTodayStatus.ts` — Live Pulse data
-- `lib/hooks/useDashboardAlerts.ts` — Needs Attention (unchanged)
+**`CASE_DETAIL_SELECT` (lines 136–151):**
+- Uses `*` so column removal is handled by migration
+- Add `expected_duration_minutes` to `procedure_types(...)` join
 
-### Analytics (consumed)
-- `lib/analyticsV2.ts` — `calculateAnalyticsOverview()`
-- `lib/insightsEngine.ts` — `generateInsights()`
+**`SORT_COLUMN_MAP` (line 630):**
+- Remove `duration: 'scheduled_duration_minutes'` entry
 
-## iOS Parity
-- [ ] iOS can wait — iOS doesn't have a dashboard yet
+### 1.2 — Schedule Timeline
 
-## Out of Scope
-- Real-time WebSocket/Supabase Realtime subscriptions (using polling instead)
-- Block schedule visualization (separate from case-level Gantt)
-- Surgeon-level dashboard views
-- Mobile-specific responsive breakpoints beyond basic sm/lg grid
-- Drag-and-drop case reordering on the Gantt
+**File:** `lib/hooks/useScheduleTimeline.ts`
 
-## Acceptance Criteria
-- [ ] Procedure types have configurable expected duration with surgeon override
-- [ ] Live Pulse Banner shows real-time room status counts and case progress
-- [ ] KPI cards show sparkline trends and target progress bars
-- [ ] Schedule Adherence Timeline renders scheduled vs actual per room with 60s polling
-- [ ] AI Insights section lazy-loads and shows ranked, expandable insight cards
-- [ ] Layout uses 50/50 splits for Alerts+Insights and Rooms+Surgeons
-- [ ] Trend chart uses AreaChart with gradient fill
-- [ ] Quick access cards are visually restyled
-- [ ] `npx tsc --noEmit` passes
-- [ ] All existing tests pass
-- [ ] New components have test coverage
+- Remove `scheduled_duration_minutes` from `TIMELINE_CASE_SELECT` (line 141)
+- Remove from inline type cast (line 216)
+- Duration chain (lines 283–294): Remove step 1 (`c.scheduled_duration_minutes`). Chain becomes:
+  ```
+  let durationMinutes: number | null = null
+  // 1. surgeon override
+  if (c.surgeon_id && c.procedure_type_id) {
+    durationMinutes = overrideMap.get(`${c.surgeon_id}::${c.procedure_type_id}`) ?? null
+  }
+  // 2. procedure base
+  if (durationMinutes === null && c.procedure_type_id) {
+    durationMinutes = procedureMap.get(c.procedure_type_id) ?? null
+  }
+  ```
 
-## Review Q&A
+### 1.3 — Dashboard Alerts
 
-> Generated by /review on 2026-02-18
+**File:** `lib/hooks/useDashboardAlerts.ts`
 
-**Q1: Sparkline approach** — Existing SVG `Sparkline` component (`components/ui/Sparkline.tsx`) vs recharts `AreaChart` for KPI sparklines?
-**A1:** Build recharts `AreaChart` sparklines for visual fidelity with gradient fill, matching the mockup and trend chart library.
+- Remove `scheduled_duration_minutes` from select (line 168)
+- Add `procedure_type_id, surgeon_id, procedure_types(expected_duration_minutes)` to query
+- Add parallel fetch of `surgeon_procedure_duration` overrides (same pattern as useScheduleTimeline)
+- Build overrideMap, then replace line 202:
+  ```
+  // WAS: const estimatedDuration = c.scheduled_duration_minutes ?? 120
+  // NOW:
+  const overrideKey = `${c.surgeon_id}::${c.procedure_type_id}`
+  const surgeonDuration = overrideMap.get(overrideKey) ?? null
+  const procDuration = c.procedure_types?.expected_duration_minutes ?? null
+  const estimatedDuration = surgeonDuration ?? procDuration ?? 120
+  ```
 
-**Q2: KPI card component** — Extend existing `MetricCard` (animated count-up, gradient text) or build new `DashboardKpiCard`?
-**A2:** Build new `DashboardKpiCard` component. Existing MetricCard has a very different design (animated count-up, gradient text) — leave it untouched for analytics pages.
+### 1.4 — Dashboard Metrics
 
-**Q3: Gantt rendering approach** — CSS absolute positioning, SVG, or recharts?
-**A3:** Recharts custom chart — use horizontal BarChart with custom bar shapes for ghost/actual overlay and `ReferenceLine` for the now marker.
+**File:** `lib/hooks/useCaseMetrics.ts`
 
-**Q4: Gantt data source** — New `useScheduleTimeline` hook vs extending `useTodayStatus` vs composing multiple hooks?
-**A4:** New `useScheduleTimeline` hook. Purpose-built, fetches today's cases + joins surgeon overrides + procedure durations. Includes 60s polling. Cleanly separated from `useTodayStatus`.
+**Median duration (lines 127–152):**
+- Switch from `cases.scheduled_duration_minutes` to `case_completion_stats.total_duration_minutes`
+- Query `case_completion_stats` for completed cases in date range:
+  ```
+  supabase.from('case_completion_stats')
+    .select('total_duration_minutes')
+    .eq('facility_id', facilityId)
+    .gte('case_date', start).lte('case_date', end)
+    .not('total_duration_minutes', 'is', null)
+  ```
+- Update downstream median computation to use `total_duration_minutes`
 
-**Q5: Polling scope** — Which components get 60-second polling?
-**A5:** `useScheduleTimeline` only. Live Pulse Banner consumes `useTodayStatus` without polling (data updates on navigation/reload). Minimal blast radius.
+**Total scheduled hours (lines 266–278):**
+- Add `procedure_types(expected_duration_minutes)` join to cases query
+- Add parallel `surgeon_procedure_duration` fetch
+- Apply surgeon_override → procedure_types → 0 fallback when computing totalMinutes
 
-**Q6: Duration data availability** — Is `cases.scheduled_duration_minutes` populated?
-**A6:** Likely not populated (no UI exists for it). Need the full fallback chain: `scheduled_duration_minutes` → surgeon override → procedure base → no bar.
+### 1.5 — Cases Table
 
-**Q7: Procedure Duration Settings UI** — Where and how?
-**A7:** Full redesign of `/settings/procedures` page into a master-detail view (like the procedure milestones page). Left panel: procedure list with search. Right panel: ALL procedure settings (existing fields + expected duration + surgeon overrides). When a procedure is selected, shows all settings. Surgeon overrides section shows which surgeons have custom durations. List view indicates which procedures have overrides.
+**File:** `components/cases/CasesTable.tsx`
 
-**Q8: Duration page location** — New route, tab, or modal integration?
-**A8:** Replace the current `/settings/procedures` page entirely with the master-detail view. No separate route needed — same URL, new UX.
+**Duration column cell (line 487):**
+- Completed: `row.original.case_completion_stats?.total_duration_minutes` (actual)
+- Scheduled: `row.original.procedure_type?.expected_duration_minutes` (expected, may be null)
+- In-progress: unchanged (elapsed from start_time)
 
-**Q9: AI Insights data loading** — Full `AnalyticsOverview` on mount, lazy-load, or simplified?
-**A9:** Lazy-load on scroll via `IntersectionObserver`. Dashboard loads fast, insights populate when the user scrolls to the Insights section.
+**Duration column header:**
+- Remove `SortableHeader` wrapper, replace with plain `<span>` label (no server-side sort)
 
-**Q10: Insight cards content** — Actionable (with recommendations + impact) or informational only?
-**A10:** Informational only. No action items or impact callout boxes. Just show the insight information: priority rank, title, category/pillar tag, analysis text. Click to expand for full detail.
+### 1.6 — Case Drawer
 
-**Q11: Time range toggle behavior** — What does Today/Week/Month affect?
-**A11:** Applies to KPI cards + Trend chart only. Live Pulse, Gantt, OR Status, Surgeons, and Alerts are always "today" (operational/live data).
+**File:** `components/cases/CaseDrawer.tsx`
 
-**Q12: Facility ORbit Score card** — New FacilityScoreMini, adapt existing FacilityScoreCard, or plain KPI card?
-**A12:** Use the `ScoreRing` SVG component from the surgeon orbit-score page, extracted to `components/ui/ScoreRing.tsx`. Compact 52px ring + grade letter + trend. Uses `computeFacilityScore()` from `facilityScoreStub.ts` (same as current).
+- Line 174: `caseDetail?.scheduled_duration_minutes ?? null` → `caseDetail?.procedure_type?.expected_duration_minutes ?? null`
 
-**Q13: TrendChart conversion** — Convert in-place, build new, or extract SegmentedControl first?
-**A13:** Convert in-place. Swap `LineChart` → `AreaChart` with gradient fill, replace dropdown with segmented button toggle. Data flow (`useTrendData`) stays the same.
+### 1.7 — Tests
 
-**Q14: QuickAccessCards restyle** — Full mockup match, trim to 4 items, or minimal restyle?
-**A14:** Minimal restyle only. Just update hover effects and icon colors. Don't restructure the cards.
+| File | Change |
+|------|--------|
+| `lib/dal/__tests__/cases.test.ts` | Remove `scheduled_duration_minutes` from fixtures (lines 24, 46, 65, 123). Add `case_completion_stats: null` + `procedure_type.expected_duration_minutes: null` |
+| `components/cases/__tests__/CasesTable-duration.test.tsx` | Rewrite: completed → test `case_completion_stats.total_duration_minutes`, scheduled → test `procedure_type.expected_duration_minutes`, null cases → dash |
+| `components/cases/__tests__/CaseDrawer.test.tsx` | Remove `scheduled_duration_minutes: 95` (line 122). Add `procedure_type.expected_duration_minutes: 90` |
+| `components/cases/__tests__/CasesTable-validation.test.tsx` | Remove `scheduled_duration_minutes: 120` (line 43). Add new fields |
+| `lib/hooks/__tests__/useScheduleTimeline.test.ts` | Remove "Level 1: cases.scheduled_duration_minutes" test (line 197). Renumber remaining levels. Update comments (lines 45–64) |
 
-**Q15: NeedsAttention updates** — Restyle to match mockup or keep as-is?
-**A15:** Minor tweaks: add urgent count badge to header, add "View all" link, adjust row padding/bg. No structural changes.
+### Phase 1 Verification
 
-**Q16: OR hours for Gantt timeline axis** — Hardcoded, derived from data, or configurable?
-**A16:** Derive from `or_rooms.available_hours`. Use 7am as assumed start, add `available_hours` to get end. Timeline = earliest room start to latest room end.
+1. `npx tsc --noEmit` — clean compile
+2. `npx vitest run` — all tests pass
+3. Manual: Cases page Duration column shows actual time for completed cases, schedule timeline shows 90 min for THA/TKA
 
-**Q17: Gantt milestone range** — Which milestones define the actual case bars?
-**A17:** `patient_in` → `patient_out`. Represents full patient-in-room time. Uses `getMilestoneMap()` from `analyticsV2.ts`.
+---
 
-**Q18: Gantt "late" determination** — What defines a late case?
-**A18:** Use the facility-configured FCOTS milestone (`facility_analytics_settings.fcots_milestone` = `'patient_in'` or `'incision'`). Case is late if the configured milestone `recorded_at > cases.start_time + fcots_grace_minutes`. Consistent with FCOTS KPI calculation.
+## Phase 2: Database Drop + Demo Generator
 
-**Q19: Gantt bar labels** — Inline text, conditional, or tooltip only?
-**A19:** Tooltip on hover only. Never render text inside bars. Tooltip shows procedure name, surgeon, scheduled time, actual time, status.
+### 2.1 — Migration
 
-**Q20: KPI responsive layout** — How to handle narrower viewports?
-**A20:** Keep `grid-cols-5` with min-width on cards. Sidebar is usually collapsed (64px) giving plenty of room.
+**File:** `supabase/migrations/20260219000012_drop_scheduled_duration_minutes.sql`
 
-**Q21: Empty states** — What to show when no cases today (Gantt, Live Pulse)?
-**A21:** Show component frame with empty state message ("No cases scheduled today"). Consistent with NeedsAttention "All clear" pattern.
+```sql
+-- Drop cases.scheduled_duration_minutes
+-- All application code now reads surgeon_procedure_duration and
+-- procedure_types.expected_duration_minutes directly.
+ALTER TABLE cases DROP COLUMN IF EXISTS scheduled_duration_minutes;
+```
 
-**Q22: Target progress bar** — What does the bar represent?
-**A22:** Current value as percentage of target. Color: green if >= 80% of target, amber if >= 50%, red if < 50%. Label shows target value.
+Apply: `supabase db push --workdir /Users/ryandevine/Desktop/ORbit/apps/web/or-flow-app`
 
-**Q23: Phase 2 scope** — Should the expanded procedures page redesign be split?
-**A23:** Split into Phase 2a (DB migration) + Phase 2b (procedures page redesign to master-detail with duration + surgeon overrides).
+### 2.2 — Demo Generator
 
-**Q24: Pulse effect** — JS interval or CSS animation?
-**A24:** Pure CSS animation (`@keyframes`). More performant, smoother, standard approach.
+**File:** `lib/demo-data-generator.ts`
 
-**Q25: Facility score data source** — Stub or real engine?
-**A25:** Consume same `facilityScoreStub.ts` via `useDashboardKPIs`. No new data fetching needed.
+**Remove column references:**
+- Remove `scheduled_duration_minutes` from `CaseRecord` interface (line 63)
+- Remove `scheduled_duration_minutes: scheduledDuration` assignment (line 828)
+- Remove `scheduledDuration` variable computation (lines 805–810)
+
+**Fetch procedure durations:**
+- Update procedure_types select (line 395): `select('id, name, expected_duration_minutes')`
+- Update `allProcedureTypes` type throughout: `{ id: string; name: string; expected_duration_minutes: number | null }[]`
+- Pass through to `generateSurgeonCases` function signature
+
+**Use expected_duration_minutes for surgicalTime:**
+- When `proc.expected_duration_minutes` is set, derive surgicalTime from it:
+  ```
+  // Overhead constants from milestone templates:
+  //   joint: incision(28) + exit(12) = ~40 min overhead
+  //   spine: incision(32) + exit(20) = ~48 min overhead
+  //   hand:  incision(18) + exit(10) = ~28 min overhead (use 30)
+  const SURGICAL_OVERHEAD: Record<string, number> = { joint: 40, spine: 48, hand_wrist: 30 }
+  const overhead = SURGICAL_OVERHEAD[surgeon.specialty] ?? 40
+
+  let surgicalTime: number
+  if (proc.expected_duration_minutes != null) {
+    const derived = Math.max(15, proc.expected_duration_minutes - overhead)
+    surgicalTime = derived + randomInt(-5, 5) // ±5 min jitter for realism
+  } else if (PROCEDURE_SURGICAL_TIMES[proc.name]) {
+    surgicalTime = randomInt(override.min, override.max)
+  } else {
+    surgicalTime = randomInt(speedCfg.surgicalTime.min, speedCfg.surgicalTime.max)
+  }
+  ```
+
+**Use expected_duration_minutes for flip-room spacing:**
+- Line 914: When `proc.expected_duration_minutes` is set, use it as `flipInterval` instead of `speedCfg.flipInterval`
+  ```
+  const interval = proc.expected_duration_minutes ?? speedCfg.flipInterval
+  currentTime = addMinutes(currentTime, interval > 0 ? interval : 90)
+  ```
+
+### Phase 2 Verification
+
+1. `npx tsc --noEmit` — clean compile
+2. `supabase db push` — column dropped successfully
+3. Generate demo data → verify cases insert without errors
+4. Schedule timeline shows correct 90 min durations for THA/TKA cases
+5. `npx vitest run` — all tests pass
+
+## Files Involved
+
+### Modified Files
+- `lib/dal/cases.ts` — Types, select strings, sort map
+- `lib/hooks/useScheduleTimeline.ts` — Duration resolution chain
+- `lib/hooks/useDashboardAlerts.ts` — Behind-schedule detection
+- `lib/hooks/useCaseMetrics.ts` — Median duration + total hours
+- `components/cases/CasesTable.tsx` — Duration column display + sort
+- `components/cases/CaseDrawer.tsx` — Financial comparison param
+- `lib/demo-data-generator.ts` — Stop writing column, use procedure durations
+
+### New Files
+- `supabase/migrations/20260219000012_drop_scheduled_duration_minutes.sql`
+
+### Test Files
+- `lib/dal/__tests__/cases.test.ts`
+- `components/cases/__tests__/CasesTable-duration.test.tsx`
+- `components/cases/__tests__/CaseDrawer.test.tsx`
+- `components/cases/__tests__/CasesTable-validation.test.tsx`
+- `lib/hooks/__tests__/useScheduleTimeline.test.ts`
