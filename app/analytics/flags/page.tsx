@@ -15,7 +15,21 @@ import FlagTrendChart from '@/components/analytics/flags/FlagTrendChart'
 import DayHeatmap from '@/components/analytics/flags/DayHeatmap'
 import { SectionHeader } from '@/components/analytics/AnalyticsComponents'
 import { Card } from '@/components/ui/CardEnhanced'
-import { Flag, BarChart3, TrendingUp, Grid3x3 } from 'lucide-react'
+import HorizontalBarList from '@/components/analytics/flags/HorizontalBarList'
+import SurgeonFlagTable from '@/components/analytics/flags/SurgeonFlagTable'
+import RoomAnalysisCards from '@/components/analytics/flags/RoomAnalysisCards'
+import { Flag, BarChart3, TrendingUp, Grid3x3, Shield, Clock, Users, DoorOpen } from 'lucide-react'
+
+// Delay type color palette (cycles for dynamic delay types from DB)
+const DELAY_TYPE_COLORS = [
+  '#e11d48', // rose-600
+  '#d97706', // amber-600
+  '#7c3aed', // violet-600
+  '#0284c7', // sky-600
+  '#059669', // emerald-600
+  '#ea580c', // orange-600
+  '#94a3b8', // slate-400 (fallback)
+]
 
 // ============================================
 // Loading skeleton (page-specific)
@@ -276,7 +290,68 @@ export default function CaseFlagsAnalyticsPage() {
             </Card>
           </div>
 
-          {/* Phase 4: Flag rule breakdown + delay type breakdown + surgeon table + room cards */}
+          {/* Two-column: Auto-detected flags + Reported delays */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card padding="none">
+              <Card.Content>
+                <SectionHeader
+                  title="Auto-Detected Flags"
+                  subtitle={`${data.flagRuleBreakdown.reduce((a, b) => a + b.count, 0)} threshold flags by rule`}
+                  icon={<Shield className="w-4 h-4" />}
+                  accentColor="red"
+                />
+                <div className="mt-4">
+                  <HorizontalBarList items={data.flagRuleBreakdown} />
+                </div>
+              </Card.Content>
+            </Card>
+
+            <Card padding="none">
+              <Card.Content>
+                <SectionHeader
+                  title="Reported Delays"
+                  subtitle={`${data.delayTypeBreakdown.reduce((a, b) => a + b.count, 0)} delays by category`}
+                  icon={<Clock className="w-4 h-4" />}
+                  accentColor="amber"
+                />
+                <div className="mt-4">
+                  <HorizontalBarList
+                    items={data.delayTypeBreakdown.map((d, i) => ({
+                      ...d,
+                      color: DELAY_TYPE_COLORS[i % DELAY_TYPE_COLORS.length],
+                    }))}
+                  />
+                </div>
+              </Card.Content>
+            </Card>
+          </div>
+
+          {/* Surgeon flag distribution */}
+          <Card padding="none">
+            <div className="px-6 pt-5 pb-3">
+              <SectionHeader
+                title="Surgeon Flag Distribution"
+                subtitle="Flag rate by surgeon with top flag category"
+                icon={<Users className="w-4 h-4" />}
+                accentColor="violet"
+              />
+            </div>
+            <SurgeonFlagTable data={data.surgeonFlags} />
+          </Card>
+
+          {/* Room analysis */}
+          <div>
+            <div className="mb-3">
+              <SectionHeader
+                title="Room Analysis"
+                subtitle="Flag and delay concentration by operating room"
+                icon={<DoorOpen className="w-4 h-4" />}
+                accentColor="blue"
+              />
+            </div>
+            <RoomAnalysisCards data={data.roomFlags} />
+          </div>
+
           {/* Phase 5: Pattern insight cards + recent flagged cases + drill-through */}
         </div>
       )}
