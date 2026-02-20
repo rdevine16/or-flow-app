@@ -219,14 +219,4 @@ describe('useFinancialsMetrics', () => {
     })
   })
 
-  describe('outlier backward compatibility', () => {
-    it('returns empty outlier data', () => {
-      const { result } = renderHook(() =>
-        useFinancialsMetrics([makeCase()], emptySurgeonProcStats, emptyFacilityProcStats, facilitySettings)
-      )
-      expect(result.current.outlierStats.total).toBe(0)
-      expect(result.current.outlierDetails).toHaveLength(0)
-      expect(result.current.issueStats.overTime).toBe(0)
-    })
-  })
 })

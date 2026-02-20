@@ -202,71 +202,6 @@ export interface SurgeonOverallStats {
   cases_last_90_days: number
 }
 
-// ============================================
-// OUTLIER / ISSUE TYPES (unchanged)
-// ============================================
-
-export type OutlierType = 'personal' | 'facility' | 'both' | 'none'
-
-export interface OutlierFlags {
-  isDurationPersonalOutlier: boolean
-  isDurationFacilityOutlier: boolean
-  durationOutlierType: OutlierType
-  isProfitPersonalOutlier: boolean
-  isProfitFacilityOutlier: boolean
-  profitOutlierType: OutlierType
-  personalDurationThreshold: number | null
-  facilityDurationThreshold: number | null
-  personalProfitThreshold: number | null
-  facilityProfitThreshold: number | null
-}
-
-export type CaseIssue = 
-  | { type: 'overTime'; actualMinutes: number; expectedMinutes: number; thresholdMinutes: number; minutesOver: number }
-  | { type: 'delay'; delays: { name: string; minutes: number | null }[]; totalMinutes: number }
-  | { type: 'lowPayer'; payerName: string; payerRate: number; defaultRate: number; percentBelow: number }
-  | { type: 'lowProfit'; actualProfit: number; expectedProfit: number; thresholdProfit: number; amountBelow: number }
-  | { type: 'unknown' }
-
-export interface FinancialBreakdown {
-  reimbursement: number
-  totalDebits: number
-  totalCredits: number
-  orTimeCost: number
-  orRate: number
-  payerName: string | null
-  costSource: string | null
-  // Legacy aliases
-  softGoodsCost: number
-  hardGoodsCost: number
-  orCost: number
-  expectedProfit: number | null
-  facilityExpectedProfit: number | null
-  expectedDuration: number | null
-  facilityExpectedDuration: number | null
-}
-
-export interface OutlierCase {
-  caseId: string
-  caseNumber: string
-  date: string
-  surgeonId: string | null
-  surgeonName: string
-  procedureId: string | null
-  procedureName: string
-  roomName: string | null
-  actualProfit: number
-  actualDuration: number
-  expectedProfit: number | null
-  expectedDuration: number | null
-  facilityExpectedProfit: number | null
-  facilityExpectedDuration: number | null
-  profitGap: number
-  durationGap: number
-  outlierFlags: OutlierFlags
-  issues: CaseIssue[]
-  financialBreakdown: FinancialBreakdown
-}
 
 // ============================================
 // SURGEON PROCEDURE BREAKDOWN
@@ -371,60 +306,6 @@ export interface ProcedureStats {
 }
 
 // ============================================
-// ISSUE STATS & OUTLIER STATS (unchanged)
-// ============================================
-
-export interface IssueStats {
-  overTime: number
-  delay: number
-  lowPayer: number
-  lowProfit: number
-  unknown: number
-}
-
-export interface OutlierStats {
-  total: number
-  personalOnly: number
-  facilityOnly: number
-  both: number
-  durationOutliers: number
-  profitOutliers: number
-}
-
-// ============================================
-// ISSUE TYPE (discriminated union for IssuesBadge)
-// ============================================
-
-export type Issue =
-  | {
-      type: 'overTime'
-      actualMinutes: number
-      expectedMinutes: number
-      minutesOver: number
-    }
-  | {
-      type: 'lowProfit'
-      actualProfit: number
-      expectedProfit: number
-      amountBelow: number
-    }
-  | {
-      type: 'delay'
-      delays: { name: string; minutes?: number }[]
-      totalMinutes: number
-    }
-  | {
-      type: 'lowPayer'
-      payerName: string
-      payerRate: number
-      defaultRate: number
-      percentBelow: number
-    }
-  | {
-      type: 'unknown'
-    }
-
-// ============================================
 // PROFIT TREND
 // ============================================
 
@@ -464,11 +345,6 @@ export interface FinancialsMetrics {
   avgDuration: number
   medianDuration: number | null
   totalORMinutes: number
-  
-  // Outliers
-  outlierStats: OutlierStats
-  outlierDetails: OutlierCase[]
-  issueStats: IssueStats
   
   // Time = Money
   costPerMinute: number

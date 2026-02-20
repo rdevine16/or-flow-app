@@ -1,7 +1,7 @@
 // components/analytics/financials/useFinancialsMetrics.ts
 // Computes enriched financial metrics from case completion stats
 // Includes: surgeon/procedure stats, payer mix, profit bins, monthly sparklines
-// Outlier detection REMOVED per design decision — no longer part of the analytics flow
+// Computes payer mix, profit distribution bins, monthly sparklines, and phase durations
 
 import { useMemo } from 'react'
 import {
@@ -591,14 +591,6 @@ export function useFinancialsMetrics(
       avgDuration,
       medianDuration: median(allDurations),
       totalORMinutes,
-
-      // Outlier fields — kept as empty/zero for backward compatibility
-      outlierStats: {
-        total: 0, personalOnly: 0, facilityOnly: 0,
-        both: 0, durationOutliers: 0, profitOutliers: 0,
-      },
-      outlierDetails: [],
-      issueStats: { overTime: 0, delay: 0, lowPayer: 0, lowProfit: 0, unknown: 0 },
 
       costPerMinute,
       excessTimeCost: excessTimeMinutes * costPerMinute,

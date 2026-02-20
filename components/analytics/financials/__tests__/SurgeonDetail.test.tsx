@@ -179,22 +179,6 @@ function makeMetrics(): FinancialsMetrics {
     surgeonStats: [makeSurgeon()],
     procedureStats: [],
     profitTrend: [],
-    outlierStats: {
-      total: 0,
-      personalOnly: 0,
-      facilityOnly: 0,
-      both: 0,
-      profitOutliers: 0,
-      durationOutliers: 0,
-    },
-    outlierDetails: [],
-    issueStats: {
-      overTime: 0,
-      delay: 0,
-      lowPayer: 0,
-      lowProfit: 0,
-      unknown: 0,
-    },
   }
 }
 
