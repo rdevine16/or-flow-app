@@ -1,97 +1,105 @@
 // components/settings/flags/__tests__/SeverityPills.test.tsx
-// Unit tests for SeverityPills component
+// Unit tests for SeverityPills component (single cycling button)
 
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SeverityPills } from '../SeverityPills'
-import type { Severity } from '@/types/flag-settings'
 
 describe('SeverityPills', () => {
-  it('renders all three severity pills: info, warning, critical', () => {
+  it('renders the current severity label', () => {
     const onChange = vi.fn()
     render(<SeverityPills value="info" onChange={onChange} />)
 
     expect(screen.getByText('Info')).toBeDefined()
-    expect(screen.getByText('Warning')).toBeDefined()
-    expect(screen.getByText('Critical')).toBeDefined()
   })
 
-  it('applies selected styles to the active severity', () => {
+  it('applies correct styles for info severity', () => {
+    const onChange = vi.fn()
+    render(<SeverityPills value="info" onChange={onChange} />)
+
+    const button = screen.getByText('Info').closest('button')!
+    expect(button.className).toContain('bg-blue-50')
+    expect(button.className).toContain('text-blue-700')
+    expect(button.className).toContain('ring-blue-200')
+  })
+
+  it('applies correct styles for warning severity', () => {
     const onChange = vi.fn()
     render(<SeverityPills value="warning" onChange={onChange} />)
 
-    const warningButton = screen.getByText('Warning').closest('button')!
-    expect(warningButton.className).toContain('bg-amber-50')
-    expect(warningButton.className).toContain('text-amber-700')
-    expect(warningButton.className).toContain('ring-amber-200')
+    const button = screen.getByText('Warning').closest('button')!
+    expect(button.className).toContain('bg-amber-50')
+    expect(button.className).toContain('text-amber-700')
+    expect(button.className).toContain('ring-amber-200')
   })
 
-  it('applies inactive styles to non-selected pills', () => {
+  it('applies correct styles for critical severity', () => {
     const onChange = vi.fn()
-    render(<SeverityPills value="warning" onChange={onChange} />)
+    render(<SeverityPills value="critical" onChange={onChange} />)
 
-    const infoButton = screen.getByText('Info').closest('button')!
-    expect(infoButton.className).toContain('text-slate-400')
-    expect(infoButton.className).not.toContain('bg-sky-50')
+    const button = screen.getByText('Critical').closest('button')!
+    expect(button.className).toContain('bg-red-50')
+    expect(button.className).toContain('text-red-600')
+    expect(button.className).toContain('ring-red-200')
   })
 
-  it('calls onChange with the clicked severity', async () => {
+  it('cycles from info to warning on click', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     render(<SeverityPills value="info" onChange={onChange} />)
 
-    const criticalButton = screen.getByText('Critical')
-    await user.click(criticalButton)
+    await user.click(screen.getByText('Info'))
+
+    expect(onChange).toHaveBeenCalledWith('warning')
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('cycles from warning to critical on click', async () => {
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    render(<SeverityPills value="warning" onChange={onChange} />)
+
+    await user.click(screen.getByText('Warning'))
 
     expect(onChange).toHaveBeenCalledWith('critical')
     expect(onChange).toHaveBeenCalledTimes(1)
   })
 
-  it('allows changing between all three severities', async () => {
+  it('cycles from critical back to info on click', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
-    render(<SeverityPills value="info" onChange={onChange} />)
-
-    await user.click(screen.getByText('Warning'))
-    expect(onChange).toHaveBeenCalledWith('warning')
+    render(<SeverityPills value="critical" onChange={onChange} />)
 
     await user.click(screen.getByText('Critical'))
-    expect(onChange).toHaveBeenCalledWith('critical')
 
-    await user.click(screen.getByText('Info'))
     expect(onChange).toHaveBeenCalledWith('info')
+    expect(onChange).toHaveBeenCalledTimes(1)
   })
 
-  it('disables all pills when disabled prop is true', () => {
+  it('disables the button when disabled prop is true', () => {
     const onChange = vi.fn()
     render(<SeverityPills value="info" onChange={onChange} disabled={true} />)
 
-    const infoButton = screen.getByText('Info').closest('button')!
-    const warningButton = screen.getByText('Warning').closest('button')!
-    const criticalButton = screen.getByText('Critical').closest('button')!
-
-    expect(infoButton.disabled).toBe(true)
-    expect(warningButton.disabled).toBe(true)
-    expect(criticalButton.disabled).toBe(true)
+    const button = screen.getByText('Info').closest('button')!
+    expect(button.disabled).toBe(true)
   })
 
   it('applies disabled styles when disabled', () => {
     const onChange = vi.fn()
     render(<SeverityPills value="warning" onChange={onChange} disabled={true} />)
 
-    const warningButton = screen.getByText('Warning').closest('button')!
-    expect(warningButton.className).toContain('opacity-40')
-    expect(warningButton.className).toContain('cursor-default')
+    const button = screen.getByText('Warning').closest('button')!
+    expect(button.className).toContain('opacity-40')
+    expect(button.className).toContain('cursor-default')
   })
 
-  it('does not call onChange when clicking a disabled pill', async () => {
+  it('does not call onChange when clicking while disabled', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     render(<SeverityPills value="info" onChange={onChange} disabled={true} />)
 
-    const criticalButton = screen.getByText('Critical')
-    await user.click(criticalButton)
+    await user.click(screen.getByText('Info'))
 
     expect(onChange).not.toHaveBeenCalled()
   })
@@ -100,42 +108,12 @@ describe('SeverityPills', () => {
     const onChange = vi.fn()
     const { rerender } = render(<SeverityPills value="info" onChange={onChange} />)
 
-    let infoButton = screen.getByText('Info').closest('button')!
-    expect(infoButton.className).toContain('bg-blue-50')
+    let button = screen.getByText('Info').closest('button')!
+    expect(button.className).toContain('bg-blue-50')
 
     rerender(<SeverityPills value="critical" onChange={onChange} />)
 
-    infoButton = screen.getByText('Info').closest('button')!
-    const criticalButton = screen.getByText('Critical').closest('button')!
-    expect(infoButton.className).not.toContain('bg-blue-50')
-    expect(criticalButton.className).toContain('bg-red-50')
-  })
-
-  it('renders a colored dot indicator for each pill', () => {
-    const onChange = vi.fn()
-    render(<SeverityPills value="warning" onChange={onChange} />)
-
-    const warningButton = screen.getByText('Warning').closest('button')!
-    const dot = warningButton.querySelector('span.w-1\\.5')
-    expect(dot).toBeDefined()
-    expect(dot?.className).toContain('rounded-full')
-  })
-
-  it('selected pill dot uses bg-current (inherits color from button)', () => {
-    const onChange = vi.fn()
-    render(<SeverityPills value="warning" onChange={onChange} />)
-
-    const warningButton = screen.getByText('Warning').closest('button')!
-    const dot = warningButton.querySelector('span.w-1\\.5')
-    expect(dot?.className).toContain('bg-current')
-  })
-
-  it('unselected pill dot uses bg-slate-300', () => {
-    const onChange = vi.fn()
-    render(<SeverityPills value="warning" onChange={onChange} />)
-
-    const infoButton = screen.getByText('Info').closest('button')!
-    const dot = infoButton.querySelector('span.w-1\\.5')
-    expect(dot?.className).toContain('bg-slate-300')
+    button = screen.getByText('Critical').closest('button')!
+    expect(button.className).toContain('bg-red-50')
   })
 })
