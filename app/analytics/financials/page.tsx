@@ -48,7 +48,6 @@ export default function FinancialsAnalyticsPage() {
   // UI state
   const [activeTab, setActiveTab] = useState<SubTab>('overview')
   const [dateRange, setDateRange] = useState('mtd')
-  const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
   const { showToast } = useToast()
   // Calculate metrics using custom hook
   const metrics = useFinancialsMetrics(
@@ -371,11 +370,9 @@ if (facilityStatsRes.error) {
             )}
 
             {activeTab === 'surgeon' && (
-              <SurgeonTab 
+              <SurgeonTab
                 metrics={metrics}
-                caseStats={caseStats}
-                selectedSurgeon={selectedSurgeon}
-                onSurgeonSelect={setSelectedSurgeon}
+                onSurgeonClick={handleSurgeonClick}
               />
             )}
 
