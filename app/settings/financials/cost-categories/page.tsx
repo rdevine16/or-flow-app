@@ -7,7 +7,9 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import { genericAuditLog } from '@/lib/audit-logger'
+import { genericAuditLog, flagRuleAudit } from '@/lib/audit-logger'
+import { getRulesByCostCategory, archiveByCostCategory } from '@/lib/dal/flag-rules'
+import type { FlagRule } from '@/types/flag-settings'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -33,6 +35,7 @@ interface DeleteModalState {
   dependencies: {
     procedureCostItems: number
     surgeonCostItems: number
+    linkedFlagRules: FlagRule[]
   }
   loading: boolean
 }
@@ -64,7 +67,7 @@ export default function CostCategoriesPage() {
   const [deleteModalState, setDeleteModalState] = useState<DeleteModalState>({
     isOpen: false,
     category: null,
-    dependencies: { procedureCostItems: 0, surgeonCostItems: 0 },
+    dependencies: { procedureCostItems: 0, surgeonCostItems: 0, linkedFlagRules: [] },
     loading: false
   })
 
@@ -293,12 +296,12 @@ const openDeleteModal = async (category: CostCategory) => {
     setDeleteModalState({
       isOpen: true,
       category,
-      dependencies: { procedureCostItems: 0, surgeonCostItems: 0 },
+      dependencies: { procedureCostItems: 0, surgeonCostItems: 0, linkedFlagRules: [] },
       loading: true
     })
 
     try {
-      const [procResult, surgResult] = await Promise.all([
+      const [procResult, surgResult, flagRulesResult] = await Promise.all([
         supabase
           .from('procedure_cost_items')
           .select('id', { count: 'exact', head: true })
@@ -306,14 +309,16 @@ const openDeleteModal = async (category: CostCategory) => {
         supabase
           .from('surgeon_cost_items')
           .select('id', { count: 'exact', head: true })
-          .eq('cost_category_id', category.id)
+          .eq('cost_category_id', category.id),
+        getRulesByCostCategory(supabase, category.id)
       ])
 
       setDeleteModalState(prev => ({
         ...prev,
         dependencies: {
           procedureCostItems: procResult.count || 0,
-          surgeonCostItems: surgResult.count || 0
+          surgeonCostItems: surgResult.count || 0,
+          linkedFlagRules: flagRulesResult.data ?? []
         },
         loading: false
       }))
@@ -327,22 +332,24 @@ const openDeleteModal = async (category: CostCategory) => {
     setDeleteModalState({
       isOpen: false,
       category: null,
-      dependencies: { procedureCostItems: 0, surgeonCostItems: 0 },
+      dependencies: { procedureCostItems: 0, surgeonCostItems: 0, linkedFlagRules: [] },
       loading: false
     })
   }
 
-  // Soft delete - sets deleted_at timestamp
+  // Soft delete - sets deleted_at timestamp, cascade-archives linked flag rules
  const handleDelete = async () => {
     if (!deleteModalState.category || !effectiveFacilityId || !currentUserId) return
     setSaving(true)
 
     const category = deleteModalState.category
+    const linkedRules = deleteModalState.dependencies.linkedFlagRules
 
     try {
+      // Archive the cost category
       const { error } = await supabase
         .from('cost_categories')
-        .update({ 
+        .update({
           deleted_at: new Date().toISOString(),
           deleted_by: currentUserId
         })
@@ -350,16 +357,32 @@ const openDeleteModal = async (category: CostCategory) => {
 
       if (error) throw error
 
+      // Cascade-archive linked flag rules
+      if (linkedRules.length > 0) {
+        const archiveResult = await archiveByCostCategory(supabase, category.id)
+        if (archiveResult.error) throw archiveResult.error
+
+        // Audit log each archived flag rule
+        await Promise.all(
+          linkedRules.map(rule =>
+            flagRuleAudit.archived(supabase, rule.id, rule.name, effectiveFacilityId)
+          )
+        )
+      }
+
       setCategories(categories.map(c =>
-        c.id === category.id 
-          ? { ...c, deleted_at: new Date().toISOString(), deleted_by: currentUserId } 
+        c.id === category.id
+          ? { ...c, deleted_at: new Date().toISOString(), deleted_by: currentUserId }
           : c
       ))
 
+      const ruleCount = linkedRules.length
       showToast({
         type: 'success',
         title: 'Category Archived',
-        message: `"${category.name}" has been moved to archive`
+        message: ruleCount > 0
+          ? `"${category.name}" and ${ruleCount} linked flag rule${ruleCount !== 1 ? 's' : ''} archived`
+          : `"${category.name}" has been moved to archive`
       })
 
       await genericAuditLog(supabase, 'cost_category.deleted', {
@@ -367,6 +390,7 @@ const openDeleteModal = async (category: CostCategory) => {
         targetId: category.id,
         targetLabel: category.name,
         facilityId: effectiveFacilityId,
+        newValues: ruleCount > 0 ? { cascadedFlagRules: linkedRules.map(r => r.name) } : undefined,
       })
 
 closeDeleteModal()
@@ -684,6 +708,10 @@ await genericAuditLog(supabase, 'cost_category.restored', {
           Surgeon Variance
           <ExternalLink className="w-3 h-3" />
         </a>
+        <a href="/settings/flags" className="underline hover:no-underline inline-flex items-center gap-1">
+          Flag Rules
+          <ExternalLink className="w-3 h-3" />
+        </a>
       </div>
     </div>
   </div>
@@ -754,6 +782,26 @@ await genericAuditLog(supabase, 'cost_category.restored', {
                           </ul>
                           <p className="mt-2 text-sm text-amber-700">
                             Archiving will hide it from new procedures but existing data will be preserved.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {deleteModalState.dependencies.linkedFlagRules.length > 0 && (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
+                      <div className="flex gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-red-800">
+                            {deleteModalState.dependencies.linkedFlagRules.length} flag rule{deleteModalState.dependencies.linkedFlagRules.length !== 1 ? 's' : ''} will also be archived:
+                          </p>
+                          <ul className="mt-1 text-sm text-red-700 list-disc list-inside">
+                            {deleteModalState.dependencies.linkedFlagRules.map(rule => (
+                              <li key={rule.id}>{rule.name}</li>
+                            ))}
+                          </ul>
+                          <p className="mt-2 text-sm text-red-700">
+                            You can restore archived flag rules separately from the Flag Rules settings page.
                           </p>
                         </div>
                       </div>
