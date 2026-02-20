@@ -25,7 +25,7 @@ import {
 
 // Re-export the shared FlagRule type for consumers that import from flagEngine
 export type { FlagRule } from '@/types/flag-settings'
-import type { FlagRule } from '@/types/flag-settings'
+import type { FlagRule, CaseWithFinancials } from '@/types/flag-settings'
 
 export interface CaseFlag {
   case_id: string
@@ -42,11 +42,19 @@ export interface CaseFlag {
   created_by: string | null
 }
 
+export interface BaselineEntry {
+  median: number
+  stdDev: number
+  count: number
+  /** Sorted values for percentile calculation — only populated when percentile rules are active */
+  values?: number[]
+}
+
 export interface FlagBaselines {
   // Facility-wide baselines by metric+procedure
-  facility: Map<string, { median: number; stdDev: number; count: number }>
+  facility: Map<string, BaselineEntry>
   // Per-surgeon baselines by metric+procedure+surgeon
-  personal: Map<string, { median: number; stdDev: number; count: number }>
+  personal: Map<string, BaselineEntry>
 }
 
 // ============================================
@@ -68,7 +76,7 @@ export function extractMetricValue(
   metric: string,
   startMilestone?: string | null,
   endMilestone?: string | null,
-  caseData?: CaseWithMilestones
+  caseData?: CaseWithFinancials
 ): number | null {
   // Direct milestone-pair metrics
   if (startMilestone && endMilestone) {
@@ -79,6 +87,7 @@ export function extractMetricValue(
 
   // Named metric shortcuts (fallback if milestones not specified on rule)
   switch (metric) {
+    // ---- Timing ----
     case 'total_case_time':
       return getTimeDiffMinutes(milestones.patient_in, milestones.patient_out)
     case 'surgical_time':
@@ -91,8 +100,49 @@ export function extractMetricValue(
       return getTimeDiffMinutes(milestones.closing, milestones.closing_complete)
     case 'emergence_time':
       return getTimeDiffMinutes(milestones.closing_complete, milestones.patient_out)
+    case 'prep_to_incision':
+    case 'surgeon_readiness_gap':
+      return getTimeDiffMinutes(milestones.prep_drape_complete, milestones.incision)
+
+    // ---- Efficiency ----
     case 'fcots_delay':
       return extractFCOTSDelay(milestones, caseData)
+    // turnover_time and room_idle_gap are cross-case — handled in evaluateCase
+
+    // ---- Financial (from case_completion_stats) ----
+    case 'case_profit':
+      return caseData?.completion_stats?.profit ?? null
+    case 'case_margin': {
+      const stats = caseData?.completion_stats
+      if (stats?.profit == null || stats?.reimbursement == null || stats.reimbursement === 0) return null
+      return (stats.profit / stats.reimbursement) * 100
+    }
+    case 'profit_per_minute': {
+      const stats = caseData?.completion_stats
+      if (stats?.profit == null || stats?.total_duration_minutes == null || stats.total_duration_minutes === 0) return null
+      return stats.profit / stats.total_duration_minutes
+    }
+    case 'total_case_cost': {
+      const stats = caseData?.completion_stats
+      if (stats?.total_debits == null && stats?.or_time_cost == null) return null
+      return (stats?.total_debits ?? 0) + (stats?.or_time_cost ?? 0)
+    }
+    case 'reimbursement_variance': {
+      const stats = caseData?.completion_stats
+      const expected = caseData?.expected_reimbursement
+      if (stats?.reimbursement == null || expected == null || expected === 0) return null
+      return ((stats.reimbursement - expected) / expected) * 100
+    }
+    case 'or_time_cost':
+      return caseData?.completion_stats?.or_time_cost ?? null
+    // excess_time_cost is computed (needs baselines) — handled in evaluateCase
+
+    // ---- Quality ----
+    case 'missing_milestones':
+      return countMissingMilestones(milestones)
+    case 'milestone_out_of_order':
+      return countSequenceViolations(milestones)
+
     default:
       return null
   }
@@ -118,6 +168,82 @@ function extractFCOTSDelay(
 
 
 // ============================================
+// QUALITY METRIC HELPERS
+// ============================================
+
+/**
+ * Core milestones expected in every case, in correct sequence order.
+ */
+const CORE_MILESTONE_SEQUENCE: (keyof MilestoneMap)[] = [
+  'patient_in',
+  'anes_start',
+  'anes_end',
+  'prep_drape_complete',
+  'incision',
+  'closing',
+  'closing_complete',
+  'patient_out',
+]
+
+/**
+ * Count the number of core milestones missing from a case.
+ */
+function countMissingMilestones(milestones: MilestoneMap): number {
+  let missing = 0
+  for (const key of CORE_MILESTONE_SEQUENCE) {
+    if (!milestones[key]) missing++
+  }
+  return missing
+}
+
+/**
+ * Count the number of milestone sequence violations.
+ * A violation occurs when a later milestone has an earlier timestamp
+ * than a preceding milestone in the expected sequence.
+ */
+function countSequenceViolations(milestones: MilestoneMap): number {
+  let violations = 0
+  const recorded = CORE_MILESTONE_SEQUENCE
+    .filter(key => milestones[key] != null)
+    .map(key => ({ key, time: milestones[key]! }))
+
+  for (let i = 1; i < recorded.length; i++) {
+    if (recorded[i].time < recorded[i - 1].time) {
+      violations++
+    }
+  }
+  return violations
+}
+
+/**
+ * Metrics that can have zero or negative values (financial, quality).
+ * For these, we don't skip evaluation when value <= 0.
+ */
+const ALLOW_ZERO_OR_NEGATIVE = new Set([
+  'case_profit', 'case_margin', 'profit_per_minute', 'total_case_cost',
+  'reimbursement_variance', 'or_time_cost', 'excess_time_cost',
+  'missing_milestones', 'milestone_out_of_order',
+])
+
+/**
+ * Calculate the Nth percentile from a sorted array of values.
+ * Uses linear interpolation between adjacent values.
+ */
+function calculatePercentile(sortedValues: number[], percentile: number): number {
+  if (sortedValues.length === 0) return 0
+  if (sortedValues.length === 1) return sortedValues[0]
+
+  const idx = (percentile / 100) * (sortedValues.length - 1)
+  const lower = Math.floor(idx)
+  const upper = Math.ceil(idx)
+
+  if (lower === upper) return sortedValues[lower]
+  const weight = idx - lower
+  return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight
+}
+
+
+// ============================================
 // BASELINE CALCULATION
 // ============================================
 
@@ -132,13 +258,14 @@ function extractFCOTSDelay(
  * This runs once per evaluation batch (not per case).
  */
 export function buildBaselines(
-  historicalCases: CaseWithMilestones[],
-  metrics: string[]
+  historicalCases: CaseWithFinancials[],
+  metrics: string[],
+  needsPercentileValues?: boolean
 ): FlagBaselines {
   const facilityValues = new Map<string, number[]>()
   const personalValues = new Map<string, number[]>()
 
-  // Metric definitions for extraction
+  // Milestone-pair metrics: canonical start/end milestones
   const metricDefs: Record<string, { start: string | null; end: string | null }> = {
     total_case_time: { start: 'patient_in', end: 'patient_out' },
     surgical_time: { start: 'incision', end: 'closing' },
@@ -147,7 +274,13 @@ export function buildBaselines(
     closing_time: { start: 'closing', end: 'closing_complete' },
     emergence_time: { start: 'closing_complete', end: 'patient_out' },
     surgeon_readiness_gap: { start: 'prep_drape_complete', end: 'incision' },
+    prep_to_incision: { start: 'prep_drape_complete', end: 'incision' },
   }
+
+  // Metrics that are cross-case or depend on baselines themselves (skip)
+  const SKIP_FOR_BASELINES = new Set([
+    'turnover_time', 'fcots_delay', 'room_idle_gap', 'excess_time_cost',
+  ])
 
   historicalCases.forEach(c => {
     const m = getMilestoneMap(c)
@@ -155,14 +288,12 @@ export function buildBaselines(
     const procedureId = c.procedure_types?.id ?? null
 
     metrics.forEach(metric => {
-      // Skip cross-case metrics (turnover, fcots) — they need different baseline logic
-      if (metric === 'turnover_time' || metric === 'fcots_delay') return
+      if (SKIP_FOR_BASELINES.has(metric)) return
 
       const def = metricDefs[metric]
-      if (!def) return
-
-      const value = extractMetricValue(m, metric, def.start, def.end, c)
-      if (value === null || value <= 0) return
+      const value = extractMetricValue(m, metric, def?.start ?? null, def?.end ?? null, c)
+      if (value === null) return
+      if (!ALLOW_ZERO_OR_NEGATIVE.has(metric) && value <= 0) return
 
       // Facility-wide baseline (by metric, optionally by procedure)
       const facilityKey = procedureId ? `${metric}:${procedureId}` : metric
@@ -195,12 +326,16 @@ export function buildBaselines(
 
   // Convert value arrays to statistics
   const toStats = (valuesMap: Map<string, number[]>) => {
-    const statsMap = new Map<string, { median: number; stdDev: number; count: number }>()
+    const statsMap = new Map<string, BaselineEntry>()
     valuesMap.forEach((values, key) => {
       const median = calculateMedian(values)
       const stdDev = calculateStdDev(values)
       if (median !== null && stdDev !== null && values.length >= 3) {
-        statsMap.set(key, { median, stdDev, count: values.length })
+        const entry: BaselineEntry = { median, stdDev, count: values.length }
+        if (needsPercentileValues) {
+          entry.values = [...values].sort((a, b) => a - b)
+        }
+        statsMap.set(key, entry)
       }
     })
     return statsMap
@@ -320,7 +455,7 @@ function compareValue(
  */
 function resolveThreshold(
   rule: FlagRule,
-  baseline: { median: number; stdDev: number } | undefined
+  baseline: BaselineEntry | undefined
 ): number | null {
   switch (rule.threshold_type) {
     case 'absolute':
@@ -334,9 +469,21 @@ function resolveThreshold(
         return baseline.median - (rule.threshold_value * baseline.stdDev)
       }
 
+    case 'percentage_of_median':
+      if (!baseline) return null
+      if (rule.operator === 'gt' || rule.operator === 'gte') {
+        return baseline.median * (1 + rule.threshold_value / 100)
+      } else {
+        return baseline.median * (1 - rule.threshold_value / 100)
+      }
+
     case 'percentile':
-      // Future: implement percentile-based thresholds
-      return null
+      if (!baseline?.values || baseline.values.length === 0) return null
+      return calculatePercentile(baseline.values, rule.threshold_value)
+
+    case 'between':
+      // Between is handled separately in evaluateAgainstRule
+      return rule.threshold_value
 
     default:
       return null
@@ -352,7 +499,7 @@ function lookupBaseline(
   rule: FlagRule,
   surgeonId: string | null,
   procedureId: string | null
-): { median: number; stdDev: number; count: number } | undefined {
+): BaselineEntry | undefined {
   const scope = rule.comparison_scope === 'personal' ? baselines.personal : baselines.facility
 
   // Try most specific first
@@ -375,18 +522,71 @@ function lookupBaseline(
 
 
 /**
+ * Evaluate a metric value against a rule's threshold configuration.
+ * Handles all threshold types including 'between'.
+ */
+function evaluateAgainstRule(
+  metricValue: number,
+  rule: FlagRule,
+  baseline: BaselineEntry | undefined
+): { triggered: boolean; threshold: number } {
+  // Between: check if value falls within range
+  if (rule.threshold_type === 'between') {
+    if (rule.threshold_value_max === null) return { triggered: false, threshold: 0 }
+    return {
+      triggered: metricValue >= rule.threshold_value && metricValue <= rule.threshold_value_max,
+      threshold: rule.threshold_value,
+    }
+  }
+
+  const threshold = resolveThreshold(rule, baseline)
+  if (threshold === null) return { triggered: false, threshold: 0 }
+
+  return {
+    triggered: compareValue(metricValue, threshold, rule.operator),
+    threshold,
+  }
+}
+
+/**
+ * Create a CaseFlag object from a triggered rule evaluation.
+ */
+function buildFlag(
+  caseData: CaseWithFinancials,
+  rule: FlagRule,
+  metricValue: number,
+  threshold: number
+): CaseFlag {
+  return {
+    case_id: caseData.id,
+    facility_id: caseData.facility_id,
+    flag_type: 'threshold',
+    flag_rule_id: rule.id,
+    metric_value: Math.round(metricValue * 10) / 10,
+    threshold_value: Math.round(threshold * 10) / 10,
+    comparison_scope: rule.comparison_scope,
+    delay_type_id: null,
+    duration_minutes: null,
+    severity: rule.severity,
+    note: null,
+    created_by: null,
+  }
+}
+
+
+/**
  * Evaluate a single case against all active flag rules.
  * Returns an array of CaseFlag objects ready for insertion.
- * 
- * @param caseData - The case to evaluate
+ *
+ * @param caseData - The case to evaluate (with optional financial data)
  * @param rules - Active flag rules for this facility
  * @param baselines - Pre-computed baselines from historical data
  * @param turnoverBaseline - Pre-computed turnover baseline
  * @param firstCaseIds - Set of case IDs that are first in their room for the day
- * @param turnoverForCase - Turnover time before this specific case (if applicable)
+ * @param turnoverForCase - Turnover/idle gap time before this specific case (if applicable)
  */
 export function evaluateCase(
-  caseData: CaseWithMilestones,
+  caseData: CaseWithFinancials,
   rules: FlagRule[],
   baselines: FlagBaselines,
   turnoverBaseline: { median: number; stdDev: number } | null,
@@ -397,7 +597,6 @@ export function evaluateCase(
   const milestones = getMilestoneMap(caseData)
   const surgeonId = caseData.surgeon_id ?? null
   const procedureId = caseData.procedure_types?.id ?? null
-  const facilityId = caseData.facility_id
 
   // Must have at least patient_in and patient_out to evaluate
   if (!milestones.patient_in || !milestones.patient_out) return flags
@@ -405,90 +604,84 @@ export function evaluateCase(
   for (const rule of rules) {
     if (!rule.is_enabled) continue
 
-    // Special handling for cross-case metrics
-    if (rule.metric === 'turnover_time') {
+    // --- Cross-case metrics (turnover_time, room_idle_gap) ---
+    if (rule.metric === 'turnover_time' || rule.metric === 'room_idle_gap') {
       if (turnoverForCase === null || turnoverForCase === undefined) continue
       if (turnoverForCase <= 0) continue
-      if (!turnoverBaseline) continue
 
-      const threshold = resolveThreshold(rule, turnoverBaseline)
-      if (threshold === null) continue
-
-      if (compareValue(turnoverForCase, threshold, rule.operator)) {
-        flags.push({
-          case_id: caseData.id,
-          facility_id: facilityId,
-          flag_type: 'threshold',
-          flag_rule_id: rule.id,
-          metric_value: Math.round(turnoverForCase * 10) / 10,
-          threshold_value: Math.round(threshold * 10) / 10,
-          comparison_scope: rule.comparison_scope,
-          delay_type_id: null,
-          duration_minutes: null,
-          severity: rule.severity,
-          note: null,
-          created_by: null,
-        })
+      // Use turnover baseline for both metrics (same underlying computation)
+      const bl = turnoverBaseline
+        ? { median: turnoverBaseline.median, stdDev: turnoverBaseline.stdDev, count: 0 }
+        : undefined
+      const result = evaluateAgainstRule(turnoverForCase, rule, bl)
+      if (result.triggered) {
+        flags.push(buildFlag(caseData, rule, turnoverForCase, result.threshold))
       }
       continue
     }
 
+    // --- FCOTS delay (first-case only) ---
     if (rule.metric === 'fcots_delay') {
-      // Only evaluate first cases
       if (!firstCaseIds.has(caseData.id)) continue
 
       const delayMinutes = extractFCOTSDelay(milestones, caseData)
       if (delayMinutes === null) continue
 
-      const threshold = resolveThreshold(rule, undefined) // Always absolute for FCOTS
-      if (threshold === null) continue
-
-      if (compareValue(delayMinutes, threshold, rule.operator)) {
-        flags.push({
-          case_id: caseData.id,
-          facility_id: facilityId,
-          flag_type: 'threshold',
-          flag_rule_id: rule.id,
-          metric_value: Math.round(delayMinutes * 10) / 10,
-          threshold_value: threshold,
-          comparison_scope: rule.comparison_scope,
-          delay_type_id: null,
-          duration_minutes: null,
-          severity: rule.severity,
-          note: null,
-          created_by: null,
-        })
+      const result = evaluateAgainstRule(delayMinutes, rule, undefined)
+      if (result.triggered) {
+        flags.push(buildFlag(caseData, rule, delayMinutes, result.threshold))
       }
       continue
     }
 
-    // Standard milestone-pair metrics
+    // --- Excess time cost (computed from baselines + completion_stats) ---
+    if (rule.metric === 'excess_time_cost') {
+      const stats = caseData.completion_stats
+      if (!stats?.total_duration_minutes || !stats?.or_hourly_rate) continue
+
+      // Look up median total_case_time for this procedure (or facility-wide)
+      const tcBaseline = procedureId
+        ? (baselines.facility.get(`total_case_time:${procedureId}`) ?? baselines.facility.get('total_case_time'))
+        : baselines.facility.get('total_case_time')
+      if (!tcBaseline) continue
+
+      const excessMinutes = Math.max(0, stats.total_duration_minutes - tcBaseline.median)
+      const metricValue = excessMinutes * stats.or_hourly_rate / 60
+
+      const baseline = lookupBaseline(baselines, rule, surgeonId, procedureId)
+      const result = evaluateAgainstRule(metricValue, rule, baseline)
+      if (result.triggered) {
+        flags.push(buildFlag(caseData, rule, metricValue, result.threshold))
+      }
+      continue
+    }
+
+    // --- Per-cost-category metrics ---
+    if (rule.cost_category_id) {
+      const metricValue = caseData.category_costs?.[rule.cost_category_id] ?? null
+      if (metricValue === null) continue
+
+      const baseline = lookupBaseline(baselines, rule, surgeonId, procedureId)
+      const result = evaluateAgainstRule(metricValue, rule, baseline)
+      if (result.triggered) {
+        flags.push(buildFlag(caseData, rule, metricValue, result.threshold))
+      }
+      continue
+    }
+
+    // --- Standard metrics (milestone-pair, financial, quality) ---
     const metricValue = extractMetricValue(
       milestones, rule.metric, rule.start_milestone, rule.end_milestone, caseData
     )
-    if (metricValue === null || metricValue <= 0) continue
+    if (metricValue === null) continue
+    // For timing/efficiency metrics, skip zero/negative (bad milestone data)
+    if (!ALLOW_ZERO_OR_NEGATIVE.has(rule.metric) && metricValue <= 0) continue
 
-    // Look up baseline
+    // Look up baseline and evaluate
     const baseline = lookupBaseline(baselines, rule, surgeonId, procedureId)
-    const threshold = resolveThreshold(rule, baseline)
-    if (threshold === null) continue
-
-    // Compare
-    if (compareValue(metricValue, threshold, rule.operator)) {
-      flags.push({
-        case_id: caseData.id,
-        facility_id: facilityId,
-        flag_type: 'threshold',
-        flag_rule_id: rule.id,
-        metric_value: Math.round(metricValue * 10) / 10,
-        threshold_value: Math.round(threshold * 10) / 10,
-        comparison_scope: rule.comparison_scope,
-        delay_type_id: null,
-        duration_minutes: null,
-        severity: rule.severity,
-        note: null,
-        created_by: null,
-      })
+    const result = evaluateAgainstRule(metricValue, rule, baseline)
+    if (result.triggered) {
+      flags.push(buildFlag(caseData, rule, metricValue, result.threshold))
     }
   }
 
@@ -512,7 +705,7 @@ export function evaluateCase(
  * @returns Array of CaseFlag objects ready for bulk insert
  */
 export function evaluateCasesBatch(
-  cases: CaseWithMilestones[],
+  cases: CaseWithFinancials[],
   rules: FlagRule[]
 ): CaseFlag[] {
   if (cases.length === 0 || rules.length === 0) return []
@@ -520,18 +713,23 @@ export function evaluateCasesBatch(
   // Determine which metrics we need baselines for
   const activeMetrics = [...new Set(rules.filter(r => r.is_enabled).map(r => r.metric))]
 
-  // Build baselines from all cases
-  const baselines = buildBaselines(cases, activeMetrics)
+  // Check if any rules use percentile threshold (need sorted values in baselines)
+  const needsPercentileValues = rules.some(r => r.is_enabled && r.threshold_type === 'percentile')
 
-  // Build turnover baseline if any turnover rules exist
-  const hasTurnoverRule = rules.some(r => r.metric === 'turnover_time' && r.is_enabled)
+  // Build baselines from all cases
+  const baselines = buildBaselines(cases, activeMetrics, needsPercentileValues)
+
+  // Build turnover baseline if any turnover or room_idle_gap rules exist
+  const hasTurnoverRule = rules.some(r =>
+    (r.metric === 'turnover_time' || r.metric === 'room_idle_gap') && r.is_enabled
+  )
   const turnoverBaseline = hasTurnoverRule ? buildTurnoverBaseline(cases) : null
 
   // Identify first cases for FCOTS rules
   const hasFCOTSRule = rules.some(r => r.metric === 'fcots_delay' && r.is_enabled)
   const firstCaseIds = hasFCOTSRule ? identifyFirstCases(cases) : new Set<string>()
 
-  // Pre-compute turnovers per case
+  // Pre-compute turnovers per case (used by both turnover_time and room_idle_gap)
   const turnoverByCase = hasTurnoverRule ? computeTurnoversPerCase(cases) : new Map<string, number>()
 
   // Evaluate each case
