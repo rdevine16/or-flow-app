@@ -435,12 +435,10 @@ describe('RuleConfigureStep', () => {
         />
       )
 
-      // SeverityPills is rendered
+      // SeverityPills is rendered with label and current severity
       expect(screen.getByText(/severity/i)).toBeInTheDocument()
-      // SeverityPills should render buttons for each severity
-      expect(screen.getByText('Info')).toBeInTheDocument()
+      // SeverityPills now shows a single cycling button with the current severity label
       expect(screen.getByText('Warning')).toBeInTheDocument()
-      expect(screen.getByText('Critical')).toBeInTheDocument()
     })
 
     it('calls onFormChange when severity is changed', () => {
@@ -454,8 +452,9 @@ describe('RuleConfigureStep', () => {
         />
       )
 
-      const criticalButton = screen.getByText('Critical')
-      fireEvent.click(criticalButton)
+      // SeverityPills is now a cycling button: warning → critical on click
+      const severityButton = screen.getByText('Warning')
+      fireEvent.click(severityButton)
 
       expect(mockOnFormChange).toHaveBeenCalledWith({ severity: 'critical' })
     })
