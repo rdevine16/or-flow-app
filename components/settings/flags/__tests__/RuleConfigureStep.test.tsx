@@ -424,7 +424,7 @@ describe('RuleConfigureStep', () => {
   })
 
   describe('Severity selector', () => {
-    it('renders SeverityPills component', () => {
+    it('renders all three severity badges', () => {
       render(
         <RuleConfigureStep
           metric={mockMetric}
@@ -435,13 +435,14 @@ describe('RuleConfigureStep', () => {
         />
       )
 
-      // SeverityPills is rendered with label and current severity
       expect(screen.getByText(/severity/i)).toBeInTheDocument()
-      // SeverityPills now shows a single cycling button with the current severity label
+      // All 3 severity options visible as badges
+      expect(screen.getByText('Info')).toBeInTheDocument()
       expect(screen.getByText('Warning')).toBeInTheDocument()
+      expect(screen.getByText('Critical')).toBeInTheDocument()
     })
 
-    it('calls onFormChange when severity is changed', () => {
+    it('highlights the currently selected severity', () => {
       render(
         <RuleConfigureStep
           metric={mockMetric}
@@ -452,9 +453,28 @@ describe('RuleConfigureStep', () => {
         />
       )
 
-      // SeverityPills is now a cycling button: warning → critical on click
-      const severityButton = screen.getByText('Warning')
-      fireEvent.click(severityButton)
+      // Warning is selected (defaultForm.severity = 'warning')
+      const warningBtn = screen.getByText('Warning')
+      expect(warningBtn).toHaveClass('bg-amber-50')
+
+      // Info should be unselected
+      const infoBtn = screen.getByText('Info')
+      expect(infoBtn).toHaveClass('text-slate-400')
+    })
+
+    it('calls onFormChange when a different severity is clicked', () => {
+      render(
+        <RuleConfigureStep
+          metric={mockMetric}
+          form={defaultForm}
+          onFormChange={mockOnFormChange}
+          onBack={mockOnBack}
+          onSubmit={mockOnSubmit}
+        />
+      )
+
+      // Click Critical directly (not cycling)
+      fireEvent.click(screen.getByText('Critical'))
 
       expect(mockOnFormChange).toHaveBeenCalledWith({ severity: 'critical' })
     })

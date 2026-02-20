@@ -45,6 +45,7 @@ export type Operator = 'gt' | 'gte' | 'lt' | 'lte'
 
 export type ThresholdType =
   | 'median_plus_sd'
+  | 'median_plus_offset'
   | 'absolute'
   | 'percentage_of_median'
   | 'percentile'

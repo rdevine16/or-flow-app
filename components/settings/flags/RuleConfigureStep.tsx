@@ -36,11 +36,13 @@ export function RuleConfigureStep({
   const categoryColors = getCategoryColors(metric.category)
   const isBetween = form.thresholdType === 'between'
   const isMedianSD = form.thresholdType === 'median_plus_sd'
+  const isMedianOffset = form.thresholdType === 'median_plus_offset'
   const canSubmit = form.name.trim().length > 0
 
   // Filter threshold types based on metric capabilities
   const availableTypes = THRESHOLD_TYPES.filter((t) => {
     if (t.id === 'median_plus_sd' && !metric.supportsMedian) return false
+    if (t.id === 'median_plus_offset' && !metric.supportsMedian) return false
     if (t.id === 'percentage_of_median' && !metric.supportsMedian) return false
     if (t.id === 'percentile' && !metric.supportsMedian) return false
     return true
@@ -50,6 +52,11 @@ export function RuleConfigureStep({
     if (isMedianSD) return 0.5
     if (form.thresholdType === 'percentage_of_median' || form.thresholdType === 'percentile')
       return 5
+    if (isMedianOffset || form.thresholdType === 'absolute') {
+      if (metric.dataType === 'currency') return 100
+      if (metric.dataType === 'percentage') return 5
+      return 5
+    }
     if (metric.dataType === 'currency') return 100
     if (metric.dataType === 'percentage') return 5
     return 5
@@ -57,6 +64,7 @@ export function RuleConfigureStep({
 
   const getValueLabel = () => {
     if (isMedianSD) return 'Standard Deviations'
+    if (isMedianOffset) return 'Offset'
     if (form.thresholdType === 'percentage_of_median') return '% of Median'
     if (form.thresholdType === 'percentile') return 'Percentile'
     if (isBetween) return 'Range'
@@ -65,6 +73,7 @@ export function RuleConfigureStep({
 
   const getValueSuffix = () => {
     if (isMedianSD) return 'SD'
+    if (isMedianOffset) return metric.unit
     if (form.thresholdType === 'percentage_of_median') return '%'
     if (form.thresholdType === 'percentile') return 'th'
     return metric.unit
@@ -75,6 +84,9 @@ export function RuleConfigureStep({
     switch (type) {
       case 'median_plus_sd':
         defaultValue = 1.0
+        break
+      case 'median_plus_offset':
+        defaultValue = 5
         break
       case 'absolute':
         defaultValue = 90
@@ -91,11 +103,16 @@ export function RuleConfigureStep({
       default:
         defaultValue = 1.0
     }
-    onFormChange({
+    const updates: Partial<CustomRuleFormState> = {
       thresholdType: type,
       thresholdValue: defaultValue,
       thresholdValueMax: type === 'between' ? defaultValue + 100 : null,
-    })
+    }
+    // Default to "greater than" for median-based types (most common use case)
+    if (type === 'median_plus_offset' || type === 'median_plus_sd') {
+      updates.operator = 'gt'
+    }
+    onFormChange(updates)
   }
 
   return (
@@ -256,6 +273,7 @@ export function RuleConfigureStep({
           <SeverityPills
             value={form.severity}
             onChange={(sev: Severity) => onFormChange({ severity: sev })}
+            variant="badges"
           />
         </div>
 

@@ -18,12 +18,12 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
-  { key: 'all', label: 'All', colorKey: 'scheduled' },
   { key: 'today', label: 'Today', colorKey: 'scheduled' },
   { key: 'scheduled', label: 'Scheduled', colorKey: 'scheduled' },
   { key: 'in_progress', label: 'In Progress', colorKey: 'in_progress' },
   { key: 'completed', label: 'Completed', colorKey: 'completed' },
   { key: 'data_quality', label: 'Data Quality', colorKey: 'needs_validation' },
+  { key: 'all', label: 'All', colorKey: 'scheduled' },
 ]
 
 // ============================================

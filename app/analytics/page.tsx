@@ -37,6 +37,8 @@ import {
 } from '@/lib/analyticsV2'
 
 import FlagsSummaryCard from '@/components/analytics/FlagsSummaryCard'
+import CaseDrawer from '@/components/cases/CaseDrawer'
+import { useProcedureCategories } from '@/hooks/useLookups'
 
 import { AlertTriangle, ArrowRight, BarChart3, CalendarDays, Clock, DollarSign, Flag, Presentation, RefreshCw, Sparkles, Star, TrendingDown, TrendingUp, User, X } from 'lucide-react'
 
@@ -452,6 +454,27 @@ export default function AnalyticsHubPage() {
   const [currentEndDate, setCurrentEndDate] = useState<string | undefined>()
   
   const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
+
+  // Case drawer state
+  const [drawerCaseId, setDrawerCaseId] = useState<string | null>(null)
+  const { data: procCatsForDrawer } = useProcedureCategories()
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    if (procCatsForDrawer) {
+      for (const cat of procCatsForDrawer) {
+        map.set(cat.id, cat.name)
+      }
+    }
+    return map
+  }, [procCatsForDrawer])
+
+  const handleCaseClick = useCallback((caseId: string) => {
+    setDrawerCaseId(caseId)
+  }, [])
+
+  const handleDrawerClose = useCallback(() => {
+    setDrawerCaseId(null)
+  }, [])
 
   // Fetch procedure categories and techniques
   useEffect(() => {
@@ -1031,6 +1054,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     facilityId={effectiveFacilityId}
                     startDate={currentStartDate}
                     endDate={currentEndDate}
+                    onCaseClick={handleCaseClick}
                   />
                 </section>
               )}
@@ -1201,6 +1225,13 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                 isOpen={showFlipRoomModal}
                 onClose={() => setShowFlipRoomModal(false)}
                 data={analytics.flipRoomAnalysis}
+              />
+
+              {/* CASE DRAWER */}
+              <CaseDrawer
+                caseId={drawerCaseId}
+                onClose={handleDrawerClose}
+                categoryNameById={categoryNameById}
               />
             </div>
           )}

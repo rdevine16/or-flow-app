@@ -1,107 +1,100 @@
 // components/settings/flags/__tests__/ScopeBadge.test.tsx
-// Unit tests for ScopeBadge component
+// Unit tests for ScopeBadge component (dropdown)
 
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { ScopeBadge } from '../ScopeBadge'
 
 describe('ScopeBadge', () => {
-  it('displays "Facility" when value is facility', () => {
+  it('renders a select element with current value', () => {
     const onChange = vi.fn()
     render(<ScopeBadge value="facility" onChange={onChange} />)
 
-    expect(screen.getByText('Facility')).toBeDefined()
+    const select = screen.getByRole('combobox')
+    expect(select).toBeDefined()
+    expect((select as HTMLSelectElement).value).toBe('facility')
   })
 
-  it('displays "Personal" when value is personal', () => {
+  it('renders both scope options', () => {
     const onChange = vi.fn()
-    render(<ScopeBadge value="personal" onChange={onChange} />)
+    render(<ScopeBadge value="facility" onChange={onChange} />)
 
-    expect(screen.getByText('Personal')).toBeDefined()
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(2)
+    expect(options[0]).toHaveTextContent('Facility')
+    expect(options[1]).toHaveTextContent('Personal')
   })
 
   it('applies violet styles when scope is personal', () => {
     const onChange = vi.fn()
     render(<ScopeBadge value="personal" onChange={onChange} />)
 
-    const button = screen.getByText('Personal')
-    expect(button.className).toContain('bg-violet-50')
-    expect(button.className).toContain('text-violet-600')
-    expect(button.className).toContain('border-violet-200')
+    const select = screen.getByRole('combobox')
+    expect(select.className).toContain('bg-violet-50')
+    expect(select.className).toContain('text-violet-600')
+    expect(select.className).toContain('border-violet-200')
   })
 
   it('applies slate styles when scope is facility', () => {
     const onChange = vi.fn()
     render(<ScopeBadge value="facility" onChange={onChange} />)
 
-    const button = screen.getByText('Facility')
-    expect(button.className).toContain('bg-slate-50')
-    expect(button.className).toContain('text-slate-500')
-    expect(button.className).toContain('border-slate-200')
+    const select = screen.getByRole('combobox')
+    expect(select.className).toContain('bg-slate-50')
+    expect(select.className).toContain('text-slate-500')
+    expect(select.className).toContain('border-slate-200')
   })
 
-  it('toggles from facility to personal when clicked', async () => {
+  it('calls onChange with selected scope', () => {
     const onChange = vi.fn()
-    const user = userEvent.setup()
     render(<ScopeBadge value="facility" onChange={onChange} />)
 
-    const button = screen.getByText('Facility')
-    await user.click(button)
+    const select = screen.getByRole('combobox')
+    fireEvent.change(select, { target: { value: 'personal' } })
 
     expect(onChange).toHaveBeenCalledWith('personal')
     expect(onChange).toHaveBeenCalledTimes(1)
   })
 
-  it('toggles from personal to facility when clicked', async () => {
+  it('calls onChange when switching from personal to facility', () => {
     const onChange = vi.fn()
-    const user = userEvent.setup()
     render(<ScopeBadge value="personal" onChange={onChange} />)
 
-    const button = screen.getByText('Personal')
-    await user.click(button)
+    const select = screen.getByRole('combobox')
+    fireEvent.change(select, { target: { value: 'facility' } })
 
     expect(onChange).toHaveBeenCalledWith('facility')
     expect(onChange).toHaveBeenCalledTimes(1)
   })
 
-  it('disables button when disabled prop is true', () => {
+  it('disables select when disabled prop is true', () => {
     const onChange = vi.fn()
     render(<ScopeBadge value="facility" onChange={onChange} disabled={true} />)
 
-    const button = screen.getByText('Facility')
-    expect(button.getAttribute('disabled')).not.toBeNull()
+    const select = screen.getByRole('combobox')
+    expect(select).toBeDisabled()
   })
 
   it('applies disabled styles when disabled', () => {
     const onChange = vi.fn()
     render(<ScopeBadge value="personal" onChange={onChange} disabled={true} />)
 
-    const button = screen.getByText('Personal')
-    expect(button.className).toContain('opacity-40')
-    expect(button.className).toContain('cursor-default')
-  })
-
-  it('does not call onChange when clicking disabled badge', async () => {
-    const onChange = vi.fn()
-    const user = userEvent.setup()
-    render(<ScopeBadge value="facility" onChange={onChange} disabled={true} />)
-
-    const button = screen.getByText('Facility')
-    await user.click(button)
-
-    expect(onChange).not.toHaveBeenCalled()
+    const select = screen.getByRole('combobox')
+    expect(select.className).toContain('opacity-40')
   })
 
   it('updates display when value prop changes', () => {
     const onChange = vi.fn()
     const { rerender } = render(<ScopeBadge value="facility" onChange={onChange} />)
 
-    expect(screen.getByText('Facility')).toBeDefined()
+    let select = screen.getByRole('combobox') as HTMLSelectElement
+    expect(select.value).toBe('facility')
+    expect(select.className).toContain('bg-slate-50')
 
     rerender(<ScopeBadge value="personal" onChange={onChange} />)
 
-    expect(screen.getByText('Personal')).toBeDefined()
-    expect(screen.queryByText('Facility')).toBeNull()
+    select = screen.getByRole('combobox') as HTMLSelectElement
+    expect(select.value).toBe('personal')
+    expect(select.className).toContain('bg-violet-50')
   })
 })

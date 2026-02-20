@@ -469,6 +469,14 @@ function resolveThreshold(
         return baseline.median - (rule.threshold_value * baseline.stdDev)
       }
 
+    case 'median_plus_offset':
+      if (!baseline) return null
+      if (rule.operator === 'gt' || rule.operator === 'gte') {
+        return baseline.median + rule.threshold_value
+      } else {
+        return baseline.median - rule.threshold_value
+      }
+
     case 'percentage_of_median':
       if (!baseline) return null
       if (rule.operator === 'gt' || rule.operator === 'gte') {

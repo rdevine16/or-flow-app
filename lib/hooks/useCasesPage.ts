@@ -165,12 +165,12 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
   // --- Tab State (URL-synced via ?tab= query param) ---
   const activeTab: CasesPageTab = useMemo(() => {
     const tabParam = searchParams.get('tab')
-    return isValidTab(tabParam) ? tabParam : 'all'
+    return isValidTab(tabParam) ? tabParam : 'today'
   }, [searchParams])
 
   const setActiveTab = useCallback((tab: CasesPageTab) => {
     const params = new URLSearchParams(searchParams.toString())
-    if (tab === 'all') {
+    if (tab === 'today') {
       params.delete('tab')
     } else {
       params.set('tab', tab)

@@ -49,6 +49,8 @@ interface FlagsSummaryCardProps {
   facilityId: string
   startDate?: string
   endDate?: string
+  /** When provided, clicking a case opens the drawer instead of navigating */
+  onCaseClick?: (caseId: string) => void
 }
 
 // =====================================================
@@ -86,7 +88,7 @@ const SEVERITY = {
 // COMPONENT
 // =====================================================
 
-export default function FlagsSummaryCard({ facilityId, startDate, endDate }: FlagsSummaryCardProps) {
+export default function FlagsSummaryCard({ facilityId, startDate, endDate, onCaseClick }: FlagsSummaryCardProps) {
   const supabase = createClient()
   const [flags, setFlags] = useState<CaseFlag[]>([])
   const [loading, setLoading] = useState(true)
@@ -296,10 +298,11 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
             </p>
             <div className="space-y-1.5">
               {stats.topCases.map((c) => (
-                <Link
+                <button
                   key={c.caseId}
-                  href={`/cases/${c.caseId}`}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors group"
+                  type="button"
+                  onClick={() => onCaseClick?.(c.caseId)}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors group text-left"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="text-sm font-mono font-medium text-slate-700 shrink-0">
@@ -333,7 +336,7 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
                     </span>
                     <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-blue-500 transition-colors" />
                   </div>
-                </Link>
+                </button>
               ))}
             </div>
           </div>

@@ -248,7 +248,7 @@ export const settingsCategories: SettingsCategory[] = [
       },
       {
         id: 'flags',
-        label: 'Case Flags',
+        label: 'Flag Rules',
         href: '/settings/flags',
         icon: Flag,
         description: 'Auto-detection rules & delay types',

@@ -40,6 +40,9 @@ export function RulePreviewSentence({ form, metric }: RulePreviewSentenceProps) 
       case 'median_plus_sd':
         return `Flag cases where ${metricName} is ${operatorLabel} ${form.thresholdValue} standard deviation${form.thresholdValue !== 1 ? 's' : ''} from the ${form.comparisonScope} median`
 
+      case 'median_plus_offset':
+        return `Flag cases where ${metricName} is ${operatorLabel} the ${form.comparisonScope} median + ${formatValue(form.thresholdValue, metric.dataType, metric.unit)}`
+
       case 'absolute':
         return `Flag cases where ${metricName} is ${operatorLabel} ${formatValue(form.thresholdValue, metric.dataType, metric.unit)}`
 

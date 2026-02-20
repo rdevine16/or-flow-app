@@ -32,6 +32,11 @@ export const THRESHOLD_TYPES: ReadonlyArray<{ id: ThresholdType; label: string; 
     description: 'Flag when value exceeds the median by N standard deviations',
   },
   {
+    id: 'median_plus_offset',
+    label: 'Median + Offset',
+    description: 'Flag when value exceeds the median by a fixed amount',
+  },
+  {
     id: 'absolute',
     label: 'Absolute Value',
     description: 'Flag when value exceeds a fixed number',
