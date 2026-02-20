@@ -5,7 +5,8 @@
 // Supports all 8 Phase 1 KPIs with daily tracking
 // ============================================
 
-import type { Color } from '@tremor/react'
+/** Color type for daily tracker sparkline indicators (replaces @tremor/react Color) */
+type Color = 'green' | 'yellow' | 'red'
 import { getLocalDateString } from '@/lib/date-utils'
 
 // ============================================
