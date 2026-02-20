@@ -27,6 +27,7 @@ export type { CasesPageTab, CaseFlagSummary, CasesFilterParams } from './cases'
 export { usersDAL } from './users'
 export { facilitiesDAL } from './facilities'
 export { lookupsDAL } from './lookups'
+export * as flagRulesDAL from './flag-rules'
 
 // ============================================
 // SHARED TYPES

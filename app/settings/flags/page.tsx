@@ -1,6 +1,7 @@
 // app/settings/flags/page.tsx
-// Flag Rules Settings — Phase 2 table layout rebuild
-// CSS Grid table with inline editing, category filter, debounced number saves.
+// Flag Rules Settings — Phase 4: Full CRUD with audit logging and archive.
+// CSS Grid table with inline editing, category filter, custom rule builder,
+// archive/restore for custom rules, and audit logging.
 
 'use client'
 
@@ -16,6 +17,8 @@ import { FlagRuleTable } from '@/components/settings/flags/FlagRuleTable'
 import { FlagRuleRow } from '@/components/settings/flags/FlagRuleRow'
 import { MetricSearchBuilder } from '@/components/settings/flags/MetricSearchBuilder'
 import { Plus } from 'lucide-react'
+import { flagRuleAudit } from '@/lib/audit-logger'
+import * as flagRulesDal from '@/lib/dal/flag-rules'
 import type { FlagRule, Severity, ThresholdType, Operator, ComparisonScope, MetricCatalogEntry, CustomRuleFormState } from '@/types/flag-settings'
 
 // =====================================================
@@ -88,14 +91,22 @@ export default function FlagsSettingsPage() {
   // Data: active rules (is_active = true)
   const { data: rules, loading, error, setData: setRules } = useSupabaseQuery<FlagRule[]>(
     async (sb) => {
-      const { data, error } = await sb
-        .from('flag_rules')
-        .select('*')
-        .eq('facility_id', effectiveFacilityId!)
-        .eq('is_active', true)
-        .order('display_order', { ascending: true })
-      if (error) throw error
-      return data || []
+      const result = await flagRulesDal.listActiveByFacility(sb, effectiveFacilityId!)
+      if (result.error) throw new Error(result.error.message)
+      return result.data
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  // Data: archived rules (is_active = false)
+  const {
+    data: archivedRules,
+    setData: setArchivedRules,
+  } = useSupabaseQuery<FlagRule[]>(
+    async (sb) => {
+      const result = await flagRulesDal.listArchivedByFacility(sb, effectiveFacilityId!)
+      if (result.error) throw new Error(result.error.message)
+      return result.data
     },
     { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
   )
@@ -129,45 +140,60 @@ export default function FlagsSettingsPage() {
     })
   }, [])
 
-  /** Save rule fields immediately. Flushes any pending debounced changes for same rule. */
+  /** Save rule fields immediately via DAL. Flushes any pending debounced changes for same rule. */
   const saveImmediate = useCallback(
     async (
-      ruleId: string,
+      rule: FlagRule,
       fields: Record<string, unknown>,
       rollback: () => void,
       successMsg?: string
     ) => {
       // Flush pending debounced changes
-      const pending = pendingChanges.current.get(ruleId)
-      const pendingRollback = preEditValues.current.get(ruleId)
+      const pending = pendingChanges.current.get(rule.id)
+      const pendingRollback = preEditValues.current.get(rule.id)
       if (pending) {
         fields = { ...pending, ...fields }
-        pendingChanges.current.delete(ruleId)
-        preEditValues.current.delete(ruleId)
+        pendingChanges.current.delete(rule.id)
+        preEditValues.current.delete(rule.id)
       }
-      const timer = debounceTimers.current.get(ruleId)
+      const timer = debounceTimers.current.get(rule.id)
       if (timer) {
         clearTimeout(timer)
-        debounceTimers.current.delete(ruleId)
+        debounceTimers.current.delete(rule.id)
       }
 
-      markSaving(ruleId, true)
+      markSaving(rule.id, true)
       try {
-        const { error } = await supabase.from('flag_rules').update(fields).eq('id', ruleId)
-        if (error) throw error
+        const result = await flagRulesDal.updateRule(supabase, rule.id, fields as Partial<FlagRule>)
+        if (!result.success) throw new Error(result.error?.message ?? 'Update failed')
+
+        // Audit log the update (fire-and-forget)
+        const oldValues: Record<string, unknown> = {}
+        for (const key of Object.keys(fields)) {
+          oldValues[key] = (rule as unknown as Record<string, unknown>)[key]
+        }
+        flagRuleAudit.updated(
+          supabase,
+          rule.id,
+          rule.name,
+          rule.facility_id,
+          oldValues,
+          fields
+        )
+
         if (successMsg) showToast({ type: 'success', title: successMsg })
       } catch {
         rollback()
         if (pendingRollback) {
           setRules((prev) =>
             (prev || []).map((r) =>
-              r.id === ruleId ? { ...r, ...(pendingRollback as Partial<FlagRule>) } : r
+              r.id === rule.id ? { ...r, ...(pendingRollback as Partial<FlagRule>) } : r
             )
           )
         }
         showToast({ type: 'error', title: 'Failed to save changes' })
       } finally {
-        markSaving(ruleId, false)
+        markSaving(rule.id, false)
       }
     },
     [supabase, showToast, markSaving, setRules]
@@ -175,46 +201,53 @@ export default function FlagsSettingsPage() {
 
   /** Debounced save for number inputs. Batches multiple field changes per rule. */
   const saveDebouncedField = useCallback(
-    (ruleId: string, field: string, value: unknown, originalValue: unknown) => {
+    (rule: FlagRule, field: string, value: unknown, originalValue: unknown) => {
       // Accumulate pending changes
-      const existing = pendingChanges.current.get(ruleId) || {}
-      pendingChanges.current.set(ruleId, { ...existing, [field]: value })
+      const existing = pendingChanges.current.get(rule.id) || {}
+      pendingChanges.current.set(rule.id, { ...existing, [field]: value })
 
       // Track original (pre-edit) value only on first change
-      const originals = preEditValues.current.get(ruleId) || {}
+      const originals = preEditValues.current.get(rule.id) || {}
       if (!(field in originals)) {
-        preEditValues.current.set(ruleId, { ...originals, [field]: originalValue })
+        preEditValues.current.set(rule.id, { ...originals, [field]: originalValue })
       }
 
       // Reset debounce timer
-      const timer = debounceTimers.current.get(ruleId)
+      const timer = debounceTimers.current.get(rule.id)
       if (timer) clearTimeout(timer)
 
       debounceTimers.current.set(
-        ruleId,
+        rule.id,
         setTimeout(async () => {
-          const changes = pendingChanges.current.get(ruleId) || {}
-          const rollbackValues = preEditValues.current.get(ruleId) || {}
-          pendingChanges.current.delete(ruleId)
-          preEditValues.current.delete(ruleId)
-          debounceTimers.current.delete(ruleId)
+          const changes = pendingChanges.current.get(rule.id) || {}
+          const rollbackValues = preEditValues.current.get(rule.id) || {}
+          pendingChanges.current.delete(rule.id)
+          preEditValues.current.delete(rule.id)
+          debounceTimers.current.delete(rule.id)
 
-          markSaving(ruleId, true)
+          markSaving(rule.id, true)
           try {
-            const { error } = await supabase
-              .from('flag_rules')
-              .update(changes)
-              .eq('id', ruleId)
-            if (error) throw error
+            const result = await flagRulesDal.updateRule(supabase, rule.id, changes as Partial<FlagRule>)
+            if (!result.success) throw new Error(result.error?.message ?? 'Update failed')
+
+            // Audit log
+            flagRuleAudit.updated(
+              supabase,
+              rule.id,
+              rule.name,
+              rule.facility_id,
+              rollbackValues,
+              changes
+            )
           } catch {
             setRules((prev) =>
               (prev || []).map((r) =>
-                r.id === ruleId ? { ...r, ...(rollbackValues as Partial<FlagRule>) } : r
+                r.id === rule.id ? { ...r, ...(rollbackValues as Partial<FlagRule>) } : r
               )
             )
             showToast({ type: 'error', title: 'Failed to save threshold' })
           } finally {
-            markSaving(ruleId, false)
+            markSaving(rule.id, false)
           }
         }, DEBOUNCE_MS)
       )
@@ -233,7 +266,7 @@ export default function FlagsSettingsPage() {
         (prev || []).map((r) => (r.id === rule.id ? { ...r, is_enabled: newEnabled } : r))
       )
       saveImmediate(
-        rule.id,
+        rule,
         { is_enabled: newEnabled },
         () =>
           setRules((prev) =>
@@ -254,7 +287,7 @@ export default function FlagsSettingsPage() {
         (r || []).map((x) => (x.id === rule.id ? { ...x, severity } : x))
       )
       saveImmediate(
-        rule.id,
+        rule,
         { severity },
         () =>
           setRules((r) =>
@@ -273,7 +306,7 @@ export default function FlagsSettingsPage() {
         (r || []).map((x) => (x.id === rule.id ? { ...x, comparison_scope: scope } : x))
       )
       saveImmediate(
-        rule.id,
+        rule,
         { comparison_scope: scope },
         () =>
           setRules((r) =>
@@ -293,7 +326,7 @@ export default function FlagsSettingsPage() {
         (r || []).map((x) => (x.id === rule.id ? { ...x, operator } : x))
       )
       saveImmediate(
-        rule.id,
+        rule,
         { operator },
         () =>
           setRules((r) =>
@@ -318,7 +351,7 @@ export default function FlagsSettingsPage() {
         )
       )
       saveImmediate(
-        rule.id,
+        rule,
         { threshold_type: type, threshold_value: defaultValue },
         () =>
           setRules((r) =>
@@ -337,7 +370,7 @@ export default function FlagsSettingsPage() {
           r.id === rule.id ? { ...r, threshold_value: value } : r
         )
       )
-      saveDebouncedField(rule.id, 'threshold_value', value, originalValue)
+      saveDebouncedField(rule, 'threshold_value', value, originalValue)
     },
     [setRules, saveDebouncedField]
   )
@@ -350,23 +383,105 @@ export default function FlagsSettingsPage() {
           r.id === rule.id ? { ...r, threshold_value_max: value } : r
         )
       )
-      saveDebouncedField(rule.id, 'threshold_value_max', value, originalValue)
+      saveDebouncedField(rule, 'threshold_value_max', value, originalValue)
     },
     [setRules, saveDebouncedField]
   )
 
   // =====================================================
-  // BUILDER SUBMIT (Phase 4 wires this to DB — for now, log only)
+  // BUILDER SUBMIT — Create custom rule via DAL
   // =====================================================
 
   const handleBuilderSubmit = useCallback(
-    (form: CustomRuleFormState) => {
-      // Phase 4 will create the rule in the DB and refresh the list.
-      // For now, close the drawer and show a placeholder toast.
-      console.log('Custom rule submitted:', form)
-      showToast({ type: 'info', title: 'Custom rule builder ready — persistence coming in Phase 4' })
+    async (form: CustomRuleFormState) => {
+      if (!effectiveFacilityId) return
+
+      const result = await flagRulesDal.createCustomRule(supabase, effectiveFacilityId, form)
+
+      if (result.error) {
+        showToast({ type: 'error', title: 'Failed to create rule' })
+        return
+      }
+
+      const newRule = result.data
+      // Add to local state optimistically
+      setRules((prev) => [...(prev || []), newRule])
+
+      // Audit log (fire-and-forget)
+      flagRuleAudit.created(supabase, newRule.id, newRule.name, effectiveFacilityId, {
+        metric: newRule.metric,
+        category: newRule.category,
+        threshold_type: newRule.threshold_type,
+        threshold_value: newRule.threshold_value,
+        operator: newRule.operator,
+        severity: newRule.severity,
+        comparison_scope: newRule.comparison_scope,
+        cost_category_id: newRule.cost_category_id,
+      })
+
+      showToast({ type: 'success', title: `Rule "${newRule.name}" created` })
     },
-    [showToast]
+    [supabase, effectiveFacilityId, showToast, setRules]
+  )
+
+  // =====================================================
+  // ARCHIVE / RESTORE HANDLERS
+  // =====================================================
+
+  const handleArchive = useCallback(
+    async (rule: FlagRule) => {
+      if (!effectiveFacilityId) return
+
+      // Optimistic: remove from active, add to archived
+      setRules((prev) => (prev || []).filter((r) => r.id !== rule.id))
+      const archivedRule = { ...rule, is_active: false }
+      setArchivedRules((prev) => [archivedRule, ...(prev || [])])
+
+      markSaving(rule.id, true)
+      try {
+        const result = await flagRulesDal.archiveRule(supabase, rule.id)
+        if (!result.success) throw new Error(result.error?.message ?? 'Archive failed')
+
+        flagRuleAudit.archived(supabase, rule.id, rule.name, effectiveFacilityId)
+        showToast({ type: 'success', title: `"${rule.name}" archived` })
+      } catch {
+        // Rollback: add back to active, remove from archived
+        setRules((prev) => [...(prev || []), rule])
+        setArchivedRules((prev) => (prev || []).filter((r) => r.id !== rule.id))
+        showToast({ type: 'error', title: 'Failed to archive rule' })
+      } finally {
+        markSaving(rule.id, false)
+      }
+    },
+    [supabase, effectiveFacilityId, showToast, setRules, setArchivedRules, markSaving]
+  )
+
+  const handleRestore = useCallback(
+    async (rule: FlagRule) => {
+      if (!effectiveFacilityId) return
+
+      // Optimistic: remove from archived, add to active
+      setArchivedRules((prev) => (prev || []).filter((r) => r.id !== rule.id))
+      const restoredRule = { ...rule, is_active: true }
+      setRules((prev) => [...(prev || []), restoredRule])
+
+      markSaving(rule.id, true)
+      try {
+        const result = await flagRulesDal.restoreRule(supabase, rule.id)
+        if (!result.success) throw new Error(result.error?.message ?? 'Restore failed')
+
+        flagRuleAudit.restored(supabase, rule.id, rule.name, effectiveFacilityId)
+        showToast({ type: 'success', title: `"${rule.name}" restored` })
+      } catch {
+        // Rollback: add back to archived, remove from active
+        setArchivedRules((prev) => [rule, ...(prev || [])])
+        setRules((prev) => (prev || []).filter((r) => r.id !== rule.id))
+        showToast({ type: 'error', title: 'Failed to restore rule' })
+      } finally {
+        markSaving(rule.id, false)
+      }
+    },
+    [supabase, effectiveFacilityId, showToast, setRules, setArchivedRules, markSaving]
   )
 
   // =====================================================
@@ -376,6 +491,7 @@ export default function FlagsSettingsPage() {
   const activeRules = rules || []
   const enabledCount = activeRules.filter((r) => r.is_enabled).length
   const totalCount = activeRules.length
+  const archivedList = archivedRules || []
 
   // Derive unique categories from rules, in canonical order
   const presentCategories = new Set(activeRules.map((r) => r.category))
@@ -395,6 +511,15 @@ export default function FlagsSettingsPage() {
   // Separate built-in and custom rules
   const builtInRules = filteredRules.filter((r) => r.is_built_in)
   const customRules = filteredRules.filter((r) => !r.is_built_in)
+
+  // Noop handlers for archived rows (editing disabled)
+  const noop = () => {}
+  const noopSev = () => {}
+  const noopTT = () => {}
+  const noopOp = () => {}
+  const noopVal = () => {}
+  const noopValMax = () => {}
+  const noopScope = () => {}
 
   // =====================================================
   // LOADING / EMPTY STATES
@@ -472,14 +597,49 @@ export default function FlagsSettingsPage() {
       </div>
 
       <div className="space-y-6">
-        {/* Archived placeholder */}
+        {/* Archived rules */}
         {filterCategory === 'archived' && (
-          <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
-            <p className="text-sm text-slate-500 mb-1">No archived rules</p>
-            <p className="text-xs text-slate-400">
-              Archived rules will appear here when you archive custom rules.
-            </p>
-          </div>
+          <>
+            {archivedList.length > 0 ? (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+                    Archived Rules
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    {archivedList.length} rule{archivedList.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <FlagRuleTable>
+                    {archivedList.map((rule) => (
+                      <FlagRuleRow
+                        key={rule.id}
+                        rule={rule}
+                        onToggle={noop}
+                        onSeverityChange={noopSev}
+                        onThresholdTypeChange={noopTT}
+                        onOperatorChange={noopOp}
+                        onValueChange={noopVal}
+                        onValueMaxChange={noopValMax}
+                        onScopeChange={noopScope}
+                        isSaving={savingRules.has(rule.id)}
+                        showRestore
+                        onRestore={() => handleRestore(rule)}
+                      />
+                    ))}
+                  </FlagRuleTable>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
+                <p className="text-sm text-slate-500 mb-1">No archived rules</p>
+                <p className="text-xs text-slate-400">
+                  Archived rules will appear here when you archive custom rules.
+                </p>
+              </div>
+            )}
+          </>
         )}
 
         {/* Built-in Rules */}
@@ -546,6 +706,8 @@ export default function FlagsSettingsPage() {
                       onValueMaxChange={(val) => handleValueMaxChange(rule, val)}
                       onScopeChange={(scope) => handleScopeChange(rule, scope)}
                       isSaving={savingRules.has(rule.id)}
+                      showArchive
+                      onArchive={() => handleArchive(rule)}
                     />
                   ))}
                 </FlagRuleTable>

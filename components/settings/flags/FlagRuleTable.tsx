@@ -30,6 +30,7 @@ export function FlagRuleTable({ children }: FlagRuleTableProps) {
         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-center">
           Scope
         </span>
+        <span />
       </div>
       {children}
     </div>

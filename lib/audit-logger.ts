@@ -227,6 +227,11 @@ export type AuditAction =
   | 'surgeon_cost_item.created'
   | 'surgeon_cost_item.updated'
   | 'surgeon_cost_item.deleted'
+  // Flag Rules
+  | 'flag_rule.created'
+  | 'flag_rule.updated'
+  | 'flag_rule.archived'
+  | 'flag_rule.restored'
 // Human-readable labels for audit log display
 export const auditActionLabels: Record<AuditAction, string> = {
     // Block Schedules
@@ -427,6 +432,11 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'surgeon_cost_item.created': 'created surgeon cost variance',
   'surgeon_cost_item.updated': 'updated surgeon cost variance',
   'surgeon_cost_item.deleted': 'deleted surgeon cost variance',
+  // Flag Rules
+  'flag_rule.created': 'created a flag rule',
+  'flag_rule.updated': 'updated a flag rule',
+  'flag_rule.archived': 'archived a flag rule',
+  'flag_rule.restored': 'restored a flag rule',
 // Data Quality
   'data_quality.issue_resolved': 'resolved a data quality issue',
   'data_quality.issue_excluded': 'excluded a data quality issue',
@@ -2805,6 +2815,74 @@ export const featureAudit = {
     })
   },
 }
+// =====================================================
+// FLAG RULES
+// =====================================================
+
+export const flagRuleAudit = {
+  async created(
+    supabase: SupabaseClient,
+    ruleId: string,
+    ruleName: string,
+    facilityId: string,
+    newValues: Record<string, unknown>
+  ) {
+    await log(supabase, 'flag_rule.created', {
+      targetType: 'flag_rule',
+      targetId: ruleId,
+      targetLabel: ruleName,
+      facilityId,
+      newValues,
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    ruleId: string,
+    ruleName: string,
+    facilityId: string,
+    oldValues: Record<string, unknown>,
+    newValues: Record<string, unknown>
+  ) {
+    await log(supabase, 'flag_rule.updated', {
+      targetType: 'flag_rule',
+      targetId: ruleId,
+      targetLabel: ruleName,
+      facilityId,
+      oldValues,
+      newValues,
+    })
+  },
+
+  async archived(
+    supabase: SupabaseClient,
+    ruleId: string,
+    ruleName: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'flag_rule.archived', {
+      targetType: 'flag_rule',
+      targetId: ruleId,
+      targetLabel: ruleName,
+      facilityId,
+    })
+  },
+
+  async restored(
+    supabase: SupabaseClient,
+    ruleId: string,
+    ruleName: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'flag_rule.restored', {
+      targetType: 'flag_rule',
+      targetId: ruleId,
+      targetLabel: ruleName,
+      facilityId,
+    })
+  },
+}
+
 // =====================================================
 // GENERIC LOG (for custom actions)
 // =====================================================
