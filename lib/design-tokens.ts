@@ -597,6 +597,8 @@ export const categoryColors = {
   efficiency: { bg: 'bg-green-100', text: 'text-green-600', border: 'border-green-200' },
   anesthesia: { bg: 'bg-violet-100', text: 'text-violet-600', border: 'border-violet-200' },
   recovery: { bg: 'bg-orange-100', text: 'text-orange-600', border: 'border-orange-200' },
+  financial: { bg: 'bg-emerald-100', text: 'text-emerald-600', border: 'border-emerald-200' },
+  quality: { bg: 'bg-indigo-100', text: 'text-indigo-600', border: 'border-indigo-200' },
 } as const
 
 // ============================================
@@ -669,6 +671,10 @@ export const flagChartColors = {
   timing: '#f59e0b',        // amber-500
   /** Heatmap: Turnover category */
   turnover: '#8b5cf6',      // violet-500
+  /** Category: Financial flags */
+  financial: '#10b981',     // emerald-500
+  /** Category: Quality flags */
+  quality: '#6366f1',       // indigo-500
 } as const
 
 // ============================================

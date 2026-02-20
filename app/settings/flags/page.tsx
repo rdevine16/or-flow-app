@@ -15,35 +15,7 @@ import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ChevronDown } from 'lucide-react'
 import { severityColors, categoryColors } from '@/lib/design-tokens'
-
-// =====================================================
-// TYPES
-// =====================================================
-
-interface FlagRule {
-  id: string
-  facility_id: string
-  name: string
-  description: string | null
-  category: string
-  metric: string
-  start_milestone: string | null
-  end_milestone: string | null
-  operator: string
-  threshold_type: string
-  threshold_value: number
-  comparison_scope: string
-  severity: string
-  display_order: number
-  is_built_in: boolean
-  is_enabled: boolean
-  source_rule_id: string | null
-  created_at: string
-  updated_at: string
-}
-
-type Severity = 'info' | 'warning' | 'critical'
-type ThresholdType = 'median_plus_sd' | 'absolute'
+import type { FlagRule, Severity, ThresholdType } from '@/types/flag-settings'
 
 // =====================================================
 // CONSTANTS
@@ -56,6 +28,8 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
   efficiency: { label: 'Efficiency', color: categoryColors.efficiency.text },
   anesthesia: { label: 'Anesthesia', color: categoryColors.anesthesia.text },
   recovery: { label: 'Recovery', color: categoryColors.recovery.text },
+  financial: { label: 'Financial', color: categoryColors.financial.text },
+  quality: { label: 'Quality', color: categoryColors.quality.text },
 }
 
 const SCOPE_LABELS: Record<string, string> = {

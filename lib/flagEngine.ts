@@ -23,22 +23,9 @@ import {
 // TYPES
 // ============================================
 
-export interface FlagRule {
-  id: string
-  facility_id: string
-  name: string
-  description: string | null
-  category: string            // 'timing', 'efficiency', 'anesthesia', 'recovery'
-  metric: string              // 'total_case_time', 'surgical_time', etc.
-  start_milestone: string | null
-  end_milestone: string | null
-  operator: string            // 'gt', 'lt', 'gte', 'lte'
-  threshold_type: string      // 'median_plus_sd', 'absolute', 'percentile'
-  threshold_value: number     // e.g., 1.0 (SDs) or 90 (minutes)
-  comparison_scope: string    // 'personal', 'facility'
-  severity: string            // 'info', 'warning', 'critical'
-  is_enabled: boolean
-}
+// Re-export the shared FlagRule type for consumers that import from flagEngine
+export type { FlagRule } from '@/types/flag-settings'
+import type { FlagRule } from '@/types/flag-settings'
 
 export interface CaseFlag {
   case_id: string
