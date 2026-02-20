@@ -562,8 +562,49 @@ export default function SurgeonDetail({
   // RENDER
   // ============================================
 
+  // Handle edge case: zero cases
+  if (cases.length === 0) {
+    return (
+      <div className="space-y-4">
+        <style>{`
+          @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
+        <nav className="flex items-center gap-1.5 text-sm mb-1">
+          <button onClick={onBack} className="text-slate-500 hover:text-blue-600 font-medium transition-colors">
+            All Surgeons
+          </button>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+          <span className="text-slate-900 font-medium">{surgeon.surgeonName}</span>
+        </nav>
+        <SurgeonHero
+          name={surgeon.surgeonName}
+          caseCount={0}
+          procedureCount={0}
+          isLowVolume
+          stats={heroStats}
+          facilityComparison={facilityComparison}
+        />
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center" style={{ animation: 'fadeSlideIn 0.4s ease-out both' }}>
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">No Cases Found</h3>
+          <p className="text-slate-500">No cases for {surgeon.surgeonName} in the selected date range.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
+      {/* Staggered fade-in keyframe */}
+      <style>{`
+        @keyframes fadeSlideIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-sm mb-1">
         <button
@@ -577,6 +618,7 @@ export default function SurgeonDetail({
       </nav>
 
       {/* Hero Header */}
+      <div style={{ animation: 'fadeSlideIn 0.4s ease-out both' }}>
       <SurgeonHero
         name={surgeon.surgeonName}
         caseCount={surgeon.caseCount}
@@ -585,6 +627,7 @@ export default function SurgeonDetail({
         stats={heroStats}
         facilityComparison={facilityComparison}
       />
+      </div>
 
       {/* Sub-tabs */}
       <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
@@ -696,7 +739,7 @@ function OverviewSubTab({
   return (
     <div className="space-y-4">
       {/* Row 1: Performance Metric Cards */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-3" style={{ animation: 'fadeSlideIn 0.4s ease-out 0.05s both' }}>
         {/* Time vs Facility */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:border-slate-300 transition-all group">
           <div className="flex items-center gap-1 mb-2">
@@ -825,7 +868,7 @@ function OverviewSubTab({
       </div>
 
       {/* Row 2: Trend Chart + Distribution */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4" style={{ animation: 'fadeSlideIn 0.4s ease-out 0.1s both' }}>
         {/* Volume & Profit Trend (2 cols) */}
         <div className="col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
@@ -1038,7 +1081,7 @@ function OverviewSubTab({
       </div>
 
       {/* Row 3: Case Economics + Payer Mix */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4" style={{ animation: 'fadeSlideIn 0.4s ease-out 0.15s both' }}>
         <CaseEconomicsCard
           avgReimbursement={economics.avgReimbursement}
           avgDebits={economics.avgDebits}
@@ -1053,13 +1096,15 @@ function OverviewSubTab({
       </div>
 
       {/* Row 4: Recent Cases */}
-      <RecentCasesSection
-        recentCases={recentCases}
-        surgeonMedians={surgeonMedians}
-        casePhaseDurations={casePhaseDurations}
-        loadingPhases={loadingPhases}
-        onSwitchToDaily={onSwitchToDaily}
-      />
+      <div style={{ animation: 'fadeSlideIn 0.4s ease-out 0.2s both' }}>
+        <RecentCasesSection
+          recentCases={recentCases}
+          surgeonMedians={surgeonMedians}
+          casePhaseDurations={casePhaseDurations}
+          loadingPhases={loadingPhases}
+          onSwitchToDaily={onSwitchToDaily}
+        />
+      </div>
     </div>
   )
 }

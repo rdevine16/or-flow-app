@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import { Building2, Calculator, Check, ChevronRight, ClipboardCheck, Clock, PenLine, Plus, Tag, User } from 'lucide-react'
+import { Building2, Calculator, Check, ChevronRight, ClipboardCheck, Clock, PenLine, Plus, Tag, Target, User } from 'lucide-react'
 import { genericAuditLog } from '@/lib/audit-logger'
 import Link from 'next/link'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -471,6 +471,21 @@ showToast({
                   <h3 className="font-semibold text-slate-900 mb-1">Surgeon Variance</h3>
                   <p className="text-2xl font-bold text-slate-900">{stats.surgeonVariances}</p>
                   <p className="text-sm text-slate-500">Surgeon overrides</p>
+                </Link>
+
+                {/* Monthly Profit Targets */}
+                <Link
+                  href="/settings/financials/targets"
+                  className="bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-md transition-all group"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                      <Target className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                  </div>
+                  <h3 className="font-semibold text-slate-900 mb-1">Profit Targets</h3>
+                  <p className="text-sm text-slate-500">Monthly profit goals</p>
                 </Link>
               </div>
 

@@ -266,8 +266,41 @@ export default function ProcedureDetail({
 
   const loss = proc.totalProfit < 0
 
+  // Handle edge case: no cases at all
+  if (cases.length === 0) {
+    return (
+      <div className="space-y-4">
+        <style>{`
+          @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
+        <nav className="flex items-center gap-1.5 text-sm mb-1">
+          <button onClick={onBack} className="text-slate-500 hover:text-blue-600 font-medium transition-colors">
+            All Procedures
+          </button>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+          <span className="text-slate-900 font-medium">{proc.procedureName}</span>
+        </nav>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center" style={{ animation: 'fadeSlideIn 0.4s ease-out both' }}>
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">No Cases Found</h3>
+          <p className="text-slate-500">No cases for {proc.procedureName} in the selected date range.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
+      {/* Staggered fade-in keyframe */}
+      <style>{`
+        @keyframes fadeSlideIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-sm mb-1">
         <button
@@ -283,7 +316,7 @@ export default function ProcedureDetail({
       {/* ================================================
           SECTION 1: KPI CARDS
           ================================================ */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-5 gap-3" style={{ animation: 'fadeSlideIn 0.4s ease-out both' }}>
         {/* Total Profit — hero card */}
         <div
           className={`rounded-xl border p-4 ${
@@ -388,7 +421,7 @@ export default function ProcedureDetail({
       {/* ================================================
           SECTION 2 & 3: TREND + DISTRIBUTION (side by side)
           ================================================ */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4" style={{ animation: 'fadeSlideIn 0.4s ease-out 0.05s both' }}>
         {/* Volume & Profit Trend (2 cols) */}
         <div className="col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
@@ -591,7 +624,7 @@ export default function ProcedureDetail({
       {/* ================================================
           SECTION 4 & 5: CASE ECONOMICS + PAYER MIX
           ================================================ */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4" style={{ animation: 'fadeSlideIn 0.4s ease-out 0.1s both' }}>
         <CaseEconomicsCard
           avgReimbursement={economics.avgReimbursement}
           avgDebits={economics.avgDebits}
@@ -608,17 +641,21 @@ export default function ProcedureDetail({
       {/* ================================================
           SECTION 6: SURGEON BREAKDOWN TABLE
           ================================================ */}
-      <SurgeonBreakdownTable procedure={proc} />
+      <div style={{ animation: 'fadeSlideIn 0.4s ease-out 0.15s both' }}>
+        <SurgeonBreakdownTable procedure={proc} />
+      </div>
 
       {/* ================================================
           SECTION 7: RECENT CASES TABLE
           ================================================ */}
+      <div style={{ animation: 'fadeSlideIn 0.4s ease-out 0.2s both' }}>
       <RecentCasesTable
         cases={cases}
         medianProfit={proc.medianProfit ?? proc.avgProfit}
         medianDuration={proc.medianDurationMinutes ?? proc.avgDurationMinutes}
         procedureName={proc.procedureName}
       />
+      </div>
     </div>
   )
 }
@@ -679,6 +716,7 @@ function SurgeonBreakdownTable({ procedure: proc }: { procedure: ProcedureStats 
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   const sorted = useMemo(() => {
+    if (!proc.surgeonBreakdown || proc.surgeonBreakdown.length === 0) return []
     return [...proc.surgeonBreakdown].sort((a, b) => {
       const getVal = (s: typeof a) => {
         switch (sortKey) {
@@ -703,6 +741,15 @@ function SurgeonBreakdownTable({ procedure: proc }: { procedure: ProcedureStats 
       setSortKey(k)
       setSortDir('desc')
     }
+  }
+
+  // Edge case: no surgeon breakdown data
+  if (!proc.surgeonBreakdown || proc.surgeonBreakdown.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center">
+        <p className="text-sm text-slate-400">No surgeon breakdown available</p>
+      </div>
+    )
   }
 
   return (

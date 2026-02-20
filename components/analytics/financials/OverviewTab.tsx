@@ -122,9 +122,13 @@ export default function OverviewTab({
     })
   }, [metrics.profitTrend])
 
-  // Max values for MicroBar scaling
-  const maxProcProfit = Math.max(...metrics.procedureStats.map(p => Math.abs(p.totalProfit)), 1)
-  const maxSurgeonProfit = Math.max(...metrics.surgeonStats.map(s => s.totalProfit), 1)
+  // Max values for MicroBar scaling (guard empty arrays)
+  const maxProcProfit = metrics.procedureStats.length > 0
+    ? Math.max(...metrics.procedureStats.map(p => Math.abs(p.totalProfit)), 1)
+    : 1
+  const maxSurgeonProfit = metrics.surgeonStats.length > 0
+    ? Math.max(...metrics.surgeonStats.map(s => s.totalProfit), 1)
+    : 1
 
   // Target progress
   const targetProgress = monthlyTarget && monthlyTarget > 0
@@ -150,10 +154,21 @@ export default function OverviewTab({
 
   return (
     <div className="space-y-4">
+      {/* Staggered fade-in keyframe */}
+      <style>{`
+        @keyframes fadeSlideIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+
       {/* ==========================================
           HERO P&L CARD
           ========================================== */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+      <div
+        className="bg-white rounded-xl border border-slate-200 shadow-sm p-6"
+        style={{ animation: 'fadeSlideIn 0.4s ease-out both' }}
+      >
         <div className="grid grid-cols-12 gap-6 items-center">
           {/* Left: Net Profit */}
           <div className="col-span-4 border-r border-slate-100 pr-6">
@@ -220,7 +235,10 @@ export default function OverviewTab({
       {/* ==========================================
           SECONDARY KPI CARDS
           ========================================== */}
-      <div className="grid grid-cols-4 gap-3">
+      <div
+        className="grid grid-cols-4 gap-3"
+        style={{ animation: 'fadeSlideIn 0.4s ease-out 0.05s both' }}
+      >
         {secondaryCards.map(card => (
           <div
             key={card.label}
@@ -258,7 +276,10 @@ export default function OverviewTab({
       {/* ==========================================
           TWO-COLUMN TABLES: PROCEDURES + SURGEONS
           ========================================== */}
-      <div className="grid grid-cols-2 gap-4">
+      <div
+        className="grid grid-cols-2 gap-4"
+        style={{ animation: 'fadeSlideIn 0.4s ease-out 0.1s both' }}
+      >
         <TopProceduresPanel
           procedures={metrics.procedureStats}
           maxProfit={maxProcProfit}
@@ -275,7 +296,10 @@ export default function OverviewTab({
           PROFIT TREND CHART
           ========================================== */}
       {chartData.length >= 2 && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <div
+          className="bg-white rounded-xl border border-slate-200 shadow-sm p-6"
+          style={{ animation: 'fadeSlideIn 0.4s ease-out 0.15s both' }}
+        >
           <div className="flex items-start justify-between mb-4">
             <div>
               <h3 className="text-sm font-semibold text-slate-900">Profit Trend</h3>
@@ -418,6 +442,16 @@ export default function OverviewTab({
           )}
         </div>
       )}
+      {chartData.length < 2 && (
+        <div
+          className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center"
+          style={{ animation: 'fadeSlideIn 0.4s ease-out 0.15s both' }}
+        >
+          <p className="text-sm text-slate-400">
+            Not enough data for the profit trend chart. More daily data points are needed.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -450,6 +484,11 @@ function TopProceduresPanel({
           <div className="col-span-2 text-right">Margin</div>
         </div>
         {/* Rows */}
+        {procedures.length === 0 && (
+          <div className="px-5 py-8 text-center text-sm text-slate-400">
+            No procedure data for the selected period
+          </div>
+        )}
         {procedures.slice(0, 8).map(proc => {
           const loss = proc.totalProfit < 0
           return (
@@ -529,6 +568,11 @@ function TopSurgeonsPanel({
           <div className="col-span-2 text-right">Margin</div>
         </div>
         {/* Rows */}
+        {surgeons.length === 0 && (
+          <div className="px-5 py-8 text-center text-sm text-slate-400">
+            No surgeon data for the selected period
+          </div>
+        )}
         {surgeons.slice(0, 8).map((surgeon, idx) => (
           <div
             key={surgeon.surgeonId}

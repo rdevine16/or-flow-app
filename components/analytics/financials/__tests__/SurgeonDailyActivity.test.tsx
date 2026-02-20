@@ -239,7 +239,14 @@ describe('SurgeonDailyActivity', () => {
 
   describe('Empty states', () => {
     it('shows empty state when no cases', () => {
-      render(<SurgeonDailyActivity cases={[]} facilityId="fac-1" />)
+      render(
+        <SurgeonDailyActivity
+          cases={[]}
+          casePhaseDurations={new Map()}
+          loadingPhases={false}
+          surgeonMedians={{}}
+        />
+      )
 
       expect(screen.getByText(/No cases found/i)).toBeDefined()
     })

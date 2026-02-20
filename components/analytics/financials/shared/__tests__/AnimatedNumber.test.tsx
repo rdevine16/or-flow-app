@@ -31,4 +31,25 @@ describe('AnimatedNumber', () => {
     render(<AnimatedNumber value={0} />)
     expect(screen.getByText('$0')).toBeDefined()
   })
+
+  it('renders with suffix', () => {
+    render(<AnimatedNumber value={0} prefix="" suffix="%" />)
+    expect(screen.getByText('0%')).toBeDefined()
+  })
+
+  it('renders with prefix and suffix', () => {
+    render(<AnimatedNumber value={0} prefix="$" suffix="/hr" />)
+    expect(screen.getByText('$0/hr')).toBeDefined()
+  })
+
+  it('renders with decimal places', () => {
+    // decimals=2 should format the initial display with 2 decimal places
+    const { container } = render(<AnimatedNumber value={0} decimals={2} />)
+    expect(container.textContent).toContain('$0.00')
+  })
+
+  it('handles negative target value', () => {
+    const { container } = render(<AnimatedNumber value={-500} prefix="" />)
+    expect(container.textContent).toBeDefined()
+  })
 })

@@ -307,9 +307,10 @@ describe('SurgeonDetail', () => {
     expect(screen.getByText('C-002')).toBeDefined()
   })
 
-  it('hides recent cases when no cases', () => {
+  it('shows empty state message when zero cases', () => {
     render(<SurgeonDetail {...defaultProps} cases={[]} surgeon={makeSurgeon({ caseCount: 0 })} />)
-    expect(screen.queryByText('Recent Cases')).toBeNull()
+    expect(screen.getByText('No Cases Found')).toBeDefined()
+    expect(screen.getByText(/No cases for Dr. Smith/)).toBeDefined()
   })
 
   it('shows "Not enough data" for single-month trend', () => {
