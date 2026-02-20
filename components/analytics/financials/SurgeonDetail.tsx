@@ -19,7 +19,7 @@ import {
   Cell,
   CartesianGrid,
 } from 'recharts'
-import { ChevronRight, ArrowRight, CalendarDays, BarChart3 } from 'lucide-react'
+import { ChevronRight, ArrowRight } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -31,6 +31,7 @@ import {
   PayerMixEntry,
   ProfitBin,
   PhasePillColor,
+  CasePhaseDuration,
   SortDir,
 } from './types'
 import {
@@ -53,6 +54,8 @@ import {
 import { CaseEconomicsCard } from './CaseEconomicsCard'
 import { PayerMixCard } from './PayerMixCard'
 import { SurgeonHero, HeroStat } from './SurgeonHero'
+import SurgeonDailyActivity from './SurgeonDailyActivity'
+import SurgeonByProcedure from './SurgeonByProcedure'
 
 // ============================================
 // TYPES
@@ -81,12 +84,6 @@ interface PhaseDefRow {
   color_key: string | null
   start_milestone_id: string
   end_milestone_id: string
-}
-
-interface CasePhaseDuration {
-  label: string
-  minutes: number | null
-  color: PhasePillColor
 }
 
 // ============================================
@@ -516,10 +513,11 @@ export default function SurgeonDetail({
     [facilityId, showToast],
   )
 
+  // Fetch phase data for ALL cases (needed by Daily Activity tab)
   useEffect(() => {
-    const caseIds = recentCases.map(c => c.case_id)
+    const caseIds = cases.map(c => c.case_id)
     fetchPhaseData(caseIds)
-  }, [recentCases, fetchPhaseData])
+  }, [cases, fetchPhaseData])
 
   // Compute phase durations per case from phase_definitions + case milestones
   const casePhaseDurations = useMemo(() => {
@@ -630,23 +628,19 @@ export default function SurgeonDetail({
       )}
 
       {activeSubTab === 'daily' && (
-        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <CalendarDays className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-slate-900">Daily Activity</h3>
-          <p className="text-slate-500 mt-1">
-            Day-by-day case breakdown with phase pills and surgical uptime — coming in the next update.
-          </p>
-        </div>
+        <SurgeonDailyActivity
+          cases={cases}
+          casePhaseDurations={casePhaseDurations}
+          loadingPhases={loadingPhases}
+          surgeonMedians={surgeonMedians}
+        />
       )}
 
       {activeSubTab === 'procedures' && (
-        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <BarChart3 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-slate-900">By Procedure</h3>
-          <p className="text-slate-500 mt-1">
-            Surgeon vs facility comparison by procedure type — coming in the next update.
-          </p>
-        </div>
+        <SurgeonByProcedure
+          procedureBreakdown={surgeon.procedureBreakdown ?? []}
+          surgeonName={surgeon.surgeonName}
+        />
       )}
     </div>
   )

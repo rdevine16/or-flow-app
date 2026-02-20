@@ -556,6 +556,15 @@ export interface PhaseDuration {
 
 export type PhasePillColor = 'blue' | 'green' | 'amber' | 'violet'
 
+/**
+ * Per-case phase duration used in case cards (daily activity, recent cases)
+ */
+export interface CasePhaseDuration {
+  label: string
+  minutes: number | null
+  color: PhasePillColor
+}
+
 // ============================================
 // SORT DIRECTION
 // ============================================
