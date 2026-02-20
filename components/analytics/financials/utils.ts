@@ -1,5 +1,4 @@
 // components/analytics/financials/utils.ts
-// UPDATED: Added formatPercent, formatRate, formatCompact for enterprise metrics
 
 /**
  * Format a number as USD currency
@@ -7,7 +6,7 @@
  */
 export function formatCurrency(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
-  
+
   const absValue = Math.abs(value)
   const formatted = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -15,7 +14,7 @@ export function formatCurrency(value: number | null | undefined): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(absValue)
-  
+
   if (value < 0) return `(${formatted})`
   return formatted
 }
@@ -46,7 +45,7 @@ export function formatCompact(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
   const absValue = Math.abs(value)
   const sign = value < 0 ? '-' : ''
-  
+
   if (absValue >= 1_000_000) {
     return `${sign}$${(absValue / 1_000_000).toFixed(1)}M`
   }
@@ -54,4 +53,56 @@ export function formatCompact(value: number | null | undefined): string {
     return `${sign}$${(absValue / 1_000).toFixed(0)}K`
   }
   return formatCurrency(value)
+}
+
+/**
+ * Format currency with K suffix (e.g., $4.2k, $850)
+ * Used in compact table cells and chart labels
+ */
+export function fmtK(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—'
+  const abs = Math.abs(value)
+  const sign = value < 0 ? '-' : ''
+  if (abs >= 1000) {
+    const k = abs / 1000
+    return `${sign}$${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`
+  }
+  return `${sign}$${abs.toLocaleString()}`
+}
+
+/**
+ * Short duration format (e.g., "1h 32m", "45m")
+ * Alias for formatDuration, kept for mockup consistency
+ */
+export const fmtDur = formatDuration
+
+/**
+ * Format hour/minute to 12-hour time string (e.g., "7:30 AM")
+ */
+export function fmtTime(hours: number, minutes: number): string {
+  const suffix = hours >= 12 ? 'PM' : 'AM'
+  const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+  return `${displayHours}:${String(minutes).padStart(2, '0')} ${suffix}`
+}
+
+/**
+ * Format a raw number with $ prefix (no K/M suffix)
+ * Used for exact amounts in tooltips
+ */
+export function fmt(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—'
+  return `$${Math.abs(value).toLocaleString()}`
+}
+
+/**
+ * Map phase_group values to PhasePill colors
+ */
+export function phaseGroupColor(group: string): 'blue' | 'green' | 'amber' | 'violet' {
+  switch (group) {
+    case 'pre_op': return 'blue'
+    case 'surgical': return 'green'
+    case 'closing': return 'amber'
+    case 'post_op': return 'violet'
+    default: return 'blue'
+  }
 }

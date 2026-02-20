@@ -1,10 +1,7 @@
 // components/analytics/financials/useFinancialsMetrics.ts
-// FIXED: Compute profit correctly using total_debits/total_credits/or_time_cost
-// FIXED: Compute consistency ratings (was hardcoded null)
-// FIXED: Compute p25/p75 ranges (was hardcoded null)
-// ADDED: profitPerORHour — the key enterprise metric
-// ADDED: Revenue/cost breakdown for P&L summary
-// ADDED: Per-surgeon margin and cost breakdown
+// Computes enriched financial metrics from case completion stats
+// Includes: surgeon/procedure stats, payer mix, profit bins, monthly sparklines
+// Outlier detection REMOVED per design decision — no longer part of the analytics flow
 
 import { useMemo } from 'react'
 import {
@@ -13,15 +10,13 @@ import {
   FacilityProcedureStats,
   SurgeonStats,
   ProcedureStats,
-  OutlierCase,
-  OutlierType,
-  CaseIssue,
-  FinancialsMetrics,
-  OutlierStats,
-  IssueStats,
   ProfitTrendPoint,
   FacilitySettings,
   SurgeonProcedureBreakdown,
+  EnrichedFinancialsMetrics,
+  PayerMixEntry,
+  ProfitBin,
+  MonthlyTrendPoint,
 } from './types'
 
 // ============================================
@@ -70,13 +65,6 @@ function getConsistencyRating(
   return 'low'
 }
 
-function getOutlierType(isPersonal: boolean, isFacility: boolean): OutlierType {
-  if (isPersonal && isFacility) return 'both'
-  if (isPersonal) return 'personal'
-  if (isFacility) return 'facility'
-  return 'none'
-}
-
 /** Get case debits — prefer new columns, fall back to legacy */
 function getCaseDebits(c: CaseCompletionStats): number {
   return c.total_debits ?? c.soft_goods_cost ?? 0
@@ -92,6 +80,136 @@ function getCaseORCost(c: CaseCompletionStats): number {
   return c.or_time_cost ?? c.or_cost ?? 0
 }
 
+/** Month label from 1-based month number */
+function monthLabel(month: number): string {
+  const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return labels[month - 1] || ''
+}
+
+// ============================================
+// PAYER MIX COMPUTATION
+// ============================================
+
+function computePayerMix(cases: CaseCompletionStats[]): PayerMixEntry[] {
+  const payerMap = new Map<string, { payerName: string; cases: CaseCompletionStats[] }>()
+
+  cases.forEach(c => {
+    const payer = normalizeJoin(c.payers)
+    const payerId = c.payer_id || 'unknown'
+    const payerName = payer?.name || 'Unknown Payer'
+
+    const existing = payerMap.get(payerId)
+    if (existing) {
+      existing.cases.push(c)
+    } else {
+      payerMap.set(payerId, { payerName, cases: [c] })
+    }
+  })
+
+  const totalCases = cases.length
+
+  return Array.from(payerMap.entries())
+    .map(([payerId, { payerName, cases: payerCases }]) => {
+      const totalReimbursement = payerCases.reduce((sum, c) => sum + (c.reimbursement || 0), 0)
+      const totalProfit = payerCases.reduce((sum, c) => sum + (c.profit || 0), 0)
+
+      return {
+        payerId,
+        payerName,
+        caseCount: payerCases.length,
+        totalReimbursement,
+        avgReimbursement: payerCases.length > 0 ? totalReimbursement / payerCases.length : 0,
+        totalProfit,
+        avgProfit: payerCases.length > 0 ? totalProfit / payerCases.length : 0,
+        marginPercent: totalReimbursement > 0 ? (totalProfit / totalReimbursement) * 100 : 0,
+        pctOfCases: totalCases > 0 ? (payerCases.length / totalCases) * 100 : 0,
+      }
+    })
+    .sort((a, b) => b.caseCount - a.caseCount)
+}
+
+// ============================================
+// PROFIT DISTRIBUTION BINS
+// ============================================
+
+function computeProfitBins(cases: CaseCompletionStats[]): ProfitBin[] {
+  const profits = cases.map(c => c.profit || 0)
+  if (profits.length === 0) return []
+
+  const min = Math.min(...profits)
+  const max = Math.max(...profits)
+
+  // Round to nearest 500 for bin boundaries
+  const binStart = Math.floor(min / 500) * 500
+  const binEnd = Math.ceil(max / 500) * 500
+  const binWidth = 500
+
+  const bins: ProfitBin[] = []
+  for (let start = binStart; start < binEnd; start += binWidth) {
+    const end = start + binWidth
+    const count = profits.filter(p => p >= start && p < end).length
+
+    const fmtVal = (v: number) => {
+      const abs = Math.abs(v)
+      if (abs >= 1000) return `${v < 0 ? '-' : ''}$${(abs / 1000).toFixed(abs % 1000 === 0 ? 0 : 1)}k`
+      return `${v < 0 ? '-' : ''}$${abs}`
+    }
+
+    bins.push({
+      rangeLabel: `${fmtVal(start)}\u2013${fmtVal(end)}`,
+      min: start,
+      max: end,
+      count,
+    })
+  }
+
+  return bins
+}
+
+// ============================================
+// MONTHLY TREND (for sparklines)
+// ============================================
+
+function computeMonthlyTrend(cases: CaseCompletionStats[]): MonthlyTrendPoint[] {
+  const monthMap = new Map<string, CaseCompletionStats[]>()
+
+  cases.forEach(c => {
+    const date = new Date(c.case_date)
+    const key = `${date.getFullYear()}-${date.getMonth() + 1}`
+    const existing = monthMap.get(key) || []
+    existing.push(c)
+    monthMap.set(key, existing)
+  })
+
+  return Array.from(monthMap.entries())
+    .map(([key, monthCases]) => {
+      const [yearStr, monthStr] = key.split('-')
+      const year = parseInt(yearStr, 10)
+      const month = parseInt(monthStr, 10)
+
+      const profits = monthCases.map(c => c.profit || 0)
+      const durations = monthCases.map(c => c.total_duration_minutes || 0)
+      const totalProfit = profits.reduce((a, b) => a + b, 0)
+      const totalReimbursement = monthCases.reduce((sum, c) => sum + (c.reimbursement || 0), 0)
+      const totalORMinutes = durations.reduce((a, b) => a + b, 0)
+      const totalORHours = totalORMinutes / 60
+
+      return {
+        year,
+        month,
+        label: monthLabel(month),
+        caseCount: monthCases.length,
+        totalProfit,
+        avgProfit: monthCases.length > 0 ? totalProfit / monthCases.length : 0,
+        totalReimbursement,
+        marginPercent: totalReimbursement > 0 ? (totalProfit / totalReimbursement) * 100 : 0,
+        medianDuration: median(durations),
+        profitPerORHour: totalORHours > 0 ? totalProfit / totalORHours : null,
+      }
+    })
+    .sort((a, b) => a.year - b.year || a.month - b.month)
+}
+
 // ============================================
 // MAIN HOOK
 // ============================================
@@ -100,25 +218,20 @@ export function useFinancialsMetrics(
   surgeonProcedureStats: SurgeonProcedureStats[],
   facilityProcedureStats: FacilityProcedureStats[],
   facilitySettings: FacilitySettings | null
-): FinancialsMetrics {
+): EnrichedFinancialsMetrics {
   return useMemo(() => {
     const orRate = facilitySettings?.or_hourly_rate || 0
     const costPerMinute = orRate / 60
 
     // Filter to cases with valid profit data
-    const validCases = caseStats.filter(c => 
-      c.profit !== null && 
+    const validCases = caseStats.filter(c =>
+      c.profit !== null &&
       c.total_duration_minutes !== null
     )
 
     // ============================================
-    // BUILD LOOKUP MAPS (for outliers)
+    // BUILD LOOKUP MAP
     // ============================================
-    const surgeonProcStatsMap = new Map<string, SurgeonProcedureStats>()
-    surgeonProcedureStats.forEach(s => {
-      surgeonProcStatsMap.set(`${s.surgeon_id}|${s.procedure_type_id}`, s)
-    })
-
     const facilityProcStatsMap = new Map<string, FacilityProcedureStats>()
     facilityProcedureStats.forEach(f => {
       facilityProcStatsMap.set(f.procedure_type_id, f)
@@ -143,36 +256,30 @@ export function useFinancialsMetrics(
           ? `Dr. ${surgeon.last_name}`
           : 'Unknown Surgeon'
 
-        // Profit stats
         const profits = cases.map(c => c.profit || 0)
         const totalProfit = profits.reduce((a, b) => a + b, 0)
         const avgProfit = profits.length > 0 ? totalProfit / profits.length : 0
         const medianProfitVal = median(profits)
         const stddevProfitVal = stddev(profits)
 
-        // Duration stats
         const durations = cases.map(c => c.total_duration_minutes || 0)
         const totalORMinutes = durations.reduce((a, b) => a + b, 0)
         const avgDuration = durations.length > 0 ? totalORMinutes / durations.length : 0
         const medianDurationVal = median(durations)
         const stddevDurationVal = stddev(durations)
 
-        // Revenue & cost breakdown
         const totalReimbursement = cases.reduce((sum, c) => sum + (c.reimbursement || 0), 0)
         const totalDebits = cases.reduce((sum, c) => sum + getCaseDebits(c), 0)
         const totalCredits = cases.reduce((sum, c) => sum + getCaseCredits(c), 0)
         const totalORCost = cases.reduce((sum, c) => sum + getCaseORCost(c), 0)
 
-        // Margin
-        const avgMarginPercent = totalReimbursement > 0 
-          ? (totalProfit / totalReimbursement) * 100 
+        const avgMarginPercent = totalReimbursement > 0
+          ? (totalProfit / totalReimbursement) * 100
           : 0
 
-        // Profit per OR hour
         const totalORHours = totalORMinutes / 60
         const profitPerORHour = totalORHours > 0 ? totalProfit / totalORHours : null
 
-        // Consistency rating — FIXED (was hardcoded null)
         const consistencyRating = getConsistencyRating(medianDurationVal, stddevDurationVal)
 
         // Procedure breakdown
@@ -210,15 +317,14 @@ export function useFinancialsMetrics(
               totalProfit: procTotalProfit,
               facilityMedianDuration, facilityMedianProfit,
               durationVsFacility, profitVsFacility,
-              durationVsFacilityPct: facilityMedianDuration 
+              durationVsFacilityPct: facilityMedianDuration
                 ? (durationVsFacility / facilityMedianDuration) * 100 : null,
-              profitVsFacilityPct: facilityMedianProfit 
+              profitVsFacilityPct: facilityMedianProfit
                 ? (profitVsFacility / facilityMedianProfit) * 100 : null,
             }
           })
           .sort((a, b) => b.caseCount - a.caseCount)
 
-        // Procedure-adjusted duration efficiency
         let weightedDurationDiff = 0
         let weightedDurationCases = 0
         procedureBreakdown.forEach(pb => {
@@ -230,7 +336,6 @@ export function useFinancialsMetrics(
         const procedureAdjustedDuration = weightedDurationCases > 0
           ? weightedDurationDiff / weightedDurationCases : 0
 
-        // Procedure-adjusted profit efficiency
         let weightedProfitDiff = 0
         let weightedProfitCases = 0
         procedureBreakdown.forEach(pb => {
@@ -249,9 +354,9 @@ export function useFinancialsMetrics(
           totalProfit, avgProfit,
           medianProfit: medianProfitVal,
           stddevProfit: stddevProfitVal,
-          profitRange: { 
-            p25: percentile(profits, 25), 
-            p75: percentile(profits, 75) 
+          profitRange: {
+            p25: percentile(profits, 25),
+            p75: percentile(profits, 75),
           },
           avgMarginPercent,
           profitPerORHour,
@@ -290,8 +395,7 @@ export function useFinancialsMetrics(
 
         const totalProfit = profits.reduce((a, b) => a + b, 0)
         const avgProfit = profits.length > 0 ? totalProfit / profits.length : 0
-        
-        // Revenue & cost aggregates
+
         const totalReimbursement = cases.reduce((sum, c) => sum + (c.reimbursement || 0), 0)
         const avgReimbursement = cases.length > 0 ? totalReimbursement / cases.length : 0
         const totalDebits = cases.reduce((sum, c) => sum + getCaseDebits(c), 0)
@@ -304,7 +408,6 @@ export function useFinancialsMetrics(
 
         const uniqueSurgeons = new Set(cases.map(c => c.surgeon_id).filter(Boolean))
 
-        // Surgeon breakdown for this procedure
         const surgeonCasesForProc = new Map<string, CaseCompletionStats[]>()
         cases.forEach(c => {
           if (!c.surgeon_id) return
@@ -351,11 +454,11 @@ export function useFinancialsMetrics(
               avgProfit: surgeonCases.length > 0 ? surgeonTotalProfit / surgeonCases.length : 0,
               medianProfit: median(surgeonProfits),
               stddevProfit: stddev(surgeonProfits),
-              profitRange: { 
-                p25: percentile(surgeonProfits, 25), 
-                p75: percentile(surgeonProfits, 75) 
+              profitRange: {
+                p25: percentile(surgeonProfits, 25),
+                p75: percentile(surgeonProfits, 75),
               },
-              avgMarginPercent: surgeonTotalReimbursement > 0 
+              avgMarginPercent: surgeonTotalReimbursement > 0
                 ? (surgeonTotalProfit / surgeonTotalReimbursement) * 100 : 0,
               profitPerORHour: surgeonORHours > 0 ? surgeonTotalProfit / surgeonORHours : null,
               avgDurationMinutes: surgeonCases.length > 0
@@ -381,20 +484,20 @@ export function useFinancialsMetrics(
           totalProfit, avgProfit,
           medianProfit: median(profits),
           stddevProfit: stddev(profits),
-          profitRange: { 
-            p25: percentile(profits, 25), 
-            p75: percentile(profits, 75) 
+          profitRange: {
+            p25: percentile(profits, 25),
+            p75: percentile(profits, 75),
           },
-          avgMarginPercent: totalReimbursement > 0 
+          avgMarginPercent: totalReimbursement > 0
             ? (totalProfit / totalReimbursement) * 100 : 0,
           profitPerORHour,
           avgDurationMinutes: durations.length > 0
             ? durations.reduce((a, b) => a + b, 0) / durations.length : 0,
           medianDurationMinutes: median(durations),
           stddevDurationMinutes: stddev(durations),
-          durationRange: { 
-            p25: percentile(durations, 25), 
-            p75: percentile(durations, 75) 
+          durationRange: {
+            p25: percentile(durations, 25),
+            p75: percentile(durations, 75),
           },
           surgeonBreakdown,
         }
@@ -413,153 +516,13 @@ export function useFinancialsMetrics(
     const totalCredits = validCases.reduce((sum, c) => sum + getCaseCredits(c), 0)
     const totalORCost = validCases.reduce((sum, c) => sum + getCaseORCost(c), 0)
     const totalORMinutes = allDurations.reduce((a, b) => a + b, 0)
-    
+
     const avgProfit = validCases.length > 0 ? totalProfit / validCases.length : 0
     const avgMargin = totalReimbursement > 0 ? (totalProfit / totalReimbursement) * 100 : 0
     const avgDuration = validCases.length > 0 ? totalORMinutes / validCases.length : 0
-    
+
     const totalORHours = totalORMinutes / 60
     const profitPerORHour = totalORHours > 0 ? totalProfit / totalORHours : null
-
-    // ============================================
-    // CLASSIFY OUTLIERS
-    // ============================================
-    const outlierDetails: OutlierCase[] = []
-    let personalOnlyCount = 0
-    let facilityOnlyCount = 0
-    let bothCount = 0
-    let durationOutlierCount = 0
-    let profitOutlierCount = 0
-
-    const issueStats: IssueStats = {
-      overTime: 0, delay: 0, lowPayer: 0, lowProfit: 0, unknown: 0,
-    }
-
-    validCases.forEach(c => {
-      const surgeonKey = `${c.surgeon_id}|${c.procedure_type_id}`
-      const surgeonBaselineStats = surgeonProcStatsMap.get(surgeonKey)
-      const facilityStats = c.procedure_type_id ? facilityProcStatsMap.get(c.procedure_type_id) : null
-
-      const personalDurationThreshold = surgeonBaselineStats?.median_duration != null && surgeonBaselineStats?.stddev_duration != null
-        ? surgeonBaselineStats.median_duration + surgeonBaselineStats.stddev_duration : null
-      const facilityDurationThreshold = facilityStats?.median_duration != null && facilityStats?.stddev_duration != null
-        ? facilityStats.median_duration + facilityStats.stddev_duration : null
-      const personalProfitThreshold = surgeonBaselineStats?.median_profit != null && surgeonBaselineStats?.stddev_profit != null
-        ? surgeonBaselineStats.median_profit - surgeonBaselineStats.stddev_profit : null
-      const facilityProfitThreshold = facilityStats?.median_profit != null && facilityStats?.stddev_profit != null
-        ? facilityStats.median_profit - facilityStats.stddev_profit : null
-
-      const actualDuration = c.total_duration_minutes || 0
-      const actualProfit = c.profit || 0
-
-      const isDurationPersonalOutlier = personalDurationThreshold !== null && actualDuration > personalDurationThreshold
-      const isDurationFacilityOutlier = facilityDurationThreshold !== null && actualDuration > facilityDurationThreshold
-      const isProfitPersonalOutlier = personalProfitThreshold !== null && actualProfit < personalProfitThreshold
-      const isProfitFacilityOutlier = facilityProfitThreshold !== null && actualProfit < facilityProfitThreshold
-
-      const isAnyOutlier = isDurationPersonalOutlier || isDurationFacilityOutlier || 
-                           isProfitPersonalOutlier || isProfitFacilityOutlier
-      if (!isAnyOutlier) return
-
-      const isOnlyPersonal = (isDurationPersonalOutlier || isProfitPersonalOutlier) && 
-                             !isDurationFacilityOutlier && !isProfitFacilityOutlier
-      const isOnlyFacility = (isDurationFacilityOutlier || isProfitFacilityOutlier) && 
-                             !isDurationPersonalOutlier && !isProfitPersonalOutlier
-      const isBoth = (isDurationPersonalOutlier || isProfitPersonalOutlier) && 
-                     (isDurationFacilityOutlier || isProfitFacilityOutlier)
-
-      if (isOnlyPersonal) personalOnlyCount++
-      if (isOnlyFacility) facilityOnlyCount++
-      if (isBoth) bothCount++
-      if (isDurationPersonalOutlier || isDurationFacilityOutlier) durationOutlierCount++
-      if (isProfitPersonalOutlier || isProfitFacilityOutlier) profitOutlierCount++
-
-      const issues: CaseIssue[] = []
-      if (isDurationPersonalOutlier || isDurationFacilityOutlier) {
-        issues.push({
-          type: 'overTime',
-          actualMinutes: actualDuration,
-          expectedMinutes: surgeonBaselineStats?.median_duration || facilityStats?.median_duration || 0,
-          thresholdMinutes: personalDurationThreshold || facilityDurationThreshold || 0,
-          minutesOver: actualDuration - (personalDurationThreshold || facilityDurationThreshold || 0),
-        })
-        issueStats.overTime++
-      }
-      if (isProfitPersonalOutlier || isProfitFacilityOutlier) {
-        issues.push({
-          type: 'lowProfit',
-          actualProfit,
-          expectedProfit: surgeonBaselineStats?.median_profit || facilityStats?.median_profit || 0,
-          thresholdProfit: personalProfitThreshold || facilityProfitThreshold || 0,
-          amountBelow: (personalProfitThreshold || facilityProfitThreshold || 0) - actualProfit,
-        })
-        issueStats.lowProfit++
-      }
-      if (issues.length === 0) {
-        issues.push({ type: 'unknown' })
-        issueStats.unknown++
-      }
-
-      const surgeonObj = normalizeJoin(c.surgeon)
-      const surgeonName = surgeonObj?.first_name && surgeonObj?.last_name
-        ? `Dr. ${surgeonObj.last_name}` : 'Unassigned'
-      const procType = normalizeJoin(c.procedure_types)
-      const procedureName = procType?.name || 'Unknown'
-
-      outlierDetails.push({
-        caseId: c.case_id,
-        caseNumber: c.case_number,
-        date: c.case_date,
-        surgeonId: c.surgeon_id,
-        surgeonName,
-        procedureId: c.procedure_type_id,
-        procedureName,
-        roomName: normalizeJoin(c.or_rooms)?.name || null,
-        actualProfit, actualDuration,
-        expectedProfit: surgeonBaselineStats?.median_profit || null,
-        expectedDuration: surgeonBaselineStats?.median_duration || null,
-        facilityExpectedProfit: facilityStats?.median_profit || null,
-        facilityExpectedDuration: facilityStats?.median_duration || null,
-        profitGap: actualProfit - (surgeonBaselineStats?.median_profit || facilityStats?.median_profit || actualProfit),
-        durationGap: actualDuration - (surgeonBaselineStats?.median_duration || facilityStats?.median_duration || actualDuration),
-        outlierFlags: {
-          isDurationPersonalOutlier, isDurationFacilityOutlier,
-          durationOutlierType: getOutlierType(isDurationPersonalOutlier, isDurationFacilityOutlier),
-          isProfitPersonalOutlier, isProfitFacilityOutlier,
-          profitOutlierType: getOutlierType(isProfitPersonalOutlier, isProfitFacilityOutlier),
-          personalDurationThreshold, facilityDurationThreshold,
-          personalProfitThreshold, facilityProfitThreshold,
-        },
-        issues,
-        financialBreakdown: {
-          reimbursement: c.reimbursement || 0,
-          totalDebits: getCaseDebits(c),
-          totalCredits: getCaseCredits(c),
-          orTimeCost: getCaseORCost(c),
-          orRate: c.or_hourly_rate || orRate,
-          payerName: normalizeJoin(c.payers)?.name || null,
-          costSource: c.cost_source || null,
-          softGoodsCost: getCaseDebits(c),
-          hardGoodsCost: getCaseCredits(c),
-          orCost: getCaseORCost(c),
-          expectedProfit: surgeonBaselineStats?.median_profit || null,
-          facilityExpectedProfit: facilityStats?.median_profit || null,
-          expectedDuration: surgeonBaselineStats?.median_duration || null,
-          facilityExpectedDuration: facilityStats?.median_duration || null,
-        },
-      })
-    })
-
-    outlierDetails.sort((a, b) => a.profitGap - b.profitGap)
-
-    const outlierStats: OutlierStats = {
-      total: outlierDetails.length,
-      personalOnly: personalOnlyCount,
-      facilityOnly: facilityOnlyCount,
-      both: bothCount,
-      durationOutliers: durationOutlierCount,
-      profitOutliers: profitOutlierCount,
-    }
 
     // ============================================
     // EXCESS TIME COST
@@ -573,7 +536,7 @@ export function useFinancialsMetrics(
     })
 
     // ============================================
-    // PROFIT TREND
+    // PROFIT TREND (daily)
     // ============================================
     const profitByDate = new Map<string, { profit: number; count: number }>()
     validCases.forEach(c => {
@@ -594,6 +557,23 @@ export function useFinancialsMetrics(
       .sort((a, b) => a.date.localeCompare(b.date))
 
     // ============================================
+    // NEW: Payer mix, profit bins, monthly trend
+    // ============================================
+    const payerMix = computePayerMix(validCases)
+    const profitBins = computeProfitBins(validCases)
+    const monthlyTrend = computeMonthlyTrend(validCases)
+
+    // Extract sparkline data arrays from monthly trend (last 6 months)
+    const trendSlice = monthlyTrend.slice(-6)
+    const sparklines = {
+      profit: trendSlice.map(t => t.totalProfit),
+      margin: trendSlice.map(t => t.marginPercent),
+      duration: trendSlice.map(t => t.medianDuration ?? 0),
+      profitPerHour: trendSlice.map(t => t.profitPerORHour ?? 0),
+      volume: trendSlice.map(t => t.caseCount),
+    }
+
+    // ============================================
     // RETURN
     // ============================================
     return {
@@ -602,20 +582,34 @@ export function useFinancialsMetrics(
       totalProfit, avgProfit,
       medianProfit: median(allProfits),
       stddevProfit: stddev(allProfits),
-      profitRange: { 
-        p25: percentile(allProfits, 25), 
-        p75: percentile(allProfits, 75) 
+      profitRange: {
+        p25: percentile(allProfits, 25),
+        p75: percentile(allProfits, 75),
       },
       avgMargin,
       profitPerORHour,
       avgDuration,
       medianDuration: median(allDurations),
       totalORMinutes,
-      outlierStats, outlierDetails, issueStats,
+
+      // Outlier fields — kept as empty/zero for backward compatibility
+      outlierStats: {
+        total: 0, personalOnly: 0, facilityOnly: 0,
+        both: 0, durationOutliers: 0, profitOutliers: 0,
+      },
+      outlierDetails: [],
+      issueStats: { overTime: 0, delay: 0, lowPayer: 0, lowProfit: 0, unknown: 0 },
+
       costPerMinute,
       excessTimeCost: excessTimeMinutes * costPerMinute,
       procedureStats, surgeonStats, profitTrend,
       orRate,
+
+      // NEW enriched data
+      payerMix,
+      profitBins,
+      monthlyTrend,
+      sparklines,
     }
   }, [caseStats, surgeonProcedureStats, facilityProcedureStats, facilitySettings])
 }

@@ -486,6 +486,89 @@ export interface FinancialsMetrics {
 }
 
 // ============================================
+// PAYER MIX
+// ============================================
+
+export interface PayerMixEntry {
+  payerId: string
+  payerName: string
+  caseCount: number
+  totalReimbursement: number
+  avgReimbursement: number
+  totalProfit: number
+  avgProfit: number
+  marginPercent: number
+  pctOfCases: number
+}
+
+// ============================================
+// PROFIT DISTRIBUTION BINS
+// ============================================
+
+export interface ProfitBin {
+  rangeLabel: string
+  min: number
+  max: number
+  count: number
+}
+
+// ============================================
+// MONTHLY TREND (for sparklines)
+// ============================================
+
+export interface MonthlyTrendPoint {
+  year: number
+  month: number
+  label: string
+  caseCount: number
+  totalProfit: number
+  avgProfit: number
+  totalReimbursement: number
+  marginPercent: number
+  medianDuration: number | null
+  profitPerORHour: number | null
+}
+
+// ============================================
+// FINANCIAL TARGETS
+// ============================================
+
+export interface FinancialTarget {
+  id: string
+  facility_id: string
+  year: number
+  month: number
+  profit_target: number
+  created_at: string
+  updated_at: string
+}
+
+// ============================================
+// PHASE DURATION (from case_milestones)
+// ============================================
+
+export interface PhaseDuration {
+  phaseName: string
+  phaseGroup: string
+  durationMinutes: number | null
+  color: PhasePillColor
+}
+
+export type PhasePillColor = 'blue' | 'green' | 'amber' | 'violet'
+
+// ============================================
+// SORT DIRECTION
+// ============================================
+
+export type SortDir = 'asc' | 'desc'
+
+// ============================================
+// CONSISTENCY RATING
+// ============================================
+
+export type ConsistencyRating = 'high' | 'medium' | 'low'
+
+// ============================================
 // UI TYPES
 // ============================================
 
@@ -493,4 +576,28 @@ export type SubTab = 'overview' | 'procedure' | 'surgeon'
 
 export interface FacilitySettings {
   or_hourly_rate: number | null
+}
+
+// ============================================
+// ENRICHED METRICS (extends FinancialsMetrics with new computations)
+// ============================================
+
+export interface EnrichedFinancialsMetrics extends FinancialsMetrics {
+  // Payer mix analysis
+  payerMix: PayerMixEntry[]
+
+  // Profit distribution histogram
+  profitBins: ProfitBin[]
+
+  // Monthly trend sparklines (last 6 months)
+  monthlyTrend: MonthlyTrendPoint[]
+
+  // Sparkline data arrays (extracted from monthlyTrend for easy consumption)
+  sparklines: {
+    profit: number[]
+    margin: number[]
+    duration: number[]
+    profitPerHour: number[]
+    volume: number[]
+  }
 }
