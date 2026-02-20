@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -14,7 +14,9 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { CategoryFilter } from '@/components/settings/flags/CategoryFilter'
 import { FlagRuleTable } from '@/components/settings/flags/FlagRuleTable'
 import { FlagRuleRow } from '@/components/settings/flags/FlagRuleRow'
-import type { FlagRule, Severity, ThresholdType, Operator, ComparisonScope } from '@/types/flag-settings'
+import { MetricSearchBuilder } from '@/components/settings/flags/MetricSearchBuilder'
+import { Plus } from 'lucide-react'
+import type { FlagRule, Severity, ThresholdType, Operator, ComparisonScope, MetricCatalogEntry, CustomRuleFormState } from '@/types/flag-settings'
 
 // =====================================================
 // CONSTANTS
@@ -46,6 +48,42 @@ export default function FlagsSettingsPage() {
 
   // Category filter state
   const [filterCategory, setFilterCategory] = useState<string>('all')
+
+  // Builder drawer state
+  const [builderOpen, setBuilderOpen] = useState(false)
+
+  // Fetch cost categories for dynamic per-category metrics in the builder
+  const { data: costCategories } = useSupabaseQuery<Array<{ id: string; name: string }>>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('cost_categories')
+        .select('id, name')
+        .eq('facility_id', effectiveFacilityId!)
+        .eq('is_active', true)
+        .order('name')
+      if (error) throw error
+      return data || []
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  // Generate dynamic per-cost-category metrics from facility's active cost categories
+  const dynamicMetrics: MetricCatalogEntry[] = useMemo(() => {
+    if (!costCategories) return []
+    return costCategories.map((cat) => ({
+      id: `cost_category_${cat.id}`,
+      name: `${cat.name} Cost`,
+      description: `Total cost for ${cat.name} category`,
+      category: 'financial' as const,
+      dataType: 'currency' as const,
+      unit: '$',
+      source: 'case_completion_stats' as const,
+      startMilestone: null,
+      endMilestone: null,
+      supportsMedian: true,
+      costCategoryId: cat.id,
+    }))
+  }, [costCategories])
 
   // Data: active rules (is_active = true)
   const { data: rules, loading, error, setData: setRules } = useSupabaseQuery<FlagRule[]>(
@@ -318,6 +356,20 @@ export default function FlagsSettingsPage() {
   )
 
   // =====================================================
+  // BUILDER SUBMIT (Phase 4 wires this to DB — for now, log only)
+  // =====================================================
+
+  const handleBuilderSubmit = useCallback(
+    (form: CustomRuleFormState) => {
+      // Phase 4 will create the rule in the DB and refresh the list.
+      // For now, close the drawer and show a placeholder toast.
+      console.log('Custom rule submitted:', form)
+      showToast({ type: 'info', title: 'Custom rule builder ready — persistence coming in Phase 4' })
+    },
+    [showToast]
+  )
+
+  // =====================================================
   // COMPUTED VALUES
   // =====================================================
 
@@ -399,6 +451,14 @@ export default function FlagsSettingsPage() {
             <span>{totalCount}</span>
             <span>active</span>
           </div>
+          {/* Add Rule button */}
+          <button
+            onClick={() => setBuilderOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Rule
+          </button>
         </div>
       </div>
 
@@ -493,9 +553,16 @@ export default function FlagsSettingsPage() {
             ) : (
               <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
                 <p className="text-sm text-slate-500 mb-1">No custom rules yet</p>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 mb-3">
                   Add rules from any metric in your database using the rule builder.
                 </p>
+                <button
+                  onClick={() => setBuilderOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Rule
+                </button>
               </div>
             )}
           </div>
@@ -510,6 +577,14 @@ export default function FlagsSettingsPage() {
             </div>
           )}
       </div>
+
+      {/* Custom Rule Builder Drawer */}
+      <MetricSearchBuilder
+        open={builderOpen}
+        onOpenChange={setBuilderOpen}
+        onSubmit={handleBuilderSubmit}
+        dynamicMetrics={dynamicMetrics}
+      />
     </>
   )
 }
