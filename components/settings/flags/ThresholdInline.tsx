@@ -84,14 +84,14 @@ export function ThresholdInline({
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1.5">
+    <div className="flex flex-col gap-1 min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0">
         {/* Threshold type */}
         <select
           value={rule.threshold_type}
           disabled={disabled}
           onChange={(e) => handleTypeChange(e.target.value as ThresholdType)}
-          className="text-[11px] px-1.5 py-1 rounded-md border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-40 cursor-pointer disabled:cursor-default"
+          className="text-[11px] px-1.5 py-1 rounded-md border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-40 cursor-pointer disabled:cursor-default max-w-[100px] shrink-0"
         >
           {availableTypes.map((t) => (
             <option key={t.id} value={t.id}>

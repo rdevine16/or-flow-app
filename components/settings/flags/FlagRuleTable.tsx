@@ -11,11 +11,11 @@ interface FlagRuleTableProps {
 
 export function FlagRuleTable({ children }: FlagRuleTableProps) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+    <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
       {/* Header Row */}
       <div
         className="grid px-4 py-2 bg-slate-50/80 border-b border-slate-200 gap-x-2.5"
-        style={{ gridTemplateColumns: RULE_GRID_COLUMNS, minWidth: 640 }}
+        style={{ gridTemplateColumns: RULE_GRID_COLUMNS, minWidth: 750 }}
       >
         <span />
         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">

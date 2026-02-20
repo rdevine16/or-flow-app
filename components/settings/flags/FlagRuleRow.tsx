@@ -14,7 +14,7 @@ import { Archive, RotateCcw } from 'lucide-react'
 import type { FlagRule, Severity, ThresholdType, Operator, ComparisonScope } from '@/types/flag-settings'
 
 /** Must match FlagRuleTable header columns */
-export const RULE_GRID_COLUMNS = '44px 1fr 230px 160px 80px 36px'
+export const RULE_GRID_COLUMNS = '44px 1fr 290px 90px 80px 36px'
 
 interface FlagRuleRowProps {
   rule: FlagRule
@@ -65,7 +65,7 @@ export function FlagRuleRow({
       className={`grid items-center px-4 py-3 gap-x-2.5 border-b border-slate-100 last:border-b-0 transition-opacity ${
         disabled || isArchived ? 'opacity-45' : ''
       }`}
-      style={{ gridTemplateColumns: RULE_GRID_COLUMNS, minWidth: 640 }}
+      style={{ gridTemplateColumns: RULE_GRID_COLUMNS, minWidth: 750 }}
     >
       {/* Toggle */}
       <div className="flex justify-center">

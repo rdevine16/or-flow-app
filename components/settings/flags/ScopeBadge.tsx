@@ -18,7 +18,7 @@ export function ScopeBadge({ value, onChange, disabled = false }: ScopeBadgeProp
     <button
       onClick={() => onChange(isPersonal ? 'facility' : 'personal')}
       disabled={disabled}
-      className={`text-[11px] font-semibold px-2 py-1 rounded-md transition-all ${
+      className={`text-[11px] font-semibold px-2 py-1 rounded-md text-center list-none transition-all ${
         isPersonal
           ? 'bg-violet-50 text-violet-600 border border-violet-200'
           : 'bg-slate-50 text-slate-500 border border-slate-200'
