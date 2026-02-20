@@ -95,6 +95,47 @@ export function fmt(value: number | null | undefined): string {
 }
 
 /**
+ * Normalize Supabase join data — handles both single object and array forms
+ */
+export function normalizeJoin<T>(data: T | T[] | null | undefined): T | null {
+  if (Array.isArray(data)) return data[0] || null
+  return data ?? null
+}
+
+/**
+ * Standard payer color palette for charts
+ */
+export const PAYER_COLORS = [
+  '#3b82f6', '#8b5cf6', '#06b6d4', '#f59e0b', '#ef4444',
+  '#10b981', '#ec4899', '#6366f1', '#14b8a6', '#f97316',
+] as const
+
+/**
+ * Compute median of a number array
+ */
+export function median(values: number[]): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+/**
+ * Compute percentile of a number array
+ */
+export function percentile(values: number[], p: number): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const idx = (p / 100) * (sorted.length - 1)
+  const lower = Math.floor(idx)
+  const upper = Math.ceil(idx)
+  if (lower === upper) return sorted[lower]
+  return sorted[lower] + (idx - lower) * (sorted[upper] - sorted[lower])
+}
+
+/**
  * Map phase_group values to PhasePill colors
  */
 export function phaseGroupColor(group: string): 'blue' | 'green' | 'amber' | 'violet' {
