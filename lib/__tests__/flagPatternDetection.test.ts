@@ -36,6 +36,21 @@ function makeSummary(
   }
 }
 
+function makeSurgeonRow(
+  overrides: Partial<FlagAnalyticsRPCResponse['surgeonFlags'][number]> & { name: string; surgeonId: string },
+): FlagAnalyticsRPCResponse['surgeonFlags'][number] {
+  return {
+    cases: 10,
+    flaggedCases: 5,
+    flags: 5,
+    rate: 50,
+    prevRate: null,
+    trend: 0,
+    topFlag: '',
+    ...overrides,
+  }
+}
+
 function makeBaseData(
   overrides: Partial<FlagAnalyticsRPCResponse> = {},
 ): FlagAnalyticsRPCResponse {
@@ -106,15 +121,7 @@ describe('detectFlagPatterns: severity sort order', () => {
       ],
       // surgeons: triggers warning (rate > 2x facility average of 20%)
       surgeonFlags: [
-        {
-          name: 'Dr. Jones',
-          surgeonId: 's1',
-          cases: 10,
-          flags: 5,
-          rate: 50,
-          trend: 0,
-          topFlag: 'FCOTS',
-        },
+        makeSurgeonRow({ name: 'Dr. Jones', surgeonId: 's1', cases: 10, flags: 5, rate: 50, topFlag: 'FCOTS' }),
       ],
       // trend: improvement (secondHalf threshold < firstHalf by >20%)
       weeklyTrend: [
@@ -566,15 +573,7 @@ describe('detectRecurringSurgeon', () => {
     const data = makeBaseData({
       summary: makeSummary({ totalFlags: 10, flagRate: 20 }),
       surgeonFlags: [
-        {
-          name: 'Dr. Smith',
-          surgeonId: 's1',
-          cases: 10,
-          flags: 5,
-          rate: 50,
-          trend: 0,
-          topFlag: 'FCOTS Breach',
-        },
+        makeSurgeonRow({ name: 'Dr. Smith', surgeonId: 's1', cases: 10, flags: 5, rate: 50, topFlag: 'FCOTS Breach' }),
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -591,15 +590,7 @@ describe('detectRecurringSurgeon', () => {
     const data = makeBaseData({
       summary: makeSummary({ totalFlags: 10, flagRate: 20 }),
       surgeonFlags: [
-        {
-          name: 'Dr. Jones',
-          surgeonId: 's2',
-          cases: 10,
-          flags: 4,
-          rate: 40,
-          trend: 0,
-          topFlag: 'Timing',
-        },
+        makeSurgeonRow({ name: 'Dr. Jones', surgeonId: 's2', cases: 10, flags: 4, rate: 40, topFlag: 'Timing' }),
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -612,15 +603,7 @@ describe('detectRecurringSurgeon', () => {
     const data = makeBaseData({
       summary: makeSummary({ totalFlags: 10, flagRate: 20 }),
       surgeonFlags: [
-        {
-          name: 'Dr. Lee',
-          surgeonId: 's3',
-          cases: 3,
-          flags: 2,
-          rate: 66,
-          trend: 0,
-          topFlag: 'Delay',
-        },
+        makeSurgeonRow({ name: 'Dr. Lee', surgeonId: 's3', cases: 3, flags: 2, rate: 66, topFlag: 'Delay' }),
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -632,15 +615,7 @@ describe('detectRecurringSurgeon', () => {
     const data = makeBaseData({
       summary: makeSummary({ totalFlags: 10, flagRate: 0 }),
       surgeonFlags: [
-        {
-          name: 'Dr. Zhang',
-          surgeonId: 's4',
-          cases: 10,
-          flags: 8,
-          rate: 80,
-          trend: 0,
-          topFlag: 'Timing',
-        },
+        makeSurgeonRow({ name: 'Dr. Zhang', surgeonId: 's4', cases: 10, flags: 8, rate: 80, topFlag: 'Timing' }),
       ],
     })
     expect(() => detectFlagPatterns(data)).not.toThrow()
@@ -661,15 +636,7 @@ describe('detectRecurringSurgeon', () => {
     const data = makeBaseData({
       summary: makeSummary({ totalFlags: 10, flagRate: 20 }),
       surgeonFlags: [
-        {
-          name: 'Dr. Brown',
-          surgeonId: 's5',
-          cases: 10,
-          flags: 5,
-          rate: 50,
-          trend: 0,
-          topFlag: '',
-        },
+        makeSurgeonRow({ name: 'Dr. Brown', surgeonId: 's5', cases: 10, flags: 5, rate: 50, topFlag: '' }),
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -682,9 +649,9 @@ describe('detectRecurringSurgeon', () => {
     const data = makeBaseData({
       summary: makeSummary({ totalFlags: 20, flagRate: 20 }),
       surgeonFlags: [
-        { name: 'Dr. A', surgeonId: 's1', cases: 10, flags: 5, rate: 50, trend: 0, topFlag: 'FCOTS' },
-        { name: 'Dr. B', surgeonId: 's2', cases: 10, flags: 6, rate: 60, trend: 0, topFlag: 'Timing' },
-        { name: 'Dr. C', surgeonId: 's3', cases: 20, flags: 3, rate: 15, trend: 0, topFlag: '' },
+        makeSurgeonRow({ name: 'Dr. A', surgeonId: 's1', cases: 10, flags: 5, rate: 50, topFlag: 'FCOTS' }),
+        makeSurgeonRow({ name: 'Dr. B', surgeonId: 's2', cases: 10, flags: 6, rate: 60, topFlag: 'Timing' }),
+        makeSurgeonRow({ name: 'Dr. C', surgeonId: 's3', cases: 20, flags: 3, rate: 15, topFlag: '' }),
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -825,7 +792,7 @@ describe('detectFlagPatterns: combined edge cases', () => {
         { room: 'OR 1', roomId: 'r1', cases: 10, flags: 5, rate: 50, topIssue: 'Timing', topDelay: '' },
       ],
       surgeonFlags: [
-        { name: 'Dr. A', surgeonId: 's1', cases: 10, flags: 5, rate: 50, trend: 0, topFlag: '' },
+        makeSurgeonRow({ name: 'Dr. A', surgeonId: 's1', cases: 10, flags: 5, rate: 50, topFlag: '' }),
       ],
     })
     expect(() => detectFlagPatterns(data)).not.toThrow()

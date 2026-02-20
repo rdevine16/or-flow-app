@@ -167,6 +167,8 @@ const MOCK_CASE_DETAIL: CaseDetail = {
       flag_type: 'warning',
       severity: 'warning',
       note: 'Late start — 10 min behind schedule',
+      metric_value: null,
+      threshold_value: null,
       duration_minutes: 10,
     },
   ],

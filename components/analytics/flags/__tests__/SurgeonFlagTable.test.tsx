@@ -40,8 +40,10 @@ function makeSurgeon(
 ): SurgeonFlagRow {
   return {
     cases: 20,
+    flaggedCases: 5,
     flags: 5,
     rate: 25,
+    prevRate: null,
     trend: 0,
     topFlag: 'Late Patient',
     ...overrides,

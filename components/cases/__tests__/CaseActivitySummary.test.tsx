@@ -1,240 +1,205 @@
 // components/cases/__tests__/CaseActivitySummary.test.tsx
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import CaseActivitySummary from '../CaseActivitySummary'
 
+const baseProps = {
+  completedMilestones: 0,
+  totalMilestones: 0,
+  implantsFilled: 0,
+  implantTotal: 0,
+  delayCount: 0,
+  flagCount: 0,
+}
+
 describe('CaseActivitySummary', () => {
-  it('renders all activity rows with correct labels', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={3}
-        totalMilestones={8}
-        implantsFilled={2}
-        implantTotal={4}
-        delayCount={1}
-        flagCount={0}
-      />
-    )
+  describe('Activity tab (default)', () => {
+    it('renders all activity rows with correct labels', () => {
+      render(
+        <CaseActivitySummary
+          {...baseProps}
+          completedMilestones={3}
+          totalMilestones={8}
+          implantsFilled={2}
+          implantTotal={4}
+          delayCount={1}
+        />
+      )
 
-    expect(screen.getByText('Milestones')).toBeInTheDocument()
-    expect(screen.getByText('Implants')).toBeInTheDocument()
-    expect(screen.getByText('Delays')).toBeInTheDocument()
-    expect(screen.getByText('Flags')).toBeInTheDocument()
+      expect(screen.getByText('Milestones')).toBeInTheDocument()
+      expect(screen.getByText('Implants')).toBeInTheDocument()
+      expect(screen.getByText('Delays')).toBeInTheDocument()
+    })
+
+    it('displays milestone count in X/Y format', () => {
+      render(<CaseActivitySummary {...baseProps} completedMilestones={5} totalMilestones={10} />)
+      expect(screen.getByText('5/10')).toBeInTheDocument()
+    })
+
+    it('displays implant count in X/Y format', () => {
+      render(<CaseActivitySummary {...baseProps} implantsFilled={3} implantTotal={4} />)
+      expect(screen.getByText('3/4')).toBeInTheDocument()
+    })
+
+    it('displays delay count as plain number', () => {
+      render(<CaseActivitySummary {...baseProps} delayCount={3} />)
+      const delaysRow = screen.getByText('Delays').closest('div')
+      expect(within(delaysRow!).getByText('3')).toBeInTheDocument()
+    })
+
+    it('applies amber color to delay count when greater than 0', () => {
+      render(<CaseActivitySummary {...baseProps} delayCount={2} />)
+      const delaysRow = screen.getByText('Delays').closest('div')
+      const delayValue = within(delaysRow!).getByText('2')
+      expect(delayValue).toHaveClass('text-amber-600')
+    })
+
+    it('does not apply amber color to delay count when 0', () => {
+      render(<CaseActivitySummary {...baseProps} />)
+      const delaysRow = screen.getByText('Delays').closest('div')
+      const delayValue = delaysRow?.querySelector('.font-mono')
+      expect(delayValue).not.toHaveClass('text-amber-600')
+      expect(delayValue).toHaveClass('text-slate-800')
+    })
+
+    it('applies red color to flag count when greater than 0', () => {
+      render(<CaseActivitySummary {...baseProps} flagCount={3} />)
+      // Row label "Flags" in the activity tab — use selector to disambiguate from tab button
+      const flagsRow = screen.getByText('Flags', { selector: 'span.text-slate-500' }).closest('div')
+      const flagValue = within(flagsRow!).getByText('3')
+      expect(flagValue).toHaveClass('text-red-600')
+    })
+
+    it('does not apply red color to flag count when 0', () => {
+      render(<CaseActivitySummary {...baseProps} />)
+      const flagsRow = screen.getByText('Flags', { selector: 'span.text-sm' }).closest('div')
+      const flagValue = flagsRow?.querySelector('.font-mono')
+      expect(flagValue).not.toHaveClass('text-red-600')
+      expect(flagValue).toHaveClass('text-slate-800')
+    })
+
+    it('handles 0/0 milestone scenario', () => {
+      render(<CaseActivitySummary {...baseProps} />)
+      const milestoneRow = screen.getByText('Milestones').closest('div')
+      expect(milestoneRow).toHaveTextContent('0/0')
+    })
+
+    it('handles all milestones completed scenario', () => {
+      render(
+        <CaseActivitySummary {...baseProps} completedMilestones={8} totalMilestones={8} implantsFilled={4} implantTotal={4} />
+      )
+      expect(screen.getByText('8/8')).toBeInTheDocument()
+      expect(screen.getByText('4/4')).toBeInTheDocument()
+    })
+
+    it('applies monospace font to values for tabular alignment', () => {
+      render(<CaseActivitySummary {...baseProps} completedMilestones={5} totalMilestones={10} />)
+      const milestoneValue = screen.getByText('5/10')
+      expect(milestoneValue).toHaveClass('font-mono')
+      expect(milestoneValue).toHaveClass('tabular-nums')
+    })
   })
 
-  it('displays milestone count in X/Y format', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={5}
-        totalMilestones={10}
-        implantsFilled={0}
-        implantTotal={0}
-        delayCount={0}
-        flagCount={0}
-      />
-    )
+  describe('Tab navigation', () => {
+    it('renders Case Activity and Flags tabs', () => {
+      render(<CaseActivitySummary {...baseProps} />)
+      expect(screen.getByRole('button', { name: /Case Activity/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Flags/i })).toBeInTheDocument()
+    })
 
-    expect(screen.getByText('5/10')).toBeInTheDocument()
+    it('shows badge count on Flags tab when flags/delays exist', () => {
+      render(<CaseActivitySummary {...baseProps} flagCount={2} delayCount={1} />)
+      const flagsTab = screen.getByRole('button', { name: /Flags/i })
+      expect(within(flagsTab).getByText('3')).toBeInTheDocument()
+    })
+
+    it('does not show badge count on Flags tab when no flags/delays', () => {
+      render(<CaseActivitySummary {...baseProps} />)
+      const flagsTab = screen.getByRole('button', { name: /Flags/i })
+      expect(within(flagsTab).queryByText('0')).not.toBeInTheDocument()
+    })
+
+    it('switches to Flags tab on click', async () => {
+      const user = userEvent.setup()
+      render(<CaseActivitySummary {...baseProps} flags={[]} />)
+
+      await user.click(screen.getByRole('button', { name: /Flags/i }))
+      expect(screen.getByText('No flags')).toBeInTheDocument()
+    })
   })
 
-  it('displays implant count in X/Y format', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={0}
-        totalMilestones={0}
-        implantsFilled={3}
-        implantTotal={4}
-        delayCount={0}
-        flagCount={0}
-      />
-    )
+  describe('Flags tab content', () => {
+    const sampleFlags = [
+      {
+        id: 'f1',
+        flag_type: 'threshold' as const,
+        severity: 'critical' as const,
+        label: 'Late Case Start',
+        detail: '227 min (threshold: 15 min)',
+        duration_minutes: null,
+        note: null,
+      },
+      {
+        id: 'f2',
+        flag_type: 'delay' as const,
+        severity: 'warning' as const,
+        label: 'Equipment Delay',
+        detail: '30 min',
+        duration_minutes: 30,
+        note: 'Waiting for implant trays',
+      },
+    ]
 
-    expect(screen.getByText('3/4')).toBeInTheDocument()
-  })
+    it('renders flag cards with labels', async () => {
+      const user = userEvent.setup()
+      render(<CaseActivitySummary {...baseProps} flagCount={1} delayCount={1} flags={sampleFlags} />)
 
-  it('displays delay count as plain number', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={0}
-        totalMilestones={0}
-        implantsFilled={0}
-        implantTotal={0}
-        delayCount={3}
-        flagCount={0}
-      />
-    )
+      await user.click(screen.getByRole('button', { name: /Flags/i }))
+      expect(screen.getByText('Late Case Start')).toBeInTheDocument()
+      expect(screen.getByText('Equipment Delay')).toBeInTheDocument()
+    })
 
-    expect(screen.getByText('3')).toBeInTheDocument()
-  })
+    it('renders flag details', async () => {
+      const user = userEvent.setup()
+      render(<CaseActivitySummary {...baseProps} flagCount={1} delayCount={1} flags={sampleFlags} />)
 
-  it('displays flag count as plain number', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={0}
-        totalMilestones={0}
-        implantsFilled={0}
-        implantTotal={0}
-        delayCount={0}
-        flagCount={2}
-      />
-    )
+      await user.click(screen.getByRole('button', { name: /Flags/i }))
+      expect(screen.getByText('227 min (threshold: 15 min)')).toBeInTheDocument()
+      expect(screen.getByText('30 min')).toBeInTheDocument()
+    })
 
-    expect(screen.getByText('2')).toBeInTheDocument()
-  })
+    it('renders flag notes', async () => {
+      const user = userEvent.setup()
+      render(<CaseActivitySummary {...baseProps} flagCount={1} delayCount={1} flags={sampleFlags} />)
 
-  it('applies amber color to delay count when greater than 0', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={0}
-        totalMilestones={0}
-        implantsFilled={0}
-        implantTotal={0}
-        delayCount={2}
-        flagCount={0}
-      />
-    )
+      await user.click(screen.getByRole('button', { name: /Flags/i }))
+      expect(screen.getByText('Waiting for implant trays')).toBeInTheDocument()
+    })
 
-    const delayValue = screen.getByText('2')
-    expect(delayValue).toHaveClass('text-amber-600')
-  })
+    it('shows empty state when no flags', async () => {
+      const user = userEvent.setup()
+      render(<CaseActivitySummary {...baseProps} flags={[]} />)
 
-  it('does not apply amber color to delay count when 0', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={0}
-        totalMilestones={0}
-        implantsFilled={0}
-        implantTotal={0}
-        delayCount={0}
-        flagCount={0}
-      />
-    )
+      await user.click(screen.getByRole('button', { name: /Flags/i }))
+      expect(screen.getByText('No flags')).toBeInTheDocument()
+      expect(screen.getByText('This case is clean')).toBeInTheDocument()
+    })
 
-    // Find the Delays row and check its value
-    const delaysRow = screen.getByText('Delays').closest('div')
-    const delayValue = delaysRow?.querySelector('.font-mono')
-    expect(delayValue).not.toHaveClass('text-amber-600')
-    expect(delayValue).toHaveClass('text-slate-800')
-  })
+    it('shows severity label for threshold flags', async () => {
+      const user = userEvent.setup()
+      render(<CaseActivitySummary {...baseProps} flagCount={1} flags={[sampleFlags[0]]} />)
 
-  it('applies red color to flag count when greater than 0', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={0}
-        totalMilestones={0}
-        implantsFilled={0}
-        implantTotal={0}
-        delayCount={0}
-        flagCount={3}
-      />
-    )
+      await user.click(screen.getByRole('button', { name: /Flags/i }))
+      expect(screen.getByText('critical')).toBeInTheDocument()
+    })
 
-    const flagValue = screen.getByText('3')
-    expect(flagValue).toHaveClass('text-red-600')
-  })
+    it('shows delay label for delay flags', async () => {
+      const user = userEvent.setup()
+      render(<CaseActivitySummary {...baseProps} delayCount={1} flags={[sampleFlags[1]]} />)
 
-  it('does not apply red color to flag count when 0', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={0}
-        totalMilestones={0}
-        implantsFilled={0}
-        implantTotal={0}
-        delayCount={0}
-        flagCount={0}
-      />
-    )
-
-    const flagValues = screen.getAllByText('0')
-    const flagValue = flagValues[flagValues.length - 1] // Last one is Flags
-    expect(flagValue).not.toHaveClass('text-red-600')
-    expect(flagValue).toHaveClass('text-slate-800')
-  })
-
-  it('handles 0/0 milestone scenario', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={0}
-        totalMilestones={0}
-        implantsFilled={0}
-        implantTotal={0}
-        delayCount={0}
-        flagCount={0}
-      />
-    )
-
-    const milestoneRow = screen.getByText('Milestones').closest('div')
-    expect(milestoneRow).toHaveTextContent('0/0')
-  })
-
-  it('handles all milestones completed scenario', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={8}
-        totalMilestones={8}
-        implantsFilled={4}
-        implantTotal={4}
-        delayCount={0}
-        flagCount={0}
-      />
-    )
-
-    expect(screen.getByText('8/8')).toBeInTheDocument()
-    expect(screen.getByText('4/4')).toBeInTheDocument()
-  })
-
-  it('handles mixed activity with some delays and flags', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={4}
-        totalMilestones={10}
-        implantsFilled={2}
-        implantTotal={4}
-        delayCount={3}
-        flagCount={1}
-      />
-    )
-
-    expect(screen.getByText('4/10')).toBeInTheDocument()
-    expect(screen.getByText('2/4')).toBeInTheDocument()
-    expect(screen.getByText('3')).toBeInTheDocument()
-    expect(screen.getByText('1')).toBeInTheDocument()
-
-    const delayValue = screen.getByText('3')
-    const flagValue = screen.getByText('1')
-    expect(delayValue).toHaveClass('text-amber-600')
-    expect(flagValue).toHaveClass('text-red-600')
-  })
-
-  it('renders section title', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={0}
-        totalMilestones={0}
-        implantsFilled={0}
-        implantTotal={0}
-        delayCount={0}
-        flagCount={0}
-      />
-    )
-
-    expect(screen.getByText('Case Activity')).toBeInTheDocument()
-  })
-
-  it('applies monospace font to values for tabular alignment', () => {
-    render(
-      <CaseActivitySummary
-        completedMilestones={5}
-        totalMilestones={10}
-        implantsFilled={0}
-        implantTotal={0}
-        delayCount={0}
-        flagCount={0}
-      />
-    )
-
-    const milestoneValue = screen.getByText('5/10')
-    expect(milestoneValue).toHaveClass('font-mono')
-    expect(milestoneValue).toHaveClass('tabular-nums')
+      await user.click(screen.getByRole('button', { name: /Flags/i }))
+      expect(screen.getByText('delay')).toBeInTheDocument()
+    })
   })
 })

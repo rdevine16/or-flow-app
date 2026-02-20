@@ -1,9 +1,10 @@
--- get_flag_analytics: Comprehensive flag analytics aggregation RPC
--- Returns a single JSON blob with all analytics dimensions for the flags page.
--- Handles previous-period comparison internally for trend calculations.
---
--- Filters: completed cases, data_validated=true, is_draft=false, is_excluded_from_metrics=false
--- Date filtering: by cases.scheduled_date (consistent with all analytics pages)
+-- Add flaggedCases and prevRate to surgeon flag distribution output
+-- These fields enable the redesigned surgeon drill-through panel
+-- to show distinct flagged cases (vs total flag count) and
+-- previous period rate for a descriptive trend display.
+
+-- Re-create the function with updated Section 7 output fields.
+-- All other sections remain identical.
 
 CREATE OR REPLACE FUNCTION public.get_flag_analytics(
   p_facility_id uuid,
@@ -54,7 +55,6 @@ BEGIN
   -- SECTION 1: Summary KPIs
   -- ================================================================
 
-  -- Current period: total completed validated cases
   SELECT count(*) INTO v_total_cases
   FROM cases c
   JOIN case_statuses cs ON cs.id = c.status_id
@@ -65,7 +65,6 @@ BEGIN
     AND c.is_draft = false
     AND c.is_excluded_from_metrics = false;
 
-  -- Current period: flag counts by type and severity
   SELECT
     count(DISTINCT cf.case_id),
     count(DISTINCT cf.case_id) FILTER (WHERE cf.flag_type = 'delay'),
@@ -84,7 +83,6 @@ BEGIN
     AND c.is_draft = false
     AND c.is_excluded_from_metrics = false;
 
-  -- Previous period: total cases
   SELECT count(*) INTO v_prev_total_cases
   FROM cases c
   JOIN case_statuses cs ON cs.id = c.status_id
@@ -95,7 +93,6 @@ BEGIN
     AND c.is_draft = false
     AND c.is_excluded_from_metrics = false;
 
-  -- Previous period: flag counts
   SELECT
     count(DISTINCT cf.case_id),
     count(DISTINCT cf.case_id) FILTER (WHERE cf.flag_type = 'delay')
@@ -140,7 +137,7 @@ BEGIN
   );
 
   -- ================================================================
-  -- SECTION 2: Sparkline Data (weekly flag rate + delay rate arrays)
+  -- SECTION 2: Sparkline Data
   -- ================================================================
 
   SELECT jsonb_build_object(
@@ -188,7 +185,7 @@ BEGIN
   ) INTO v_sparkline;
 
   -- ================================================================
-  -- SECTION 3: Weekly Trend (threshold vs delay flag counts by week)
+  -- SECTION 3: Weekly Trend
   -- ================================================================
 
   SELECT COALESCE((
@@ -220,11 +217,6 @@ BEGIN
 
   -- ================================================================
   -- SECTION 4: Day-of-Week Heatmap
-  -- Maps by metric (per review Q&A):
-  --   FCOTS    = flag_rules.metric = 'fcots_delay'
-  --   Timing   = flag_rules.metric IN ('total_case_time','surgical_time','pre_op_time')
-  --   Turnover = flag_rules.metric = 'turnover_time'
-  --   Delays   = flag_type = 'delay'
   -- ================================================================
 
   SELECT COALESCE((
@@ -262,8 +254,7 @@ BEGIN
   ), '[]'::jsonb) INTO v_day_heatmap;
 
   -- ================================================================
-  -- SECTION 5: Flag Rule Breakdown (threshold flags grouped by rule)
-  -- Percentage is relative to total threshold flags
+  -- SECTION 5: Flag Rule Breakdown
   -- ================================================================
 
   SELECT COALESCE((
@@ -295,8 +286,7 @@ BEGIN
   ), '[]'::jsonb) INTO v_flag_rule_breakdown;
 
   -- ================================================================
-  -- SECTION 6: Delay Type Breakdown (delay flags grouped by type)
-  -- Percentage is relative to total delay flags
+  -- SECTION 6: Delay Type Breakdown
   -- ================================================================
 
   SELECT COALESCE((
@@ -329,7 +319,7 @@ BEGIN
 
   -- ================================================================
   -- SECTION 7: Surgeon Flag Distribution
-  -- Includes trend vs previous period and top flag per surgeon
+  -- Now includes flaggedCases (distinct) and prevRate for trend display
   -- ================================================================
 
   SELECT COALESCE((
@@ -419,7 +409,6 @@ BEGIN
 
   -- ================================================================
   -- SECTION 8: Room Flag Distribution
-  -- Includes top threshold flag and top delay type per room
   -- ================================================================
 
   SELECT COALESCE((
@@ -509,8 +498,7 @@ BEGIN
   ), '[]'::jsonb) INTO v_room_flags;
 
   -- ================================================================
-  -- SECTION 9: Recent Flagged Cases (all flagged cases, sorted by date desc)
-  -- UI shows 5 initially and expands inline to show all
+  -- SECTION 9: Recent Flagged Cases
   -- ================================================================
 
   SELECT COALESCE((
@@ -576,5 +564,3 @@ BEGIN
   );
 END;
 $$;
-
-GRANT EXECUTE ON FUNCTION public.get_flag_analytics(uuid, date, date) TO authenticated;

@@ -15,6 +15,8 @@ function makeFlag(overrides: Partial<CaseFlag> = {}): CaseFlag {
     flag_type: 'warning',
     severity: 'warning',
     note: null,
+    metric_value: null,
+    threshold_value: null,
     duration_minutes: null,
     delay_type: undefined,
     ...overrides,

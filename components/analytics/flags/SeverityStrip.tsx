@@ -69,7 +69,7 @@ export default function SeverityStrip({
   if (totalFlags === 0) return null
 
   return (
-    <div className="flex gap-2">
+    <div className="grid grid-cols-3 gap-2">
       {SEVERITIES.map((sev) => {
         const count = counts[sev.key]
         const pct = totalFlags > 0 ? Math.round((count / totalFlags) * 100) : 0
@@ -78,7 +78,6 @@ export default function SeverityStrip({
           <div
             key={sev.key}
             className={`${sev.bg} border ${sev.border} rounded-lg px-3.5 py-2.5 flex justify-between items-center`}
-            style={{ flex: `${count || 1} 0 0`, minWidth: 100 }}
           >
             <div className="flex items-center gap-1.5">
               <span

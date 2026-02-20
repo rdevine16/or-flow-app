@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import { TimerChip, ProgressChip } from '@/components/cases/TimerChip'
 import MilestoneTimelineV2 from '@/components/cases/MilestoneTimelineV2'
 import FlagBadge from '@/components/cases/FlagBadge'
@@ -502,7 +502,8 @@ describe('Phase 9: Cross-Feature Consistency', () => {
           flagCount={0}
         />
       )
-      const delayValue = screen.getByText('3')
+      const delaysRow = screen.getByText('Delays').closest('div')
+      const delayValue = within(delaysRow!).getByText('3')
       expect(delayValue.className).toContain('text-amber-600')
     })
 
@@ -517,7 +518,8 @@ describe('Phase 9: Cross-Feature Consistency', () => {
           flagCount={2}
         />
       )
-      const flagValue = screen.getByText('2')
+      const flagsRow = screen.getByText('Flags', { selector: 'span.text-slate-500' }).closest('div')
+      const flagValue = within(flagsRow!).getByText('2')
       expect(flagValue.className).toContain('text-red-600')
     })
 

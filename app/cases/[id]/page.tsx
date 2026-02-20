@@ -1600,6 +1600,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               implantTotal={implantCategory === 'hip' || implantCategory === 'total_hip' || implantCategory === 'knee' || implantCategory === 'total_knee' ? 4 : 0}
               delayCount={caseFlags.filter(f => f.flag_type === 'delay').length}
               flagCount={caseFlags.filter(f => f.flag_type === 'threshold').length}
+              flags={caseFlags}
             />
 
             {/* NOTES */}

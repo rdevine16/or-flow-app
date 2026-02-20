@@ -270,7 +270,7 @@ describe('normalizeRPCResponse: fully populated RPC response', () => {
   ]
 
   const mockSurgeons: SurgeonFlagRow[] = [
-    { name: 'Dr. Smith', surgeonId: 'surg-1', cases: 30, flags: 14, rate: 46.7, trend: -3.2, topFlag: 'FCOTS Breach' },
+    { name: 'Dr. Smith', surgeonId: 'surg-1', cases: 30, flaggedCases: 14, flags: 14, rate: 46.7, prevRate: 49.9, trend: -3.2, topFlag: 'FCOTS Breach' },
   ]
 
   const mockRooms: RoomFlagRow[] = [
@@ -283,6 +283,7 @@ describe('normalizeRPCResponse: fully populated RPC response', () => {
       caseNumber: 'C-2026-001',
       date: '2026-01-28',
       surgeon: 'Dr. Smith',
+      roomId: 'room-3',
       procedure: 'Total Knee Replacement',
       flags: [{ type: 'threshold', name: 'FCOTS Breach', severity: 'critical' }],
     },

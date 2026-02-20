@@ -26,6 +26,11 @@ function getSeverityKey(flagType: string): keyof typeof severityColors {
   return 'info'
 }
 
+function formatMetricValue(value: number | null): string {
+  if (value == null) return '—'
+  return value % 1 === 0 ? String(value) : value.toFixed(1)
+}
+
 export default function CaseDrawerFlags({ flags }: CaseDrawerFlagsProps) {
   if (flags.length === 0) {
     return (
@@ -58,12 +63,24 @@ export default function CaseDrawerFlags({ flags }: CaseDrawerFlagsProps) {
                   <span className={`text-xs font-semibold uppercase ${colors.color}`}>
                     {severityKey}
                   </span>
+                  {flag.flag_rule?.name && (
+                    <span className="text-sm font-medium text-slate-900">
+                      {flag.flag_rule.name}
+                    </span>
+                  )}
                   {(flag.delay_type?.display_name || flag.delay_type?.name) && (
-                    <span className="text-xs text-slate-500">
+                    <span className="text-sm font-medium text-slate-900">
                       {flag.delay_type.display_name || flag.delay_type.name}
                     </span>
                   )}
                 </div>
+                {flag.metric_value != null && flag.threshold_value != null && (
+                  <p className="text-xs text-slate-600 mt-1">
+                    Value: <span className="font-mono font-semibold">{formatMetricValue(flag.metric_value)}</span>
+                    {' · '}
+                    Threshold: <span className="font-mono">{formatMetricValue(flag.threshold_value)}</span>
+                  </p>
+                )}
                 {flag.note && (
                   <p className="text-sm text-slate-700 mt-1">{flag.note}</p>
                 )}

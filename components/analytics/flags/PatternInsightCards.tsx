@@ -4,19 +4,20 @@
 
 'use client'
 
+import { TrendingUp, TrendingDown, Zap, DoorOpen, User, BarChart3 } from 'lucide-react'
 import type { DetectedPattern, PatternSeverity, PatternType } from '@/types/flag-analytics'
 
 // ============================================
-// Pattern icons by type
+// Pattern icons by type (lucide-react, consistent with rest of app)
 // ============================================
 
-const PATTERN_ICONS: Record<PatternType, string> = {
-  day_spike: '📈',
-  equipment_cascade: '🔗',
-  trend_improvement: '✅',
-  trend_deterioration: '📉',
-  room_concentration: '🔄',
-  recurring_surgeon: '👤',
+const PATTERN_ICONS: Record<PatternType, React.ElementType> = {
+  day_spike: BarChart3,
+  equipment_cascade: Zap,
+  trend_improvement: TrendingDown,
+  trend_deterioration: TrendingUp,
+  room_concentration: DoorOpen,
+  recurring_surgeon: User,
 }
 
 // ============================================
@@ -69,13 +70,13 @@ export default function PatternInsightCards({ patterns }: PatternInsightCardsPro
 
 function PatternCard({ pattern }: { pattern: DetectedPattern }) {
   const config = SEVERITY_CONFIG[pattern.severity]
-  const icon = PATTERN_ICONS[pattern.type] ?? '📊'
+  const Icon = PATTERN_ICONS[pattern.type] ?? BarChart3
 
   return (
     <div
       className={`bg-white border border-slate-200 ${config.border} border-l-[3px] rounded-lg px-4 py-3 flex items-start gap-3 shadow-[0_1px_2px_rgba(0,0,0,0.03)]`}
     >
-      <span className="text-xl leading-none flex-shrink-0 mt-0.5">{icon}</span>
+      <Icon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${config.badgeText}`} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2 mb-1">
           <span className="text-[13px] font-bold text-slate-900 truncate">{pattern.title}</span>

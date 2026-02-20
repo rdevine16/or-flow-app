@@ -7,7 +7,7 @@
 'use client'
 
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, User, DoorOpen, ExternalLink } from 'lucide-react'
+import { X, User, DoorOpen, ExternalLink, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import type {
   SurgeonFlagRow,
   RoomFlagRow,
@@ -29,6 +29,7 @@ interface FlagDrillThroughProps {
   surgeonFlags: SurgeonFlagRow[]
   roomFlags: RoomFlagRow[]
   recentFlaggedCases: RecentFlaggedCase[]
+  onCaseClick?: (caseId: string) => void
 }
 
 // ============================================
@@ -51,6 +52,7 @@ export default function FlagDrillThrough({
   surgeonFlags,
   roomFlags,
   recentFlaggedCases,
+  onCaseClick,
 }: FlagDrillThroughProps) {
   const isOpen = target !== null
 
@@ -68,13 +70,16 @@ export default function FlagDrillThrough({
               surgeonFlags={surgeonFlags}
               recentFlaggedCases={recentFlaggedCases}
               onClose={onClose}
+              onCaseClick={onCaseClick}
             />
           )}
           {target?.mode === 'room' && (
             <RoomPanel
               roomId={target.roomId}
               roomFlags={roomFlags}
+              recentFlaggedCases={recentFlaggedCases}
               onClose={onClose}
+              onCaseClick={onCaseClick}
             />
           )}
         </Dialog.Content>
@@ -92,11 +97,13 @@ function SurgeonPanel({
   surgeonFlags,
   recentFlaggedCases,
   onClose,
+  onCaseClick,
 }: {
   surgeonId: string
   surgeonFlags: SurgeonFlagRow[]
   recentFlaggedCases: RecentFlaggedCase[]
   onClose: () => void
+  onCaseClick?: (caseId: string) => void
 }) {
   const surgeon = surgeonFlags.find((s) => s.surgeonId === surgeonId)
 
@@ -121,24 +128,25 @@ function SurgeonPanel({
           <div className="text-center py-12 text-sm text-slate-400">Surgeon data not found.</div>
         ) : (
           <div className="space-y-6">
-            {/* Summary stats */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Summary stats — three cards */}
+            <div className="grid grid-cols-3 gap-3">
               <StatCard label="Total Cases" value={String(surgeon.cases)} />
-              <StatCard label="Flagged Cases" value={String(surgeon.flags)} />
-              <StatCard label="Flag Rate" value={`${surgeon.rate.toFixed(1)}%`} highlight={surgeon.rate > 30} />
               <StatCard
-                label="Trend"
-                value={
-                  surgeon.trend > 0
-                    ? `+${surgeon.trend.toFixed(1)}%`
-                    : `${surgeon.trend.toFixed(1)}%`
-                }
-                highlight={surgeon.trend > 0}
+                label="Total Cases Flagged"
+                value={String(surgeon.flaggedCases ?? Math.round(surgeon.rate * surgeon.cases / 100))}
+              />
+              <StatCard
+                label="Flag Rate"
+                value={`${surgeon.rate.toFixed(1)}%`}
+                highlight={surgeon.rate > 30}
               />
             </div>
 
+            {/* Trend row */}
+            <TrendRow trend={surgeon.trend} />
+
             {/* Top flag */}
-            {surgeon.topFlag && (
+            {surgeon.topFlag && surgeon.topFlag !== 'N/A' && (
               <div>
                 <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                   Most Common Flag
@@ -159,7 +167,7 @@ function SurgeonPanel({
               ) : (
                 <div className="space-y-2">
                   {surgeonCases.map((c) => (
-                    <CaseRow key={c.caseId} caseData={c} />
+                    <CaseRow key={c.caseId} caseData={c} onClick={onCaseClick} />
                   ))}
                 </div>
               )}
@@ -178,13 +186,19 @@ function SurgeonPanel({
 function RoomPanel({
   roomId,
   roomFlags,
+  recentFlaggedCases,
   onClose,
+  onCaseClick,
 }: {
   roomId: string
   roomFlags: RoomFlagRow[]
+  recentFlaggedCases: RecentFlaggedCase[]
   onClose: () => void
+  onCaseClick?: (caseId: string) => void
 }) {
   const room = roomFlags.find((r) => r.roomId === roomId)
+
+  const roomCases = recentFlaggedCases.filter((c) => c.roomId === roomId)
 
   return (
     <>
@@ -202,37 +216,63 @@ function RoomPanel({
           <div className="text-center py-12 text-sm text-slate-400">Room data not found.</div>
         ) : (
           <div className="space-y-6">
-            {/* Summary stats */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Summary stats — three cards */}
+            <div className="grid grid-cols-3 gap-3">
               <StatCard label="Total Cases" value={String(room.cases)} />
-              <StatCard label="Total Flags" value={String(room.flags)} />
-              <StatCard label="Flag Rate" value={`${room.rate.toFixed(1)}%`} highlight={room.rate > 30} />
-              <StatCard label="Flags / Case" value={room.cases > 0 ? (room.flags / room.cases).toFixed(1) : '0'} />
+              <StatCard
+                label="Total Cases Flagged"
+                value={String(Math.round(room.rate * room.cases / 100))}
+              />
+              <StatCard
+                label="Flag Rate"
+                value={`${room.rate.toFixed(1)}%`}
+                highlight={room.rate > 30}
+              />
             </div>
 
             {/* Top issue */}
-            {room.topIssue && (
-              <div>
-                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Top Auto-Detected Issue
-                </h4>
-                <div className="text-sm font-medium text-slate-900 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
-                  {room.topIssue}
-                </div>
+            <div>
+              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                Top Auto-Detected Issue
+              </h4>
+              <div className={`text-sm rounded-lg px-3 py-2 border ${
+                room.topIssue && room.topIssue !== 'N/A'
+                  ? 'font-medium text-slate-900 bg-slate-50 border-slate-100'
+                  : 'text-slate-400 bg-slate-50/50 border-slate-100'
+              }`}>
+                {room.topIssue && room.topIssue !== 'N/A' ? room.topIssue : 'No threshold issues detected'}
               </div>
-            )}
+            </div>
 
             {/* Top delay */}
-            {room.topDelay && (
-              <div>
-                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Top Reported Delay
-                </h4>
-                <div className="text-sm font-medium text-slate-900 bg-amber-50 rounded-lg px-3 py-2 border border-amber-100">
-                  {room.topDelay}
-                </div>
+            <div>
+              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                Top Reported Delay
+              </h4>
+              <div className={`text-sm rounded-lg px-3 py-2 border ${
+                room.topDelay && room.topDelay !== 'N/A'
+                  ? 'font-medium text-slate-900 bg-amber-50 border-amber-100'
+                  : 'text-slate-400 bg-slate-50/50 border-slate-100'
+              }`}>
+                {room.topDelay && room.topDelay !== 'N/A' ? room.topDelay : 'No delays reported'}
               </div>
-            )}
+            </div>
+
+            {/* Flagged cases for this room */}
+            <div>
+              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                Flagged Cases ({roomCases.length})
+              </h4>
+              {roomCases.length === 0 ? (
+                <p className="text-sm text-slate-400">No recent flagged cases in this period.</p>
+              ) : (
+                <div className="space-y-2">
+                  {roomCases.map((c) => (
+                    <CaseRow key={c.caseId} caseData={c} onClick={onCaseClick} />
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Link to cases page */}
             <div className="pt-2">
@@ -293,22 +333,58 @@ function PanelHeader({
   )
 }
 
-function StatCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function StatCard({ label, value, subtitle, highlight }: { label: string; value: string; subtitle?: string; highlight?: boolean }) {
   return (
     <div className="bg-slate-50 rounded-lg px-3 py-2.5 border border-slate-100">
       <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1">{label}</div>
       <div className={`text-lg font-bold font-mono ${highlight ? 'text-rose-600' : 'text-slate-900'}`}>
         {value}
       </div>
+      {subtitle && (
+        <div className={`text-[11px] mt-0.5 ${highlight ? 'text-rose-500' : 'text-slate-400'}`}>
+          {subtitle}
+        </div>
+      )}
     </div>
   )
 }
 
-function CaseRow({ caseData }: { caseData: RecentFlaggedCase }) {
+function TrendRow({ trend }: { trend: number }) {
+  if (trend === 0) {
+    return (
+      <div className="rounded-lg border border-slate-100 bg-slate-50/50 px-4 py-3 flex items-center gap-3">
+        <Minus className="w-4 h-4 text-slate-400" />
+        <span className="text-sm text-slate-400">No change from prior period</span>
+      </div>
+    )
+  }
+
+  const isImproving = trend < 0
+  const absTrend = Math.abs(trend)
+
   return (
-    <a
-      href={`/cases?caseId=${caseData.caseId}`}
-      className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100 hover:bg-slate-50 hover:border-slate-200 transition-colors group"
+    <div className={`rounded-lg border px-4 py-3 flex items-center gap-3 ${
+      isImproving ? 'bg-emerald-50/50 border-emerald-200' : 'bg-rose-50/50 border-rose-200'
+    }`}>
+      <div className={`flex items-center gap-1.5 ${
+        isImproving ? 'text-emerald-600' : 'text-rose-600'
+      }`}>
+        {isImproving ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
+        <span className="text-sm font-bold font-mono">{absTrend.toFixed(1)}%</span>
+      </div>
+      <span className="text-sm text-slate-600">
+        Flag rate {isImproving ? 'decreased' : 'increased'} by {absTrend.toFixed(1)}% vs prior period
+      </span>
+    </div>
+  )
+}
+
+function CaseRow({ caseData, onClick }: { caseData: RecentFlaggedCase; onClick?: (caseId: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick?.(caseData.caseId)}
+      className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100 hover:bg-slate-50 hover:border-slate-200 transition-colors group cursor-pointer"
     >
       <div className="flex-shrink-0">
         <span className="text-[13px] font-semibold text-sky-600 font-mono group-hover:text-sky-700">
@@ -331,6 +407,6 @@ function CaseRow({ caseData }: { caseData: RecentFlaggedCase }) {
           )
         })}
       </div>
-    </a>
+    </button>
   )
 }

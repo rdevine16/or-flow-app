@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import AccessDenied from '@/components/ui/AccessDenied'
@@ -22,7 +22,9 @@ import PatternInsightCards from '@/components/analytics/flags/PatternInsightCard
 import RecentFlaggedCases from '@/components/analytics/flags/RecentFlaggedCases'
 import FlagDrillThrough from '@/components/analytics/flags/FlagDrillThrough'
 import type { DrillThroughTarget } from '@/components/analytics/flags/FlagDrillThrough'
-import { Flag, BarChart3, TrendingUp, Grid3x3, Shield, Clock, Users, DoorOpen, Lightbulb, FileText } from 'lucide-react'
+import CaseDrawer from '@/components/cases/CaseDrawer'
+import { useProcedureCategories } from '@/hooks/useLookups'
+import { Flag, BarChart3, TrendingUp, Grid3x3, Shield, Clock, Users, DoorOpen } from 'lucide-react'
 
 // Delay type color palette (cycles for dynamic delay types from DB)
 const DELAY_TYPE_COLORS = [
@@ -54,12 +56,11 @@ function FlagsPageSkeleton() {
       </div>
 
       {/* Severity strip skeleton */}
-      <div className="flex gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
             className="bg-slate-100 rounded-lg h-12"
-            style={{ flex: `${3 - i} 0 0`, minWidth: 100 }}
           />
         ))}
       </div>
@@ -130,8 +131,25 @@ export default function CaseFlagsAnalyticsPage() {
     setDrillTarget({ mode: 'room', roomId })
   }, [])
 
+  // Case drawer state
+  const [drawerCaseId, setDrawerCaseId] = useState<string | null>(null)
+  const { data: procedureCategories } = useProcedureCategories()
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    if (procedureCategories) {
+      for (const cat of procedureCategories) {
+        map.set(cat.id, cat.name)
+      }
+    }
+    return map
+  }, [procedureCategories])
+
   const handleCaseClick = useCallback((caseId: string) => {
-    window.location.href = `/cases?caseId=${caseId}`
+    setDrawerCaseId(caseId)
+  }, [])
+
+  const handleDrawerClose = useCallback(() => {
+    setDrawerCaseId(null)
   }, [])
 
   const handleDrillClose = useCallback(() => {
@@ -377,16 +395,14 @@ export default function CaseFlagsAnalyticsPage() {
 
           {/* Detected patterns */}
           {data.patterns.length > 0 && (
-            <div>
-              <div className="mb-3">
-                <SectionHeader
-                  title="Detected Patterns"
-                  subtitle="Auto-analyzed trends and correlations from your flag data"
-                  icon={<Lightbulb className="w-4 h-4" />}
-                  accentColor="amber"
-                />
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="text-[15px] font-bold text-slate-900">Detected Patterns</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Auto-analyzed trends and correlations from your flag data</p>
               </div>
-              <PatternInsightCards patterns={data.patterns} />
+              <div className="p-4">
+                <PatternInsightCards patterns={data.patterns} />
+              </div>
             </div>
           )}
 
@@ -410,8 +426,16 @@ export default function CaseFlagsAnalyticsPage() {
           surgeonFlags={data.surgeonFlags}
           roomFlags={data.roomFlags}
           recentFlaggedCases={data.recentFlaggedCases}
+          onCaseClick={handleCaseClick}
         />
       )}
+
+      {/* Case detail drawer */}
+      <CaseDrawer
+        caseId={drawerCaseId}
+        onClose={handleDrawerClose}
+        categoryNameById={categoryNameById}
+      />
     </DashboardLayout>
   )
 }

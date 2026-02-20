@@ -85,8 +85,10 @@ export interface SurgeonFlagRow {
   name: string
   surgeonId: string
   cases: number
+  flaggedCases: number
   flags: number
   rate: number
+  prevRate: number | null
   trend: number
   topFlag: string
 }
@@ -120,6 +122,7 @@ export interface RecentFlaggedCase {
   caseNumber: string
   date: string
   surgeon: string
+  roomId: string | null
   procedure: string
   flags: RecentFlaggedCaseFlag[]
 }
