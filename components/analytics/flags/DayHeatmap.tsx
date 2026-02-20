@@ -11,7 +11,7 @@ interface DayHeatmapProps {
   data: DayOfWeekRow[]
 }
 
-type CategoryKey = 'fcots' | 'timing' | 'turnover' | 'delay'
+type CategoryKey = 'fcots' | 'timing' | 'turnover' | 'delay' | 'financial' | 'quality'
 
 interface HeatmapCategory {
   key: CategoryKey
@@ -27,6 +27,8 @@ const CATEGORIES: HeatmapCategory[] = [
   { key: 'fcots', label: 'FCOTS', color: flagChartColors.fcots },
   { key: 'timing', label: 'Timing', color: flagChartColors.timing },
   { key: 'turnover', label: 'Turnover', color: flagChartColors.turnover },
+  { key: 'financial', label: 'Financial', color: flagChartColors.financial },
+  { key: 'quality', label: 'Quality', color: flagChartColors.quality },
   { key: 'delay', label: 'Delays', color: flagChartColors.delays },
 ]
 

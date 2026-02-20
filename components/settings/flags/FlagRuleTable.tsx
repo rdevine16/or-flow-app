@@ -15,7 +15,7 @@ export function FlagRuleTable({ children }: FlagRuleTableProps) {
       {/* Header Row */}
       <div
         className="grid px-4 py-2 bg-slate-50/80 border-b border-slate-200 gap-x-2.5"
-        style={{ gridTemplateColumns: RULE_GRID_COLUMNS }}
+        style={{ gridTemplateColumns: RULE_GRID_COLUMNS, minWidth: 640 }}
       >
         <span />
         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">

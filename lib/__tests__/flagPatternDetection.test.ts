@@ -109,11 +109,11 @@ describe('detectFlagPatterns: severity sort order', () => {
       }),
       // day heatmap: Monday spike >50% over average, total 8 flags (>=3) — warning
       dayOfWeekHeatmap: [
-        { day: 'Monday', dayNum: 1, fcots: 4, timing: 2, turnover: 1, delay: 1, total: 8 },
-        { day: 'Tuesday', dayNum: 2, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
-        { day: 'Wednesday', dayNum: 3, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
-        { day: 'Thursday', dayNum: 4, fcots: 1, timing: 0, turnover: 0, delay: 0, total: 1 },
-        { day: 'Friday', dayNum: 5, fcots: 1, timing: 0, turnover: 0, delay: 0, total: 1 },
+        { day: 'Monday', dayNum: 1, fcots: 4, timing: 2, turnover: 1, delay: 1, financial: 0, quality: 0, total: 8 },
+        { day: 'Tuesday', dayNum: 2, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Wednesday', dayNum: 3, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Thursday', dayNum: 4, fcots: 1, timing: 0, turnover: 0, delay: 0, financial: 0, quality: 0, total: 1 },
+        { day: 'Friday', dayNum: 5, fcots: 1, timing: 0, turnover: 0, delay: 0, financial: 0, quality: 0, total: 1 },
       ],
       // room: triggers critical (>35% flags, <30% cases)
       roomFlags: [
@@ -163,11 +163,11 @@ describe('detectDaySpikes', () => {
       summary: makeSummary({ totalFlags: 20 }),
       dayOfWeekHeatmap: [
         // avg = (12 + 2 + 2 + 2 + 2) / 5 = 4. Monday excess = (12-4)/4 = 200% > 50%
-        { day: 'Monday', dayNum: 1, fcots: 6, timing: 3, turnover: 2, delay: 1, total: 12 },
-        { day: 'Tuesday', dayNum: 2, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
-        { day: 'Wednesday', dayNum: 3, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
-        { day: 'Thursday', dayNum: 4, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
-        { day: 'Friday', dayNum: 5, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
+        { day: 'Monday', dayNum: 1, fcots: 6, timing: 3, turnover: 2, delay: 1, financial: 0, quality: 0, total: 12 },
+        { day: 'Tuesday', dayNum: 2, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Wednesday', dayNum: 3, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Thursday', dayNum: 4, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Friday', dayNum: 5, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -181,11 +181,11 @@ describe('detectDaySpikes', () => {
       summary: makeSummary({ totalFlags: 20 }),
       dayOfWeekHeatmap: [
         // avg=4, Monday=12 → excess=200% > 100%
-        { day: 'Monday', dayNum: 1, fcots: 6, timing: 3, turnover: 2, delay: 1, total: 12 },
-        { day: 'Tuesday', dayNum: 2, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
-        { day: 'Wednesday', dayNum: 3, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
-        { day: 'Thursday', dayNum: 4, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
-        { day: 'Friday', dayNum: 5, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
+        { day: 'Monday', dayNum: 1, fcots: 6, timing: 3, turnover: 2, delay: 1, financial: 0, quality: 0, total: 12 },
+        { day: 'Tuesday', dayNum: 2, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Wednesday', dayNum: 3, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Thursday', dayNum: 4, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Friday', dayNum: 5, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -198,11 +198,11 @@ describe('detectDaySpikes', () => {
       summary: makeSummary({ totalFlags: 20 }),
       dayOfWeekHeatmap: [
         // avg = (7 + 4 + 4 + 4 + 3) / 5 = 4.4, Monday excess = (7-4.4)/4.4 ≈ 59% — warning
-        { day: 'Monday', dayNum: 1, fcots: 4, timing: 2, turnover: 1, delay: 0, total: 7 },
-        { day: 'Tuesday', dayNum: 2, fcots: 2, timing: 1, turnover: 1, delay: 0, total: 4 },
-        { day: 'Wednesday', dayNum: 3, fcots: 2, timing: 1, turnover: 1, delay: 0, total: 4 },
-        { day: 'Thursday', dayNum: 4, fcots: 2, timing: 1, turnover: 1, delay: 0, total: 4 },
-        { day: 'Friday', dayNum: 5, fcots: 1, timing: 1, turnover: 1, delay: 0, total: 3 },
+        { day: 'Monday', dayNum: 1, fcots: 4, timing: 2, turnover: 1, delay: 0, financial: 0, quality: 0, total: 7 },
+        { day: 'Tuesday', dayNum: 2, fcots: 2, timing: 1, turnover: 1, delay: 0, financial: 0, quality: 0, total: 4 },
+        { day: 'Wednesday', dayNum: 3, fcots: 2, timing: 1, turnover: 1, delay: 0, financial: 0, quality: 0, total: 4 },
+        { day: 'Thursday', dayNum: 4, fcots: 2, timing: 1, turnover: 1, delay: 0, financial: 0, quality: 0, total: 4 },
+        { day: 'Friday', dayNum: 5, fcots: 1, timing: 1, turnover: 1, delay: 0, financial: 0, quality: 0, total: 3 },
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -215,10 +215,10 @@ describe('detectDaySpikes', () => {
       summary: makeSummary({ totalFlags: 18 }),
       dayOfWeekHeatmap: [
         // avg = (6 + 4 + 4 + 4) / 4 = 4.5, Monday excess = (6-4.5)/4.5 = 33% — not a spike
-        { day: 'Monday', dayNum: 1, fcots: 3, timing: 2, turnover: 1, delay: 0, total: 6 },
-        { day: 'Tuesday', dayNum: 2, fcots: 2, timing: 1, turnover: 1, delay: 0, total: 4 },
-        { day: 'Wednesday', dayNum: 3, fcots: 2, timing: 1, turnover: 1, delay: 0, total: 4 },
-        { day: 'Thursday', dayNum: 4, fcots: 2, timing: 1, turnover: 1, delay: 0, total: 4 },
+        { day: 'Monday', dayNum: 1, fcots: 3, timing: 2, turnover: 1, delay: 0, financial: 0, quality: 0, total: 6 },
+        { day: 'Tuesday', dayNum: 2, fcots: 2, timing: 1, turnover: 1, delay: 0, financial: 0, quality: 0, total: 4 },
+        { day: 'Wednesday', dayNum: 3, fcots: 2, timing: 1, turnover: 1, delay: 0, financial: 0, quality: 0, total: 4 },
+        { day: 'Thursday', dayNum: 4, fcots: 2, timing: 1, turnover: 1, delay: 0, financial: 0, quality: 0, total: 4 },
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -232,9 +232,9 @@ describe('detectDaySpikes', () => {
       dayOfWeekHeatmap: [
         // avg = (2 + 1 + 1) / 3 = 1.33, Monday excess = (2-1.33)/1.33 = 50.4% — barely over threshold
         // but Monday total=2 < 3, so should NOT trigger
-        { day: 'Monday', dayNum: 1, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
-        { day: 'Tuesday', dayNum: 2, fcots: 0, timing: 1, turnover: 0, delay: 0, total: 1 },
-        { day: 'Wednesday', dayNum: 3, fcots: 0, timing: 1, turnover: 0, delay: 0, total: 1 },
+        { day: 'Monday', dayNum: 1, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Tuesday', dayNum: 2, fcots: 0, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 1 },
+        { day: 'Wednesday', dayNum: 3, fcots: 0, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 1 },
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -254,11 +254,11 @@ describe('detectDaySpikes', () => {
       summary: makeSummary({ totalFlags: 20 }),
       dayOfWeekHeatmap: [
         // Timing dominates (5 out of 10)
-        { day: 'Friday', dayNum: 5, fcots: 2, timing: 5, turnover: 2, delay: 1, total: 10 },
-        { day: 'Monday', dayNum: 1, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
-        { day: 'Tuesday', dayNum: 2, fcots: 1, timing: 0, turnover: 0, delay: 0, total: 1 },
-        { day: 'Wednesday', dayNum: 3, fcots: 1, timing: 0, turnover: 0, delay: 0, total: 1 },
-        { day: 'Thursday', dayNum: 4, fcots: 1, timing: 0, turnover: 0, delay: 0, total: 1 },
+        { day: 'Friday', dayNum: 5, fcots: 2, timing: 5, turnover: 2, delay: 1, financial: 0, quality: 0, total: 10 },
+        { day: 'Monday', dayNum: 1, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Tuesday', dayNum: 2, fcots: 1, timing: 0, turnover: 0, delay: 0, financial: 0, quality: 0, total: 1 },
+        { day: 'Wednesday', dayNum: 3, fcots: 1, timing: 0, turnover: 0, delay: 0, financial: 0, quality: 0, total: 1 },
+        { day: 'Thursday', dayNum: 4, fcots: 1, timing: 0, turnover: 0, delay: 0, financial: 0, quality: 0, total: 1 },
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -274,11 +274,11 @@ describe('detectDaySpikes', () => {
         // avg = (12 + 12 + 1 + 1 + 1) / 5 = 5.4
         // Monday: (12-5.4)/5.4 ≈ 122% spike
         // Tuesday: (12-5.4)/5.4 ≈ 122% spike
-        { day: 'Monday', dayNum: 1, fcots: 6, timing: 3, turnover: 2, delay: 1, total: 12 },
-        { day: 'Tuesday', dayNum: 2, fcots: 6, timing: 3, turnover: 2, delay: 1, total: 12 },
-        { day: 'Wednesday', dayNum: 3, fcots: 0, timing: 1, turnover: 0, delay: 0, total: 1 },
-        { day: 'Thursday', dayNum: 4, fcots: 0, timing: 1, turnover: 0, delay: 0, total: 1 },
-        { day: 'Friday', dayNum: 5, fcots: 0, timing: 1, turnover: 0, delay: 0, total: 1 },
+        { day: 'Monday', dayNum: 1, fcots: 6, timing: 3, turnover: 2, delay: 1, financial: 0, quality: 0, total: 12 },
+        { day: 'Tuesday', dayNum: 2, fcots: 6, timing: 3, turnover: 2, delay: 1, financial: 0, quality: 0, total: 12 },
+        { day: 'Wednesday', dayNum: 3, fcots: 0, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 1 },
+        { day: 'Thursday', dayNum: 4, fcots: 0, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 1 },
+        { day: 'Friday', dayNum: 5, fcots: 0, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 1 },
       ],
     })
     const patterns = detectFlagPatterns(data)
@@ -290,8 +290,8 @@ describe('detectDaySpikes', () => {
     const data = makeBaseData({
       summary: makeSummary({ totalFlags: 10 }),
       dayOfWeekHeatmap: [
-        { day: 'Monday', dayNum: 1, fcots: 0, timing: 0, turnover: 0, delay: 0, total: 0 },
-        { day: 'Tuesday', dayNum: 2, fcots: 0, timing: 0, turnover: 0, delay: 0, total: 0 },
+        { day: 'Monday', dayNum: 1, fcots: 0, timing: 0, turnover: 0, delay: 0, financial: 0, quality: 0, total: 0 },
+        { day: 'Tuesday', dayNum: 2, fcots: 0, timing: 0, turnover: 0, delay: 0, financial: 0, quality: 0, total: 0 },
       ],
     })
     // Should not throw
@@ -786,7 +786,7 @@ describe('detectFlagPatterns: combined edge cases', () => {
       summary: makeSummary({ totalFlags: 5, totalCases: 10, flagRate: 50, avgFlagsPerCase: 0.5 }),
       weeklyTrend: [{ week: '2026-01-01', threshold: 3, delay: 2, total: 5 }],
       dayOfWeekHeatmap: [
-        { day: 'Monday', dayNum: 1, fcots: 2, timing: 2, turnover: 1, delay: 0, total: 5 },
+        { day: 'Monday', dayNum: 1, fcots: 2, timing: 2, turnover: 1, delay: 0, financial: 0, quality: 0, total: 5 },
       ],
       roomFlags: [
         { room: 'OR 1', roomId: 'r1', cases: 10, flags: 5, rate: 50, topIssue: 'Timing', topDelay: '' },
@@ -802,11 +802,11 @@ describe('detectFlagPatterns: combined edge cases', () => {
     const data = makeBaseData({
       summary: makeSummary({ totalFlags: 20, totalCases: 100, flagRate: 20, avgFlagsPerCase: 1.0 }),
       dayOfWeekHeatmap: [
-        { day: 'Monday', dayNum: 1, fcots: 6, timing: 3, turnover: 2, delay: 1, total: 12 },
-        { day: 'Tuesday', dayNum: 2, fcots: 1, timing: 1, turnover: 0, delay: 0, total: 2 },
-        { day: 'Wednesday', dayNum: 3, fcots: 1, timing: 0, turnover: 0, delay: 0, total: 2 },
-        { day: 'Thursday', dayNum: 4, fcots: 1, timing: 0, turnover: 0, delay: 0, total: 2 },
-        { day: 'Friday', dayNum: 5, fcots: 1, timing: 0, turnover: 0, delay: 0, total: 2 },
+        { day: 'Monday', dayNum: 1, fcots: 6, timing: 3, turnover: 2, delay: 1, financial: 0, quality: 0, total: 12 },
+        { day: 'Tuesday', dayNum: 2, fcots: 1, timing: 1, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Wednesday', dayNum: 3, fcots: 1, timing: 0, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Thursday', dayNum: 4, fcots: 1, timing: 0, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
+        { day: 'Friday', dayNum: 5, fcots: 1, timing: 0, turnover: 0, delay: 0, financial: 0, quality: 0, total: 2 },
       ],
     })
     const patterns = detectFlagPatterns(data)

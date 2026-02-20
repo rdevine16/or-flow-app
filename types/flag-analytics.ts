@@ -52,6 +52,8 @@ export interface DayOfWeekRow {
   timing: number
   turnover: number
   delay: number
+  financial: number
+  quality: number
   total: number
 }
 

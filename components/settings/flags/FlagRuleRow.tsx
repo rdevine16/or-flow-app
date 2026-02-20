@@ -65,7 +65,7 @@ export function FlagRuleRow({
       className={`grid items-center px-4 py-3 gap-x-2.5 border-b border-slate-100 last:border-b-0 transition-opacity ${
         disabled || isArchived ? 'opacity-45' : ''
       }`}
-      style={{ gridTemplateColumns: RULE_GRID_COLUMNS }}
+      style={{ gridTemplateColumns: RULE_GRID_COLUMNS, minWidth: 640 }}
     >
       {/* Toggle */}
       <div className="flex justify-center">

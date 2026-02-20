@@ -195,7 +195,12 @@ describe('FlagRuleRow — Phase 4: Custom Badge & Archive/Restore Buttons', () =
           isSaving={false}
           onToggle={vi.fn()}
           onSeverityChange={vi.fn()}
-          onThresholdEdit={vi.fn()}
+          onThresholdTypeChange={vi.fn()}
+          onOperatorChange={vi.fn()}
+          onValueChange={vi.fn()}
+          onValueMaxChange={vi.fn()}
+          onScopeChange={vi.fn()}
+          showArchive={true}
           onArchive={vi.fn()}
         />
       )
@@ -213,7 +218,12 @@ describe('FlagRuleRow — Phase 4: Custom Badge & Archive/Restore Buttons', () =
           isSaving={false}
           onToggle={vi.fn()}
           onSeverityChange={vi.fn()}
-          onThresholdEdit={vi.fn()}
+          onThresholdTypeChange={vi.fn()}
+          onOperatorChange={vi.fn()}
+          onValueChange={vi.fn()}
+          onValueMaxChange={vi.fn()}
+          onScopeChange={vi.fn()}
+          showArchive={true}
           onArchive={vi.fn()}
         />
       )
@@ -233,7 +243,12 @@ describe('FlagRuleRow — Phase 4: Custom Badge & Archive/Restore Buttons', () =
           isSaving={false}
           onToggle={vi.fn()}
           onSeverityChange={vi.fn()}
-          onThresholdEdit={vi.fn()}
+          onThresholdTypeChange={vi.fn()}
+          onOperatorChange={vi.fn()}
+          onValueChange={vi.fn()}
+          onValueMaxChange={vi.fn()}
+          onScopeChange={vi.fn()}
+          showArchive={false}
           onArchive={vi.fn()}
         />
       )
@@ -256,7 +271,12 @@ describe('FlagRuleRow — Phase 4: Custom Badge & Archive/Restore Buttons', () =
           isSaving={true}
           onToggle={vi.fn()}
           onSeverityChange={vi.fn()}
-          onThresholdEdit={vi.fn()}
+          onThresholdTypeChange={vi.fn()}
+          onOperatorChange={vi.fn()}
+          onValueChange={vi.fn()}
+          onValueMaxChange={vi.fn()}
+          onScopeChange={vi.fn()}
+          showArchive={true}
           onArchive={vi.fn()}
         />
       )
@@ -272,7 +292,12 @@ describe('FlagRuleRow — Phase 4: Custom Badge & Archive/Restore Buttons', () =
           isSaving={false}
           onToggle={vi.fn()}
           onSeverityChange={vi.fn()}
-          onThresholdEdit={vi.fn()}
+          onThresholdTypeChange={vi.fn()}
+          onOperatorChange={vi.fn()}
+          onValueChange={vi.fn()}
+          onValueMaxChange={vi.fn()}
+          onScopeChange={vi.fn()}
+          showArchive={true}
           onArchive={vi.fn()}
         />
       )
@@ -290,7 +315,12 @@ describe('FlagRuleRow — Phase 4: Custom Badge & Archive/Restore Buttons', () =
           isSaving={false}
           onToggle={vi.fn()}
           onSeverityChange={vi.fn()}
-          onThresholdEdit={vi.fn()}
+          onThresholdTypeChange={vi.fn()}
+          onOperatorChange={vi.fn()}
+          onValueChange={vi.fn()}
+          onValueMaxChange={vi.fn()}
+          onScopeChange={vi.fn()}
+          showArchive={true}
           onArchive={vi.fn()}
         />
       )
@@ -306,7 +336,12 @@ describe('FlagRuleRow — Phase 4: Custom Badge & Archive/Restore Buttons', () =
           isSaving={false}
           onToggle={vi.fn()}
           onSeverityChange={vi.fn()}
-          onThresholdEdit={vi.fn()}
+          onThresholdTypeChange={vi.fn()}
+          onOperatorChange={vi.fn()}
+          onValueChange={vi.fn()}
+          onValueMaxChange={vi.fn()}
+          onScopeChange={vi.fn()}
+          showArchive={true}
           onArchive={vi.fn()}
         />
       )
@@ -328,30 +363,41 @@ describe('FlagRuleRow — Phase 4: Custom Badge & Archive/Restore Buttons', () =
           isSaving={false}
           onToggle={vi.fn()}
           onSeverityChange={vi.fn()}
-          onThresholdEdit={vi.fn()}
+          onThresholdTypeChange={vi.fn()}
+          onOperatorChange={vi.fn()}
+          onValueChange={vi.fn()}
+          onValueMaxChange={vi.fn()}
+          onScopeChange={vi.fn()}
+          showArchive={true}
           onArchive={vi.fn()}
         />
       )
 
       const customBadge = screen.getByText('Custom')
-      expect(customBadge).toHaveClass('text-xs', 'font-medium', 'bg-blue-100', 'text-blue-700')
+      // Updated to match Phase 5 styling: smaller font, uppercase, rounded
+      expect(customBadge).toHaveClass('text-[9px]', 'font-bold', 'uppercase', 'bg-blue-50', 'text-blue-600')
     })
 
-    it('archive button has slate color (neutral, not destructive red)', () => {
+    it('archive button has slate default with red hover', () => {
       render(
         <FlagRuleRow
           rule={mockCustomRule}
           isSaving={false}
           onToggle={vi.fn()}
           onSeverityChange={vi.fn()}
-          onThresholdEdit={vi.fn()}
+          onThresholdTypeChange={vi.fn()}
+          onOperatorChange={vi.fn()}
+          onValueChange={vi.fn()}
+          onValueMaxChange={vi.fn()}
+          onScopeChange={vi.fn()}
+          showArchive={true}
           onArchive={vi.fn()}
         />
       )
 
       const archiveButton = screen.getByTitle('Archive rule')
-      // Archive is not destructive (can be restored), so use neutral slate color
-      expect(archiveButton).toHaveClass('text-slate-400', 'hover:text-slate-600')
+      // Archive button: light slate default, red on hover to indicate removal
+      expect(archiveButton).toHaveClass('text-slate-300', 'hover:text-red-500')
     })
   })
 
@@ -363,7 +409,12 @@ describe('FlagRuleRow — Phase 4: Custom Badge & Archive/Restore Buttons', () =
           isSaving={false}
           onToggle={vi.fn()}
           onSeverityChange={vi.fn()}
-          onThresholdEdit={vi.fn()}
+          onThresholdTypeChange={vi.fn()}
+          onOperatorChange={vi.fn()}
+          onValueChange={vi.fn()}
+          onValueMaxChange={vi.fn()}
+          onScopeChange={vi.fn()}
+          showArchive={true}
           onArchive={vi.fn()}
         />
       )
@@ -379,7 +430,12 @@ describe('FlagRuleRow — Phase 4: Custom Badge & Archive/Restore Buttons', () =
           isSaving={false}
           onToggle={vi.fn()}
           onSeverityChange={vi.fn()}
-          onThresholdEdit={vi.fn()}
+          onThresholdTypeChange={vi.fn()}
+          onOperatorChange={vi.fn()}
+          onValueChange={vi.fn()}
+          onValueMaxChange={vi.fn()}
+          onScopeChange={vi.fn()}
+          showArchive={true}
           onArchive={vi.fn()}
         />
       )

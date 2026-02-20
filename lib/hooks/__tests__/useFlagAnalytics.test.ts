@@ -256,7 +256,7 @@ describe('normalizeRPCResponse: fully populated RPC response', () => {
   ]
 
   const mockDayOfWeek: DayOfWeekRow[] = [
-    { day: 'Monday', dayNum: 1, fcots: 3, timing: 2, turnover: 4, delay: 2, total: 11 },
+    { day: 'Monday', dayNum: 1, fcots: 3, timing: 2, turnover: 4, delay: 2, financial: 0, quality: 0, total: 11 },
   ]
 
   const mockFlagRules: FlagRuleBreakdownItem[] = [

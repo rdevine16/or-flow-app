@@ -85,7 +85,11 @@ export function useFlagAnalytics(options: UseFlagAnalyticsOptions): UseFlagAnaly
         summary: raw?.summary ?? EMPTY_SUMMARY,
         sparklineData: raw?.sparklineData ?? EMPTY_SPARKLINE,
         weeklyTrend: raw?.weeklyTrend ?? [],
-        dayOfWeekHeatmap: raw?.dayOfWeekHeatmap ?? [],
+        dayOfWeekHeatmap: (raw?.dayOfWeekHeatmap ?? []).map((row) => ({
+          ...row,
+          financial: row.financial ?? 0,
+          quality: row.quality ?? 0,
+        })),
         flagRuleBreakdown: raw?.flagRuleBreakdown ?? [],
         delayTypeBreakdown: raw?.delayTypeBreakdown ?? [],
         surgeonFlags: raw?.surgeonFlags ?? [],

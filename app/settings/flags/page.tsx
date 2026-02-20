@@ -16,8 +16,9 @@ import { CategoryFilter } from '@/components/settings/flags/CategoryFilter'
 import { FlagRuleTable } from '@/components/settings/flags/FlagRuleTable'
 import { FlagRuleRow } from '@/components/settings/flags/FlagRuleRow'
 import { MetricSearchBuilder } from '@/components/settings/flags/MetricSearchBuilder'
-import { Plus } from 'lucide-react'
+import { Plus, Info } from 'lucide-react'
 import { flagRuleAudit } from '@/lib/audit-logger'
+import { THRESHOLD_TYPES } from '@/lib/constants/metrics-catalog'
 import * as flagRulesDal from '@/lib/dal/flag-rules'
 import type { FlagRule, Severity, ThresholdType, Operator, ComparisonScope, MetricCatalogEntry, CustomRuleFormState } from '@/types/flag-settings'
 
@@ -559,7 +560,7 @@ export default function FlagsSettingsPage() {
   return (
     <>
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 mb-1">Flag Rules</h1>
           <p className="text-sm text-slate-500 max-w-xl leading-relaxed">
@@ -567,7 +568,7 @@ export default function FlagsSettingsPage() {
             rules provide standard OR metrics. Add custom rules from any metric in your database.
           </p>
         </div>
-        <div className="flex items-center gap-3 shrink-0 ml-6">
+        <div className="flex items-center gap-3 shrink-0">
           {/* Active counter */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-sm text-slate-500">
             <span className="w-2 h-2 rounded-full bg-blue-600" />
@@ -739,6 +740,53 @@ export default function FlagsSettingsPage() {
             </div>
           )}
       </div>
+
+      {/* Legend Section */}
+      {filterCategory !== 'archived' && (
+        <div className="mt-8 rounded-xl border border-slate-200 bg-slate-50/50 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Info className="w-4 h-4 text-slate-400" />
+            <h3 className="text-sm font-semibold text-slate-700">How Flag Rules Work</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-xs text-slate-500 leading-relaxed">
+            <div>
+              <p className="font-medium text-slate-600 mb-1.5">Threshold Types</p>
+              <ul className="space-y-1">
+                {THRESHOLD_TYPES.map((t) => (
+                  <li key={t.id}>
+                    <span className="font-medium text-slate-600">{t.label}</span>
+                    {' — '}
+                    {t.description}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="font-medium text-slate-600 mb-1.5">Severity Levels</p>
+                <ul className="space-y-1">
+                  <li><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1.5" />
+                    <span className="font-medium text-slate-600">Critical</span> — Immediate attention required
+                  </li>
+                  <li><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />
+                    <span className="font-medium text-slate-600">Warning</span> — Notable deviation from normal
+                  </li>
+                  <li><span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1.5" />
+                    <span className="font-medium text-slate-600">Info</span> — Informational, for tracking purposes
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-medium text-slate-600 mb-1.5">Scope</p>
+                <ul className="space-y-1">
+                  <li><span className="font-medium text-slate-600">Facility</span> — Compares against all facility cases</li>
+                  <li><span className="font-medium text-slate-600">Personal</span> — Compares against the surgeon&apos;s own history</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Custom Rule Builder Drawer */}
       <MetricSearchBuilder

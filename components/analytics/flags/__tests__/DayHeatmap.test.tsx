@@ -36,6 +36,8 @@ function makeDay(
   const timing = overrides.timing ?? 1
   const turnover = overrides.turnover ?? 3
   const delay = overrides.delay ?? 0
+  const financial = overrides.financial ?? 0
+  const quality = overrides.quality ?? 0
   return {
     day,
     dayNum,
@@ -43,7 +45,9 @@ function makeDay(
     timing,
     turnover,
     delay,
-    total: overrides.total ?? fcots + timing + turnover + delay,
+    financial,
+    quality,
+    total: overrides.total ?? fcots + timing + turnover + delay + financial + quality,
   }
 }
 
