@@ -1,407 +1,357 @@
-# Feature: Case & Flag Analytics Page + Tremor-to-Recharts Migration
+# Feature: Flag Settings Rebuild + Custom Rule Builder
 
-## Goal
+**Branch:** `feature/flag-settings-custom-builder`
+**Created:** 2026-02-19
+**Design Reference:** `docs/flag-settings-custom-builder.jsx`
 
-Replace the current `analytics/flags` page (which incorrectly shows the general analytics overview) with a dedicated **Case & Flag Analytics** dashboard. The new page is a comprehensive flags analytics tool with KPIs, severity breakdowns, computed pattern detection, trend charts, a day-of-week heatmap, flag rule/delay type breakdowns, surgeon flag distribution, room analysis, recent flagged cases, and drill-through panels.
+---
 
-Additionally, migrate all remaining analytics pages from `@tremor/react` to **Recharts** for consistency, then remove the Tremor dependency.
+## Overview
 
-## Background
+Rebuild the flag settings page (`app/settings/flags/page.tsx`) from a simple expandable-card layout into a full-featured rule management interface. The centerpiece is a **Custom Rule Builder** that lets facility admins create their own flag rules from a catalog of 22+ metrics spanning timing, efficiency, financial, and quality categories.
 
-The codebase has a well-established flag system:
-- **`case_flags` table** — stores both auto-detected threshold flags and user-reported delay flags
-- **`flag_rules` table** — configurable rules (timing, efficiency, anesthesia, recovery categories)
-- **`delay_types` table** — user-reportable delay categories
-- **`flagEngine.ts`** — batch flag evaluation engine (auto-detection at case completion)
-- **`FlagsSummaryCard.tsx`** — compact summary card on the analytics hub (proven query pattern)
+### What Changes
 
-The current `/analytics/flags` page was a copy-paste mistake — it shows the general analytics overview (FCOTS, OR Utilization, turnovers, charts) with just the title changed to "Case Flags." The KPI page at `/analytics/kpi` already covers that content.
+| Area | Current State | Target State |
+|------|--------------|--------------|
+| Layout | Expandable card list, single section | Two-section table layout: Built-in Rules + Custom Rules |
+| Categories | 4 (timing, efficiency, anesthesia, recovery) | 6 (+ financial, quality) |
+| Custom rules | Not supported in UI | Full CRUD via metrics catalog browser |
+| Metrics | ~9 timing/efficiency metrics | 22+ metrics (timing, efficiency, financial, quality) |
+| Filtering | None | Category filter bar |
+| Operators | Only `>` (implicit) | Explicit operator selector: `>`, `>=`, `<`, `<=` |
+| Rule preview | None | Natural-language preview sentence |
+| Data sources | `case_milestones` only | `case_milestones` + `case_completion_stats` + computed |
 
-The design spec at `docs/case-flags-analytics-light.jsx` defines the complete page layout using mock data and Recharts.
+### What Doesn't Change
+
+- `flag_rules` and `case_flags` DB schema (already supports `is_built_in = false`)
+- Flag analytics page (`app/analytics/flags/page.tsx`)
+- Case drawer flags display
+- Delay type flags (separate settings page)
+- Flag engine evaluation pipeline (extended, not replaced)
+- `useSupabaseQuery` data fetching pattern
+
+---
 
 ## Key Decisions
 
-| # | Decision | Answer |
-|---|---|---|
-| 1 | Chart library | Recharts — build new page with it, then migrate all analytics pages from Tremor |
-| 2 | Pattern insights | Computed from real flag data (day spikes, cascades, trends, concentrations) |
-| 3 | Heatmap categories | Map by `flag_rules.category` → FCOTS / Timing / Turnover / Delay buckets |
-| 4 | Row click behavior | Drill-through slide-over panels (surgeon detail, case detail, room detail) |
-| 5 | Current flags page | Full replace — was a copy/paste mistake |
-| 6 | KPI card pattern | Custom `FlagKPICard` component matching design spec |
-| 7 | Migration scope | Same branch, split by page (one phase per page) |
-| 8 | Branch | `feature/flags-analytics-recharts-migration` |
+1. **Metrics catalog is a TypeScript constant, not a DB table.** The catalog defines what metrics are *available* for rule creation. The actual rules live in `flag_rules`. This avoids a migration for catalog changes and keeps the builder self-contained.
 
-## Affected Systems
+2. **Financial and quality metrics require flag engine extension.** The `flagEngine.ts` currently only evaluates timing-based metrics from `case_milestones`. Financial metrics need data from `case_completion_stats`. Quality metrics (missing milestones, sequence errors) need milestone analysis. This is Phase 5.
 
-### Database (read-only — no migrations needed)
-- `case_flags` — main data source (threshold + delay flags)
-- `flag_rules` — rule names, categories, severity
-- `delay_types` — delay type display names
-- `cases` — case metadata (date, surgeon, room, procedure)
-- `users` (surgeons) — surgeon names for flag distribution
-- `or_rooms` — room names for room analysis
+3. **Table layout replaces expandable cards.** The prototype uses a dense table grid (`grid-template-columns`) for both built-in and custom rules. Built-in rules are read-only for name/metric but editable for threshold, severity, and enable/disable. Custom rules add a delete button column.
 
-### Web App — New Files
-- `types/flag-analytics.ts` — TypeScript interfaces
-- `lib/hooks/useFlagAnalytics.ts` — data fetching hook
-- `lib/flagPatternDetection.ts` — pattern detection engine
-- `components/analytics/flags/FlagKPICard.tsx` — custom KPI cards with sparklines
-- `components/analytics/flags/SeverityStrip.tsx` — proportional severity strip
-- `components/analytics/flags/FlagTrendChart.tsx` — Recharts stacked area chart
-- `components/analytics/flags/DayHeatmap.tsx` — CSS grid heatmap
-- `components/analytics/flags/HorizontalBarList.tsx` — reusable bar breakdown
-- `components/analytics/flags/SurgeonFlagTable.tsx` — surgeon flag distribution table
-- `components/analytics/flags/RoomAnalysisCards.tsx` — room analysis cards
-- `components/analytics/flags/PatternInsightCards.tsx` — pattern insight cards
-- `components/analytics/flags/RecentFlaggedCases.tsx` — recent flagged cases list
-- `components/analytics/flags/FlagDrillThrough.tsx` — slide-over drill-through panels
+4. **Two-step builder flow.** Step 1: Search/browse the metrics catalog grouped by category. Step 2: Configure the rule (name, threshold type, operator, value, severity, scope) with a live preview sentence.
 
-### Web App — Modified Files
-- `app/analytics/flags/page.tsx` — full replace
-- `app/analytics/page.tsx` — Tremor → Recharts migration
-- `app/analytics/surgeons/page.tsx` — Tremor → Recharts migration
-- `app/analytics/block-utilization/page.tsx` — Tremor → Recharts migration
-- `lib/analyticsV2.ts` — remove Tremor `Color` type import
-- `package.json` — remove `@tremor/react`
+5. **Scope: facility vs personal.** Personal scope means the flag compares a surgeon's case against their own historical data. Facility scope compares against all facility cases. This already exists in the DB schema.
 
 ---
 
-## Phase 1: Data Layer — Hook + Query Infrastructure (Medium)
+## Metrics Catalog
 
-**Goal:** Create the `useFlagAnalytics` hook and TypeScript interfaces that power the entire page.
+22 metrics across 6 categories, as defined in the prototype:
 
-### 1.1 — TypeScript interfaces
+### Timing (7 metrics)
+| Metric ID | Name | Source | Milestone Pair |
+|-----------|------|--------|---------------|
+| `total_case_time` | Total Case Time | case_milestone_stats | patient_in → patient_out |
+| `surgical_time` | Surgical Time | case_milestone_stats | incision → closing |
+| `pre_op_time` | Pre-Op Time | case_milestone_stats | patient_in → incision |
+| `anesthesia_time` | Anesthesia Induction | case_milestone_stats | anes_start → anes_end |
+| `closing_time` | Closing Time | case_milestone_stats | closing → closing_complete |
+| `emergence_time` | Emergence Time | case_milestone_stats | closing_complete → patient_out |
+| `prep_to_incision` | Prep to Incision | case_milestone_stats | prep_drape_complete → incision |
 
-**File:** `types/flag-analytics.ts`
+### Efficiency (5 metrics)
+| Metric ID | Name | Source |
+|-----------|------|--------|
+| `turnover_time` | Room Turnover | case_milestone_stats |
+| `fcots_delay` | First Case Delay | case_milestone_stats |
+| `surgeon_readiness_gap` | Surgeon Readiness Gap | case_milestone_stats |
+| `callback_delay` | Callback Delay | case_milestone_stats |
+| `room_idle_gap` | Room Idle Gap | computed |
 
-Define interfaces for:
-- `FlagAnalyticsData` — top-level shape returned by the hook
-- `FlagSummaryKPIs` — totalCases, flaggedCases, flagRate, flagRateTrend, delayedCases, delayRate, delayRateTrend, criticalCount, warningCount, infoCount, totalFlags, avgFlagsPerCase
-- `FlagRuleBreakdownItem` — name, count, severity, pct
-- `DelayTypeBreakdownItem` — name, count, pct, avgDuration, color
-- `WeeklyTrendPoint` — week label, threshold count, delay count, total
-- `DayOfWeekRow` — day, fcots, timing, turnover, delay, total
-- `SurgeonFlagRow` — name, surgeonId, cases, flags, rate, trend, topFlag
-- `RoomFlagRow` — room, roomId, cases, flags, rate, topIssue, topDelay
-- `RecentFlaggedCase` — caseNum, caseId, date, surgeon, procedure, flags[]
-- `DetectedPattern` — type, title, desc, severity, metric
+### Financial (7 metrics)
+| Metric ID | Name | Source | Data Type |
+|-----------|------|--------|-----------|
+| `case_profit` | Case Profit | case_completion_stats | currency |
+| `case_margin` | Case Margin | case_completion_stats | percentage |
+| `profit_per_minute` | Profit per Minute | case_completion_stats | currency |
+| `implant_cost_ratio` | Implant Cost Ratio | case_completion_stats | percentage |
+| `total_case_cost` | Total Case Cost | case_completion_stats | currency |
+| `reimbursement_variance` | Reimbursement Variance | case_completion_stats | percentage |
+| `excess_time_cost` | Excess Time Cost | computed | currency |
 
-### 1.2 — Data fetching hook
-
-**File:** `lib/hooks/useFlagAnalytics.ts`
-
-- Use `useSupabaseQuery` to fetch `case_flags` with joins to `flag_rules`, `delay_types`, and `cases` (including surgeon + room + procedure joins)
-- Accept `facilityId` and date range params
-- Compute all aggregate stats client-side from the raw flags:
-  - KPI values (flag rate, delay rate, severity counts)
-  - Sparkline data (12-week rolling flag rate)
-  - Flag rule breakdown (group by `flag_rule.name`, count, sort desc)
-  - Delay type breakdown (group by `delay_type.display_name`, count, avg duration)
-  - Weekly trend (group by ISO week, split threshold vs delay)
-  - Day-of-week heatmap (group by `scheduled_date` day, categorize by `flag_rules.category`)
-  - Surgeon rollup (group by `surgeon_id`, compute flag rate, trend, top flag)
-  - Room rollup (group by `or_room_id`, compute flag rate, top issue/delay)
-  - Recent flagged cases (dedupe by case, sort by date desc, take 5)
-- Also fetch total case count for the period (for flag rate denominator)
-- Fetch previous period flag data for trend comparison
-- Return typed `FlagAnalyticsData` object
-
-### Phase 1 Commit
-`feat(analytics): phase 1 - flag analytics data layer and hook`
-
-### Phase 1 Test Gate
-1. **Unit:** Hook returns correctly typed data, handles loading/error/empty states, computations are accurate for known inputs
-2. **Integration:** Query returns real data from `case_flags` with all joins populated
-3. **Workflow:** Hook responds to date range changes and facility scoping correctly
+### Quality (2 metrics)
+| Metric ID | Name | Source |
+|-----------|------|--------|
+| `missing_milestones` | Missing Milestones | case_milestones |
+| `milestone_out_of_order` | Milestone Sequence Error | case_milestones |
 
 ---
 
-## Phase 2: Page Shell + KPI Strip + Severity Strip (Medium)
+## Implementation Plan
 
-**Goal:** Replace the entire `analytics/flags/page.tsx` with the new page skeleton. Build custom KPI cards and severity strip.
+### Phase 1: Types, Constants & Design Tokens
+**Goal:** Lay the typed foundation for the metrics catalog and extended categories.
 
-### 2.1 — Page skeleton
+**Files to create/modify:**
+- `types/flag-settings.ts` — New file: `MetricCatalogEntry`, `MetricCategory`, `MetricDataType`, `Operator`, `CustomRuleFormState` interfaces
+- `lib/constants/metrics-catalog.ts` — New file: typed `METRICS_CATALOG` array, `OPERATORS` array, `METRIC_CATEGORIES` config (labels, colors, icons)
+- `lib/design-tokens.ts` — Add `financial` and `quality` to `categoryColors`
 
-**File:** `app/analytics/flags/page.tsx` (full replace)
+**Acceptance criteria:**
+- All 22 metrics defined with full type safety
+- Category config includes all 6 categories with colors and labels
+- Operator definitions (gt, gte, lt, lte) with display labels
+- `MetricCatalogEntry` type includes: id, name, description, category, dataType, unit, source, startMilestone, endMilestone, supportsMedian
+- No runtime changes — types and constants only
 
-- Standard analytics page pattern: `DashboardLayout`, `AnalyticsPageHeader`, `DateRangeSelector`
-- Permission guard: `can('analytics.view')`
-- `useUser()` for facility scoping, `useFlagAnalytics()` for data
-- Loading skeleton
-- Content layout: `space-y-8` sections
-
-### 2.2 — Custom FlagKPICard component
-
-**File:** `components/analytics/flags/FlagKPICard.tsx`
-
-- Match design spec: status dot, uppercase label, large monospace value + unit, sparkline (Recharts mini AreaChart), trend badge, detail text
-- Props: `label, value, unit?, trend?, trendInverse?, sparkData?, sparkColor?, status?, detail?`
-- Inline MiniSparkline using Recharts `AreaChart` + `Area` (no axes, gradient fill)
-- TrendBadge sub-component: directional arrow + percentage + color based on good/bad
-
-### 2.3 — Severity strip
-
-**File:** `components/analytics/flags/SeverityStrip.tsx`
-
-- Proportional flex strip showing critical/warning/info with counts and percentages
-- Each segment uses severity-appropriate bg/border/text colors
-- Flex basis proportional to count
-
-### 2.4 — Wire into page
-
-- 4 KPI cards in `grid-cols-4`: Flagged Cases (%), Delay Rate (%), Critical Flags (count), Total Flags (count)
-- Severity strip below KPIs
-
-### Phase 2 Commit
-`feat(analytics): phase 2 - flags page shell, KPI cards, severity strip`
-
-### Phase 2 Test Gate
-1. **Unit:** KPI cards render correct values, trend badges, sparklines; severity strip proportions are accurate
-2. **Integration:** Page loads with real data, date filtering updates KPIs
-3. **Workflow:** Navigate from analytics hub → flags page → KPIs populated with real numbers
+**Tests:**
+- Type-check passes (`npx tsc --noEmit`)
+- Unit test: metrics catalog has no duplicate IDs
+- Unit test: all metric categories have matching design token entries
 
 ---
 
-## Phase 3: Charts — Flag Trend + Day-of-Week Heatmap (Medium)
+### Phase 2: Settings Page Rebuild — Table Layout + Built-in Rules
+**Goal:** Replace the expandable card layout with the table-based layout from the prototype. Built-in rules section only (no custom rules yet).
 
-**Goal:** Build the flag trend stacked area chart and the day-of-week category heatmap.
+**Files to modify:**
+- `app/settings/flags/page.tsx` — Complete rewrite of the render logic
 
-### 3.1 — Flag trend chart
+**New sub-components (in `components/settings/flags/`):**
+- `FlagRuleTable.tsx` — Table container with header row
+- `FlagRuleRow.tsx` — Single rule row with inline editing
+- `ThresholdInline.tsx` — Threshold type selector + value input + computed display
+- `SeverityPills.tsx` — Inline severity selector (3 pill buttons)
+- `ScopeBadge.tsx` — Facility/Personal badge
+- `CategoryFilter.tsx` — Category filter bar
 
-**File:** `components/analytics/flags/FlagTrendChart.tsx`
+**Key behaviors:**
+- Grid layout: Toggle | Name+Description | Threshold | Severity | Scope
+- Category filter bar at top (All, Timing, Efficiency, etc.)
+- Active rule counter in header (`N/M active`)
+- Auto-save on every change (existing pattern, keep it)
+- Disabled state dims the entire row (opacity)
+- All editing is inline — no expand/collapse
 
-- Recharts `AreaChart` inside `ResponsiveContainer`
-- Stacked areas: "Auto-detected" (violet) + "User-reported" (orange)
-- Linear gradient fills, custom tooltip, legend
-- X-axis: week labels, Y-axis: flag count
-- Data from `useFlagAnalytics().weeklyTrend`
+**Acceptance criteria:**
+- All existing built-in rules display in the new table layout
+- Toggle, threshold, severity editing works with auto-save
+- Category filter correctly filters displayed rules
+- Active count updates in real-time
+- No visual regressions on other settings pages
 
-### 3.2 — Day-of-week heatmap
-
-**File:** `components/analytics/flags/DayHeatmap.tsx`
-
-- Custom CSS grid (not chart library)
-- Rows: FCOTS, Timing, Turnover, Delays + Total row
-- Columns: Mon–Fri
-- Cell background intensity based on value relative to max
-- Category colors: rose (FCOTS), amber (Timing), violet (Turnover), orange (Delays)
-
-### 3.3 — Wire into page
-
-- Two-column grid: trend chart (left) + heatmap (right)
-- Both wrapped in Card components with SectionHeader
-
-### Phase 3 Commit
-`feat(analytics): phase 3 - flag trend chart and day-of-week heatmap`
-
-### Phase 3 Test Gate
-1. **Unit:** Chart renders with mock data, handles empty/single-week edge cases; heatmap renders all 5 days
-2. **Integration:** Charts populate from real flag data grouped by week/day
-3. **Workflow:** Change date range → both charts update; hover tooltip shows correct values
+**Tests:**
+- Component test: renders rules in table format
+- Component test: category filter shows/hides rules
+- Component test: toggle updates rule enabled state
+- Component test: threshold edit persists
 
 ---
 
-## Phase 4: Breakdowns + Surgeon Table + Room Cards (Large)
+### Phase 3: Custom Rule Builder Component
+**Goal:** Build the MetricSearchBuilder — the 2-step flow for creating custom rules from the metrics catalog.
 
-**Goal:** Build the flag rule breakdown, delay type breakdown, surgeon flag distribution table, and room analysis cards.
+**New files (in `components/settings/flags/`):**
+- `MetricSearchBuilder.tsx` — Main builder with 2-step flow
+- `MetricSearchStep.tsx` — Step 1: search + browse metrics by category
+- `RuleConfigureStep.tsx` — Step 2: configure name, threshold, operator, severity, scope
+- `RulePreviewSentence.tsx` — Natural-language preview of the configured rule
 
-### 4.1 — Horizontal bar list
+**Key behaviors:**
+- Step 1: Text search across metric names/descriptions/categories. Results grouped by category with sticky headers. Click metric → advance to step 2.
+- Step 2: Form with fields: Rule Name (required), Threshold Type (median+SD or absolute), Operator (>, >=, <, <=), Value, Severity (pills), Scope (facility/personal). Live preview sentence at bottom.
+- "Add Rule" button disabled until name is filled.
+- "← Back" returns to step 1, "Cancel" closes builder entirely.
+- Builder appears between header and tables when "Add Rule" is clicked.
 
-**File:** `components/analytics/flags/HorizontalBarList.tsx`
+**Acceptance criteria:**
+- Search filters metrics in real-time
+- All 22 metrics browsable by category
+- Configuration form validates rule name is required
+- Preview sentence accurately describes the rule
+- Builder integrates into settings page layout
+- Component is fully controlled — parent manages open/close state
 
-- Reusable for both flag rule and delay type breakdowns
-- Props: `items[]` with `name, count, pct, severity?, color?, avgDuration?`
-- Each row: dot, name, count (monospace), percentage, thin progress bar
-
-### 4.2 — Flag rule & delay type sections
-
-- Two-column grid: Auto-detected flags (left) + Reported delays (right)
-- Both use `HorizontalBarList` with different data
-
-### 4.3 — Surgeon flag distribution table
-
-**File:** `components/analytics/flags/SurgeonFlagTable.tsx`
-
-- Plain `<table>` — dataset is small
-- Columns: Surgeon, Cases, Flags, Flag Rate (color-coded), Trend, Top Flag
-- Hover highlighting, click → triggers drill-through (Phase 5)
-
-### 4.4 — Room analysis cards
-
-**File:** `components/analytics/flags/RoomAnalysisCards.tsx`
-
-- Grid of cards (one per room), responsive columns
-- Each card: room name, flag rate badge, progress bar, counts, top flag, top delay
-- Click → triggers drill-through (Phase 5)
-
-### Phase 4 Commit
-`feat(analytics): phase 4 - flag breakdowns, surgeon table, room analysis`
-
-### Phase 4 Test Gate
-1. **Unit:** Bar lists render sorted data; surgeon table renders; room cards show correct color thresholds
-2. **Integration:** Breakdowns show real flag rule names and delay type display_names from DB
-3. **Workflow:** Surgeon table flag rates match KPI totals; room percentages are consistent
+**Tests:**
+- Component test: search filters metrics
+- Component test: selecting metric advances to step 2
+- Component test: preview sentence updates with form changes
+- Component test: Add Rule button disabled without name
 
 ---
 
-## Phase 5: Pattern Insights + Recent Cases + Drill-Through (Large)
+### Phase 4: Custom Rule CRUD + Persistence
+**Goal:** Wire the builder to the database. Custom rules can be created, displayed, toggled, and deleted.
 
-**Goal:** Build computed pattern detection, recent flagged cases list, and drill-through slide-over panels.
+**Files to modify:**
+- `app/settings/flags/page.tsx` — Add custom rules section, integrate builder
+- `components/settings/flags/FlagRuleRow.tsx` — Add delete button column for custom rules
 
-### 5.1 — Pattern detection engine
+**New DAL functions (in `lib/dal/flag-rules.ts`):**
+- `createCustomFlagRule(facilityId, rule)` — Insert into `flag_rules` with `is_built_in = false`
+- `deleteCustomFlagRule(ruleId)` — Hard delete (custom rules, not soft delete)
+- `updateFlagRule(ruleId, updates)` — Generic update for threshold, severity, enabled
 
-**File:** `lib/flagPatternDetection.ts`
+**Key behaviors:**
+- "Add Rule" button in header and in custom rules empty state
+- Custom rules section below built-in rules with its own header
+- Custom rules get a `CUSTOM` badge and a delete (x) button
+- Delete shows confirmation (or immediate with undo toast)
+- Optimistic UI: add/delete instantly, rollback on error
+- New custom rules get `display_order` = max + 1
+- Category filter applies to both sections
 
-Detects patterns from raw flag analytics data:
-- **Day-of-week spike:** Any day >50% more flags than daily average
-- **Equipment cascade:** Delay flags correlating with subsequent threshold flags in same room/day
-- **Trend improvement:** Flag category declining >20% over recent 4 weeks
-- **Trend deterioration:** Flag category increasing >20%
-- **Room concentration:** Room with >35% of flags but <30% of cases
-- **Recurring surgeon pattern:** Surgeon flag rate >2x facility average
+**Acceptance criteria:**
+- Can create a custom rule from the builder — appears in custom rules table
+- Can delete a custom rule — removed from table and DB
+- Can toggle enable/disable on custom rules
+- Can edit threshold and severity on custom rules
+- Custom rules persist across page refreshes
+- Empty state shows "No custom rules yet" with CTA
 
-Returns `DetectedPattern[]` sorted by severity.
-
-### 5.2 — Pattern insight cards
-
-**File:** `components/analytics/flags/PatternInsightCards.tsx`
-
-- 2-column grid of pattern cards
-- Each: left color border, icon, title, metric badge, description
-- Severity colors: critical → rose, warning → amber, good → emerald
-
-### 5.3 — Recent flagged cases
-
-**File:** `components/analytics/flags/RecentFlaggedCases.tsx`
-
-- Card with header + "View All →" button (links to `/cases`)
-- Row per case: case number, date, surgeon, procedure, flag badges
-- Flag badges: severity-colored with icon (⚡ threshold, ◷ delay)
-
-### 5.4 — Drill-through slide-over
-
-**File:** `components/analytics/flags/FlagDrillThrough.tsx`
-
-- Radix Dialog slide-over (640px, right) — matches InsightSlideOver pattern
-- Three modes: surgeon detail, room detail, case detail
-- Each shows all flags for that entity, grouped and sorted
-
-### Phase 5 Commit
-`feat(analytics): phase 5 - pattern detection, recent cases, drill-through panels`
-
-### Phase 5 Test Gate
-1. **Unit:** Pattern detection identifies day spikes, trends, room concentrations correctly; handles edge cases
-2. **Integration:** Patterns render from real data; drill-through shows correct detail
-3. **Workflow:** Click surgeon → slide-over → close → click case → slide-over → page state preserved
+**Tests:**
+- Integration test: create custom rule → verify in DB
+- Integration test: delete custom rule → verify removed
+- Component test: custom rules section renders with CUSTOM badge
+- Component test: empty state renders when no custom rules
 
 ---
 
-## Phase 6: Tremor → Recharts — Analytics Hub (Small)
+### Phase 5: Flag Engine — Financial & Quality Metric Evaluation
+**Goal:** Extend `flagEngine.ts` to evaluate financial and quality metrics so custom rules on these categories actually generate flags.
 
-**Goal:** Migrate `app/analytics/page.tsx` from `@tremor/react` to Recharts.
+**Files to modify:**
+- `lib/flagEngine.ts` — Add metric extraction for financial and quality categories
 
-### What to migrate
-- `AreaChart` → Recharts `AreaChart` + `ResponsiveContainer` + `Area` + axes + tooltip
-- `Legend` → Recharts `Legend` or custom legend div
-- Remove `type Color` import
+**New metric extractors:**
+- Financial metrics: Read from `case_completion_stats` columns (total_cost, reimbursement, profit_margin, etc.)
+- Quality metrics: Analyze `case_milestones` for missing entries and sequence violations
+- Computed metrics: `excess_time_cost` (duration beyond median x cost/min), `room_idle_gap` (gap analysis)
 
-### Files touched
-- MODIFY: `app/analytics/page.tsx`
+**Mapping: metric_id → case_completion_stats column:**
+| Metric | Column(s) |
+|--------|-----------|
+| `case_profit` | reimbursement - total_cost |
+| `case_margin` | (reimbursement - total_cost) / reimbursement x 100 |
+| `profit_per_minute` | profit / total_duration_minutes |
+| `implant_cost_ratio` | implant_cost / reimbursement x 100 |
+| `total_case_cost` | total_cost |
+| `reimbursement_variance` | (actual - expected) / expected x 100 |
+| `missing_milestones` | COUNT of milestones WHERE recorded_at IS NULL |
+| `milestone_out_of_order` | COUNT of sequence violations |
 
-### Phase 6 Commit
-`refactor(analytics): phase 6 - migrate hub page from Tremor to Recharts`
+**Key behaviors:**
+- `extractMetricValue()` extended to handle all 22 metric IDs
+- Financial metrics return currency/percentage values (not durations)
+- Quality metrics return counts
+- Operators `lt` and `lte` work correctly (already in DB, need engine support)
+- Baselines for financial metrics use facility-wide stats (no per-surgeon median for financial)
 
-### Phase 6 Test Gate
-1. **Unit:** Charts render with same data shapes, no TS errors
-2. **Integration:** Hub page loads and displays all charts correctly
-3. **Workflow:** Visual check — charts look equivalent
+**Acceptance criteria:**
+- A custom rule on `case_profit < 0` correctly flags cases with negative profit
+- A custom rule on `missing_milestones > 2` correctly flags cases with 3+ missing milestones
+- Existing timing/efficiency rules continue to work unchanged
+- All operators (gt, gte, lt, lte) evaluate correctly
 
-**Complexity:** Small
-
----
-
-## Phase 7: Tremor → Recharts — Surgeons Page (Small)
-
-**Goal:** Migrate `app/analytics/surgeons/page.tsx` from `@tremor/react` to Recharts.
-
-### What to migrate
-- `AreaChart` → Recharts equivalents
-- `BarChart` → Recharts equivalents
-
-### Files touched
-- MODIFY: `app/analytics/surgeons/page.tsx`
-
-### Phase 7 Commit
-`refactor(analytics): phase 7 - migrate surgeons page from Tremor to Recharts`
-
-### Phase 7 Test Gate
-1. **Unit:** Charts render with same data shapes
-2. **Integration:** Page loads with all visualizations
-3. **Workflow:** Visual regression check
-
-**Complexity:** Small
+**Tests:**
+- Unit test: extractMetricValue for each financial metric
+- Unit test: extractMetricValue for each quality metric
+- Unit test: operator evaluation (gt, gte, lt, lte)
+- Integration test: evaluateCase with financial rule
+- Integration test: evaluateCase with quality rule
 
 ---
 
-## Phase 8: Tremor → Recharts — Block Utilization Page (Small)
+### Phase 6: Testing, Polish & Legend
+**Goal:** Full test coverage, visual polish, and the informational legend section.
 
-**Goal:** Migrate `app/analytics/block-utilization/page.tsx` from `@tremor/react` to Recharts.
+**Tasks:**
+- Add the legend/info section at bottom of settings page (threshold types explanation, custom rules description) — matches prototype
+- Keyboard navigation in builder (Escape closes, Enter submits)
+- Responsive behavior at narrower widths
+- Run full 3-stage test gate
+- Verify flag analytics page still works with new rule categories
+- Verify case drawer flags display works with financial/quality flags
 
-### What to migrate
-- `AreaChart` → Recharts equivalents
-- `BarChart` → Recharts equivalents
-
-### Files touched
-- MODIFY: `app/analytics/block-utilization/page.tsx`
-
-### Phase 8 Commit
-`refactor(analytics): phase 8 - migrate block-utilization page from Tremor to Recharts`
-
-### Phase 8 Test Gate
-1. **Unit:** Charts render with same data shapes
-2. **Integration:** Page loads with all visualizations
-3. **Workflow:** Visual regression check
-
-**Complexity:** Small
+**Acceptance criteria:**
+- All tests pass
+- No TypeScript errors
+- Legend section renders below rules
+- Page handles edge cases: no rules, all disabled, many custom rules, long rule names
 
 ---
 
-## Phase 9: Remove @tremor/react Dependency (Small)
+## File Inventory
 
-**Goal:** Remove `@tremor/react` from the project entirely.
+### New Files
+| File | Purpose |
+|------|---------|
+| `types/flag-settings.ts` | Metric catalog and builder types |
+| `lib/constants/metrics-catalog.ts` | METRICS_CATALOG, OPERATORS, METRIC_CATEGORIES |
+| `lib/dal/flag-rules.ts` | Custom rule CRUD functions |
+| `components/settings/flags/FlagRuleTable.tsx` | Table container |
+| `components/settings/flags/FlagRuleRow.tsx` | Single rule row |
+| `components/settings/flags/ThresholdInline.tsx` | Inline threshold editor |
+| `components/settings/flags/SeverityPills.tsx` | Inline severity selector |
+| `components/settings/flags/ScopeBadge.tsx` | Scope badge |
+| `components/settings/flags/CategoryFilter.tsx` | Category filter bar |
+| `components/settings/flags/MetricSearchBuilder.tsx` | 2-step builder |
+| `components/settings/flags/MetricSearchStep.tsx` | Step 1: metric search |
+| `components/settings/flags/RuleConfigureStep.tsx` | Step 2: rule config |
+| `components/settings/flags/RulePreviewSentence.tsx` | Preview sentence |
 
-### What to do
-- Remove `@tremor/react` from `package.json`
-- Update `lib/analyticsV2.ts`: replace `import { type Color } from '@tremor/react'` with local type
-- Grep for any remaining `@tremor` references
-- Run `npm install` to update lockfile
-- Verify `npm run build` succeeds
+### Modified Files
+| File | Changes |
+|------|---------|
+| `app/settings/flags/page.tsx` | Complete rewrite — table layout, builder integration, custom rules section |
+| `lib/design-tokens.ts` | Add `financial` and `quality` category colors |
+| `lib/flagEngine.ts` | Extend metric extraction for financial + quality categories |
 
-### Files touched
-- MODIFY: `package.json`
-- MODIFY: `lib/analyticsV2.ts`
+### Reference (read-only)
+| File | Why |
+|------|-----|
+| `docs/flag-settings-custom-builder.jsx` | Design prototype — UI reference |
+| `types/flag-analytics.ts` | Existing flag analytics types |
+| `lib/flagEngine.ts` | Existing flag evaluation engine |
+| `lib/dal/cases.ts` | Case flag query patterns |
 
-### Phase 9 Commit
-`chore: phase 9 - remove @tremor/react dependency`
+---
 
-### Phase 9 Test Gate
-1. **Unit:** `npx tsc --noEmit` — clean compile, no Tremor references
-2. **Integration:** `npm run build` succeeds
-3. **Workflow:** All analytics pages render correctly
+## Database Impact
 
-**Complexity:** Small
+**No new migrations required for Phases 1-4.** The `flag_rules` table already supports:
+- `is_built_in = false` for custom rules
+- `category` as text (accepts any string including 'financial', 'quality')
+- All needed columns (metric, operator, threshold_type, threshold_value, comparison_scope, severity)
+
+**Phase 5 may need a migration** if `case_completion_stats` is missing columns needed for financial metric calculations (e.g., `implant_cost`, `total_cost`). Verify column availability before starting Phase 5.
+
+---
+
+## Risk Register
+
+| Risk | Mitigation |
+|------|-----------|
+| Financial metrics depend on case_completion_stats columns that may not exist | Verify columns in Phase 5 before building extractors; stub with null if missing |
+| Custom rules could create many flags, overwhelming the UI | Phase 6: consider rate/count display in analytics |
+| Metric catalog changes require code deploys | Acceptable tradeoff vs. DB-managed catalog complexity |
+| Built-in rules have computed_median/computed_sd in prototype but not in current DB | These are display-only values computed at render time from facility stats, not stored |
 
 ---
 
 ## Phase Dependency Chain
 ```
-Phase 1 (data layer) → Phase 2 (page + KPIs) → Phase 3 (charts)
-                                               → Phase 4 (tables)
-                                               → Phase 5 (patterns + drill-through)
-Phase 6–8 (Tremor migration — independent of each other and of 1–5)
-Phase 6 + 7 + 8 → Phase 9 (remove Tremor)
+Phase 1 (types/constants) → Phase 2 (table layout) → Phase 3 (builder component)
+                                                    → Phase 4 (CRUD persistence)
+                                                    → Phase 5 (flag engine extension)
+                                                    → Phase 6 (polish + legend)
 ```
+
+Phase 3 and Phase 4 are tightly coupled (builder produces rules, CRUD persists them) but split for commit granularity. Phase 5 is independent of the UI work and can be done in parallel if needed.
 
 ---
 
@@ -409,120 +359,158 @@ Phase 6 + 7 + 8 → Phase 9 (remove Tremor)
 
 > Generated by /review on 2026-02-19
 
-**Q1:** The heatmap categories in the design spec (FCOTS / Timing / Turnover / Delays) don't match the DB's flag_rules.category values (timing / efficiency / anesthesia / recovery). How should we map flag data to heatmap rows?
-**A1:** Map by metric, not category. FCOTS row = metric 'fcots_delay'. Timing row = metrics 'total_case_time', 'surgical_time', 'pre_op_time'. Turnover row = metric 'turnover_time'. Delays row = all flag_type='delay' flags. This matches what users actually care about regardless of how flag_rules.category is set.
+**Q1:** The prototype uses rose/red (#e11d48) for Financial and slate/gray for Quality. The existing `categoryColors` in design-tokens.ts uses Tailwind classes. What colors for the new categories?
+**A1:** Follow the Tailwind class formatting already established. Financial → emerald (matching financials analytics page). Quality → needs its own color.
 
-**Q2:** Which sparkline approach should the new FlagKPICard use for its inline mini-charts?
-**A2:** Reuse existing SVG Sparkline from `components/ui/Sparkline.tsx`. Zero extra dependencies, already handles edge cases, consistent with KPI page.
+**Q2:** For the Quality category color, the prototype uses slate/gray which blends with neutral UI. What color?
+**A2:** Violet/Purple.
 
-**Q3:** Should the useFlagAnalytics hook filter by cases.scheduled_date (consistent with other analytics pages) or by case_flags.created_at (consistent with FlagsSummaryCard)?
-**A3:** Filter by `cases.scheduled_date`. Consistent with all other analytics pages. When a user selects a date range, they see flags for cases scheduled in that window.
+**Q3:** Anesthesia currently uses bg-violet-100/text-violet-600. Quality also chosen as violet. How to handle the overlap?
+**A3:** Shift Quality to indigo (bg-indigo-100/text-indigo-600). Visually close to violet but distinguishable.
 
-**Q4:** Are you comfortable with the all-client-side computation approach, or should we consider an RPC/view for heavy aggregation?
-**A4:** Create a Supabase RPC for aggregation. Build a PostgreSQL function that returns pre-aggregated data in one call.
+**Q4:** Table layout approach: CSS Grid (prototype), HTML `<table>` (existing SurgeonFlagTable), or keep flex (current settings)?
+**A4:** CSS Grid (prototype). Exact column alignment across rows.
 
-**Q5:** For the Supabase RPC approach, should it return a single comprehensive JSON blob covering all aggregation dimensions, or should we split into multiple focused RPCs?
-**A5:** Single comprehensive RPC. One call like `get_flag_analytics(facility_id, start_date, end_date)` returns a JSON object with all aggregation dimensions. One round-trip, one function to maintain.
+**Q5:** Editing UX: All inline (prototype, no expand/collapse), expand for editing (current), or hybrid?
+**A5:** All inline (prototype). No expand/collapse. Threshold selector, severity pills, scope badge all visible in every row.
 
-**Q6:** Should the RPC handle previous-period comparison internally or should the hook call the same RPC twice?
-**A6:** RPC handles both periods internally. Accepts `(facility_id, start_date, end_date)` and internally computes the equivalent previous period. Returns KPI values with deltas already calculated.
+**Q6:** Computed values (≈ 90 min) under Median+SD thresholds require knowing facility medians. Approach?
+**A6:** Query `facility_milestone_stats` table for display-only computed values.
 
-**Q7:** Should pattern detection stay client-side in TypeScript or should the RPC also compute detected patterns?
-**A7:** Client-side TypeScript. The RPC returns aggregated data; a separate `flagPatternDetection.ts` module applies heuristic rules. Easier to iterate on thresholds, testable in isolation, no migration needed when tweaking rules.
+**Q7:** Builder UI: inline between header/tables (prototype), slide-over drawer, or modal dialog?
+**A7:** Slide-over drawer (like FlagDrillThrough pattern).
 
-**Q8:** For the 'case detail' drill-through from the Recent Flagged Cases list, should it open a new flags-specific panel, or reuse the existing CaseDrawer?
-**A8:** Navigate to `/cases` with drawer. Clicking a recent flagged case navigates to the existing case page which has a Flags tab. No new component needed for case drill-through. Surgeon and room drill-throughs still get custom panels.
+**Q8:** Table sections: two separate sections (Built-in + Custom) or unified single table?
+**A8:** Two sections (prototype). Separate headers, counters, and tables for built-in and custom rules.
 
-**Q9:** Should the new flags analytics page use the compound CardEnhanced + SectionHeader pattern, or simpler Card.tsx?
-**A9:** Use CardEnhanced + SectionHeader from AnalyticsComponents.tsx. Consistent with the surgeons and block-utilization pages.
+**Q9:** Category filter bar style?
+**A9:** Segmented control (shadcn Tabs component). Category name only (no count in tab).
 
-**Q10:** Should the flags analytics page persist the selected date range in URL search params?
-**A10:** Yes, use URL search params (e.g., `?range=last_30&start=2026-01-20&end=2026-02-19`). Enables bookmarking and sharing links.
+**Q10:** Delete UX for custom rules?
+**A10:** **No delete — use archive instead.** Archive (soft delete with `is_active` column). Also add an "Archived" tab to the segmented control. All create, modify, and archive operations must be logged to audit_log.
 
-**Q11:** When a facility has zero flags for the selected date range, what should the page show?
-**A11:** Full empty state with message. Show KPI cards with zeroed values (0%, 0 flags) plus a centered EmptyState component below saying "No flags detected for this period." Charts and tables are hidden.
+**Q11:** Archive implementation: `is_active` column (consistent with ORbit soft-delete pattern) or `is_archived`?
+**A11:** Add `is_active` boolean column to `flag_rules` table (new migration). Consistent with the 20-table soft-delete pattern.
 
-**Q12:** Where should the 'View All' button on the Recent Flagged Cases section navigate to?
-**A12:** Expand inline to show full list. Instead of navigating away, toggle to show all flagged cases for the period in a scrollable list on the same page. Initially show 5 cases, expand to show all on click.
+**Q12:** Archived rules display: collapsible section, filter toggle, or separate drawer?
+**A12:** Add "Archived" as a tab in the segmented control alongside category filters. Clicking it shows archived rules with restore action.
 
-**Q13:** When a user clicks a surgeon row to open the drill-through panel, what level of detail should it show?
-**A13:** Summary stats + flagged case list. Show surgeon name, total cases, flagged cases, flag rate, top flags, plus a list of their recent flagged cases (case number, date, flag badges). Case clicks navigate to `/cases`.
+**Q13:** Should built-in rules be archivable?
+**A13:** Custom rules only. Built-in rules can only be disabled (toggled off), not archived.
 
-**Q14:** For the Tremor migration phases (6-8), should these be one phase per page or collapsed?
-**A14:** Keep one phase per page as planned. Safer — each page gets its own commit, test gate, and rollback point.
+**Q14:** Operator editing: editable for all rules, read-only for built-in, or editable with lock icon?
+**A14:** Editable for all rules. Also expand beyond 4 basic operators.
 
-**Q15:** What default date range should the flags analytics page load with?
-**A15:** Last 30 days. Consistent with all other analytics pages.
+**Q15:** Additional threshold types beyond gt/gte/lt/lte + median_plus_sd + absolute?
+**A15:** Add three new threshold types: percentage above/below median (`percentage_of_median`), percentile-based (`percentile`), and range (`between`). All included in MVP.
 
-**Q16:** Should the RPC return all flagged cases upfront (enabling instant expand), or return just the top 5?
-**A16:** Return all upfront. The UI initially shows 5, toggles to show all. For 30 days this is likely <100 rows — minimal payload overhead.
+**Q16:** Phasing for new threshold types — ship with MVP or iterate later?
+**A16:** Ship with MVP. All 5 threshold types in initial build.
 
-**Q17:** Should the flags analytics page define its chart colors in design-tokens.ts or inline per component?
-**A17:** Constants in `design-tokens.ts`. Add a `flagChartColors` object with named keys: autoDetected, delays, critical, warning, info, fcots, timing, turnover. Centralized, easy to adjust.
+**Q17:** Auto-save pattern: debounce number inputs or immediate save?
+**A17:** Debounce number inputs (500ms). Immediate save for toggles and severity pills.
 
-**Q18:** Should Phase 1 be split into two sub-phases (1a: migration/RPC, 1b: hook + types)?
-**A18:** Yes, split into Phase 1a (migration + RPC function + db push) and Phase 1b (TypeScript types + hook). Two commits, two test gates. More granular rollback.
+**Q18:** Financial metric column mappings (case_completion_stats doesn't have `implant_cost` or `total_cost`)?
+**A18:** Need to verify with real data before implementing. Check trigger function for exact calculations.
 
-**Q19:** Should FlagsSummaryCard on the hub page be updated to consume the new RPC?
-**A19:** Yes, update to use new RPC + fix heroicons→lucide-react. Part of the hub page migration phase.
+**Q19:** Flag engine data flow for financial metrics?
+**A19:** Extend CaseWithMilestones type to include optional financial fields. Flag engine extracts from the same object.
 
-**Q20:** Should loading states use existing skeleton components or page-specific skeletons?
-**A20:** Build page-specific skeletons that mirror the exact page structure for a polished loading experience.
+**Q20:** Computed metrics (excess_time_cost, room_idle_gap) — include in MVP or defer?
+**A20:** Include both. Full 22 metrics as specced.
 
-**Q21:** Should the RPC filter out is_excluded_from_metrics and is_draft cases?
-**A21:** Yes, filter both out in the RPC. `cases.is_excluded_from_metrics = false AND cases.is_draft = false`. Consistent with all other analytics queries.
+**Q21:** Role-based UI gating for non-admin users?
+**A21:** Rely on existing navigation guards and RLS enforcement. No extra role checking in the component.
 
-**Q22:** How much responsive behavior should the flags analytics page support?
-**A22:** Desktop-optimized with basic responsive. 4-col KPI grid → 2-col on tablet. Charts stack vertically on smaller screens. Tables get horizontal scroll. Not optimized for phone.
+**Q22:** Metric search in builder: flat search + category groups, suggested section, or category tabs?
+**A22:** Search + category groups (prototype). 22 metrics is small enough to browse.
 
-**Q23:** Should the surgeon flag table support column sorting?
-**A23:** Yes, client-side sortable columns. Clickable column headers that sort by cases, flags, flag rate, or trend. Simple useState for sort state.
+**Q23:** Legend section at bottom of page?
+**A23:** Include (matches prototype).
 
-**Q24:** For the hub page Tremor migration, should the DonutChart be replaced with a Recharts PieChart?
-**A24:** Yes, Recharts PieChart with innerRadius. Direct 1:1 replacement creating the same donut shape.
+**Q24:** Analytics page impact — update for new categories in Phase 6?
+**A24:** Yes, update analytics page in Phase 6 to properly display financial/quality flags.
 
-**Q25:** How should room analysis cards handle facilities with many rooms (8+)?
-**A25:** Show all rooms in a responsive grid (2-col tablet, 3-col desktop, 4-col wide). Sorted by flag rate descending. No truncation.
+**Q25:** DAL structure?
+**A25:** CRUD + baselines together in a single `flag-rules.ts` DAL file.
 
-**Q26:** Should the flags analytics page have data export capability?
-**A26:** No export for now. Reduces scope. Can be added later if users request it.
+**Q26:** Scope selector for financial/quality metrics?
+**A26:** Always available. Let admin decide. No restrictions by metric category.
 
-**Q27:** Should the RPC include flags from all case statuses, or only completed cases?
-**A27:** Only completed cases. Filter to cases where `case_statuses.name = 'completed'`.
+**Q27:** Rule ordering / drag-and-drop?
+**A27:** Creation order only. No drag-and-drop reorder.
 
-**Q28:** Should the weekly trend chart match the selected date range or always show 12 weeks?
-**A28:** Match selected date range. If user selects 30 days, show ~4-5 weekly data points. Consistent with how the date selector works everywhere else.
+**Q28:** Case drawer flags display — add category badges?
+**A28:** No changes to case drawer flags display.
 
-**Q29:** Should the flag analytics RPC require cases.data_validated = true?
-**A29:** Yes, require `data_validated = true`. Consistent with milestone median calculations and ensures data quality.
+**Q29:** Preview sentence component?
+**A29:** Full RulePreviewSentence component handling all 5 threshold types with proper formatting per data type.
 
-**Q30:** Should pattern detection thresholds be hardcoded or configurable per-facility?
-**A30:** Configurable per-facility via the Case Flags settings page. Add a new phase to this feature that adds settings columns, migration, settings UI, and wires pattern detection to read from config.
+**Q30:** Keyboard accessibility?
+**A30:** Basic: Escape closes drawer, Enter submits form. No custom arrow-key navigation.
 
-**Q31:** Where should the configurable pattern thresholds phase go in the plan?
-**A31:** After Phase 5 (pattern detection), before Tremor migration. Build patterns with hardcoded constants first, then make configurable. Tremor migration phases shift down.
+**Q31:** `reimbursement_variance` metric — expected reimbursement data available?
+**A31:** Yes, `procedure_reimbursements` table exists. Pre-join expected reimbursement when loading cases for flag evaluation.
 
-**Q32:** Should the analyticsV2.ts Color type migration happen during hub page migration or the remove-Tremor phase?
-**A32:** In the remove-Tremor phase. Replace the Color type import with a local type definition alongside removing @tremor/react from package.json.
+**Q32:** Range operator (`between`) storage — how to store the second value?
+**A32:** Add `threshold_value_max` numeric column to flag_rules table (migration).
 
-**Q33:** What width should the FlagDrillThrough slide-over use?
-**A33:** 640px, matching InsightSlideOver. Follows the analytics page slide-over pattern.
+**Q33:** Audit logging pattern?
+**A33:** Match existing entity patterns (e.g., delayTypeAudit): `flag_rule.created`, `flag_rule.updated`, `flag_rule.archived`, `flag_rule.restored`. Use old_values/new_values JSON.
+
+**Q34:** Phase ordering with expanded scope?
+**A34:** Phase 1: Types, constants, design tokens, migration (is_active + threshold_value_max). Phase 2: Table layout + built-in rules. Phase 3: Custom rule builder drawer. Phase 4: CRUD + audit + archive. Phase 5: Flag engine extension. Phase 6: Analytics updates + computed baselines + legend + polish.
+
+**Q35:** Page title?
+**A35:** "Flag Rules" — compromise between "Auto-Detection Rules" (prototype) and "Case Flags" (current).
+
+**Q36:** Branch strategy?
+**A36:** Continue on current branch (`feature/flags-analytics-recharts-migration`).
 
 ---
 
-## Key Changes from Original Spec (Based on Review)
+## Revised Phase Plan (Post-Review)
 
-1. **Data layer changed from client-side to RPC.** Phase 1 splits into 1a (migration/RPC) and 1b (types/hook). The spec's "no migrations needed" changes — we need a migration for the `get_flag_analytics` RPC function.
-2. **Heatmap maps by metric, not category.** The original spec referenced `flag_rules.category` for heatmap rows, but actual categories (timing/efficiency/anesthesia/recovery) don't match the desired rows (FCOTS/Timing/Turnover/Delays). Mapping by `flag_rules.metric` instead.
-3. **Date filtering by `cases.scheduled_date`**, not `case_flags.created_at`. Consistent with other analytics pages.
-4. **Only completed + validated cases** included in analytics. `data_validated = true` required.
-5. **Case drill-through navigates to `/cases`** instead of a custom panel. FlagDrillThrough has 2 modes (surgeon, room), not 3.
-6. **URL search params** for date range persistence (new pattern for analytics pages).
-7. **"View All" expands inline** instead of navigating to `/cases`.
-8. **New Phase 6: Configurable pattern detection thresholds** via Case Flags settings page. Pattern detection initially built with hardcoded constants (Phase 5), then made configurable (Phase 6).
-9. **FlagsSummaryCard updated** to use new RPC + heroicons→lucide-react migration (part of hub page Tremor migration).
-10. **Page-specific loading skeletons** instead of reusing generic skeletons.
-11. **Client-side sortable surgeon table** instead of fixed sort order.
-12. **Total phases: 11** (was 9). Phase 1 splits into 1a/1b, new Phase 6 for settings.
-13. **Chart colors centralized** in `design-tokens.ts` as `flagChartColors`.
-14. **Sparkline uses existing SVG `Sparkline` component**, not Recharts mini AreaChart.
+### Phase 1: Types, Constants, Design Tokens & Migration
+- `types/flag-settings.ts` — MetricCatalogEntry, Operator, ThresholdType (5 types), CustomRuleFormState
+- `lib/constants/metrics-catalog.ts` — METRICS_CATALOG (22 metrics), OPERATORS (4 + between), THRESHOLD_TYPES (5), METRIC_CATEGORIES
+- `lib/design-tokens.ts` — Add financial (emerald) and quality (indigo) to categoryColors
+- Migration: Add `is_active DEFAULT true` and `threshold_value_max numeric` to flag_rules
+
+### Phase 2: Settings Page Rebuild — Table Layout + Built-in Rules
+- Complete rewrite of `app/settings/flags/page.tsx` with CSS Grid table layout
+- Segmented control filter (All | categories... | Archived)
+- Inline editing: toggle, threshold, operator, severity pills, scope badge
+- Debounced number inputs, immediate toggle/severity save
+- Query facility_milestone_stats for computed value display
+
+### Phase 3: Custom Rule Builder — Slide-over Drawer
+- MetricSearchBuilder as a slide-over drawer (Radix Dialog)
+- Step 1: Search + category-grouped metrics list
+- Step 2: Configure rule — name, threshold type (5 types), operator, value(s), severity, scope
+- RulePreviewSentence component (handles all 5 threshold types)
+- Escape to close, Enter to submit
+
+### Phase 4: Custom Rule CRUD + Audit + Archive
+- `lib/dal/flag-rules.ts` — CRUD + baselines + audit integration
+- `lib/audit-logger.ts` — Add flagRuleAudit (created, updated, archived, restored)
+- Custom rules section with CUSTOM badge
+- Archive (is_active=false) instead of delete
+- "Archived" tab shows archived custom rules with Restore action
+- Optimistic UI with rollback
+
+### Phase 5: Flag Engine — Financial, Quality & New Threshold Types
+- Extend CaseWithMilestones with financial fields
+- Financial metric extraction (case_completion_stats columns)
+- Quality metric extraction (missing milestones, sequence errors)
+- Computed metrics: excess_time_cost, room_idle_gap
+- Pre-join procedure_reimbursements for reimbursement_variance
+- New threshold types in engine: percentage_of_median, percentile, between
+- Verify financial column mappings with real data
+
+### Phase 6: Analytics Updates, Computed Baselines & Polish
+- Update flag analytics page for financial/quality categories
+- Computed baselines display in settings (facility_milestone_stats query)
+- Legend section at bottom of page
+- Keyboard navigation, responsive behavior
+- Full 3-stage test gate
