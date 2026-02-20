@@ -69,26 +69,49 @@ Complete visual and functional rebuild of the Financial Analytics page (`/analyt
 
 ---
 
-## Phase 2: Overview Tab Rebuild
-**Complexity: Large**
+## Phase 2A: Overview Tab Rebuild — Components
+**Complexity: Large** (split from Phase 2 due to context limits)
 
-### What it does
-1. Rebuild `OverviewTab.tsx` to match `orbit-financials-complete.jsx` design
-2. Hero P&L card with AnimatedNumber + WaterfallChart (new component)
-3. Four secondary KPI cards with Sparkline + trend badges
-4. Two-column tables: Top Procedures (MicroBar) + Top Surgeons (RankBadge)
-5. Profit trend chart (Recharts ComposedChart: daily bars + cumulative area + target reference line)
-6. Monthly target progress bar (reads from `financial_targets` table)
-7. Click handlers on procedure/surgeon rows navigate to URL-routed detail pages
+### What was done
+1. Created `WaterfallChart.tsx` — SVG waterfall showing Revenue → Debits → Credits → OR Cost → Profit flow
+2. Rewrote `OverviewTab.tsx` to match `orbit-financials-complete.jsx` design:
+   - Hero P&L card with AnimatedNumber + WaterfallChart + trend badge + waterfall legend
+   - Four secondary KPI cards with Sparkline + trend badges (profit/hr, margin, median profit, OR hours)
+   - Two-column CSS Grid tables: Top Procedures (MicroBar, MarginDot, loss styling) + Top Surgeons (RankBadge, low vol badge)
+   - Profit trend chart (Recharts ComposedChart: daily bars + cumulative area + target reference line)
+   - Monthly target progress bar with remaining/day-needed calculation
+3. Started `page.tsx` edits: added `useRouter`, `monthlyTarget` state, `financial_targets` fetch to Promise.all
 
 ### Files touched
-- **Rewrite:** `components/analytics/financials/OverviewTab.tsx`
-- **Create:** `components/analytics/financials/WaterfallChart.tsx`
-- **Modify:** `app/analytics/financials/page.tsx` — update data fetching to include financial_targets, pass enriched metrics to OverviewTab
-- **Delete:** `components/analytics/financials/MetricCard.tsx` (replaced by inline KPI cards using shared components)
+- **Created:** `components/analytics/financials/WaterfallChart.tsx`
+- **Rewritten:** `components/analytics/financials/OverviewTab.tsx`
+- **Partially modified:** `app/analytics/financials/page.tsx` (fetch added, wiring incomplete)
 
 ### Commit message
-`feat(financials): phase 2 - overview tab rebuild with sparklines, waterfall, and profit trend`
+`feat(financials): phase 2a - overview tab rebuild with sparklines, waterfall, and profit trend`
+
+---
+
+## Phase 2B: Overview Tab Rebuild — Wiring + Cleanup + Tests
+**Complexity: Small**
+
+### What it does
+1. Finish `page.tsx` wiring:
+   - Set `monthlyTarget` state from `financialTargetRes` result
+   - Update `handleProcedureClick` / `handleSurgeonClick` to use `router.push('/analytics/financials/procedures/[id]')` and `router.push('/analytics/financials/surgeons/[id]')` for URL navigation
+   - Pass `monthlyTarget` prop to `<OverviewTab />`
+2. Delete `components/analytics/financials/MetricCard.tsx`
+3. Remove MetricCard export from `components/analytics/financials/index.ts`
+4. Run 3-stage test gate
+5. Verify typecheck passes (pre-existing errors in flagEngine.test.ts are expected)
+
+### Files touched
+- **Modify:** `app/analytics/financials/page.tsx` — finish wiring monthlyTarget + router.push handlers
+- **Delete:** `components/analytics/financials/MetricCard.tsx`
+- **Modify:** `components/analytics/financials/index.ts` — remove MetricCard export
+
+### Commit message
+`feat(financials): phase 2b - page wiring, MetricCard cleanup, and test gate`
 
 ### Test gate
 - **Unit:** WaterfallChart renders correct bars for revenue/cost/profit flow

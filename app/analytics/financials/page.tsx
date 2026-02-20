@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
@@ -11,7 +12,7 @@ import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { AlertTriangle, DollarSign, DollarSignIcon } from 'lucide-react'
+import { AlertTriangle, DollarSign } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
 
@@ -39,6 +40,7 @@ export default function FinancialsAnalyticsPage() {
   const [surgeonProcedureStats, setSurgeonProcedureStats] = useState<SurgeonProcedureStats[]>([])
   const [facilityProcedureStats, setFacilityProcedureStats] = useState<FacilityProcedureStats[]>([])
   const [facilitySettings, setFacilitySettings] = useState<FacilitySettings | null>(null)
+  const [monthlyTarget, setMonthlyTarget] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
@@ -76,14 +78,15 @@ export default function FinancialsAnalyticsPage() {
       // Instead, fetch lookup tables separately and merge client-side.
       // -------------------------------------------------------
       const [
-        caseStatsRes, 
-        surgeonStatsRes, 
-        facilityStatsRes, 
+        caseStatsRes,
+        surgeonStatsRes,
+        facilityStatsRes,
         facilityRes,
         procedureTypesRes,
         payersRes,
         orRoomsRes,
         surgeonsRes,
+        financialTargetRes,
       ] = await Promise.all([
         // 1. Fetch case-level stats (NO joins — just the flat view data)
         supabase
@@ -136,6 +139,15 @@ export default function FinancialsAnalyticsPage() {
           .from('users')
           .select('id, first_name, last_name')
           .eq('facility_id', effectiveFacilityId),
+
+        // 9. Financial target for current month
+        supabase
+          .from('financial_targets')
+          .select('profit_target')
+          .eq('facility_id', effectiveFacilityId)
+          .eq('year', today.getFullYear())
+          .eq('month', today.getMonth() + 1)
+          .maybeSingle(),
       ])
 
 // Handle errors
