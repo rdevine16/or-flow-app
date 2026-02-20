@@ -33,8 +33,9 @@ import SurgeonTab from '@/components/analytics/financials/SurgeonTab'
 
 export default function FinancialsAnalyticsPage() {
   const supabase = createClient()
+  const router = useRouter()
   const { loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
-  
+
   // Data state - Using view data
   const [caseStats, setCaseStats] = useState<CaseCompletionStats[]>([])
   const [surgeonProcedureStats, setSurgeonProcedureStats] = useState<SurgeonProcedureStats[]>([])
@@ -208,6 +209,7 @@ if (facilityStatsRes.error) {
       setSurgeonProcedureStats((surgeonStatsRes.data as SurgeonProcedureStats[]) || [])
       setFacilityProcedureStats((facilityStatsRes.data as FacilityProcedureStats[]) || [])
       setFacilitySettings(facilityRes.data as FacilitySettings)
+      setMonthlyTarget(financialTargetRes.data?.profit_target ?? null)
     } catch (err) {
       setError('Failed to load financial data. Please try again.')
       showToast({
@@ -232,15 +234,13 @@ if (facilityStatsRes.error) {
     fetchData(startDate, endDate)
   }
 
-  // Tab navigation handlers
+  // Navigation handlers — URL-routed detail views
   const handleProcedureClick = (procedureId: string) => {
-    setSelectedProcedure(procedureId)
-    setActiveTab('procedure')
+    router.push(`/analytics/financials/procedures/${procedureId}`)
   }
 
   const handleSurgeonClick = (surgeonId: string) => {
-    setSelectedSurgeon(surgeonId)
-    setActiveTab('surgeon')
+    router.push(`/analytics/financials/surgeons/${surgeonId}`)
   }
 
   // Permission guard
@@ -356,8 +356,9 @@ if (facilityStatsRes.error) {
 
             {/* Tab Content */}
             {activeTab === 'overview' && (
-              <OverviewTab 
+              <OverviewTab
                 metrics={metrics}
+                monthlyTarget={monthlyTarget}
                 onProcedureClick={handleProcedureClick}
                 onSurgeonClick={handleSurgeonClick}
               />

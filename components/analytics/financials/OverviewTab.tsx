@@ -346,8 +346,8 @@ export default function OverviewTab({
                     boxShadow: '0 4px 6px -1px rgba(0,0,0,0.07)',
                     fontSize: '12px',
                   }}
-                  formatter={(v: number, name: string) => [
-                    `$${v.toLocaleString()}`,
+                  formatter={(v: number | undefined, name: string | undefined) => [
+                    v !== undefined ? `$${v.toLocaleString()}` : '$0',
                     name === 'daily' ? 'Daily' : 'Cumulative',
                   ]}
                 />
