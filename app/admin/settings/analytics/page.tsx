@@ -40,6 +40,7 @@ interface AnalyticsSettingsTemplate {
   waiting_on_surgeon_minutes: number
   waiting_on_surgeon_floor_minutes: number
   min_procedure_cases: number
+  min_case_threshold: number
 }
 
 /** Seed values from the migration — used for "Reset to Defaults" */
@@ -57,6 +58,7 @@ const SEED_DEFAULTS: Omit<AnalyticsSettingsTemplate, 'id'> = {
   waiting_on_surgeon_minutes: 3,
   waiting_on_surgeon_floor_minutes: 10,
   min_procedure_cases: 3,
+  min_case_threshold: 15,
 }
 
 // =====================================================
@@ -157,6 +159,7 @@ export default function AdminAnalyticsSettingsPage() {
     waiting_on_surgeon_minutes: '3',
     waiting_on_surgeon_floor_minutes: '10',
     min_procedure_cases: '3',
+    min_case_threshold: '15',
   })
 
   // Sync fetched template to form state
@@ -176,6 +179,7 @@ export default function AdminAnalyticsSettingsPage() {
       waiting_on_surgeon_minutes: String(template.waiting_on_surgeon_minutes ?? 3),
       waiting_on_surgeon_floor_minutes: String(template.waiting_on_surgeon_floor_minutes ?? 10),
       min_procedure_cases: String(template.min_procedure_cases ?? 3),
+      min_case_threshold: String(template.min_case_threshold ?? 15),
     })
   }, [template])
 
@@ -207,6 +211,9 @@ export default function AdminAnalyticsSettingsPage() {
     const minCases = parseInt(form.min_procedure_cases)
     if (minCases < 1 || minCases > 10) return 'Min Cases per Procedure must be 1–10'
 
+    const minThreshold = parseInt(form.min_case_threshold)
+    if (minThreshold < 1 || minThreshold > 100) return 'Min Cases for Scorecard must be 1–100'
+
     return null
   }
 
@@ -233,6 +240,7 @@ export default function AdminAnalyticsSettingsPage() {
       waiting_on_surgeon_minutes: parseInt(form.waiting_on_surgeon_minutes) || 3,
       waiting_on_surgeon_floor_minutes: parseInt(form.waiting_on_surgeon_floor_minutes) || 10,
       min_procedure_cases: parseInt(form.min_procedure_cases) || 3,
+      min_case_threshold: parseInt(form.min_case_threshold) || 15,
       updated_at: new Date().toISOString(),
     }
 
@@ -273,6 +281,7 @@ export default function AdminAnalyticsSettingsPage() {
       waiting_on_surgeon_minutes: String(SEED_DEFAULTS.waiting_on_surgeon_minutes),
       waiting_on_surgeon_floor_minutes: String(SEED_DEFAULTS.waiting_on_surgeon_floor_minutes),
       min_procedure_cases: String(SEED_DEFAULTS.min_procedure_cases),
+      min_case_threshold: String(SEED_DEFAULTS.min_case_threshold),
     })
   }
 
@@ -635,7 +644,15 @@ export default function AdminAnalyticsSettingsPage() {
                     <div className="w-2 h-2 rounded-full bg-slate-400" />
                     <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Scoring Thresholds</h4>
                   </div>
-                  <div className="max-w-xs">
+                  <div className="max-w-xs space-y-4">
+                    <SettingsNumberField
+                      label="Min Cases for Scorecard"
+                      value={form.min_case_threshold}
+                      onChange={(v) => setForm({ ...form, min_case_threshold: v })}
+                      min="1"
+                      max="100"
+                      helpText="Minimum total cases a surgeon needs to receive an ORbit Scorecard"
+                    />
                     <SettingsNumberField
                       label="Min Cases per Procedure Type"
                       value={form.min_procedure_cases}

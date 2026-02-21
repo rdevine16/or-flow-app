@@ -39,6 +39,8 @@ function makeRoom(overrides: Partial<RoomUtilizationDetail> = {}): RoomUtilizati
     caseCount: 42,
     daysActive: 18,
     usingRealHours: true,
+    sameRoomTurnoverMedian: null,
+    turnoverCount: 0,
     ...overrides,
   }
 }

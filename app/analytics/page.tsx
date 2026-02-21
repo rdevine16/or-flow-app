@@ -18,9 +18,6 @@ import {
   Bar,
   AreaChart,
   Area,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -31,16 +28,27 @@ import {
 // Analytics functions
 import {
   calculateAnalyticsOverview,
-  calculateAvgCaseTime,  // ADD THIS
+  calculateAvgCaseTime,
+  calculateSurgeonLeaderboard,
+  getMilestoneMap,
+  getTimeDiffMinutes,
+  formatMinutes,
   type CaseWithMilestones,
   type FlipRoomAnalysis,
+  type RoomHoursMap,
 } from '@/lib/analyticsV2'
+import { useAnalyticsConfig } from '@/lib/hooks/useAnalyticsConfig'
 
-import FlagsSummaryCard from '@/components/analytics/FlagsSummaryCard'
+import Sparkline, { dailyDataToSparkline } from '@/components/ui/Sparkline'
+import FlagsCompactBanner from '@/components/analytics/FlagsCompactBanner'
+import SurgeonLeaderboardTable from '@/components/analytics/SurgeonLeaderboardTable'
+import ProcedureMixCard from '@/components/analytics/ProcedureMixCard'
+import RoomUtilizationCard from '@/components/analytics/RoomUtilizationCard'
+import RecentCasesTable, { type RecentCaseRow } from '@/components/analytics/RecentCasesTable'
 import CaseDrawer from '@/components/cases/CaseDrawer'
 import { useProcedureCategories } from '@/hooks/useLookups'
 
-import { AlertTriangle, ArrowRight, BarChart3, CalendarDays, Clock, DollarSign, Flag, Presentation, RefreshCw, Sparkles, Star, TrendingDown, TrendingUp, User, X } from 'lucide-react'
+import { ArrowRight, BarChart3, CalendarDays, DollarSign, Flag, Presentation, Sparkles, Star, User, X } from 'lucide-react'
 
 // ============================================
 // TYPES
@@ -176,52 +184,81 @@ function QuickStatCard({
   title,
   value,
   subtitle,
-  icon: Icon,
+  target,
   trend,
   trendType,
+  sparklineData,
+  sparklineColor,
 }: {
   title: string
   value: string
   subtitle?: string
-  icon: React.ComponentType<{ className?: string }>
+  target?: string
   trend?: number
   trendType?: 'up' | 'down'
+  sparklineData?: number[]
+  sparklineColor?: string
 }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-4">
       <div className="flex items-center justify-between mb-2">
-        <div className="p-1.5 rounded-lg bg-slate-100">
-          <Icon className="w-4 h-4 text-slate-600" />
-        </div>
+        <span className="text-xs text-slate-500 font-medium">{title}</span>
         {trend !== undefined && trendType && (
-          <div className={`
-            flex items-center gap-1 text-sm font-semibold px-2 py-0.5 rounded-full
-            ${trend === 0 
+          <span className={`
+            text-[11px] font-semibold px-[7px] py-[2px] rounded-full inline-flex items-center gap-0.5
+            ${trend === 0
               ? 'text-slate-500 bg-slate-100'
-              : trendType === 'up' 
-                ? 'text-green-600 bg-green-50' 
+              : trendType === 'up'
+                ? 'text-green-600 bg-green-50'
                 : 'text-rose-700 bg-rose-50'
             }
           `}>
-            {trend === 0 ? (
-              <span>— 0%</span>
-            ) : trendType === 'up' ? (
-              <>
-                <TrendingUp className="w-4 h-4" />
-                {trend}%
-              </>
-            ) : (
-              <>
-                <TrendingDown className="w-4 h-4" />
-                {trend}%
-              </>
-            )}
+            {trend === 0 ? '—' : trendType === 'up' ? '↑' : '↓'} {Math.abs(trend)}%
+          </span>
+        )}
+      </div>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-2xl font-bold text-slate-900 font-mono tracking-tight">{value}</p>
+          {target && <p className="text-[11px] text-slate-400 mt-0.5">Target: {target}</p>}
+          {subtitle && <p className="text-[11px] text-slate-400 mt-0.5">{subtitle}</p>}
+        </div>
+        {sparklineData && sparklineData.length > 1 && (
+          <div className="opacity-70">
+            <Sparkline data={sparklineData} color={sparklineColor || '#94a3b8'} width={72} height={24} showArea={false} />
           </div>
         )}
       </div>
-      <p className="text-2xl font-semibold text-slate-900">{value}</p>
-      <p className="text-xs text-slate-500 mt-0.5">{title}</p>
-      {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
+    </div>
+  )
+}
+
+function CombinedTurnoverCard({
+  sameRoomValue,
+  flipRoomValue,
+  target,
+}: {
+  sameRoomValue: string
+  flipRoomValue: string
+  target: string
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-slate-500 font-medium">Room Turnover</span>
+      </div>
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <p className="text-xl font-bold text-slate-900 font-mono tracking-tight">{sameRoomValue}</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-0.5">Same Room</p>
+        </div>
+        <div className="w-px bg-slate-100" />
+        <div className="flex-1">
+          <p className="text-xl font-bold text-slate-900 font-mono tracking-tight">{flipRoomValue}</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-0.5">Flip Room</p>
+        </div>
+      </div>
+      <p className="text-[11px] text-slate-400 mt-1">Target: {target}</p>
     </div>
   )
 }
@@ -274,20 +311,6 @@ function CaseVolumeTooltip({ active, payload, label }: { active?: boolean; paylo
   )
 }
 
-function CategoryTooltip({ active, payload }: { active?: boolean; payload?: ChartTooltipPayload[] }) {
-  if (!active || !payload?.length) return null
-  const item = payload[0]
-  return (
-    <div className="bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 shadow-lg">
-      <div className="flex items-center gap-1.5">
-        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
-        <span className="text-xs text-slate-700">
-          {item.name}: <span className="font-semibold">{item.value} cases</span>
-        </span>
-      </div>
-    </div>
-  )
-}
 
 function ComparisonTooltip({ active, payload, label }: { active?: boolean; payload?: ChartTooltipPayload[]; label?: string }) {
   if (!active || !payload?.length) return null
@@ -454,6 +477,30 @@ export default function AnalyticsHubPage() {
   const [currentEndDate, setCurrentEndDate] = useState<string | undefined>()
   
   const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
+  const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
+  const { config } = useAnalyticsConfig()
+
+  // Fetch room available hours when facility changes
+  useEffect(() => {
+    if (!effectiveFacilityId) return
+
+    const fetchRoomHours = async () => {
+      const { data } = await supabase
+        .from('or_rooms')
+        .select('id, available_hours')
+        .eq('facility_id', effectiveFacilityId)
+        .is('deleted_at', null)
+      if (data) {
+        const map: RoomHoursMap = {}
+        data.forEach((r: { id: string; available_hours?: number }) => {
+          if (r.available_hours) map[r.id] = r.available_hours
+        })
+        setRoomHoursMap(map)
+      }
+    }
+
+    fetchRoomHours()
+  }, [effectiveFacilityId, supabase])
 
   // Case drawer state
   const [drawerCaseId, setDrawerCaseId] = useState<string | null>(null)
@@ -508,9 +555,12 @@ export default function AnalyticsHubPage() {
         surgeon_id,
         or_room_id,
         status_id,
+        surgeon_left_at,
+        cancelled_at,
+        is_excluded_from_metrics,
         surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
         procedure_types (
-          id, 
+          id,
           name,
           procedure_category_id,
           technique_id,
@@ -519,11 +569,10 @@ export default function AnalyticsHubPage() {
         ),
         or_rooms (id, name),
         case_statuses (name),
-case_milestones (
-            facility_milestone_id,
-            recorded_at,
-            facility_milestones (name)
-          )
+        case_milestones (
+          facility_milestone_id,
+          recorded_at,
+          facility_milestones (name)
         )
       `)
       .eq('facility_id', effectiveFacilityId)
@@ -558,9 +607,12 @@ case_milestones (
           surgeon_id,
           or_room_id,
           status_id,
+          surgeon_left_at,
+          cancelled_at,
+          is_excluded_from_metrics,
           surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
           procedure_types (
-            id, 
+            id,
             name,
             procedure_category_id,
             technique_id,
@@ -606,16 +658,49 @@ case_milestones (
 
   // Calculate all analytics
   const analytics = useMemo(() => {
-    return calculateAnalyticsOverview(cases, previousPeriodCases)
-  }, [cases, previousPeriodCases])
+    return calculateAnalyticsOverview(cases, previousPeriodCases, config, roomHoursMap)
+  }, [cases, previousPeriodCases, config, roomHoursMap])
 
   // Calculate avg case time with delta
   const avgCaseTimeKPIData = useMemo(() => {
     return calculateAvgCaseTime(cases, previousPeriodCases)
   }, [cases, previousPeriodCases])
 
+  // Surgeon leaderboard (top 5)
+  const surgeonLeaderboard = useMemo(() => {
+    return calculateSurgeonLeaderboard(cases).slice(0, 5)
+  }, [cases])
+
+  // Recent completed cases (top 6)
+  const recentCases = useMemo<RecentCaseRow[]>(() => {
+    return cases
+      .filter(c => {
+        const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
+        return status?.name === 'completed'
+      })
+      .sort((a, b) => b.scheduled_date.localeCompare(a.scheduled_date))
+      .slice(0, 6)
+      .map(c => {
+        const surgeon = Array.isArray(c.surgeon) ? c.surgeon[0] : c.surgeon
+        const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+        const room = Array.isArray(c.or_rooms) ? c.or_rooms[0] : c.or_rooms
+        const ms = getMilestoneMap(c)
+        const totalMin = getTimeDiffMinutes(ms.patient_in, ms.patient_out)
+        return {
+          id: c.id,
+          caseNumber: c.case_number,
+          surgeonName: surgeon ? `Dr. ${surgeon.last_name}` : '--',
+          procedureName: procType?.name || '--',
+          roomName: room?.name || '--',
+          time: totalMin !== null ? formatMinutes(totalMin) : '--',
+          status: 'completed',
+          flagCount: 0, // Flags loaded separately by FlagsCompactBanner
+        }
+      })
+  }, [cases])
+
   // ============================================
-  // NEW CHART DATA CALCULATIONS
+  // CHART DATA CALCULATIONS
   // ============================================
 
   // Daily Case Volume Trend Data
@@ -639,36 +724,32 @@ case_milestones (
       .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
   }, [cases])
 
-  // Procedure Category Volume Data
+  // Procedure Type Volume Data — individual procedures, not categories
   const procedureCategoryData = useMemo(() => {
-    const byCategoryId: { [key: string]: { count: number; name: string } } = {}
-    
+    const byProcType: { [key: string]: { count: number; name: string } } = {}
+
     cases.forEach(c => {
       const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
       if (status?.name !== 'completed') return
-      
+
       const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
       if (!procType) return
-      
-      const category = procType.procedure_categories
-      if (category) {
-        const catData = Array.isArray(category) ? category[0] : category
-        if (catData) {
-          if (!byCategoryId[catData.id]) {
-            byCategoryId[catData.id] = { count: 0, name: catData.display_name || catData.name }
-          }
-          byCategoryId[catData.id].count++
-        }
+
+      const procId = procType.id
+      const procName = procType.name || 'Unknown'
+      if (!byProcType[procId]) {
+        byProcType[procId] = { count: 0, name: procName }
       }
+      byProcType[procId].count++
     })
 
-    return Object.values(byCategoryId)
-      .map(cat => ({ name: cat.name, cases: cat.count }))
+    return Object.values(byProcType)
+      .map(p => ({ name: p.name, cases: p.count }))
       .sort((a, b) => b.cases - a.cases)
-      .slice(0, 8) // Top 8 categories
+      .slice(0, 10) // Top 10 procedure types
   }, [cases])
 
-  const categoryChartColors = ['#3b82f6', '#06b6d4', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#22c55e', '#f59e0b']
+  const categoryChartColors = ['#3b82f6', '#06b6d4', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#64748b']
 
   // Helper to get surgical time from milestones
   const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
@@ -904,77 +985,90 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
               </div>
             </div>
           ) : (
-            <div className="space-y-8">
-              {/* QUICK STATS ROW */}
-<section>
-  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-    <QuickStatCard
-      title="Completed Cases"
-      value={analytics.completedCases.toString()}
-      icon={CalendarDays}
-      trend={analytics.caseVolume.delta}
-      trendType={analytics.caseVolume.deltaType === 'increase' ? 'up' : analytics.caseVolume.deltaType === 'decrease' ? 'down' : undefined}
-    />
-    <QuickStatCard
-      title="FCOTS Rate"
-      value={analytics.fcots.displayValue}
-      icon={Clock}
-      trend={analytics.fcots.delta}
-      trendType={analytics.fcots.deltaType === 'increase' ? 'up' : analytics.fcots.deltaType === 'decrease' ? 'down' : undefined}
-    />
-    <QuickStatCard
-      title="Same Room Turnover"
-      value={analytics.sameRoomTurnover.displayValue}
-      icon={RefreshCw}
-      trend={analytics.sameRoomTurnover.delta}
-      trendType={analytics.sameRoomTurnover.deltaType === 'increase' ? 'up' : analytics.sameRoomTurnover.deltaType === 'decrease' ? 'down' : undefined}
-    />
-    <QuickStatCard
-      title="OR Utilization"
-      value={analytics.orUtilization.displayValue}
-      icon={BarChart3}
-      trend={analytics.orUtilization.delta}
-      trendType={analytics.orUtilization.deltaType === 'increase' ? 'up' : analytics.orUtilization.deltaType === 'decrease' ? 'down' : undefined}
-    />
-<QuickStatCard
-  title="Avg Case Time"
-  value={avgCaseTimeKPIData.displayValue}
-  icon={Clock}
-  trend={avgCaseTimeKPIData.delta}
-  trendType={avgCaseTimeKPIData.deltaType === 'increase' ? 'up' : avgCaseTimeKPIData.deltaType === 'decrease' ? 'down' : undefined}
-/>
-    <QuickStatCard
-      title="Cancellation Rate"
-      value={analytics.cancellationRate.displayValue}
-      icon={AlertTriangle}
-      trend={analytics.cancellationRate.delta}
-      trendType={analytics.cancellationRate.deltaType === 'increase' ? 'up' : analytics.cancellationRate.deltaType === 'decrease' ? 'down' : undefined}
-    />
-  </div>
-</section>
-
-              {/* CHARTS ROW - Case Trends & Category Breakdown */}
+            <div className="space-y-5">
+              {/* KPI STRIP — 6 across */}
               <section>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Daily Case Volume Trend */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <QuickStatCard
+                    title="Completed Cases"
+                    value={analytics.completedCases.toString()}
+                    trend={analytics.caseVolume.delta}
+                    trendType={analytics.caseVolume.deltaType === 'increase' ? 'up' : analytics.caseVolume.deltaType === 'decrease' ? 'down' : undefined}
+                    sparklineData={dailyDataToSparkline(analytics.caseVolume.dailyData)}
+                    sparklineColor="#3b82f6"
+                  />
+                  <QuickStatCard
+                    title="FCOTS Rate"
+                    value={analytics.fcots.displayValue}
+                    target={`${config.fcotsTargetPercent}%`}
+                    trend={analytics.fcots.delta}
+                    trendType={analytics.fcots.deltaType === 'increase' ? 'up' : analytics.fcots.deltaType === 'decrease' ? 'down' : undefined}
+                    sparklineData={dailyDataToSparkline(analytics.fcots.dailyData)}
+                    sparklineColor="#f59e0b"
+                  />
+                  <CombinedTurnoverCard
+                    sameRoomValue={analytics.sameRoomTurnover.displayValue}
+                    flipRoomValue={analytics.flipRoomTurnover.displayValue}
+                    target={`\u2264${config.turnoverThresholdMinutes} min / \u2264${config.flipRoomTurnoverTarget} min`}
+                  />
+                  <QuickStatCard
+                    title="OR Utilization"
+                    value={analytics.orUtilization.displayValue}
+                    target={`\u2265${config.utilizationTargetPercent}%`}
+                    trend={analytics.orUtilization.delta}
+                    trendType={analytics.orUtilization.deltaType === 'increase' ? 'up' : analytics.orUtilization.deltaType === 'decrease' ? 'down' : undefined}
+                  />
+                  <QuickStatCard
+                    title="Avg Case Time"
+                    value={avgCaseTimeKPIData.displayValue}
+                    trend={avgCaseTimeKPIData.delta}
+                    trendType={avgCaseTimeKPIData.deltaType === 'increase' ? 'up' : avgCaseTimeKPIData.deltaType === 'decrease' ? 'down' : undefined}
+                  />
+                  <QuickStatCard
+                    title="Cancellation"
+                    value={analytics.cancellationRate.displayValue}
+                    target={`<${config.cancellationTargetPercent}%`}
+                    trend={analytics.cancellationRate.delta}
+                    trendType={analytics.cancellationRate.deltaType === 'increase' ? 'up' : analytics.cancellationRate.deltaType === 'decrease' ? 'down' : undefined}
+                  />
+                </div>
+              </section>
+
+              {/* FLAGS COMPACT BANNER */}
+              {effectiveFacilityId && (
+                <section>
+                  <FlagsCompactBanner
+                    facilityId={effectiveFacilityId}
+                    startDate={currentStartDate}
+                    endDate={currentEndDate}
+                  />
+                </section>
+              )}
+
+              {/* ROW 1: Case Volume Trend + Surgeon Leaderboard */}
+              <section>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Case Volume Trend */}
                   <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <h3 className="text-base font-semibold text-slate-900">Case Volume Trend</h3>
-                      <p className="text-sm text-slate-500 mt-0.5">Completed cases over time</p>
+                    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Case Volume Trend</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Completed cases over time</p>
+                      </div>
                     </div>
-                    <div className="p-6">
+                    <div className="p-5">
                       {dailyCaseTrendData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={256}>
+                        <ResponsiveContainer width="100%" height={220}>
                           <BarChart data={dailyCaseTrendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                             <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                             <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
                             <Tooltip content={<CaseVolumeTooltip />} />
-                            <Bar dataKey="Completed Cases" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                            <Bar dataKey="Completed Cases" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       ) : (
-                        <div className="flex items-center justify-center h-64 text-slate-400">
+                        <div className="flex items-center justify-center h-56 text-slate-400">
                           <div className="text-center">
                             <BarChart3 className="w-12 h-12 mx-auto mb-2 text-slate-300" />
                             <p>No data available</p>
@@ -984,80 +1078,45 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     </div>
                   </div>
 
-                  {/* Procedure Category Breakdown */}
+                  {/* Surgeon Leaderboard */}
                   <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <h3 className="text-base font-semibold text-slate-900">Procedure Categories</h3>
-                      <p className="text-sm text-slate-500 mt-0.5">Case distribution by procedure type</p>
+                    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Surgeon Leaderboard</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Top performers this period</p>
+                      </div>
                     </div>
-                    <div className="p-6">
-                      {procedureCategoryData.length > 0 ? (
-                        <div className="flex flex-col items-center">
-                          <div className="relative w-full">
-                            <ResponsiveContainer width="100%" height={208}>
-                              <PieChart>
-                                <Pie
-                                  data={procedureCategoryData}
-                                  cx="50%"
-                                  cy="50%"
-                                  innerRadius={55}
-                                  outerRadius={80}
-                                  dataKey="cases"
-                                  stroke="none"
-                                >
-                                  {procedureCategoryData.map((entry, i) => (
-                                    <Cell key={entry.name} fill={categoryChartColors[i % categoryChartColors.length]} />
-                                  ))}
-                                </Pie>
-                                <Tooltip content={<CategoryTooltip />} />
-                              </PieChart>
-                            </ResponsiveContainer>
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                              <span className="text-sm font-semibold text-slate-600">
-                                {procedureCategoryData.reduce((sum, d) => sum + d.cases, 0)} total
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center mt-3">
-                            {procedureCategoryData.map((d, i) => (
-                              <span key={d.name} className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ backgroundColor: categoryChartColors[i % categoryChartColors.length] }}
-                                />
-                                {d.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center h-64 text-slate-400">
-                          <div className="text-center">
-                            <BarChart3 className="w-12 h-12 mx-auto mb-2 text-slate-300" />
-                            <p>No data available</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <SurgeonLeaderboardTable data={surgeonLeaderboard} />
                   </div>
                 </div>
               </section>
 
-              {/* CASE FLAGS SUMMARY */}
-              {effectiveFacilityId && (
-                <section>
-                  <SectionHeader
-                    title="Case Flags"
-                    subtitle="Auto-detected anomalies and reported delays"
-                  />
-                  <FlagsSummaryCard
-                    facilityId={effectiveFacilityId}
-                    startDate={currentStartDate}
-                    endDate={currentEndDate}
-                    onCaseClick={handleCaseClick}
-                  />
-                </section>
-              )}
+              {/* ROW 2: Procedure Mix + Room Utilization */}
+              <section>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Procedure Mix */}
+                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-slate-100">
+                      <h3 className="text-sm font-semibold text-slate-900">Procedure Mix</h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Case distribution by procedure type</p>
+                    </div>
+                    <div className="p-5">
+                      <ProcedureMixCard data={procedureCategoryData} colors={categoryChartColors} />
+                    </div>
+                  </div>
+
+                  {/* Room Utilization */}
+                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Room Utilization</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Utilization & same-room turnover</p>
+                      </div>
+                    </div>
+                    <RoomUtilizationCard rooms={analytics.orUtilization.roomBreakdown} />
+                  </div>
+                </div>
+              </section>
 
               {/* ROBOTIC VS TRADITIONAL COMPARISON */}
               {(kneeComparisonData.length > 0 || hipComparisonData.length > 0) && (
@@ -1204,6 +1263,21 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       </div>
                     </div>
                   </button>
+                </section>
+              )}
+
+              {/* RECENT CASES TABLE */}
+              {recentCases.length > 0 && (
+                <section>
+                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Recent Cases</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Latest completed cases</p>
+                      </div>
+                    </div>
+                    <RecentCasesTable cases={recentCases} onCaseClick={handleCaseClick} />
+                  </div>
                 </section>
               )}
 

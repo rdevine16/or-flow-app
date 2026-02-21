@@ -113,6 +113,7 @@ Deno.serve(async (req) => {
       waiting_on_surgeon_minutes: settingsData?.waiting_on_surgeon_minutes ?? 3,
       waiting_on_surgeon_floor_minutes: settingsData?.waiting_on_surgeon_floor_minutes ?? 10,
       min_procedure_cases: settingsData?.min_procedure_cases ?? 3,
+      min_case_threshold: settingsData?.min_case_threshold ?? 15,
     }
 
     // 3. Fetch ALL facility completed cases for both periods (peer comparison needs everyone)
@@ -124,11 +125,12 @@ Deno.serve(async (req) => {
 
     // Early exit: check if target surgeon has enough cases
     const surgeonCaseCount = currentCases.filter(c => c.surgeon_id === surgeonId).length
-    if (surgeonCaseCount < MIN_CASE_THRESHOLD) {
+    const minThreshold = settings.min_case_threshold
+    if (surgeonCaseCount < minThreshold) {
       return new Response(
         JSON.stringify({
           error: 'insufficient_cases',
-          message: `Surgeon has ${surgeonCaseCount} completed cases in the period (minimum ${MIN_CASE_THRESHOLD} required)`,
+          message: `Surgeon has ${surgeonCaseCount} completed cases in the period (minimum ${minThreshold} required)`,
           case_count: surgeonCaseCount,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 },

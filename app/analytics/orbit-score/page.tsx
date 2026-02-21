@@ -16,7 +16,6 @@ import {
   generateImprovementPlan,
   getGrade,
   PILLARS,
-  MIN_CASE_THRESHOLD,
   type ORbitScorecard,
   type ScorecardCase,
   type ScorecardFinancials,
@@ -163,6 +162,7 @@ async function fetchScorecardData(
     waiting_on_surgeon_minutes: settingsData?.waiting_on_surgeon_minutes ?? 3,
     waiting_on_surgeon_floor_minutes: settingsData?.waiting_on_surgeon_floor_minutes ?? 10,
     min_procedure_cases: settingsData?.min_procedure_cases ?? 3,
+    min_case_threshold: settingsData?.min_case_threshold ?? 15,
   }
 
   return {
@@ -600,8 +600,9 @@ export default function ORbitScorePage() {
         }
         allSurgeonCases[c.surgeon_id].count++
       }
+      const threshold = data.settings.min_case_threshold || 15
       setInsufficientSurgeons(
-        Object.values(allSurgeonCases).filter(s => s.count < MIN_CASE_THRESHOLD)
+        Object.values(allSurgeonCases).filter(s => s.count < threshold)
       )
     } catch {
       setError('Failed to calculate ORbit Scores')
@@ -671,13 +672,13 @@ export default function ORbitScorePage() {
           ) : scorecards.length === 0 ? (
             <div className="text-center py-16">
               <p className="text-slate-500 mb-2">
-                No surgeons met the minimum threshold of {MIN_CASE_THRESHOLD} cases.
+                No surgeons met the minimum threshold of {facilitySettings?.min_case_threshold ?? 15} cases.
               </p>
               {insufficientSurgeons.length > 0 && (
                 <div className="mt-4 text-sm text-slate-400">
                   <p className="mb-2">Surgeons with insufficient data:</p>
                   {insufficientSurgeons.map((s) => (
-                    <p key={s.name}>{s.name}: {s.count} cases (need {MIN_CASE_THRESHOLD})</p>
+                    <p key={s.name}>{s.name}: {s.count} cases (need {facilitySettings?.min_case_threshold ?? 15})</p>
                   ))}
                 </div>
               )}
@@ -693,7 +694,7 @@ export default function ORbitScorePage() {
                   <p className="text-xs text-amber-700">
                     <span className="font-semibold">Insufficient data:</span>{' '}
                     {insufficientSurgeons.map(s => `${s.name} (${s.count} cases)`).join(', ')}
-                    {' '}— minimum {MIN_CASE_THRESHOLD} cases required for scoring
+                    {' '}— minimum {facilitySettings?.min_case_threshold ?? 15} cases required for scoring
                   </p>
                 </div>
               )}
@@ -743,7 +744,7 @@ export default function ORbitScorePage() {
                 Schedule Adherence (25%) and Availability (20%) use direct graduated scoring — each case
                 scored 0–1.0 via linear decay, averaged to produce the pillar score. No peer comparison needed.
                 All pillar scores floored at 10, capped at 100. Grades: A≥80, B≥65, C≥50, D&lt;50.
-                Minimum {MIN_CASE_THRESHOLD} cases required. Trend compares current period against the equivalent prior period.
+                Minimum {facilitySettings?.min_case_threshold ?? 15} cases required. Trend compares current period against the equivalent prior period.
               </p>
             </div>
           )}

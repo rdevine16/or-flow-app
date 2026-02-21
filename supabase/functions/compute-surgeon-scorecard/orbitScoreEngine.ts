@@ -125,7 +125,7 @@
 //   start_time_floor_minutes, waiting_on_surgeon_minutes,
 //   waiting_on_surgeon_floor_minutes, min_procedure_cases
 //
-// Minimum cases: MIN_CASE_THRESHOLD (15) overall per surgeon.
+// Minimum cases: min_case_threshold (facility setting, default 15) overall per surgeon.
 //   min_procedure_cases (facility setting) per procedure cohort.
 //
 // ═══════════════════════════════════════════════════════════════════
@@ -256,6 +256,7 @@ export const PILLARS: PillarDefinition[] = [
   { key: 'availability',   label: 'Availability',        weight: 0.20, color: '#7C3AED', description: 'Surgeon readiness' },
 ]
 
+/** @deprecated Use settings.min_case_threshold instead. Kept only for edge function early-exit fallback. */
 export const MIN_CASE_THRESHOLD = 15
 
 // ─── INPUT TYPES ─────────────────────────────────────────────
@@ -299,6 +300,7 @@ export interface ScorecardSettings {
   waiting_on_surgeon_minutes: number
   waiting_on_surgeon_floor_minutes: number
   min_procedure_cases: number
+  min_case_threshold: number
 }
 
 export interface ScorecardInput {
@@ -978,6 +980,7 @@ function scoreCasesForAvailability(
 export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
   const { cases, financials, flags, settings, timezone, enableDiagnostics } = input
   const minProcCases = settings.min_procedure_cases || 3
+  const minCaseThreshold = settings.min_case_threshold || MIN_CASE_THRESHOLD
 
   // Build financials lookup
   const financialsMap = new Map<string, ScorecardFinancials>()
@@ -1007,7 +1010,7 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
     }
 
     for (const [surgeonId, surgeonCases] of Object.entries(prevBySurgeon)) {
-      if (surgeonCases.length < MIN_CASE_THRESHOLD) continue
+      if (surgeonCases.length < minCaseThreshold) continue
       const pillars: PillarScores = {
         profitability: calculateProfitability(surgeonCases, input.previousPeriodCases, prevFinMap, minProcCases),
         consistency: calculateConsistency(surgeonCases, input.previousPeriodCases, minProcCases),
@@ -1022,7 +1025,7 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
   const scorecards: ORbitScorecard[] = []
 
   for (const [surgeonId, surgeonCases] of Object.entries(bySurgeon)) {
-    if (surgeonCases.length < MIN_CASE_THRESHOLD) continue
+    if (surgeonCases.length < minCaseThreshold) continue
 
     const first = surgeonCases[0]
 

@@ -113,6 +113,8 @@ export interface RoomUtilizationDetail {
   caseCount: number         // Cases in this room for the period
   daysActive: number        // Number of days this room was used
   usingRealHours: boolean   // true = from or_rooms.available_hours, false = default
+  sameRoomTurnoverMedian: number | null  // Median same-room turnover (patient_out→patient_in) in minutes
+  turnoverCount: number     // Number of same-room turnovers measured
 }
 
 // Scheduled duration map: case ID → expected duration in minutes
@@ -1735,11 +1737,37 @@ export function calculateORUtilization(
     dailyActualMinutes.set(date, (dailyActualMinutes.get(date) || 0) + minutes)
   })
 
+  // Compute per-room same-room turnovers (patient_out → patient_in)
+  const roomTurnovers = new Map<string, number[]>()
+  const casesByRoomDate = new Map<string, CaseWithMilestones[]>()
+  cases.forEach(c => {
+    if (!c.or_room_id) return
+    const key = `${c.scheduled_date}|${c.or_room_id}`
+    const existing = casesByRoomDate.get(key) || []
+    existing.push(c)
+    casesByRoomDate.set(key, existing)
+  })
+  casesByRoomDate.forEach((roomCases, key) => {
+    const roomId = key.split('|')[1]
+    const sorted = roomCases.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const currMs = getMilestoneMap(sorted[i])
+      const nextMs = getMilestoneMap(sorted[i + 1])
+      const turnover = getTimeDiffMinutes(currMs.patient_out, nextMs.patient_in)
+      if (turnover !== null && turnover > 0 && turnover < 180) {
+        const existing = roomTurnovers.get(roomId) || []
+        existing.push(turnover)
+        roomTurnovers.set(roomId, existing)
+      }
+    }
+  })
+
   // Build per-room breakdown
   const roomBreakdown: RoomUtilizationDetail[] = Array.from(roomAgg.values()).map(agg => {
     const usingRealHours = roomHoursMap?.[agg.roomId] !== undefined
     const availableHours = roomHoursMap?.[agg.roomId] ?? defaultHours
     const avgUtilization = calculateAverage(agg.dailyUtils)
+    const turnoversForRoom = roomTurnovers.get(agg.roomId) || []
 
     return {
       roomId: agg.roomId,
@@ -1749,7 +1777,9 @@ export function calculateORUtilization(
       availableHours,
       caseCount: agg.totalCases,
       daysActive: agg.daysActive,
-      usingRealHours
+      usingRealHours,
+      sameRoomTurnoverMedian: calculateMedian(turnoversForRoom),
+      turnoverCount: turnoversForRoom.length,
     }
   }).sort((a, b) => a.utilization - b.utilization)
 
@@ -2687,7 +2717,7 @@ export function getAllSameRoomTurnovers(cases: CaseWithMilestones[]): number[] {
  */
 export function getAllSameRoomSurgicalTurnovers(cases: CaseWithMilestones[]): number[] {
   const turnovers: number[] = []
-  
+
   // Group cases by room and date
   const byRoomDate = new Map<string, CaseWithMilestones[]>()
   cases.forEach(c => {
@@ -2697,17 +2727,17 @@ export function getAllSameRoomSurgicalTurnovers(cases: CaseWithMilestones[]): nu
     existing.push(c)
     byRoomDate.set(key, existing)
   })
-  
+
   // Calculate surgical turnovers between consecutive cases
   byRoomDate.forEach((roomCases) => {
-    const sorted = roomCases.sort((a, b) => 
+    const sorted = roomCases.sort((a, b) =>
       (a.start_time || '').localeCompare(b.start_time || '')
     )
-    
+
     for (let i = 0; i < sorted.length - 1; i++) {
       const current = getMilestoneMap(sorted[i])
       const next = getMilestoneMap(sorted[i + 1])
-      
+
       // Surgical turnover: closing_complete → incision
       if (current.closing_complete && next.incision) {
         const turnoverSeconds = getTimeDiffSeconds(current.closing_complete, next.incision)
@@ -2718,6 +2748,129 @@ export function getAllSameRoomSurgicalTurnovers(cases: CaseWithMilestones[]): nu
       }
     }
   })
-  
+
   return turnovers
+}
+
+// ============================================
+// SURGEON LEADERBOARD
+// ============================================
+
+export interface SurgeonLeaderboardEntry {
+  surgeonId: string
+  surgeonName: string
+  caseCount: number
+  avgSurgicalTimeMinutes: number | null
+  avgSurgicalTimeDisplay: string
+  fcotsRate: number          // 0-100
+  score: number              // 0-100 composite
+}
+
+/**
+ * Calculate surgeon leaderboard for the analytics hub.
+ * Groups cases by surgeon and computes:
+ * - case count, avg surgical time (incision→closing), FCOTS rate, composite score
+ */
+export function calculateSurgeonLeaderboard(
+  cases: CaseWithMilestones[],
+  fcotsConfig?: FCOTSConfig
+): SurgeonLeaderboardEntry[] {
+  const milestone = fcotsConfig?.milestone || 'patient_in'
+  const grace = fcotsConfig?.graceMinutes ?? 2
+
+  // Filter to completed cases with a surgeon
+  const completed = cases.filter(c => {
+    const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
+    return status?.name === 'completed' && c.surgeon_id && c.surgeon
+  })
+
+  if (completed.length === 0) return []
+
+  // Group by surgeon
+  const bySurgeon = new Map<string, CaseWithMilestones[]>()
+  completed.forEach(c => {
+    const existing = bySurgeon.get(c.surgeon_id!) || []
+    existing.push(c)
+    bySurgeon.set(c.surgeon_id!, existing)
+  })
+
+  // Facility-wide median surgical time for scoring
+  const allSurgicalTimes: number[] = []
+  completed.forEach(c => {
+    const ms = getMilestoneMap(c)
+    const time = getTimeDiffMinutes(ms.incision, ms.closing)
+    if (time !== null && time > 0 && time < 600) allSurgicalTimes.push(time)
+  })
+  const facilityMedianSurgicalTime = calculateMedian(allSurgicalTimes) || 90
+
+  // Max case count for volume scoring
+  let maxCaseCount = 0
+  bySurgeon.forEach(sc => { if (sc.length > maxCaseCount) maxCaseCount = sc.length })
+  if (maxCaseCount === 0) maxCaseCount = 1
+
+  const entries: SurgeonLeaderboardEntry[] = []
+
+  bySurgeon.forEach((surgeonCases, surgeonId) => {
+    const first = surgeonCases[0]
+    const surgeon = Array.isArray(first.surgeon) ? first.surgeon[0] : first.surgeon
+    const surgeonName = surgeon
+      ? `Dr. ${surgeon.last_name}`
+      : 'Unknown'
+
+    // Avg surgical time (incision → closing)
+    const surgicalTimes: number[] = []
+    surgeonCases.forEach(c => {
+      const ms = getMilestoneMap(c)
+      const time = getTimeDiffMinutes(ms.incision, ms.closing)
+      if (time !== null && time > 0 && time < 600) surgicalTimes.push(time)
+    })
+    const avgSurgicalTime = surgicalTimes.length > 0
+      ? Math.round(surgicalTimes.reduce((a, b) => a + b, 0) / surgicalTimes.length)
+      : null
+
+    // FCOTS rate: % of first-case-of-day per room that were on time
+    const firstCasesByDateRoom = new Map<string, CaseWithMilestones>()
+    surgeonCases.forEach(c => {
+      if (!c.or_room_id || !c.start_time) return
+      const key = `${c.scheduled_date}|${c.or_room_id}`
+      const existing = firstCasesByDateRoom.get(key)
+      if (!existing || (c.start_time! < (existing.start_time || ''))) {
+        firstCasesByDateRoom.set(key, c)
+      }
+    })
+
+    let fcotsOnTime = 0
+    let fcotsTotal = 0
+    firstCasesByDateRoom.forEach(c => {
+      const ms = getMilestoneMap(c)
+      const scheduled = parseScheduledDateTime(c.scheduled_date, c.start_time)
+      const actual = milestone === 'incision' ? ms.incision : ms.patient_in
+      if (!scheduled || !actual) return
+      fcotsTotal++
+      const delay = getTimeDiffMinutes(scheduled, actual) || 0
+      if (delay <= grace) fcotsOnTime++
+    })
+    const fcotsRate = fcotsTotal > 0 ? Math.round((fcotsOnTime / fcotsTotal) * 100) : 0
+
+    // Composite score: 40% FCOTS + 30% time efficiency + 30% volume
+    const fcotsScore = Math.min(fcotsRate, 100) * 0.4
+    const timeRatio = avgSurgicalTime !== null
+      ? Math.max(0, Math.min(1, 1 - Math.abs(avgSurgicalTime - facilityMedianSurgicalTime) / facilityMedianSurgicalTime))
+      : 0.5
+    const timeScore = timeRatio * 100 * 0.3
+    const volumeScore = (surgeonCases.length / maxCaseCount) * 100 * 0.3
+    const score = Math.round(fcotsScore + timeScore + volumeScore)
+
+    entries.push({
+      surgeonId,
+      surgeonName,
+      caseCount: surgeonCases.length,
+      avgSurgicalTimeMinutes: avgSurgicalTime,
+      avgSurgicalTimeDisplay: avgSurgicalTime !== null ? formatMinutes(avgSurgicalTime) : '--',
+      fcotsRate,
+      score: Math.min(score, 100),
+    })
+  })
+
+  return entries.sort((a, b) => b.score - a.score)
 }

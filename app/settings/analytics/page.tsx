@@ -43,6 +43,7 @@ interface AnalyticsSettings {
   waiting_on_surgeon_minutes: number
   waiting_on_surgeon_floor_minutes: number
   min_procedure_cases: number
+  min_case_threshold: number
 }
 
 const DEFAULT_SETTINGS: Omit<AnalyticsSettings, 'id' | 'facility_id'> = {
@@ -80,6 +81,7 @@ const DEFAULT_SETTINGS: Omit<AnalyticsSettings, 'id' | 'facility_id'> = {
   waiting_on_surgeon_minutes: 3,
   waiting_on_surgeon_floor_minutes: 10,
   min_procedure_cases: 3,
+  min_case_threshold: 15,
 }
 
 // Helper component for number input fields
@@ -186,6 +188,7 @@ export default function AnalyticsSettingsPage() {
     waiting_on_surgeon_minutes: '3',
     waiting_on_surgeon_floor_minutes: '10',
     min_procedure_cases: '3',
+    min_case_threshold: '15',
   })
 
   // Sync fetched settings to form state
@@ -227,6 +230,7 @@ export default function AnalyticsSettingsPage() {
       waiting_on_surgeon_minutes: String(settings.waiting_on_surgeon_minutes ?? 3),
       waiting_on_surgeon_floor_minutes: String(settings.waiting_on_surgeon_floor_minutes ?? 10),
       min_procedure_cases: String(settings.min_procedure_cases ?? 3),
+      min_case_threshold: String(settings.min_case_threshold ?? 15),
     })
   }, [settings])
 
@@ -275,6 +279,7 @@ export default function AnalyticsSettingsPage() {
       waiting_on_surgeon_minutes: parseInt(form.waiting_on_surgeon_minutes) || 3,
       waiting_on_surgeon_floor_minutes: parseInt(form.waiting_on_surgeon_floor_minutes) || 10,
       min_procedure_cases: parseInt(form.min_procedure_cases) || 3,
+      min_case_threshold: parseInt(form.min_case_threshold) || 15,
     }
 
     let error
@@ -337,6 +342,7 @@ export default function AnalyticsSettingsPage() {
       waiting_on_surgeon_minutes: String(DEFAULT_SETTINGS.waiting_on_surgeon_minutes),
       waiting_on_surgeon_floor_minutes: String(DEFAULT_SETTINGS.waiting_on_surgeon_floor_minutes),
       min_procedure_cases: String(DEFAULT_SETTINGS.min_procedure_cases),
+      min_case_threshold: String(DEFAULT_SETTINGS.min_case_threshold),
     })
   }
 
@@ -844,7 +850,15 @@ export default function AnalyticsSettingsPage() {
                     <div className="w-2 h-2 rounded-full bg-slate-400" />
                     <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Scoring Thresholds</h4>
                   </div>
-                  <div className="max-w-xs">
+                  <div className="max-w-xs space-y-4">
+                    <SettingsNumberField
+                      label="Min Cases for Scorecard"
+                      value={form.min_case_threshold}
+                      onChange={(v) => setForm({ ...form, min_case_threshold: v })}
+                      min="1"
+                      max="100"
+                      helpText="Minimum total cases a surgeon needs to receive an ORbit Scorecard"
+                    />
                     <SettingsNumberField
                       label="Min Cases per Procedure Type"
                       value={form.min_procedure_cases}

@@ -190,6 +190,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const showTrialWarning = trialDaysRemaining !== null && trialDaysRemaining > 0 && trialDaysRemaining <= 7
 
   // ============================================
+  // Redirect Effects (must not call router.push during render)
+  // ============================================
+
+  const needsLoginRedirect = !loading && !userData.firstName && !userData.lastName && mounted
+  const needsPasswordRedirect = mustChangePassword && mounted
+
+  useEffect(() => {
+    if (needsLoginRedirect) {
+      router.push('/login')
+    }
+  }, [needsLoginRedirect, router])
+
+  useEffect(() => {
+    if (needsPasswordRedirect) {
+      router.push('/auth/change-password')
+    }
+  }, [needsPasswordRedirect, router])
+
+  // ============================================
   // Loading/Redirect States
   // ============================================
 
@@ -197,14 +216,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return <LoadingScreen message="Loading..." />
   }
 
-  if (!loading && !userData.firstName && !userData.lastName) {
-    router.push('/login')
+  if (needsLoginRedirect) {
     return <LoadingScreen message="Redirecting..." />
   }
 
-  if (mustChangePassword) {
-    router.push('/auth/change-password')
-    return null
+  if (needsPasswordRedirect) {
+    return <LoadingScreen message="Redirecting..." />
   }
 
   if (isTrialExpired() && !effectiveIsGlobalAdmin) {
