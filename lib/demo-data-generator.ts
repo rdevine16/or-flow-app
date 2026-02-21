@@ -64,7 +64,6 @@ interface CaseRecord {
   created_by: string
   called_next_case_id?: string | null
   operative_side?: string | null
-  anesthesiologist_id?: string | null
   call_time?: string | null
   called_back_at?: string | null
   is_excluded_from_metrics?: boolean
@@ -828,7 +827,6 @@ function generateSurgeonCases(
         operative_side: surgeon.specialty === 'spine' ? 'n/a'
           : surgeon.specialty === 'hand_wrist' ? randomChoice(['left', 'right'])
           : Math.random() < 0.08 ? 'bilateral' : randomChoice(['left', 'right']),
-        anesthesiologist_id: anesId,
         call_time: isFuture ? null : callTime.toISOString(),
         is_excluded_from_metrics: false,
         surgeon_left_at: null,

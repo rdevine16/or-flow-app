@@ -78,7 +78,6 @@ interface CaseData {
   procedure_types: { name: string }[] | { name: string } | null
   case_statuses: { id: string; name: string }[] | { id: string; name: string } | null
   surgeon: { id: string; first_name: string; last_name: string }[] | { id: string; first_name: string; last_name: string } | null
-  anesthesiologist: { id: string; first_name: string; last_name: string }[] | { id: string; first_name: string; last_name: string } | null
 }
 
 interface User {
@@ -199,8 +198,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           or_rooms (name),
           procedure_types (name),
           case_statuses (id, name),
-          surgeon:users!cases_surgeon_id_fkey (id, first_name, last_name),
-          anesthesiologist:users!cases_anesthesiologist_id_fkey (id, first_name, last_name)
+          surgeon:users!cases_surgeon_id_fkey (id, first_name, last_name)
         `)
         .eq('id', id)
         .single()
@@ -1025,7 +1023,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const procedure = getJoinedValue(caseData?.procedure_types)
   const status = getJoinedValue(caseData?.case_statuses)
   const surgeon = getJoinedValue(caseData?.surgeon)
-  const anesthesiologist = getJoinedValue(caseData?.anesthesiologist)
   // Calculate times
   const patientInMilestone = milestoneTypes.find(mt => mt.name === 'patient_in')
   const patientOutMilestone = milestoneTypes.find(mt => mt.name === 'patient_out')
@@ -1544,11 +1541,10 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             <div className="rounded-[14px] border border-slate-100 overflow-hidden">
               <div className="px-4 py-3 flex items-center justify-between">
                 <h3 className="text-[13px] font-bold text-slate-900">Team</h3>
-                <span className="text-[11.5px] text-slate-400">{assignedStaff.length + (surgeon ? 1 : 0) + (anesthesiologist ? 1 : 0)} assigned</span>
+                <span className="text-[11.5px] text-slate-400">{assignedStaff.length + (surgeon ? 1 : 0)} assigned</span>
               </div>
               <div className="px-4 pb-4 space-y-2">
                 {surgeon && <TeamMember name={`Dr. ${surgeon.last_name}`} role="Surgeon" roleName="surgeon" />}
-                {anesthesiologist && <TeamMember name={`Dr. ${anesthesiologist.last_name}`} role="Anesthesia" roleName="anesthesiologist" />}
                 {assignedStaff.map(cs => {
                   const user = getJoinedValue(cs.users)
                   const role = getJoinedValue(cs.user_roles)
