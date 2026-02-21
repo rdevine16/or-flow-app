@@ -80,7 +80,7 @@ async function queryUnvalidatedCases(
     title: `${count} case${count === 1 ? '' : 's'} flagged for review`,
     description: 'Cases with data quality issues that need review.',
     count,
-    linkTo: '/dashboard/data-quality',
+    linkTo: '/data-quality',
   }
 }
 

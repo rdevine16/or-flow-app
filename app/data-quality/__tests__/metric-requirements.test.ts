@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { METRIC_REQUIREMENTS } from '../page'
+import { METRIC_REQUIREMENTS } from '@/lib/dataQuality'
 
 // Known milestone slugs that actually exist in the facility_milestones system
 const KNOWN_MILESTONE_SLUGS = [
@@ -18,7 +18,7 @@ describe('METRIC_REQUIREMENTS', () => {
   })
 
   it('every required milestone slug is a known milestone', () => {
-    for (const [metricKey, config] of Object.entries(METRIC_REQUIREMENTS)) {
+    for (const [, config] of Object.entries(METRIC_REQUIREMENTS)) {
       for (const slug of config.requires) {
         expect(KNOWN_MILESTONE_SLUGS).toContain(slug)
       }

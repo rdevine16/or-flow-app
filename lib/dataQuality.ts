@@ -12,6 +12,46 @@ import { getLocalDateString } from '@/lib/date-utils'
 const log = logger('dataQuality')
 
 // ============================================
+// METRIC REQUIREMENTS
+// ============================================
+
+/** What metrics require which milestones */
+export const METRIC_REQUIREMENTS: Record<string, { name: string; requires: string[] }> = {
+  case_count: {
+    name: 'Case Count',
+    requires: [] // Always calculable - just counting the case
+  },
+  total_case_time: {
+    name: 'Total Case Time',
+    requires: ['patient_in', 'patient_out']
+  },
+  fcots: {
+    name: 'First Case On-Time Start (FCOTS)',
+    requires: ['patient_in']
+  },
+  surgical_time: {
+    name: 'Surgical Time',
+    requires: ['incision', 'closing']
+  },
+  anesthesia_duration: {
+    name: 'Anesthesia Duration',
+    requires: ['anes_start', 'anes_end']
+  },
+  pre_incision_time: {
+    name: 'Pre-Incision Time',
+    requires: ['patient_in', 'incision']
+  },
+  closing_time: {
+    name: 'Closing Duration',
+    requires: ['closing', 'closing_complete']
+  },
+  emergence_time: {
+    name: 'Emergence Time',
+    requires: ['closing_complete', 'patient_out']
+  }
+}
+
+// ============================================
 // TYPES
 // ============================================
 

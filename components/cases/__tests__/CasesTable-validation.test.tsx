@@ -128,7 +128,7 @@ describe('CasesTable — Validation column', () => {
     renderTable(cases, new Set(['c1']))
 
     const link = screen.getByText('Needs Validation').closest('a')
-    expect(link).toHaveAttribute('href', '/dashboard/data-quality?caseId=c1')
+    expect(link).toHaveAttribute('href', '/data-quality?caseId=c1')
   })
 
   it('shows Validation column header', () => {

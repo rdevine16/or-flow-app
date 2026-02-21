@@ -149,7 +149,7 @@ function ValidationBadge({ caseItem, dqCaseIds }: { caseItem: CaseListItem; dqCa
     const colors = statusColors.needs_validation
     return (
       <Link
-        href={`/dashboard/data-quality?caseId=${caseItem.id}`}
+        href={`/data-quality?caseId=${caseItem.id}`}
         onClick={(e) => e.stopPropagation()}
       >
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${colors.bg} ${colors.text} hover:opacity-80 transition-opacity`}>

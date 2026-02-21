@@ -174,8 +174,7 @@ export const ROUTE_BREADCRUMBS: Record<string, RouteSegment[]> = {
   // Dashboard
   '/': [{ label: 'Dashboard', href: null }],
   '/dashboard': [{ label: 'Dashboard', href: null }],
-  '/dashboard/data-quality': [
-    { label: 'Dashboard', href: '/' },
+  '/data-quality': [
     { label: 'Data Quality', href: null },
   ],
 

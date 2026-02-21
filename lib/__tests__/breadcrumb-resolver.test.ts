@@ -36,11 +36,10 @@ describe('resolveBreadcrumbs', () => {
       ])
     })
 
-    it('resolves /dashboard/data-quality (3-level)', () => {
-      const result = resolveBreadcrumbs('/dashboard/data-quality', emptyLabels, facilityOptions)
+    it('resolves /data-quality (top-level)', () => {
+      const result = resolveBreadcrumbs('/data-quality', emptyLabels, facilityOptions)
       expect(result).toEqual([
         { label: 'General Hospital', href: '/' },
-        { label: 'Dashboard', href: '/' },
         { label: 'Data Quality', href: null },
       ])
     })
@@ -273,7 +272,7 @@ describe('resolveBreadcrumbs', () => {
   describe('route map coverage', () => {
     it('has entries for all expected facility routes', () => {
       const expectedRoutes = [
-        '/', '/dashboard', '/dashboard/data-quality',
+        '/', '/dashboard', '/data-quality',
         '/cases', '/cases/new', '/cases/bulk-create', '/cases/[id]', '/cases/[id]/edit', '/cases/[id]/cancel',
         '/analytics', '/analytics/surgeons', '/analytics/block-utilization',
         '/analytics/financials', '/analytics/orbit-score', '/analytics/flags', '/analytics/kpi',

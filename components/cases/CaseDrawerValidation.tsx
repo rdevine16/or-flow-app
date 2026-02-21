@@ -56,7 +56,7 @@ export default function CaseDrawerValidation({ issues, loading, caseId }: CaseDr
           {issues.length} unresolved {issues.length === 1 ? 'issue' : 'issues'}
         </p>
         <Link
-          href={`/dashboard/data-quality?caseId=${caseId}`}
+          href={`/data-quality?caseId=${caseId}`}
           className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
         >
           Resolve in Data Quality

@@ -95,7 +95,7 @@ describe('CaseDrawerValidation — unit', () => {
     )
     const link = screen.getByText('Resolve in Data Quality')
     expect(link).toBeDefined()
-    expect(link.closest('a')?.getAttribute('href')).toBe('/dashboard/data-quality?caseId=case-123')
+    expect(link.closest('a')?.getAttribute('href')).toBe('/data-quality?caseId=case-123')
   })
 
   it('renders severity badge text', () => {

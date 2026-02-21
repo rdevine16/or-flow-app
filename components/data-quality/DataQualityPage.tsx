@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useSearchParams, useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
@@ -20,51 +20,12 @@ import {
   expireOldIssues,
   formatTimeAgo,
   getDaysUntilExpiration,
+  METRIC_REQUIREMENTS,
   type MetricIssue,
   type IssueType,
   type ResolutionType,
   type DataQualitySummary
 } from '@/lib/dataQuality'
-
-// ============================================
-// CONSTANTS
-// ============================================
-
-// What metrics require which milestones
-export const METRIC_REQUIREMENTS: Record<string, { name: string; requires: string[] }> = {
-  case_count: {
-    name: 'Case Count',
-    requires: [] // Always calculable - just counting the case
-  },
-  total_case_time: {
-    name: 'Total Case Time',
-    requires: ['patient_in', 'patient_out']
-  },
-  fcots: {
-    name: 'First Case On-Time Start (FCOTS)',
-    requires: ['patient_in']
-  },
-  surgical_time: {
-    name: 'Surgical Time',
-    requires: ['incision', 'closing']
-  },
-  anesthesia_duration: {
-    name: 'Anesthesia Duration',
-    requires: ['anes_start', 'anes_end']
-  },
-  pre_incision_time: {
-    name: 'Pre-Incision Time',
-    requires: ['patient_in', 'incision']
-  },
-  closing_time: {
-    name: 'Closing Duration',
-    requires: ['closing', 'closing_complete']
-  },
-  emergence_time: {
-    name: 'Emergence Time',
-    requires: ['closing_complete', 'patient_out']
-  }
-}
 
 // ============================================
 // TYPES
@@ -109,37 +70,37 @@ function getSeverityColor(severity: string): string {
 function formatIssueDescription(issue: MetricIssue): string {
   const issueType = issue.issue_type as IssueType | null
   const typeName = issueType?.name || ''
-  
+
   if (typeName === 'missing') {
     return 'Not recorded'
   }
-  
+
   if (issue.detected_value !== null) {
     const value = Math.round(issue.detected_value)
     const details = issue.details as Record<string, unknown> | null
-    
+
     if (typeName === 'too_fast' || typeName === 'timeout') {
       const min = issue.expected_min ? `${Math.round(issue.expected_min)}` : '—'
       const max = issue.expected_max ? `${Math.round(issue.expected_max)}` : '—'
       return `${value} min (expected ${min}–${max} min)`
     }
-    
+
     if (typeName === 'impossible') {
       const prevMilestone = details?.previous_milestone as string
       return `Recorded ${Math.abs(value)} min before ${prevMilestone || 'previous milestone'}`
     }
-    
+
     if (typeName === 'stale') {
       return `${value} days overdue`
     }
-    
+
     if (typeName === 'incomplete') {
       return `No activity for ${Math.round(value)} hours`
     }
-    
+
     return `${value}`
   }
-  
+
   return 'Review required'
 }
 
@@ -180,15 +141,15 @@ function storeLastScan(date: Date): void {
 // MAIN COMPONENT
 // ============================================
 
-function DataQualityContent() {
+export default function DataQualityPage() {
   const supabase = createClient()
   const { loading: userLoading, effectiveFacilityId } = useUser()
   const searchParams = useSearchParams()
   const router = useRouter()
-  
+
   // Get current user ID from auth
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  
+
   useEffect(() => {
     const getUserId = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -223,10 +184,10 @@ function DataQualityContent() {
 
   // All issues for the current case (for multi-issue handling)
   const [caseIssues, setCaseIssues] = useState<CaseIssue[]>([])
-  
+
   // Set of milestone IDs that have issues (for highlighting)
   const [issueMilestoneIds, setIssueMilestoneIds] = useState<Set<string>>(new Set())
-  
+
   // Editable milestones for modal
   const [editableMilestones, setEditableMilestones] = useState<EditableMilestone[]>([])
   const [loadingMilestones, setLoadingMilestones] = useState(false)
@@ -241,7 +202,7 @@ function DataQualityContent() {
   const [showValidationWarning, setShowValidationWarning] = useState(false)
   const [missingMilestones, setMissingMilestones] = useState<string[]>([])
   const [affectedMetrics, setAffectedMetrics] = useState<string[]>([])
-  
+
   const [resolutionNotes, setResolutionNotes] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -272,7 +233,7 @@ function DataQualityContent() {
     if (!effectiveFacilityId) return
 
     setLoading(true)
-    
+
     const [issuesData, typesData, resTypesData, summaryData] = await Promise.all([
       fetchMetricIssues(supabase, effectiveFacilityId, {
         unresolvedOnly: !showResolved,
@@ -307,14 +268,14 @@ function DataQualityContent() {
     caseId: string
   ) => {
     setLoadingMilestones(true)
-    
+
     try {
       // 1. Get milestones FOR THIS SPECIFIC CASE (without join to avoid RLS issues)
       const { data: caseMilestones, error: cmError } = await supabase
         .from('case_milestones')
         .select('id, recorded_at, facility_milestone_id')
         .eq('case_id', caseId)
-      
+
       if (cmError) {
         showToast({
           type: 'error',
@@ -327,7 +288,7 @@ function DataQualityContent() {
       const facilityMilestoneIds = [...new Set(
         caseMilestones?.map(cm => cm.facility_milestone_id).filter(Boolean) || []
       )]
-      
+
       // 3. Fetch facility_milestones separately (bypasses join RLS issues)
       let facilityMilestones: Array<{
         id: string
@@ -336,13 +297,13 @@ function DataQualityContent() {
         display_order: number
         pair_with_id: string | null
       }> = []
-      
+
       if (facilityMilestoneIds.length > 0) {
         const { data: fmData, error: fmError } = await supabase
           .from('facility_milestones')
           .select('id, name, display_name, display_order, pair_with_id')
           .in('id', facilityMilestoneIds)
-        
+
         if (fmError) {
           showToast({
             type: 'error',
@@ -353,17 +314,17 @@ function DataQualityContent() {
           facilityMilestones = fmData || []
         }
       }
-      
+
       // Create lookup map for facility_milestones
       const fmLookup = new Map(facilityMilestones.map(fm => [fm.id, fm]))
-      
+
       // 4. Get ALL unresolved issues for this case
       const { data: allCaseIssues, error: issuesError } = await supabase
         .from('metric_issues')
         .select('facility_milestone_id, issue_type_id, issue_types(name)')
         .eq('case_id', caseId)
         .is('resolved_at', null)
-      
+
       if (issuesError) {
         showToast({
   type: 'error',
@@ -371,36 +332,36 @@ function DataQualityContent() {
   message: `Error loading case issues: ${issuesError}`
 })
       }
-      
+
       // Also fetch facility_milestones for issues (might have some not in case_milestones)
       const issueFmIds = [...new Set(
         allCaseIssues?.map(i => i.facility_milestone_id).filter(Boolean) || []
       )].filter(id => !fmLookup.has(id))
-      
+
       if (issueFmIds.length > 0) {
         const { data: issueFmData } = await supabase
           .from('facility_milestones')
           .select('id, name, display_name, display_order, pair_with_id')
           .in('id', issueFmIds)
-        
+
         issueFmData?.forEach(fm => fmLookup.set(fm.id, fm))
       }
-      
+
       // Build set of milestone IDs that have issues and their types
       const localIssueMilestoneIds = new Set<string>()
       const issueMilestoneTypes = new Map<string, string>() // milestone_id -> issue_type
       allCaseIssues?.forEach(issue => {
         if (issue.facility_milestone_id) {
           localIssueMilestoneIds.add(issue.facility_milestone_id)
-          const issueTypeName = Array.isArray(issue.issue_types) 
-            ? issue.issue_types[0]?.name 
+          const issueTypeName = Array.isArray(issue.issue_types)
+            ? issue.issue_types[0]?.name
             : (issue.issue_types as { name: string } | null)?.name
           if (issueTypeName) {
             issueMilestoneTypes.set(issue.facility_milestone_id, issueTypeName)
           }
         }
       })
-      
+
       // Build milestone map from case_milestones
       const milestoneMap = new Map<string, {
         id: string
@@ -410,7 +371,7 @@ function DataQualityContent() {
         pair_with_id: string | null
         recorded_at: string | null
       }>()
-      
+
       caseMilestones?.forEach(cm => {
         if (cm.facility_milestone_id) {
           const fm = fmLookup.get(cm.facility_milestone_id)
@@ -426,12 +387,12 @@ function DataQualityContent() {
           }
         }
       })
-      
+
       // Add missing milestones from issues (they won't be in case_milestones yet)
       allCaseIssues?.forEach(issue => {
         if (issue.facility_milestone_id && !milestoneMap.has(issue.facility_milestone_id)) {
           const fm = fmLookup.get(issue.facility_milestone_id)
-          
+
           if (fm) {
             milestoneMap.set(issue.facility_milestone_id, {
               id: issue.facility_milestone_id,
@@ -444,23 +405,23 @@ function DataQualityContent() {
           }
         }
       })
-      
+
       // Convert map to sorted array
       const milestoneList = Array.from(milestoneMap.values())
         .sort((a, b) => a.display_order - b.display_order)
-      
+
       // Determine which milestones can be EDITED based on ALL issues for this case
       const editableMilestoneIds = new Set<string>()
-      
+
       // Add all milestones that have issues (and their pairs for duration issues)
       allCaseIssues?.forEach(issue => {
         if (issue.facility_milestone_id) {
           editableMilestoneIds.add(issue.facility_milestone_id)
-          
-          const issueTypeName = Array.isArray(issue.issue_types) 
-            ? issue.issue_types[0]?.name 
+
+          const issueTypeName = Array.isArray(issue.issue_types)
+            ? issue.issue_types[0]?.name
             : (issue.issue_types as { name: string } | null)?.name
-          
+
           // For duration issues, also add the paired milestone
           if (issueTypeName === 'too_fast' || issueTypeName === 'timeout' || issueTypeName === 'impossible') {
             const fm = milestoneMap.get(issue.facility_milestone_id)
@@ -476,7 +437,7 @@ function DataQualityContent() {
           }
         }
       })
-      
+
       // Build the editable milestone list
       const editable: EditableMilestone[] = milestoneList.map(fm => {
         // Can edit if:
@@ -484,7 +445,7 @@ function DataQualityContent() {
         // 2. This milestone is paired with one that has an issue, OR
         // 3. ANY unrecorded milestone (user is already reviewing, let them fix everything)
         const canEdit = editableMilestoneIds.has(fm.id) || !fm.recorded_at
-        
+
         return {
           id: fm.id,
           name: fm.name,
@@ -498,16 +459,16 @@ function DataQualityContent() {
           canEdit
         }
       })
-      
+
       setEditableMilestones(editable)
-      
+
       // Store which milestones have issues for highlighting
       setIssueMilestoneIds(localIssueMilestoneIds)
-      
+
       // Calculate initial impact
       const newImpact = calculateImpact(editable)
       setImpact(newImpact)
-      
+
     } catch (err) {
       showToast({
   type: 'error',
@@ -515,7 +476,7 @@ function DataQualityContent() {
   message: err instanceof Error ? err.message : 'Error in loadAllMilestonesForCase:'
 })
     }
-    
+
     setLoadingMilestones(false)
   }
 
@@ -532,7 +493,7 @@ function DataQualityContent() {
       `)
       .eq('case_id', caseId)
       .is('resolved_at', null)
-    
+
     if (error) {
       showToast({
         type: 'error',
@@ -541,11 +502,11 @@ function DataQualityContent() {
       })
       return
     }
-    
-    const issues: CaseIssue[] = (data || []).map(d => {
+
+    const loadedIssues: CaseIssue[] = (data || []).map(d => {
       const issueType = Array.isArray(d.issue_types) ? d.issue_types[0] : d.issue_types
       const fm = Array.isArray(d.facility_milestones) ? d.facility_milestones[0] : d.facility_milestones
-      
+
       return {
         id: d.id,
         issue_type: issueType as IssueType,
@@ -555,8 +516,8 @@ function DataQualityContent() {
         resolved: !!d.resolved_at
       }
     })
-    
-    setCaseIssues(issues)
+
+    setCaseIssues(loadedIssues)
   }
 
   // ============================================
@@ -567,10 +528,10 @@ function DataQualityContent() {
     const recordedNames = new Set(
       milestones.filter(m => m.recorded_at).map(m => m.name)
     )
-    
+
     const canCalculate: string[] = []
     const cannotCalculate: string[] = []
-    
+
     Object.values(METRIC_REQUIREMENTS).forEach((config) => {
       const hasAll = config.requires.every(req => recordedNames.has(req))
       if (hasAll) {
@@ -579,7 +540,7 @@ function DataQualityContent() {
         cannotCalculate.push(config.name)
       }
     })
-    
+
     return { canCalculate, cannotCalculate }
   }
 
@@ -597,21 +558,21 @@ function DataQualityContent() {
 
   const handleRunDetection = async () => {
     if (!effectiveFacilityId) return
-    
+
     setRunningDetection(true)
     setDetectionResult(null)
     setDetectionStep(1)
 
     // Expire old issues first
     const expiredCount = await expireOldIssues(supabase)
-    
+
     setDetectionStep(2)
     const stepTimer = setInterval(() => {
       setDetectionStep(prev => Math.min(prev + 1, 6))
     }, 800)
 
     const result = await runDetectionForFacility(supabase, effectiveFacilityId, 7)
-    
+
     clearInterval(stepTimer)
     setDetectionStep(7)
 
@@ -623,10 +584,10 @@ function DataQualityContent() {
 
     // Reload data to get actual current counts
     await loadData()
-    
+
     // Get the actual unresolved count from the refreshed summary
     const updatedSummary = await calculateDataQualitySummary(supabase, effectiveFacilityId)
-    
+
     setDetectionResult(`Scanned ${result.casesChecked} cases · ${updatedSummary.totalUnresolved} open issues${expiredCount ? ` · Expired ${expiredCount}` : ''}`)
 
     await dataQualityAudit.detectionRun(
@@ -674,15 +635,15 @@ function DataQualityContent() {
 
   const handleValidate = async () => {
     if (!modalState.issue) return
-    
+
     // Check for still-missing REQUIRED milestones
     const stillMissing = editableMilestones
       .filter(m => !m.recorded_at)
       .map(m => m.display_name)
-    
+
     // Calculate which metrics would be affected
     const newImpact = calculateImpact(editableMilestones)
-    
+
     // Only show warning if there are metrics that cannot be calculated
     if (newImpact.cannotCalculate.length > 0) {
       setMissingMilestones(stillMissing)
@@ -690,7 +651,7 @@ function DataQualityContent() {
       setShowValidationWarning(true)
       return
     }
-    
+
     // No warning needed, proceed
     await saveAndResolve('approved')
   }
@@ -702,27 +663,27 @@ function DataQualityContent() {
 
   const handleExclude = async () => {
     if (!modalState.issue || !currentUserId || !effectiveFacilityId) return
-    
+
     // Set is_excluded_from_metrics on the case
     await supabase
       .from('cases')
       .update({ is_excluded_from_metrics: true })
       .eq('id', modalState.issue.case_id)
-    
+
     await saveAndResolve('excluded')
   }
 
   // ============================================
   // STALE CASE HELPERS
   // ============================================
-  
+
   const STALE_ISSUE_TYPES = ['stale_in_progress', 'abandoned_scheduled', 'no_activity']
-  
+
   const isStaleCase = (): boolean => {
     const issueTypeName = (modalState.issue?.issue_type as IssueType)?.name
     return STALE_ISSUE_TYPES.includes(issueTypeName || '')
   }
-  
+
   const getStaleCaseDetails = (): { hours_elapsed?: number; days_overdue?: number; last_activity?: string } | null => {
     if (!modalState.issue) return null
     try {
@@ -735,30 +696,30 @@ function DataQualityContent() {
       return null
     }
   }
-  
+
   const handleMarkCompleted = async () => {
     if (!modalState.issue || !currentUserId || !effectiveFacilityId) return
-    
+
     setSaving(true)
-    
+
     // Get completed status ID
     const { data: completedStatus } = await supabase
       .from('case_statuses')
       .select('id')
       .eq('name', 'completed')
       .single()
-    
+
     if (completedStatus) {
       // Update case status to completed
       await supabase
         .from('cases')
-        .update({ 
+        .update({
           status_id: completedStatus.id,
           data_validated: false // Will need review for missing milestones
         })
         .eq('id', modalState.issue.case_id)
     }
-    
+
     // Resolve the stale issue
     await resolveIssue(
       supabase,
@@ -767,7 +728,7 @@ function DataQualityContent() {
       'approved',
       'Case marked as completed'
     )
-    
+
     // Audit log
     await dataQualityAudit.issueResolved(
       supabase,
@@ -778,36 +739,36 @@ function DataQualityContent() {
       effectiveFacilityId,
       'Case marked as completed'
     )
-    
+
     closeModal()
     setSaving(false)
     await loadData()
   }
-  
+
   const handleMarkCancelled = async () => {
     if (!modalState.issue || !currentUserId || !effectiveFacilityId) return
-    
+
     setSaving(true)
-    
+
     // Get cancelled status ID
     const { data: cancelledStatus } = await supabase
       .from('case_statuses')
       .select('id')
       .eq('name', 'cancelled')
       .single()
-    
+
     if (cancelledStatus) {
       // Update case status to cancelled and exclude from metrics
       await supabase
         .from('cases')
-        .update({ 
+        .update({
           status_id: cancelledStatus.id,
           is_excluded_from_metrics: true,
           data_validated: true // Cancelled = reviewed and excluded
         })
         .eq('id', modalState.issue.case_id)
     }
-    
+
     // Resolve the stale issue
     await resolveIssue(
       supabase,
@@ -816,7 +777,7 @@ function DataQualityContent() {
       'excluded',
       'Case marked as cancelled'
     )
-    
+
     // Audit log
     await dataQualityAudit.issueResolved(
       supabase,
@@ -827,7 +788,7 @@ function DataQualityContent() {
       effectiveFacilityId,
       'Case marked as cancelled'
     )
-    
+
     closeModal()
     setSaving(false)
     await loadData()
@@ -835,16 +796,16 @@ function DataQualityContent() {
 
   const saveAndResolve = async (resolutionType: 'approved' | 'excluded') => {
     if (!modalState.issue || !currentUserId || !effectiveFacilityId) return
-    
+
     setSaving(true)
-    
+
     // Save any changed milestones
     const changedMilestones = editableMilestones.filter(m => m.hasChanged && m.recorded_at)
-    
+
     for (const milestone of changedMilestones) {
       // Skip if no milestone id
       if (!milestone.id) continue
-      
+
       // Check if milestone exists
       const { data: existing } = await supabase
         .from('case_milestones')
@@ -852,7 +813,7 @@ function DataQualityContent() {
         .eq('case_id', modalState.issue.case_id)
         .eq('facility_milestone_id', milestone.id)
         .single()
-      
+
       if (existing) {
         // Update existing
         await supabase
@@ -874,7 +835,7 @@ function DataQualityContent() {
           })
       }
     }
-    
+
     // Resolve ALL unresolved issues for this case (multi-issue handling)
     for (const caseIssue of caseIssues) {
       if (!caseIssue.resolved) {
@@ -887,7 +848,7 @@ function DataQualityContent() {
         )
       }
     }
-    
+
     // Also resolve the current issue if not in caseIssues
     const currentIssueResolved = caseIssues.some(ci => ci.id === modalState.issue!.id)
     if (!currentIssueResolved) {
@@ -899,7 +860,7 @@ function DataQualityContent() {
         resolutionNotes || undefined
       )
     }
-    
+
     // ============================================
     // MARK CASE AS VALIDATED
     // Now that all issues are resolved, this case's
@@ -915,7 +876,7 @@ function DataQualityContent() {
         })
         .eq('id', modalState.issue.case_id)
     }
-    
+
     // Audit log
     await dataQualityAudit.issueResolved(
       supabase,
@@ -926,7 +887,7 @@ function DataQualityContent() {
       effectiveFacilityId,
       resolutionNotes || undefined
     )
-    
+
     closeModal()
     setSaving(false)
     await loadData()
@@ -935,22 +896,22 @@ function DataQualityContent() {
   // Bulk resolve
   const handleBulkExclude = async () => {
     if (!currentUserId || !effectiveFacilityId || modalState.bulkIds.length === 0) return
-    
+
     setSaving(true)
-    
+
     // Get case IDs for all selected issues and mark them excluded
     const { data: issueCases } = await supabase
       .from('metric_issues')
       .select('case_id')
       .in('id', modalState.bulkIds)
-    
+
     const caseIds = [...new Set(issueCases?.map(ic => ic.case_id) || [])]
-    
+
     // Mark all cases as excluded AND validated (reviewed but excluded)
     if (caseIds.length > 0) {
       await supabase
         .from('cases')
-        .update({ 
+        .update({
           is_excluded_from_metrics: true,
           data_validated: true,  // Marked as reviewed
           validated_at: new Date().toISOString(),
@@ -958,7 +919,7 @@ function DataQualityContent() {
         })
         .in('id', caseIds)
     }
-    
+
     await resolveMultipleIssues(
       supabase,
       modalState.bulkIds,
@@ -966,7 +927,7 @@ function DataQualityContent() {
       'excluded',
       resolutionNotes
     )
-    
+
     await dataQualityAudit.bulkResolved(
       supabase,
       modalState.bulkIds.length,
@@ -974,7 +935,7 @@ function DataQualityContent() {
       effectiveFacilityId,
       resolutionNotes || undefined
     )
-    
+
     closeModal()
     setSaving(false)
     await loadData()
@@ -1044,16 +1005,16 @@ function DataQualityContent() {
   // Check if issue can be considered "stale" (milestone now exists)
   const isIssueStale = () => {
     if (!modalState.issue) return false
-    
+
     const issueType = (modalState.issue.issue_type as IssueType)?.name
     if (issueType !== 'missing') return false
-    
+
     const issueMilestoneId = getIssueMilestoneId()
     if (!issueMilestoneId) return false
-    
+
     const milestone = editableMilestones.find(m => m.id === issueMilestoneId)
     if (!milestone) return false
-    
+
     return milestone.recorded_at !== null && !milestone.hasChanged
   }
 
@@ -1091,7 +1052,7 @@ function DataQualityContent() {
         {lastScanTime && (() => {
           const hourAgo = new Date(Date.now() - 60 * 60 * 1000)
           const isCurrent = lastScanTime > hourAgo
-          
+
           return (
             <div className="mb-4 flex items-center gap-2">
               {isCurrent ? (
@@ -1138,7 +1099,7 @@ function DataQualityContent() {
                     {summary.qualityScore}%
                   </p>
                   <div className="mt-2 h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className={`h-full rounded-full ${
                         summary.qualityScore >= 90 ? 'bg-green-500' :
                         summary.qualityScore >= 70 ? 'bg-amber-500' : 'bg-red-500'
@@ -1147,7 +1108,7 @@ function DataQualityContent() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="bg-white rounded-xl border border-slate-200 p-4">
                   <p className="text-sm font-medium text-slate-500">Open Issues</p>
                   <p className="text-3xl font-bold mt-1 text-slate-900">{summary.totalUnresolved}</p>
@@ -1155,13 +1116,13 @@ function DataQualityContent() {
                     Requires attention
                   </p>
                 </div>
-                
+
                 <div className="bg-white rounded-xl border border-slate-200 p-4">
                   <p className="text-sm font-medium text-slate-500">Expiring Soon</p>
                   <p className="text-3xl font-bold mt-1 text-amber-700">{summary.expiringThisWeek}</p>
                   <p className="text-xs text-slate-500 mt-2">Within 7 days</p>
                 </div>
-                
+
                 <div className="bg-white rounded-xl border border-slate-200 p-4">
                   <p className="text-sm font-medium text-slate-500">By Severity</p>
                   <div className="flex items-center gap-4 mt-2">
@@ -1197,7 +1158,7 @@ function DataQualityContent() {
                       <option key={type.id} value={type.name}>{type.display_name}</option>
                     ))}
                   </select>
-                  
+
                   {/* Show resolved toggle */}
                   <label className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg cursor-pointer">
                     <input
@@ -1275,7 +1236,7 @@ function DataQualityContent() {
                   </span>
                 </div>
               </div>
-              
+
               {/* Issue rows - GROUPED BY CASE */}
               {issues.length === 0 ? (
                 <div className="px-4 py-12 text-center">
@@ -1297,21 +1258,21 @@ function DataQualityContent() {
                       }
                       caseGroups.get(caseId)!.push(issue)
                     })
-                    
-                    return Array.from(caseGroups.entries()).map(([caseId, caseIssues]) => {
-                      const firstIssue = caseIssues[0]
-                      const isResolved = caseIssues.every(i => i.resolved_at)
-                      const unresolvedIssues = caseIssues.filter(i => !i.resolved_at)
-                      const earliestExpiry = caseIssues
+
+                    return Array.from(caseGroups.entries()).map(([caseId, caseIssuesGroup]) => {
+                      const firstIssue = caseIssuesGroup[0]
+                      const isResolved = caseIssuesGroup.every(i => i.resolved_at)
+                      const unresolvedIssues = caseIssuesGroup.filter(i => !i.resolved_at)
+                      const earliestExpiry = caseIssuesGroup
                         .filter(i => !i.resolved_at && i.expires_at)
                         .map(i => getDaysUntilExpiration(i.expires_at))
                         .sort((a, b) => a - b)[0]
 
                       const allSelected = unresolvedIssues.every(i => selectedIds.has(i.id))
                       const someSelected = unresolvedIssues.some(i => selectedIds.has(i.id))
-                      
+
                       return (
-                        <div 
+                        <div
                           key={caseId}
                           className={`px-4 py-3 hover:bg-slate-50 transition-colors ${
                             isResolved ? 'opacity-60' : ''
@@ -1347,12 +1308,12 @@ function DataQualityContent() {
                                 {/* Group issue types to avoid duplicates */}
                                 {(() => {
                                   const typeMap = new Map<string, { type: IssueType; count: number; milestones: string[] }>()
-                                  caseIssues.forEach(issue => {
-                                    const issueType = issueTypes.find(t => t.id === issue.issue_type_id)
-                                    if (issueType) {
-                                      const key = issueType.id
+                                  caseIssuesGroup.forEach(issue => {
+                                    const localIssueType = issueTypes.find(t => t.id === issue.issue_type_id)
+                                    if (localIssueType) {
+                                      const key = localIssueType.id
                                       if (!typeMap.has(key)) {
-                                        typeMap.set(key, { type: issueType, count: 0, milestones: [] })
+                                        typeMap.set(key, { type: localIssueType, count: 0, milestones: [] })
                                       }
                                       typeMap.get(key)!.count++
                                       if (issue.facility_milestone?.display_name) {
@@ -1360,9 +1321,9 @@ function DataQualityContent() {
                                       }
                                     }
                                   })
-                                  
+
                                   return Array.from(typeMap.values()).map(({ type, count, milestones }) => (
-                                    <span 
+                                    <span
                                       key={type.id}
                                       className={`px-2 py-0.5 rounded-full text-xs font-medium ${getSeverityColor(type.severity)}`}
                                       title={milestones.length > 0 ? milestones.join(', ') : undefined}
@@ -1371,7 +1332,7 @@ function DataQualityContent() {
                                     </span>
                                   ))
                                 })()}
-                                
+
                                 {isResolved && (
                                   <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-600">
                                     Resolved
@@ -1382,7 +1343,7 @@ function DataQualityContent() {
                               {/* Milestones with issues */}
                               <p className="text-sm text-slate-900 font-medium">
                                 {(() => {
-                                  const milestones = caseIssues
+                                  const milestones = caseIssuesGroup
                                     .filter(i => i.facility_milestone?.display_name)
                                     .map(i => i.facility_milestone!.display_name)
                                   const uniqueMilestones = [...new Set(milestones)]
@@ -1465,7 +1426,7 @@ function DataQualityContent() {
                     <span>{Math.round((detectionStep / 7) * 100)}%</span>
                   </div>
                   <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-blue-600 rounded-full transition-all duration-300 ease-out"
                       style={{ width: `${(detectionStep / 7) * 100}%` }}
                     />
@@ -1567,7 +1528,7 @@ function DataQualityContent() {
                               {(() => {
                                 const details = getStaleCaseDetails()
                                 const issueType = (modalState.issue.issue_type as IssueType)?.name
-                                
+
                                 if (issueType === 'stale_in_progress' && details?.hours_elapsed) {
                                   return `This case has been in progress for ${Math.round(details.hours_elapsed)} hours without being completed.`
                                 }
@@ -1598,7 +1559,7 @@ function DataQualityContent() {
                         </div>
                       </div>
                     )}
-                    
+
                     {/* Stale Issue Alert (only for "missing" type that's now recorded) */}
                     {!isStaleCase() && isIssueStale() && (
                       <div className="bg-green-50 border border-green-200 rounded-xl p-4">
@@ -1715,7 +1676,7 @@ function DataQualityContent() {
                         <div>
                           <span className="text-slate-500">Date</span>
                           <p className="font-medium text-slate-900">
-                            {modalState.issue.cases?.scheduled_date 
+                            {modalState.issue.cases?.scheduled_date
                               ? new Date(modalState.issue.cases.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                               : 'Unknown'
                             }
@@ -1724,7 +1685,7 @@ function DataQualityContent() {
                         <div>
                           <span className="text-slate-500">Scheduled Start</span>
                           <p className="font-medium text-slate-900">
-                            {modalState.issue.cases?.start_time 
+                            {modalState.issue.cases?.start_time
                               ? new Date(`2000-01-01T${modalState.issue.cases.start_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
                               : 'Not set'
                             }
@@ -1733,7 +1694,7 @@ function DataQualityContent() {
                         <div>
                           <span className="text-slate-500">Surgeon</span>
                           <p className="font-medium text-slate-900">
-                            {modalState.issue.cases?.surgeon 
+                            {modalState.issue.cases?.surgeon
                               ? `Dr. ${modalState.issue.cases.surgeon.first_name} ${modalState.issue.cases.surgeon.last_name}`
                               : 'Not assigned'
                             }
@@ -1760,16 +1721,16 @@ function DataQualityContent() {
                             // Check if this milestone has an issue (using global state)
                             const hasIssue = milestone.id ? issueMilestoneIds.has(milestone.id) : false
                             const isMissing = !milestone.recorded_at
-                            
+
                             // Find the paired milestone for visual indicator
-                            const pairedMilestone = milestone.pair_with_id 
+                            const pairedMilestone = milestone.pair_with_id
                               ? editableMilestones.find(m => m.id === milestone.pair_with_id)
                               : null
                             const isStartOfPair = pairedMilestone && milestone.display_order < (pairedMilestone.display_order || 999)
                             const isEndOfPair = pairedMilestone && milestone.display_order > (pairedMilestone.display_order || 0)
-                            
+
                             return (
-                              <div 
+                              <div
                                 key={milestone.id || milestone.name}
                                 className={`relative ${
                                   hasIssue ? 'bg-amber-50' : ''
@@ -1785,16 +1746,16 @@ function DataQualityContent() {
                                       <ArrowUp className="w-4 h-4 text-blue-400" />
                                     )}
                                   </div>
-                                  
+
                                   {/* Status dot */}
                                   <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                                    isMissing 
-                                      ? 'bg-slate-300' 
-                                      : milestone.hasChanged 
-                                        ? 'bg-blue-500' 
+                                    isMissing
+                                      ? 'bg-slate-300'
+                                      : milestone.hasChanged
+                                        ? 'bg-blue-500'
                                         : 'bg-green-500'
                                   }`} />
-                                  
+
                                   {/* Milestone name and badges */}
                                   <div className="flex-1 min-w-0 flex items-center gap-2">
                                     <span className={`text-sm font-medium ${
@@ -1802,7 +1763,7 @@ function DataQualityContent() {
                                     }`}>
                                       {milestone.display_name}
                                     </span>
-                                    
+
                                     {/* Start/End badge for paired milestones */}
                                     {isStartOfPair && (
                                       <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded">
@@ -1814,18 +1775,18 @@ function DataQualityContent() {
                                         End
                                       </span>
                                     )}
-                                    
+
                                     {/* Issue indicator */}
                                     {hasIssue && (
                                       <span className="text-xs text-amber-700 font-medium">(Issue)</span>
                                     )}
-                                    
+
                                     {/* Modified indicator */}
                                     {milestone.hasChanged && (
                                       <span className="text-xs text-blue-600 font-medium">(Modified)</span>
                                     )}
                                   </div>
-                                  
+
                                   {/* Time display/edit */}
                                   <div className="flex items-center gap-2">
                                     {milestone.isEditing ? (
@@ -1838,13 +1799,13 @@ function DataQualityContent() {
                                       />
                                     ) : (
                                       <span className={`text-sm ${isMissing ? 'text-slate-400 italic' : 'text-slate-600'}`}>
-                                        {milestone.recorded_at 
+                                        {milestone.recorded_at
                                           ? formatTimeWithSeconds(milestone.recorded_at)
                                           : 'Not recorded'
                                         }
                                       </span>
                                     )}
-                                    
+
                                     {milestone.canEdit && (
                                       <button
                                         onClick={() => toggleMilestoneEdit(index)}
@@ -1888,7 +1849,7 @@ function DataQualityContent() {
                   <div className="max-w-md w-full">
                     <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-6">
                       <h4 className="text-lg font-semibold text-amber-800 mb-3">Missing Milestones</h4>
-                      
+
                       {missingMilestones.length > 0 && (
                         <div className="mb-4">
                           <p className="text-sm text-amber-700 mb-2">The following milestones are still not recorded:</p>
@@ -1902,7 +1863,7 @@ function DataQualityContent() {
                           </div>
                         </div>
                       )}
-                      
+
                       <p className="text-sm text-amber-700 mb-2">The following metrics will <strong>NOT</strong> be saved to analytics:</p>
                       <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
                         {affectedMetrics.map(m => (
@@ -1912,7 +1873,7 @@ function DataQualityContent() {
                           </div>
                         ))}
                       </div>
-                      
+
                       <div className="flex gap-3">
                         <button
                           onClick={() => setShowValidationWarning(false)}
@@ -1969,7 +1930,7 @@ function DataQualityContent() {
                       >
                         Cancel
                       </button>
-                      
+
                       {/* Different actions for stale cases vs regular issues */}
                       {isStaleCase() ? (
                         <>
@@ -2014,13 +1975,5 @@ function DataQualityContent() {
           </div>
         )}
     </DashboardLayout>
-  )
-}
-
-export default function DataQualityPage() {
-  return (
-    <Suspense>
-      <DataQualityContent />
-    </Suspense>
   )
 }

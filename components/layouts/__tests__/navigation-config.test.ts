@@ -42,8 +42,8 @@ describe('isNavItemActive', () => {
     expect(isNavItemActive('/dashboard', '/dashboard')).toBe(true)
   })
 
-  it('marks /dashboard active for /dashboard sub-routes', () => {
-    expect(isNavItemActive('/dashboard', '/dashboard/data-quality')).toBe(true)
+  it('marks /data-quality active for /data-quality route', () => {
+    expect(isNavItemActive('/data-quality', '/data-quality')).toBe(true)
   })
 
   it('does NOT mark /dashboard active when on /rooms', () => {

@@ -269,7 +269,7 @@ export const facilityNavigation: NavItem[] = [
   },
   {
     name: 'Data Quality',
-    href: '/dashboard/data-quality',
+    href: '/data-quality',
     icon: navIcons.dataQuality,
     allowedRoles: ['global_admin', 'facility_admin'],
   },

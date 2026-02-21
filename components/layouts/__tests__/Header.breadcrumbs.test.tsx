@@ -187,10 +187,9 @@ describe('Header breadcrumb rendering', () => {
       expect(texts).toContain('New Case')
     })
 
-    it('renders 3-level trail for /dashboard/data-quality', () => {
-      renderHeader(baseProps({ pathname: '/dashboard/data-quality' }))
+    it('renders trail for /data-quality (top-level)', () => {
+      renderHeader(baseProps({ pathname: '/data-quality' }))
       const texts = getBreadcrumbTexts()
-      expect(texts).toContain('Dashboard')
       expect(texts).toContain('Data Quality')
     })
   })
