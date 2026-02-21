@@ -41,11 +41,17 @@ const mockIssueTypes: IssueType[] = [
 // Helper to create a mock issue
 const createMockIssue = (overrides?: Partial<MetricIssue>): MetricIssue => ({
   id: 'issue-1',
+  facility_id: 'facility-1',
   case_id: 'case-1',
   issue_type_id: '1',
-  issue_type: mockIssueTypes[0],
   facility_milestone_id: 'fm-1',
-  facility_milestone: { display_name: 'Incision' },
+  milestone_id: null,
+  resolution_type_id: null,
+  resolved_by: null,
+  resolution_notes: null,
+  created_at: '2026-02-20T09:00:00Z',
+  issue_type: mockIssueTypes[0],
+  facility_milestone: { name: 'incision', display_name: 'Incision' },
   detected_at: '2026-02-20T10:00:00Z',
   detected_value: null,
   expected_min: null,
@@ -164,6 +170,7 @@ describe('ReviewDrawer', () => {
       const issueWithoutProcedure = createMockIssue({
         cases: {
           case_number: 'OR-12345',
+          scheduled_date: '2026-02-20',
           surgeon: { first_name: 'Jane', last_name: 'Smith' },
           procedure_types: null,
         },
@@ -296,6 +303,7 @@ describe('ReviewDrawer', () => {
       const issueWithoutSide = createMockIssue({
         cases: {
           case_number: 'OR-12345',
+          scheduled_date: '2026-02-20',
           surgeon: { first_name: 'Jane', last_name: 'Smith' },
           procedure_types: { name: 'Total Hip Replacement' },
           operative_side: null,
@@ -309,6 +317,7 @@ describe('ReviewDrawer', () => {
       const issueWithoutRoom = createMockIssue({
         cases: {
           case_number: 'OR-12345',
+          scheduled_date: '2026-02-20',
           surgeon: { first_name: 'Jane', last_name: 'Smith' },
           procedure_types: { name: 'Total Hip Replacement' },
           or_rooms: null,

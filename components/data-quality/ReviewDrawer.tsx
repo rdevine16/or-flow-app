@@ -29,9 +29,9 @@ interface ReviewDrawerProps {
   issue: MetricIssue | null
   caseIssues: CaseIssue[]
   issueTypes: IssueType[]
-  /** Content rendered in the scrollable body after the case details section (Phase 6+) */
+  /** Content rendered in the scrollable body after the case details section */
   children?: ReactNode
-  /** Content rendered as a sticky footer (Phase 6+) */
+  /** Content rendered as a sticky footer */
   footer?: ReactNode
 }
 
@@ -249,11 +249,11 @@ export default function ReviewDrawer({
               </div>
             </div>
 
-            {/* Phase 6+ content passed as children */}
+            {/* Impact analysis, milestone timeline, notes, validation warning */}
             {children}
           </div>
 
-          {/* ======== FOOTER (Phase 6+) ======== */}
+          {/* ======== FOOTER ======== */}
           {footer && (
             <div className="px-5 py-3.5 border-t border-slate-200 bg-white flex-shrink-0">
               {footer}

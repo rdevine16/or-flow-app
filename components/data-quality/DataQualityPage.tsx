@@ -8,12 +8,13 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { dataQualityAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { AlertTriangle, ArrowDown, ArrowUp, Check, Clock, RefreshCw, Shield, X } from 'lucide-react'
+import { AlertTriangle, Check, Clock, RefreshCw, Shield, X } from 'lucide-react'
 import SummaryRow from './SummaryRow'
 import ScanProgress from './ScanProgress'
 import FilterBar from './FilterBar'
 import IssuesTable from './IssuesTable'
 import ReviewDrawer from './ReviewDrawer'
+import MilestoneTimeline, { type EditableMilestone } from './MilestoneTimeline'
 import {
   fetchMetricIssues,
   fetchIssueTypes,
@@ -34,19 +35,6 @@ import {
 // TYPES
 // ============================================
 
-interface EditableMilestone {
-  id?: string // facility_milestone_id
-  name: string
-  display_name: string
-  display_order: number
-  pair_with_id: string | null // Dynamic pairing from database
-  recorded_at: string | null
-  original_recorded_at: string | null
-  isEditing: boolean
-  hasChanged: boolean
-  canEdit: boolean // Based on issue type and pairs
-}
-
 interface CaseIssue {
   id: string
   issue_type: IssueType
@@ -59,21 +47,6 @@ interface CaseIssue {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
-
-function formatTimeWithSeconds(isoString: string): string {
-  try {
-    const date = new Date(isoString)
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    })
-  } catch {
-    return isoString
-  }
-}
 
 
 // LocalStorage key for last scan time
@@ -1151,7 +1124,7 @@ export default function DataQualityPage() {
             )
           }
         >
-          {/* Phase 6 content lives here as children — impact analysis, milestone timeline, notes */}
+          {/* Drawer body content — impact analysis, milestone timeline, notes, validation */}
           {modalState.issue && (
             <>
               {/* Stale Case Banner */}
@@ -1261,81 +1234,13 @@ export default function DataQualityPage() {
               {!isStaleCase() && (
                 <div className="bg-white border border-slate-200 rounded-[10px] p-4">
                   <h4 className="text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 mb-3">Milestone Timeline</h4>
-                  {loadingMilestones ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  ) : (
-                    <div className="rounded-lg overflow-hidden border border-slate-100">
-                      {editableMilestones.map((milestone, index) => {
-                        const hasIssue = milestone.id ? issueMilestoneIds.has(milestone.id) : false
-                        const isMissing = !milestone.recorded_at
-                        const pairedMilestone = milestone.pair_with_id
-                          ? editableMilestones.find(m => m.id === milestone.pair_with_id)
-                          : null
-                        const isStartOfPair = pairedMilestone && milestone.display_order < (pairedMilestone.display_order || 999)
-                        const isEndOfPair = pairedMilestone && milestone.display_order > (pairedMilestone.display_order || 0)
-
-                        return (
-                          <div
-                            key={milestone.id || milestone.name}
-                            className={`relative ${hasIssue ? 'bg-amber-50' : ''} ${index > 0 ? 'border-t border-slate-100' : ''}`}
-                          >
-                            <div className="px-3 py-2.5 flex items-center gap-2.5">
-                              {/* Pair arrow indicator */}
-                              <div className="w-4 flex-shrink-0 flex items-center justify-center">
-                                {isStartOfPair && <ArrowDown className="w-3.5 h-3.5 text-blue-400" />}
-                                {isEndOfPair && <ArrowUp className="w-3.5 h-3.5 text-blue-400" />}
-                              </div>
-
-                              {/* Status dot */}
-                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                isMissing ? 'border-2 border-slate-300' : milestone.hasChanged ? 'bg-blue-500' : 'bg-green-500'
-                              }`} />
-
-                              {/* Name and badges */}
-                              <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                                <span className={`text-xs font-medium ${hasIssue ? 'text-amber-800' : 'text-slate-900'}`}>
-                                  {milestone.display_name}
-                                </span>
-                                {isStartOfPair && <span className="px-1 py-0.5 text-[9px] font-semibold bg-blue-100 text-blue-600 rounded">Start</span>}
-                                {isEndOfPair && <span className="px-1 py-0.5 text-[9px] font-semibold bg-blue-100 text-blue-600 rounded">End</span>}
-                                {hasIssue && <span className="text-[10px] text-amber-700 font-medium">(Issue)</span>}
-                                {milestone.hasChanged && <span className="text-[10px] text-blue-600 font-medium">(Modified)</span>}
-                              </div>
-
-                              {/* Time display/edit */}
-                              <div className="flex items-center gap-1.5">
-                                {milestone.isEditing ? (
-                                  <input
-                                    type="datetime-local"
-                                    step="1"
-                                    value={milestone.recorded_at ? milestone.recorded_at.slice(0, 19) : ''}
-                                    onChange={(e) => updateMilestoneTime(index, e.target.value ? new Date(e.target.value).toISOString() : '')}
-                                    className="px-1.5 py-0.5 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
-                                  />
-                                ) : (
-                                  <span className={`text-xs ${isMissing ? 'text-slate-400 italic' : 'text-slate-600'}`}>
-                                    {milestone.recorded_at ? formatTimeWithSeconds(milestone.recorded_at) : 'Not recorded'}
-                                  </span>
-                                )}
-                                {milestone.canEdit && (
-                                  <button
-                                    onClick={() => toggleMilestoneEdit(index)}
-                                    className={`px-1.5 py-0.5 text-[10px] font-semibold rounded transition-colors ${
-                                      milestone.isEditing ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                                  >
-                                    {milestone.isEditing ? 'Done' : isMissing ? 'Add' : 'Edit'}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
+                  <MilestoneTimeline
+                    milestones={editableMilestones}
+                    issueMilestoneIds={issueMilestoneIds}
+                    loading={loadingMilestones}
+                    onToggleEdit={toggleMilestoneEdit}
+                    onTimeChange={updateMilestoneTime}
+                  />
                 </div>
               )}
 
