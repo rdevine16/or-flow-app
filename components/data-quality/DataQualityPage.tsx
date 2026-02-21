@@ -9,6 +9,7 @@ import { dataQualityAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Clock, RefreshCw, X } from 'lucide-react'
+import SummaryRow from './SummaryRow'
 import {
   fetchMetricIssues,
   fetchIssueTypes,
@@ -1087,61 +1088,8 @@ export default function DataQualityPage() {
           </div>
         ) : (
           <>
-            {/* Summary Cards */}
-            {summary && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white rounded-xl border border-slate-200 p-4">
-                  <p className="text-sm font-medium text-slate-500">Quality Score</p>
-                  <p className={`text-3xl font-bold mt-1 ${
-                    summary.qualityScore >= 90 ? 'text-green-600' :
-                    summary.qualityScore >= 70 ? 'text-amber-700' : 'text-red-600'
-                  }`}>
-                    {summary.qualityScore}%
-                  </p>
-                  <div className="mt-2 h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${
-                        summary.qualityScore >= 90 ? 'bg-green-500' :
-                        summary.qualityScore >= 70 ? 'bg-amber-500' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${summary.qualityScore}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl border border-slate-200 p-4">
-                  <p className="text-sm font-medium text-slate-500">Open Issues</p>
-                  <p className="text-3xl font-bold mt-1 text-slate-900">{summary.totalUnresolved}</p>
-                  <p className="text-xs text-slate-500 mt-2">
-                    Requires attention
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-xl border border-slate-200 p-4">
-                  <p className="text-sm font-medium text-slate-500">Expiring Soon</p>
-                  <p className="text-3xl font-bold mt-1 text-amber-700">{summary.expiringThisWeek}</p>
-                  <p className="text-xs text-slate-500 mt-2">Within 7 days</p>
-                </div>
-
-                <div className="bg-white rounded-xl border border-slate-200 p-4">
-                  <p className="text-sm font-medium text-slate-500">By Severity</p>
-                  <div className="flex items-center gap-4 mt-2">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded-full bg-red-500" />
-                      <span className="text-sm font-medium text-slate-900">{summary.bySeverity.error || 0}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded-full bg-amber-500" />
-                      <span className="text-sm font-medium text-slate-900">{summary.bySeverity.warning || 0}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded-full bg-blue-500" />
-                      <span className="text-sm font-medium text-slate-900">{summary.bySeverity.info || 0}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Summary Row — Quality Gauge + 3 Stat Cards */}
+            {summary && <SummaryRow summary={summary} />}
 
             {/* Filters and Actions */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
