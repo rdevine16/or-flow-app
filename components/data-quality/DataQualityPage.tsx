@@ -13,6 +13,7 @@ import SummaryRow from './SummaryRow'
 import ScanProgress from './ScanProgress'
 import FilterBar from './FilterBar'
 import IssuesTable from './IssuesTable'
+import ReviewDrawer from './ReviewDrawer'
 import {
   fetchMetricIssues,
   fetchIssueTypes,
@@ -22,7 +23,6 @@ import {
   resolveMultipleIssues,
   runDetectionForFacility,
   expireOldIssues,
-  formatTimeAgo,
   METRIC_REQUIREMENTS,
   type MetricIssue,
   type IssueType,
@@ -60,42 +60,6 @@ interface CaseIssue {
 // HELPER FUNCTIONS
 // ============================================
 
-function formatIssueDescription(issue: MetricIssue): string {
-  const issueType = issue.issue_type as IssueType | null
-  const typeName = issueType?.name || ''
-
-  if (typeName === 'missing') {
-    return 'Not recorded'
-  }
-
-  if (issue.detected_value !== null) {
-    const value = Math.round(issue.detected_value)
-    const details = issue.details as Record<string, unknown> | null
-
-    if (typeName === 'too_fast' || typeName === 'timeout') {
-      const min = issue.expected_min ? `${Math.round(issue.expected_min)}` : '—'
-      const max = issue.expected_max ? `${Math.round(issue.expected_max)}` : '—'
-      return `${value} min (expected ${min}–${max} min)`
-    }
-
-    if (typeName === 'impossible') {
-      const prevMilestone = details?.previous_milestone as string
-      return `Recorded ${Math.abs(value)} min before ${prevMilestone || 'previous milestone'}`
-    }
-
-    if (typeName === 'stale') {
-      return `${value} days overdue`
-    }
-
-    if (typeName === 'incomplete') {
-      return `No activity for ${Math.round(value)} hours`
-    }
-
-    return `${value}`
-  }
-
-  return 'Review required'
-}
 
 function formatTimeWithSeconds(isoString: string): string {
   try {
@@ -1122,507 +1086,362 @@ export default function DataQualityPage() {
           </>
         )}
 
-        {/* Modal */}
-        {modalState.isOpen && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-slate-50 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white rounded-t-2xl">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    {modalState.isBulk ? 'Bulk Exclude Issues' : 'Review Issue'}
-                  </h3>
-                  {!modalState.isBulk && modalState.issue?.cases && (
-                    <p className="text-sm text-slate-500">Case: <span className="font-medium text-blue-600">{modalState.issue.cases.case_number}</span></p>
+        {/* Review Drawer — single-issue overlay panel */}
+        <ReviewDrawer
+          isOpen={modalState.isOpen && !modalState.isBulk}
+          onClose={closeModal}
+          issue={modalState.issue}
+          caseIssues={caseIssues}
+          issueTypes={issueTypes}
+          footer={
+            modalState.issue && (
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={openCaseInNewTab}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-[7px] border border-blue-600/10 bg-blue-50 text-blue-600 text-xs font-semibold hover:bg-blue-100 transition-colors"
+                >
+                  Open Case
+                </button>
+                <div className="flex items-center gap-2">
+                  {isStaleCase() ? (
+                    <>
+                      <button
+                        onClick={handleMarkCancelled}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1.5 px-4 py-[7px] rounded-[7px] border border-red-200 bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 disabled:opacity-50 transition-colors"
+                      >
+                        {saving ? 'Saving...' : 'Mark Cancelled'}
+                      </button>
+                      <button
+                        onClick={handleMarkCompleted}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1.5 px-5 py-[7px] rounded-[7px] border-none text-white text-xs font-semibold disabled:opacity-50 transition-all"
+                        style={{
+                          background: 'linear-gradient(135deg, #059669, #047857)',
+                          boxShadow: '0 2px 8px rgba(5,150,105,0.19)',
+                        }}
+                      >
+                        {saving ? 'Saving...' : 'Mark Completed'}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={handleExclude}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1.5 px-4 py-[7px] rounded-[7px] border border-red-200 bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 disabled:opacity-50 transition-colors"
+                      >
+                        Exclude
+                      </button>
+                      <button
+                        onClick={handleValidate}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1.5 px-5 py-[7px] rounded-[7px] border-none text-white text-xs font-semibold disabled:opacity-50 transition-all"
+                        style={{
+                          background: 'linear-gradient(135deg, #059669, #047857)',
+                          boxShadow: '0 2px 8px rgba(5,150,105,0.19)',
+                        }}
+                      >
+                        {saving ? 'Saving...' : 'Validate & Resolve'}
+                      </button>
+                    </>
                   )}
                 </div>
-                <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                  <X className="w-5 h-5 text-slate-500" />
-                </button>
               </div>
-
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {/* Bulk Mode */}
-                {modalState.isBulk && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                    <h4 className="text-sm font-semibold text-red-800 mb-2">Exclude from Metrics</h4>
-                    <p className="text-sm text-red-600">
-                      You are about to exclude {modalState.bulkIds.length} cases from all analytics calculations.
-                      This action marks the issues as resolved but removes the cases from aggregate metrics.
-                    </p>
-                    <div className="mt-3">
-                      <textarea
-                        value={resolutionNotes}
-                        onChange={(e) => setResolutionNotes(e.target.value)}
-                        placeholder="Add notes (optional)..."
-                        rows={2}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
-                      />
+            )
+          }
+        >
+          {/* Phase 6 content lives here as children — impact analysis, milestone timeline, notes */}
+          {modalState.issue && (
+            <>
+              {/* Stale Case Banner */}
+              {isStaleCase() && (
+                <div className="bg-orange-50 border border-orange-200 rounded-[10px] p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Clock className="w-4 h-4 text-orange-600" />
                     </div>
-                  </div>
-                )}
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-orange-800">
+                        {(modalState.issue.issue_type as IssueType)?.display_name || 'Stale Case'}
+                      </h4>
+                      <p className="text-sm text-orange-700 mt-1">
+                        {(() => {
+                          const details = getStaleCaseDetails()
+                          const issueType = (modalState.issue!.issue_type as IssueType)?.name
 
-                {/* Single Issue Mode */}
-                {!modalState.isBulk && modalState.issue && (
-                  <>
-                    {/* Stale Case Banner - special handling for orphaned cases */}
-                    {isStaleCase() && (
-                      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Clock className="w-4 h-4 text-orange-600" />
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="text-sm font-semibold text-orange-800">
-                              {(modalState.issue.issue_type as IssueType)?.display_name || 'Stale Case'}
-                            </h4>
-                            <p className="text-sm text-orange-700 mt-1">
-                              {(() => {
-                                const details = getStaleCaseDetails()
-                                const issueType = (modalState.issue.issue_type as IssueType)?.name
-
-                                if (issueType === 'stale_in_progress' && details?.hours_elapsed) {
-                                  return `This case has been in progress for ${Math.round(details.hours_elapsed)} hours without being completed.`
-                                }
-                                if (issueType === 'abandoned_scheduled' && details?.days_overdue) {
-                                  return `This case was scheduled ${details.days_overdue} days ago but was never started.`
-                                }
-                                if (issueType === 'no_activity') {
-                                  const hours = details?.hours_elapsed
-                                  return `No milestone activity recorded for ${hours ? Math.round(hours) : 'several'} hours.`
-                                }
-                                return 'This case appears to be orphaned or abandoned.'
-                              })()}
-                            </p>
-                            <div className="mt-3 p-2 bg-orange-100 rounded-lg">
-                              <p className="text-xs text-orange-800 font-medium">
-                                What would you like to do?
-                              </p>
-                              <ul className="mt-1 text-xs text-orange-700 space-y-1">
-                                <li>• <strong>Mark Completed</strong> — Case is done, will be reviewed for missing milestones</li>
-                                <li>• <strong>Mark Cancelled</strong> — Case was cancelled, exclude from metrics</li>
-                                <li>• <strong>Open Case</strong> — Review and update the case directly</li>
-                              </ul>
-                            </div>
-                            <p className="text-xs text-orange-600 mt-2">
-                              Detected {formatTimeAgo(modalState.issue.detected_at)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Stale Issue Alert (only for "missing" type that's now recorded) */}
-                    {!isStaleCase() && isIssueStale() && (
-                      <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Check className="w-4 h-4 text-green-600" />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-semibold text-green-800">Issue Already Resolved</h4>
-                            <p className="text-sm text-green-600 mt-1">
-                              The {modalState.issue.facility_milestone?.display_name} milestone has been recorded since this issue was detected.
-                              You can validate to close this issue.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Unified Issue Banner - shows ALL issues for this case (not for stale cases) */}
-                    {!isStaleCase() && !isIssueStale() && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <AlertTriangle className="w-4 h-4 text-amber-600" />
-                          </div>
-                          <div className="flex-1">
-                            {caseIssues.length > 1 ? (
-                              <>
-                                <h4 className="text-sm font-semibold text-amber-800">
-                                  {caseIssues.length} Issues for This Case
-                                </h4>
-                                <p className="text-sm text-amber-700 mt-1">
-                                  Resolving will address all of them.
-                                </p>
-                                <ul className="mt-2 space-y-1">
-                                  {caseIssues.map(ci => (
-                                    <li key={ci.id} className="text-xs text-amber-700 flex items-center gap-1">
-                                      <span>•</span>
-                                      <span className="font-medium">{ci.issue_type?.display_name}:</span>
-                                      <span>{ci.facility_milestone_display_name || 'General'}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </>
-                            ) : (
-                              <>
-                                <h4 className="text-sm font-semibold text-amber-800">
-                                  {(modalState.issue.issue_type as IssueType)?.display_name || 'Issue Detected'}
-                                </h4>
-                                <p className="text-sm text-amber-700 mt-1">
-                                  {modalState.issue.facility_milestone?.display_name}: {formatIssueDescription(modalState.issue)}
-                                </p>
-                              </>
-                            )}
-                            <p className="text-xs text-amber-700 mt-2">
-                              Detected {formatTimeAgo(modalState.issue.detected_at)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Impact Analysis - NOT shown for stale cases */}
-                    {!isStaleCase() && (
-                      <div className="bg-slate-50 rounded-xl p-4">
-                      <h4 className="text-sm font-semibold text-slate-700 mb-3">Impact Analysis</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs font-medium text-red-600 uppercase tracking-wide mb-2">Cannot Calculate</p>
-                          {impact.cannotCalculate.length > 0 ? (
-                            <ul className="space-y-1">
-                              {impact.cannotCalculate.map(metric => (
-                                <li key={metric} className="flex items-center gap-2 text-sm text-slate-600">
-                                  <X className="w-4 h-4 text-red-600 flex-shrink-0" />
-                                  {metric}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-sm text-green-600 font-medium">All metrics can be calculated ✓</p>
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-green-600 uppercase tracking-wide mb-2">Can Calculate</p>
-                          {impact.canCalculate.length > 0 ? (
-                            <ul className="space-y-1">
-                              {impact.canCalculate.map(metric => (
-                                <li key={metric} className="flex items-center gap-2 text-sm text-slate-600">
-                                  <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
-                                  {metric}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-sm text-slate-500 italic">No metrics available</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    )}
-
-                    {/* Case Information - shown for all issue types */}
-                    <div className="bg-white border border-slate-200 rounded-xl p-4">
-                      <h4 className="text-sm font-medium text-slate-700 mb-3">Case Information</h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-slate-500">Procedure</span>
-                          <p className="font-medium text-slate-900">{modalState.issue.cases?.procedure_types?.name || 'Not specified'}</p>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Operative Side</span>
-                          <p className="font-medium text-slate-900 capitalize">{modalState.issue.cases?.operative_side || 'Not specified'}</p>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Date</span>
-                          <p className="font-medium text-slate-900">
-                            {modalState.issue.cases?.scheduled_date
-                              ? new Date(modalState.issue.cases.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                              : 'Unknown'
-                            }
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Scheduled Start</span>
-                          <p className="font-medium text-slate-900">
-                            {modalState.issue.cases?.start_time
-                              ? new Date(`2000-01-01T${modalState.issue.cases.start_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-                              : 'Not set'
-                            }
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Surgeon</span>
-                          <p className="font-medium text-slate-900">
-                            {modalState.issue.cases?.surgeon
-                              ? `Dr. ${modalState.issue.cases.surgeon.first_name} ${modalState.issue.cases.surgeon.last_name}`
-                              : 'Not assigned'
-                            }
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Room</span>
-                          <p className="font-medium text-slate-900">{modalState.issue.cases?.or_rooms?.name || 'Not assigned'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* All Milestones Timeline - NOT shown for stale cases */}
-                    {!isStaleCase() && (
-                      <div>
-                      <h4 className="text-sm font-medium text-slate-700 mb-3">Milestone Timeline</h4>
-                      {loadingMilestones ? (
-                        <div className="flex items-center justify-center py-8">
-                          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                        </div>
-                      ) : (
-                        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                          {editableMilestones.map((milestone, index) => {
-                            // Check if this milestone has an issue (using global state)
-                            const hasIssue = milestone.id ? issueMilestoneIds.has(milestone.id) : false
-                            const isMissing = !milestone.recorded_at
-
-                            // Find the paired milestone for visual indicator
-                            const pairedMilestone = milestone.pair_with_id
-                              ? editableMilestones.find(m => m.id === milestone.pair_with_id)
-                              : null
-                            const isStartOfPair = pairedMilestone && milestone.display_order < (pairedMilestone.display_order || 999)
-                            const isEndOfPair = pairedMilestone && milestone.display_order > (pairedMilestone.display_order || 0)
-
-                            return (
-                              <div
-                                key={milestone.id || milestone.name}
-                                className={`relative ${
-                                  hasIssue ? 'bg-amber-50' : ''
-                                } ${index > 0 ? 'border-t border-slate-100' : ''}`}
-                              >
-                                <div className="px-4 py-3 flex items-center gap-3">
-                                  {/* Pair arrow indicator */}
-                                  <div className="w-5 flex-shrink-0 flex items-center justify-center">
-                                    {isStartOfPair && (
-                                      <ArrowDown className="w-4 h-4 text-blue-400" />
-                                    )}
-                                    {isEndOfPair && (
-                                      <ArrowUp className="w-4 h-4 text-blue-400" />
-                                    )}
-                                  </div>
-
-                                  {/* Status dot */}
-                                  <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                                    isMissing
-                                      ? 'bg-slate-300'
-                                      : milestone.hasChanged
-                                        ? 'bg-blue-500'
-                                        : 'bg-green-500'
-                                  }`} />
-
-                                  {/* Milestone name and badges */}
-                                  <div className="flex-1 min-w-0 flex items-center gap-2">
-                                    <span className={`text-sm font-medium ${
-                                      hasIssue ? 'text-amber-800' : 'text-slate-900'
-                                    }`}>
-                                      {milestone.display_name}
-                                    </span>
-
-                                    {/* Start/End badge for paired milestones */}
-                                    {isStartOfPair && (
-                                      <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded">
-                                        Start
-                                      </span>
-                                    )}
-                                    {isEndOfPair && (
-                                      <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded">
-                                        End
-                                      </span>
-                                    )}
-
-                                    {/* Issue indicator */}
-                                    {hasIssue && (
-                                      <span className="text-xs text-amber-700 font-medium">(Issue)</span>
-                                    )}
-
-                                    {/* Modified indicator */}
-                                    {milestone.hasChanged && (
-                                      <span className="text-xs text-blue-600 font-medium">(Modified)</span>
-                                    )}
-                                  </div>
-
-                                  {/* Time display/edit */}
-                                  <div className="flex items-center gap-2">
-                                    {milestone.isEditing ? (
-                                      <input
-                                        type="datetime-local"
-                                        step="1"
-                                        value={milestone.recorded_at ? milestone.recorded_at.slice(0, 19) : ''}
-                                        onChange={(e) => updateMilestoneTime(index, e.target.value ? new Date(e.target.value).toISOString() : '')}
-                                        className="px-2 py-1 text-sm border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
-                                      />
-                                    ) : (
-                                      <span className={`text-sm ${isMissing ? 'text-slate-400 italic' : 'text-slate-600'}`}>
-                                        {milestone.recorded_at
-                                          ? formatTimeWithSeconds(milestone.recorded_at)
-                                          : 'Not recorded'
-                                        }
-                                      </span>
-                                    )}
-
-                                    {milestone.canEdit && (
-                                      <button
-                                        onClick={() => toggleMilestoneEdit(index)}
-                                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                                          milestone.isEditing
-                                            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                        }`}
-                                      >
-                                        {milestone.isEditing ? 'Done' : isMissing ? 'Add' : 'Edit'}
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                    )}
-
-                    {/* Notes */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
-                      <textarea
-                        value={resolutionNotes}
-                        onChange={(e) => setResolutionNotes(e.target.value)}
-                        placeholder="Add any context about this resolution..."
-                        rows={2}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Validation Warning Overlay */}
-              {showValidationWarning && (
-                <div className="absolute inset-0 bg-white/95 flex items-center justify-center p-6 rounded-xl">
-                  <div className="max-w-md w-full">
-                    <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-6">
-                      <h4 className="text-lg font-semibold text-amber-800 mb-3">Missing Milestones</h4>
-
-                      {missingMilestones.length > 0 && (
-                        <div className="mb-4">
-                          <p className="text-sm text-amber-700 mb-2">The following milestones are still not recorded:</p>
-                          <div className="bg-amber-100 rounded-lg p-3">
-                            {missingMilestones.map(m => (
-                              <div key={m} className="flex items-center gap-2 text-sm text-amber-800">
-                                <AlertTriangle className="w-4 h-4" />
-                                {m}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <p className="text-sm text-amber-700 mb-2">The following metrics will <strong>NOT</strong> be saved to analytics:</p>
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                        {affectedMetrics.map(m => (
-                          <div key={m} className="flex items-center gap-2 text-sm text-red-600">
-                            <X className="w-4 h-4 text-red-600" />
-                            {m}
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => setShowValidationWarning(false)}
-                          className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
-                        >
-                          Go Back
-                        </button>
-                        <button
-                          onClick={handleContinueAnyway}
-                          disabled={saving}
-                          className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors text-sm font-medium"
-                        >
-                          Continue Anyway
-                        </button>
+                          if (issueType === 'stale_in_progress' && details?.hours_elapsed) {
+                            return `This case has been in progress for ${Math.round(details.hours_elapsed)} hours without being completed.`
+                          }
+                          if (issueType === 'abandoned_scheduled' && details?.days_overdue) {
+                            return `This case was scheduled ${details.days_overdue} days ago but was never started.`
+                          }
+                          if (issueType === 'no_activity') {
+                            const hours = details?.hours_elapsed
+                            return `No milestone activity recorded for ${hours ? Math.round(hours) : 'several'} hours.`
+                          }
+                          return 'This case appears to be orphaned or abandoned.'
+                        })()}
+                      </p>
+                      <div className="mt-3 p-2 bg-orange-100 rounded-lg">
+                        <p className="text-xs text-orange-800 font-medium">What would you like to do?</p>
+                        <ul className="mt-1 text-xs text-orange-700 space-y-1">
+                          <li>• <strong>Mark Completed</strong> — Case is done, will be reviewed for missing milestones</li>
+                          <li>• <strong>Mark Cancelled</strong> — Case was cancelled, exclude from metrics</li>
+                          <li>• <strong>Open Case</strong> — Review and update the case directly</li>
+                        </ul>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Footer */}
-              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-white rounded-b-2xl">
-                {modalState.isBulk ? (
-                  <>
-                    <div />
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={closeModal}
-                        className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleBulkExclude}
-                        disabled={saving}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-sm font-medium"
-                      >
-                        {saving ? 'Excluding...' : `Exclude ${modalState.bulkIds.length} Cases`}
-                      </button>
+              {/* Stale Issue Alert (missing type that's now recorded) */}
+              {!isStaleCase() && isIssueStale() && (
+                <div className="bg-green-50 border border-green-200 rounded-[10px] p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Check className="w-4 h-4 text-green-600" />
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={openCaseInNewTab}
-                      className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-sm font-medium"
-                    >
-                      Open Case
-                    </button>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={closeModal}
-                        className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
-                      >
-                        Cancel
-                      </button>
+                    <div>
+                      <h4 className="text-sm font-semibold text-green-800">Issue Already Resolved</h4>
+                      <p className="text-sm text-green-600 mt-1">
+                        The {modalState.issue.facility_milestone?.display_name} milestone has been recorded since this issue was detected.
+                        You can validate to close this issue.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-                      {/* Different actions for stale cases vs regular issues */}
-                      {isStaleCase() ? (
-                        <>
-                          <button
-                            onClick={handleMarkCancelled}
-                            disabled={saving}
-                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-sm font-medium"
-                          >
-                            {saving ? 'Saving...' : 'Mark Cancelled'}
-                          </button>
-                          <button
-                            onClick={handleMarkCompleted}
-                            disabled={saving}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-sm font-medium"
-                          >
-                            {saving ? 'Saving...' : 'Mark Completed'}
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={handleExclude}
-                            disabled={saving}
-                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-sm font-medium"
-                          >
-                            Exclude from Metrics
-                          </button>
-                          <button
-                            onClick={handleValidate}
-                            disabled={saving}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-sm font-medium"
-                          >
-                            {saving ? 'Saving...' : 'Validate'}
-                          </button>
-                        </>
-                      )}
+              {/* Impact Analysis - NOT shown for stale cases */}
+              {!isStaleCase() && (
+                <div className="bg-white border border-slate-200 rounded-[10px] p-4">
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <h4 className="text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500">Impact Analysis</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Cannot Calculate */}
+                    <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-red-600">Cannot Calculate</span>
+                      <div className="mt-2 flex flex-col gap-1">
+                        {impact.cannotCalculate.length > 0 ? (
+                          impact.cannotCalculate.map(metric => (
+                            <div key={metric} className="flex items-center gap-1.5">
+                              <X className="w-3 h-3 text-red-600 flex-shrink-0" />
+                              <span className="text-xs font-medium text-red-900">{metric}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-xs text-green-600 font-medium">All metrics available</span>
+                        )}
+                      </div>
                     </div>
-                  </>
-                )}
+                    {/* Can Calculate */}
+                    <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-green-600">Can Calculate</span>
+                      <div className="mt-2 flex flex-col gap-1">
+                        {impact.canCalculate.length > 0 ? (
+                          impact.canCalculate.map(metric => (
+                            <div key={metric} className="flex items-center gap-1.5">
+                              <Check className="w-3 h-3 text-green-600 flex-shrink-0" />
+                              <span className="text-xs font-medium text-green-900">{metric}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-xs text-slate-500 italic">No metrics available</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Milestone Timeline - NOT shown for stale cases */}
+              {!isStaleCase() && (
+                <div className="bg-white border border-slate-200 rounded-[10px] p-4">
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 mb-3">Milestone Timeline</h4>
+                  {loadingMilestones ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="rounded-lg overflow-hidden border border-slate-100">
+                      {editableMilestones.map((milestone, index) => {
+                        const hasIssue = milestone.id ? issueMilestoneIds.has(milestone.id) : false
+                        const isMissing = !milestone.recorded_at
+                        const pairedMilestone = milestone.pair_with_id
+                          ? editableMilestones.find(m => m.id === milestone.pair_with_id)
+                          : null
+                        const isStartOfPair = pairedMilestone && milestone.display_order < (pairedMilestone.display_order || 999)
+                        const isEndOfPair = pairedMilestone && milestone.display_order > (pairedMilestone.display_order || 0)
+
+                        return (
+                          <div
+                            key={milestone.id || milestone.name}
+                            className={`relative ${hasIssue ? 'bg-amber-50' : ''} ${index > 0 ? 'border-t border-slate-100' : ''}`}
+                          >
+                            <div className="px-3 py-2.5 flex items-center gap-2.5">
+                              {/* Pair arrow indicator */}
+                              <div className="w-4 flex-shrink-0 flex items-center justify-center">
+                                {isStartOfPair && <ArrowDown className="w-3.5 h-3.5 text-blue-400" />}
+                                {isEndOfPair && <ArrowUp className="w-3.5 h-3.5 text-blue-400" />}
+                              </div>
+
+                              {/* Status dot */}
+                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                isMissing ? 'border-2 border-slate-300' : milestone.hasChanged ? 'bg-blue-500' : 'bg-green-500'
+                              }`} />
+
+                              {/* Name and badges */}
+                              <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                                <span className={`text-xs font-medium ${hasIssue ? 'text-amber-800' : 'text-slate-900'}`}>
+                                  {milestone.display_name}
+                                </span>
+                                {isStartOfPair && <span className="px-1 py-0.5 text-[9px] font-semibold bg-blue-100 text-blue-600 rounded">Start</span>}
+                                {isEndOfPair && <span className="px-1 py-0.5 text-[9px] font-semibold bg-blue-100 text-blue-600 rounded">End</span>}
+                                {hasIssue && <span className="text-[10px] text-amber-700 font-medium">(Issue)</span>}
+                                {milestone.hasChanged && <span className="text-[10px] text-blue-600 font-medium">(Modified)</span>}
+                              </div>
+
+                              {/* Time display/edit */}
+                              <div className="flex items-center gap-1.5">
+                                {milestone.isEditing ? (
+                                  <input
+                                    type="datetime-local"
+                                    step="1"
+                                    value={milestone.recorded_at ? milestone.recorded_at.slice(0, 19) : ''}
+                                    onChange={(e) => updateMilestoneTime(index, e.target.value ? new Date(e.target.value).toISOString() : '')}
+                                    className="px-1.5 py-0.5 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                                  />
+                                ) : (
+                                  <span className={`text-xs ${isMissing ? 'text-slate-400 italic' : 'text-slate-600'}`}>
+                                    {milestone.recorded_at ? formatTimeWithSeconds(milestone.recorded_at) : 'Not recorded'}
+                                  </span>
+                                )}
+                                {milestone.canEdit && (
+                                  <button
+                                    onClick={() => toggleMilestoneEdit(index)}
+                                    className={`px-1.5 py-0.5 text-[10px] font-semibold rounded transition-colors ${
+                                      milestone.isEditing ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    }`}
+                                  >
+                                    {milestone.isEditing ? 'Done' : isMissing ? 'Add' : 'Edit'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Notes */}
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1.5 block">
+                  Resolution Notes <span className="font-normal text-slate-400">(optional)</span>
+                </label>
+                <textarea
+                  value={resolutionNotes}
+                  onChange={(e) => setResolutionNotes(e.target.value)}
+                  placeholder="Add context about this resolution..."
+                  rows={2}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-[13px]"
+                />
+              </div>
+
+              {/* Validation Warning Overlay */}
+              {showValidationWarning && (
+                <div className="bg-amber-50 border-2 border-amber-200 rounded-[10px] p-5">
+                  <h4 className="text-base font-semibold text-amber-800 mb-3">Missing Milestones</h4>
+                  {missingMilestones.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-sm text-amber-700 mb-2">The following milestones are still not recorded:</p>
+                      <div className="bg-amber-100 rounded-lg p-3">
+                        {missingMilestones.map(m => (
+                          <div key={m} className="flex items-center gap-2 text-sm text-amber-800">
+                            <AlertTriangle className="w-4 h-4" />
+                            {m}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-sm text-amber-700 mb-2">The following metrics will <strong>NOT</strong> be saved to analytics:</p>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                    {affectedMetrics.map(m => (
+                      <div key={m} className="flex items-center gap-2 text-sm text-red-600">
+                        <X className="w-4 h-4 text-red-600" />
+                        {m}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowValidationWarning(false)}
+                      className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
+                    >
+                      Go Back
+                    </button>
+                    <button
+                      onClick={handleContinueAnyway}
+                      disabled={saving}
+                      className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors text-sm font-medium"
+                    >
+                      Continue Anyway
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </ReviewDrawer>
+
+        {/* Bulk Exclude Modal — center-screen modal for bulk operations */}
+        {modalState.isOpen && modalState.isBulk && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-50 rounded-xl shadow-xl max-w-lg w-full flex flex-col">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white rounded-t-xl">
+                <h3 className="text-lg font-semibold text-slate-900">Bulk Exclude Issues</h3>
+                <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                  <X className="w-5 h-5 text-slate-500" />
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                  <h4 className="text-sm font-semibold text-red-800 mb-2">Exclude from Metrics</h4>
+                  <p className="text-sm text-red-600">
+                    You are about to exclude {modalState.bulkIds.length} cases from all analytics calculations.
+                    This action marks the issues as resolved but removes the cases from aggregate metrics.
+                  </p>
+                  <div className="mt-3">
+                    <textarea
+                      value={resolutionNotes}
+                      onChange={(e) => setResolutionNotes(e.target.value)}
+                      placeholder="Add notes (optional)..."
+                      rows={2}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-white rounded-b-xl">
+                <button
+                  onClick={closeModal}
+                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkExclude}
+                  disabled={saving}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-sm font-medium"
+                >
+                  {saving ? 'Excluding...' : `Exclude ${modalState.bulkIds.length} Cases`}
+                </button>
               </div>
             </div>
           </div>
