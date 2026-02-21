@@ -12,7 +12,91 @@ import type { FlagRule, CustomRuleFormState } from '@/types/flag-settings'
 import { getMetricById } from '@/lib/constants/metrics-catalog'
 
 // =====================================================
-// QUERIES
+// TEMPLATE QUERIES (facility_id IS NULL)
+// =====================================================
+
+/** Fetch all active template flag rules (global defaults), ordered by display_order. */
+export async function listActiveTemplates(
+  supabase: SupabaseClient
+): Promise<DalResult<FlagRule[]>> {
+  return query('flagRules.listActiveTemplates', async () =>
+    await supabase
+      .from('flag_rules')
+      .select('*')
+      .is('facility_id', null)
+      .eq('is_active', true)
+      .order('display_order', { ascending: true })
+  )
+}
+
+/** Fetch all archived template flag rules. */
+export async function listArchivedTemplates(
+  supabase: SupabaseClient
+): Promise<DalResult<FlagRule[]>> {
+  return query('flagRules.listArchivedTemplates', async () =>
+    await supabase
+      .from('flag_rules')
+      .select('*')
+      .is('facility_id', null)
+      .eq('is_active', false)
+      .order('updated_at', { ascending: false })
+  )
+}
+
+/** Create a custom template flag rule (facility_id = NULL). Returns the created rule. */
+export async function createCustomTemplateRule(
+  supabase: SupabaseClient,
+  form: CustomRuleFormState
+): Promise<DalResult<FlagRule>> {
+  // Get next display_order among templates
+  const { data: maxOrderRow } = await supabase
+    .from('flag_rules')
+    .select('display_order')
+    .is('facility_id', null)
+    .order('display_order', { ascending: false })
+    .limit(1)
+    .single()
+
+  const nextOrder = (maxOrderRow?.display_order ?? 0) + 1
+
+  // Resolve category from metrics catalog or default to 'financial'
+  const metric = getMetricById(form.metricId)
+  const category = metric?.category ?? 'financial'
+
+  // Resolve milestone pair from catalog
+  const startMilestone = metric?.startMilestone ?? null
+  const endMilestone = metric?.endMilestone ?? null
+
+  return query('flagRules.createCustomTemplateRule', async () =>
+    await supabase
+      .from('flag_rules')
+      .insert({
+        facility_id: null,
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        category,
+        metric: form.metricId,
+        start_milestone: startMilestone,
+        end_milestone: endMilestone,
+        operator: form.operator,
+        threshold_type: form.thresholdType,
+        threshold_value: form.thresholdValue,
+        threshold_value_max: form.thresholdValueMax,
+        comparison_scope: form.comparisonScope,
+        severity: form.severity,
+        display_order: nextOrder,
+        is_built_in: false,
+        is_enabled: true,
+        is_active: true,
+        cost_category_id: form.costCategoryId,
+      })
+      .select()
+      .single()
+  )
+}
+
+// =====================================================
+// FACILITY QUERIES
 // =====================================================
 
 /** Fetch all active (non-archived) flag rules for a facility, ordered by display_order. */

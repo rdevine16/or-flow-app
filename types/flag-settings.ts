@@ -10,7 +10,7 @@ import type { CaseWithMilestones } from '@/lib/analyticsV2'
 
 export interface FlagRule {
   id: string
-  facility_id: string
+  facility_id: string | null
   name: string
   description: string | null
   category: string

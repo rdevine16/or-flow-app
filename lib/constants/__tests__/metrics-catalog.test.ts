@@ -106,9 +106,9 @@ describe('OPERATORS', () => {
 })
 
 describe('THRESHOLD_TYPES', () => {
-  it('includes all five threshold types', () => {
+  it('includes all six threshold types', () => {
     const ids = THRESHOLD_TYPES.map(t => t.id)
-    expect(ids).toEqual(['median_plus_sd', 'absolute', 'percentage_of_median', 'percentile', 'between'])
+    expect(ids).toEqual(['median_plus_sd', 'median_plus_offset', 'absolute', 'percentage_of_median', 'percentile', 'between'])
   })
 
   it('each threshold type has a label and description', () => {

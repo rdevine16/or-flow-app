@@ -2824,14 +2824,14 @@ export const flagRuleAudit = {
     supabase: SupabaseClient,
     ruleId: string,
     ruleName: string,
-    facilityId: string,
+    facilityId: string | null,
     newValues: Record<string, unknown>
   ) {
     await log(supabase, 'flag_rule.created', {
       targetType: 'flag_rule',
       targetId: ruleId,
       targetLabel: ruleName,
-      facilityId,
+      facilityId: facilityId ?? undefined,
       newValues,
     })
   },
@@ -2840,7 +2840,7 @@ export const flagRuleAudit = {
     supabase: SupabaseClient,
     ruleId: string,
     ruleName: string,
-    facilityId: string,
+    facilityId: string | null,
     oldValues: Record<string, unknown>,
     newValues: Record<string, unknown>
   ) {
@@ -2848,7 +2848,7 @@ export const flagRuleAudit = {
       targetType: 'flag_rule',
       targetId: ruleId,
       targetLabel: ruleName,
-      facilityId,
+      facilityId: facilityId ?? undefined,
       oldValues,
       newValues,
     })
@@ -2858,13 +2858,13 @@ export const flagRuleAudit = {
     supabase: SupabaseClient,
     ruleId: string,
     ruleName: string,
-    facilityId: string
+    facilityId: string | null
   ) {
     await log(supabase, 'flag_rule.archived', {
       targetType: 'flag_rule',
       targetId: ruleId,
       targetLabel: ruleName,
-      facilityId,
+      facilityId: facilityId ?? undefined,
     })
   },
 
@@ -2872,13 +2872,13 @@ export const flagRuleAudit = {
     supabase: SupabaseClient,
     ruleId: string,
     ruleName: string,
-    facilityId: string
+    facilityId: string | null
   ) {
     await log(supabase, 'flag_rule.restored', {
       targetType: 'flag_rule',
       targetId: ruleId,
       targetLabel: ruleName,
-      facilityId,
+      facilityId: facilityId ?? undefined,
     })
   },
 }
