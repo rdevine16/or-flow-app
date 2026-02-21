@@ -11,6 +11,8 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Clock, RefreshCw, Shield, X } from 'lucide-react'
 import SummaryRow from './SummaryRow'
 import ScanProgress from './ScanProgress'
+import FilterBar from './FilterBar'
+import IssuesTable from './IssuesTable'
 import {
   fetchMetricIssues,
   fetchIssueTypes,
@@ -21,7 +23,6 @@ import {
   runDetectionForFacility,
   expireOldIssues,
   formatTimeAgo,
-  getDaysUntilExpiration,
   METRIC_REQUIREMENTS,
   type MetricIssue,
   type IssueType,
@@ -58,16 +59,6 @@ interface CaseIssue {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
-// Severity color with BLACK text
-function getSeverityColor(severity: string): string {
-  switch (severity) {
-    case 'error': return 'bg-red-100 text-slate-900 border-red-200'
-    case 'warning': return 'bg-amber-100 text-slate-900 border-amber-200'
-    case 'info': return 'bg-blue-100 text-slate-900 border-blue-200'
-    default: return 'bg-slate-100 text-slate-900 border-slate-200'
-  }
-}
 
 function formatIssueDescription(issue: MetricIssue): string {
   const issueType = issue.issue_type as IssueType | null
@@ -985,18 +976,6 @@ export default function DataQualityPage() {
   }
 
   // ============================================
-  // SELECTION
-  // ============================================
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === issues.filter(i => !i.resolved_at).length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(issues.filter(i => !i.resolved_at).map(i => i.id)))
-    }
-  }
-
-  // ============================================
   // HELPERS
   // ============================================
 
@@ -1108,272 +1087,38 @@ export default function DataQualityPage() {
             {/* Summary Row — Quality Gauge + 3 Stat Cards */}
             {summary && <SummaryRow summary={summary} />}
 
-            {/* Filters and Actions */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  {/* Filter by type */}
-                  <select
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="all">All Issue Types</option>
-                    {issueTypes.map(type => (
-                      <option key={type.id} value={type.name}>{type.display_name}</option>
-                    ))}
-                  </select>
+            {/* Filter Bar */}
+            <FilterBar
+              filterType={filterType}
+              onFilterTypeChange={setFilterType}
+              showResolved={showResolved}
+              onShowResolvedChange={setShowResolved}
+              issueTypes={issueTypes}
+              selectedCount={selectedIds.size}
+              onBulkExclude={() => openBulkModal(Array.from(selectedIds))}
+              caseCount={new Set(issues.map(i => i.case_id)).size}
+              issueCount={issues.length}
+              filterCaseId={filterCaseId}
+              filterCaseNumber={filterCaseNumber}
+              onClearCaseFilter={() => {
+                const params = new URLSearchParams(searchParams.toString())
+                params.delete('caseId')
+                const newUrl = params.toString()
+                  ? `${window.location.pathname}?${params.toString()}`
+                  : window.location.pathname
+                router.replace(newUrl)
+              }}
+            />
 
-                  {/* Show resolved toggle */}
-                  <label className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={showResolved}
-                      onChange={(e) => setShowResolved(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded border-slate-300"
-                    />
-                    <span className="text-sm text-slate-700">Show resolved</span>
-                  </label>
-
-                  {/* Case filter chip (from URL param) */}
-                  {filterCaseId && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium border border-blue-200">
-                      <span>Case: {filterCaseNumber || '...'}</span>
-                      <button
-                        onClick={() => {
-                          const params = new URLSearchParams(searchParams.toString())
-                          params.delete('caseId')
-                          const newUrl = params.toString()
-                            ? `${window.location.pathname}?${params.toString()}`
-                            : window.location.pathname
-                          router.replace(newUrl)
-                        }}
-                        className="ml-1 p-0.5 hover:bg-blue-200 rounded transition-colors"
-                        aria-label="Clear case filter"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Bulk actions */}
-                {selectedIds.size > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-600">{selectedIds.size} selected</span>
-                    <button
-                      onClick={() => openBulkModal(Array.from(selectedIds))}
-                      className="px-3 py-1.5 bg-red-100 text-red-600 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors"
-                    >
-                      Exclude Selected
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Issues List */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              {/* Header */}
-              <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.size === issues.filter(i => !i.resolved_at).length && issues.length > 0}
-                    onChange={toggleSelectAll}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300"
-                  />
-                  <span className="text-sm font-medium text-slate-700">
-                    {/* Group by case for display */}
-                    {(() => {
-                      const caseGroups = new Map<string, MetricIssue[]>()
-                      issues.forEach(issue => {
-                        const caseId = issue.case_id || 'unknown'
-                        if (!caseGroups.has(caseId)) {
-                          caseGroups.set(caseId, [])
-                        }
-                        caseGroups.get(caseId)!.push(issue)
-                      })
-                      const caseCount = caseGroups.size
-                      const issueCount = issues.length
-                      return `${caseCount} case${caseCount !== 1 ? 's' : ''} with ${issueCount} issue${issueCount !== 1 ? 's' : ''}`
-                    })()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Issue rows - GROUPED BY CASE */}
-              {issues.length === 0 ? (
-                <div className="px-4 py-12 text-center">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Check className="w-6 h-6 text-green-600" />
-                  </div>
-                  <p className="text-slate-600 font-medium">No issues found</p>
-                  <p className="text-sm text-slate-500 mt-1">Your data quality looks great!</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {/* Group issues by case_id */}
-                  {(() => {
-                    const caseGroups = new Map<string, MetricIssue[]>()
-                    issues.forEach(issue => {
-                      const caseId = issue.case_id || 'unknown'
-                      if (!caseGroups.has(caseId)) {
-                        caseGroups.set(caseId, [])
-                      }
-                      caseGroups.get(caseId)!.push(issue)
-                    })
-
-                    return Array.from(caseGroups.entries()).map(([caseId, caseIssuesGroup]) => {
-                      const firstIssue = caseIssuesGroup[0]
-                      const isResolved = caseIssuesGroup.every(i => i.resolved_at)
-                      const unresolvedIssues = caseIssuesGroup.filter(i => !i.resolved_at)
-                      const earliestExpiry = caseIssuesGroup
-                        .filter(i => !i.resolved_at && i.expires_at)
-                        .map(i => getDaysUntilExpiration(i.expires_at))
-                        .sort((a, b) => a - b)[0]
-
-                      const allSelected = unresolvedIssues.every(i => selectedIds.has(i.id))
-                      const someSelected = unresolvedIssues.some(i => selectedIds.has(i.id))
-
-                      return (
-                        <div
-                          key={caseId}
-                          className={`px-4 py-3 hover:bg-slate-50 transition-colors ${
-                            isResolved ? 'opacity-60' : ''
-                          }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            {!isResolved && (
-                              <input
-                                type="checkbox"
-                                checked={allSelected}
-                                ref={el => {
-                                  if (el) el.indeterminate = someSelected && !allSelected
-                                }}
-                                onChange={() => {
-                                  // Toggle all issues for this case
-                                  setSelectedIds(prev => {
-                                    const next = new Set(prev)
-                                    if (allSelected) {
-                                      unresolvedIssues.forEach(i => next.delete(i.id))
-                                    } else {
-                                      unresolvedIssues.forEach(i => next.add(i.id))
-                                    }
-                                    return next
-                                  })
-                                }}
-                                className="mt-1 w-4 h-4 text-blue-600 rounded border-slate-300"
-                              />
-                            )}
-
-                            <div className="flex-1 min-w-0">
-                              {/* Issue Type Badges Row */}
-                              <div className="flex items-center gap-2 flex-wrap mb-2">
-                                {/* Group issue types to avoid duplicates */}
-                                {(() => {
-                                  const typeMap = new Map<string, { type: IssueType; count: number; milestones: string[] }>()
-                                  caseIssuesGroup.forEach(issue => {
-                                    const localIssueType = issueTypes.find(t => t.id === issue.issue_type_id)
-                                    if (localIssueType) {
-                                      const key = localIssueType.id
-                                      if (!typeMap.has(key)) {
-                                        typeMap.set(key, { type: localIssueType, count: 0, milestones: [] })
-                                      }
-                                      typeMap.get(key)!.count++
-                                      if (issue.facility_milestone?.display_name) {
-                                        typeMap.get(key)!.milestones.push(issue.facility_milestone.display_name)
-                                      }
-                                    }
-                                  })
-
-                                  return Array.from(typeMap.values()).map(({ type, count, milestones }) => (
-                                    <span
-                                      key={type.id}
-                                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${getSeverityColor(type.severity)}`}
-                                      title={milestones.length > 0 ? milestones.join(', ') : undefined}
-                                    >
-                                      {type.display_name}{count > 1 ? ` (${count})` : ''}
-                                    </span>
-                                  ))
-                                })()}
-
-                                {isResolved && (
-                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-600">
-                                    Resolved
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Milestones with issues */}
-                              <p className="text-sm text-slate-900 font-medium">
-                                {(() => {
-                                  const milestones = caseIssuesGroup
-                                    .filter(i => i.facility_milestone?.display_name)
-                                    .map(i => i.facility_milestone!.display_name)
-                                  const uniqueMilestones = [...new Set(milestones)]
-                                  if (uniqueMilestones.length === 0) return 'No milestone specified'
-                                  if (uniqueMilestones.length <= 3) return uniqueMilestones.join(', ')
-                                  return `${uniqueMilestones.slice(0, 3).join(', ')} +${uniqueMilestones.length - 3} more`
-                                })()}
-                              </p>
-
-                              {/* Case Info Row */}
-                              <div className="flex items-center gap-2 mt-2 text-xs text-slate-600 flex-wrap">
-                                {firstIssue.cases && (
-                                  <>
-                                    <span className="font-semibold text-slate-700">
-                                      {firstIssue.cases.case_number}
-                                    </span>
-                                    <span className="text-slate-300">•</span>
-                                    {firstIssue.cases.surgeon && (
-                                      <>
-                                        <span>
-                                          Dr. {firstIssue.cases.surgeon.last_name}
-                                        </span>
-                                        <span className="text-slate-300">•</span>
-                                      </>
-                                    )}
-                                    {firstIssue.cases.procedure_types?.name && (
-                                      <span>{firstIssue.cases.procedure_types.name}</span>
-                                    )}
-                                    {firstIssue.cases.operative_side && (
-                                      <>
-                                        <span className="text-slate-300">•</span>
-                                        <span className="capitalize">{firstIssue.cases.operative_side}</span>
-                                      </>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-
-                              {/* Timing Info Row */}
-                              <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 flex-wrap">
-                                <span>{unresolvedIssues.length} issue{unresolvedIssues.length !== 1 ? 's' : ''}</span>
-                                {!isResolved && earliestExpiry !== undefined && (
-                                  <span className={earliestExpiry <= 7 ? 'text-amber-700 font-medium' : ''}>
-                                    Expires in {earliestExpiry} day{earliestExpiry !== 1 ? 's' : ''}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {!isResolved && (
-                              <button
-                                onClick={() => openModal(firstIssue)}
-                                className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors"
-                              >
-                                Review
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })
-                  })()}
-                </div>
-              )}
-            </div>
+            {/* Issues Table */}
+            <IssuesTable
+              issues={issues}
+              issueTypes={issueTypes}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              onReview={openModal}
+              activeCaseId={modalState.isOpen && modalState.issue ? modalState.issue.case_id : null}
+            />
           </>
         )}
 
