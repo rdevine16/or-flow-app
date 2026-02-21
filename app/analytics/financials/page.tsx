@@ -42,6 +42,7 @@ export default function FinancialsAnalyticsPage() {
   const [facilityProcedureStats, setFacilityProcedureStats] = useState<FacilityProcedureStats[]>([])
   const [facilitySettings, setFacilitySettings] = useState<FacilitySettings | null>(null)
   const [monthlyTarget, setMonthlyTarget] = useState<number | null>(null)
+  const [periodStartDate, setPeriodStartDate] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
@@ -50,11 +51,14 @@ export default function FinancialsAnalyticsPage() {
   const [dateRange, setDateRange] = useState('mtd')
   const { showToast } = useToast()
   // Calculate metrics using custom hook
+  // periodStartDate ensures main metrics use only the selected range,
+  // while prior month data is available for trend comparison
   const metrics = useFinancialsMetrics(
-    caseStats, 
-    surgeonProcedureStats, 
-    facilityProcedureStats, 
-    facilitySettings
+    caseStats,
+    surgeonProcedureStats,
+    facilityProcedureStats,
+    facilitySettings,
+    periodStartDate
   )
 
   // Fetch data from views
@@ -68,6 +72,14 @@ export default function FinancialsAnalyticsPage() {
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
     const start = startDate || getLocalDateString(monthStart)
     const end = endDate || getLocalDateString(today)
+
+    // Query one month earlier for prior-period comparison data
+    const startAsDate = new Date(start)
+    const priorMonthStart = new Date(startAsDate.getFullYear(), startAsDate.getMonth() - 1, 1)
+    const queryStart = getLocalDateString(priorMonthStart)
+
+    // Track the actual period start so the hook can separate current vs prior data
+    setPeriodStartDate(start)
 
     try {
       // -------------------------------------------------------
@@ -88,11 +100,12 @@ export default function FinancialsAnalyticsPage() {
         financialTargetRes,
       ] = await Promise.all([
         // 1. Fetch case-level stats (NO joins — just the flat view data)
+        // Uses queryStart (one month earlier) so prior-period comparison has data
         supabase
           .from('case_completion_stats')
           .select('*')
           .eq('facility_id', effectiveFacilityId)
-          .gte('case_date', start)
+          .gte('case_date', queryStart)
           .lte('case_date', end)
           .order('case_date', { ascending: false }),
         

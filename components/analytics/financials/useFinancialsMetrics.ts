@@ -191,6 +191,10 @@ function computeMonthlyTrend(cases: CaseCompletionStats[]): MonthlyTrendPoint[] 
       const durations = monthCases.map(c => c.total_duration_minutes || 0)
       const totalProfit = profits.reduce((a, b) => a + b, 0)
       const totalReimbursement = monthCases.reduce((sum, c) => sum + (c.reimbursement || 0), 0)
+      const totalDebits = monthCases.reduce((sum, c) => sum + getCaseDebits(c), 0)
+      const totalCredits = monthCases.reduce((sum, c) => sum + getCaseCredits(c), 0)
+      const totalORCost = monthCases.reduce((sum, c) => sum + getCaseORCost(c), 0)
+      const totalCosts = totalDebits - totalCredits + totalORCost
       const totalORMinutes = durations.reduce((a, b) => a + b, 0)
       const totalORHours = totalORMinutes / 60
 
@@ -202,6 +206,10 @@ function computeMonthlyTrend(cases: CaseCompletionStats[]): MonthlyTrendPoint[] 
         totalProfit,
         avgProfit: monthCases.length > 0 ? totalProfit / monthCases.length : 0,
         totalReimbursement,
+        totalDebits,
+        totalCredits,
+        totalORCost,
+        totalCosts,
         marginPercent: totalReimbursement > 0 ? (totalProfit / totalReimbursement) * 100 : 0,
         medianDuration: median(durations),
         profitPerORHour: totalORHours > 0 ? totalProfit / totalORHours : null,
@@ -217,17 +225,23 @@ export function useFinancialsMetrics(
   caseStats: CaseCompletionStats[],
   surgeonProcedureStats: SurgeonProcedureStats[],
   facilityProcedureStats: FacilityProcedureStats[],
-  facilitySettings: FacilitySettings | null
+  facilitySettings: FacilitySettings | null,
+  periodStartDate?: string
 ): EnrichedFinancialsMetrics {
   return useMemo(() => {
     const orRate = facilitySettings?.or_hourly_rate || 0
     const costPerMinute = orRate / 60
 
-    // Filter to cases with valid profit data
-    const validCases = caseStats.filter(c =>
+    // All cases with valid profit data (includes prior month for trend)
+    const allValidCases = caseStats.filter(c =>
       c.profit !== null &&
       c.total_duration_minutes !== null
     )
+
+    // Cases within the selected period only (for main metrics)
+    const validCases = periodStartDate
+      ? allValidCases.filter(c => c.case_date >= periodStartDate)
+      : allValidCases
 
     // ============================================
     // BUILD LOOKUP MAP
@@ -561,7 +575,9 @@ export function useFinancialsMetrics(
     // ============================================
     const payerMix = computePayerMix(validCases)
     const profitBins = computeProfitBins(validCases)
-    const monthlyTrend = computeMonthlyTrend(validCases)
+    // Use ALL valid cases (including prior month) for monthly trend so
+    // the prior-period comparison section has data to work with
+    const monthlyTrend = computeMonthlyTrend(allValidCases)
 
     // Extract sparkline data arrays from monthly trend (last 6 months)
     const trendSlice = monthlyTrend.slice(-6)
@@ -603,5 +619,5 @@ export function useFinancialsMetrics(
       monthlyTrend,
       sparklines,
     }
-  }, [caseStats, surgeonProcedureStats, facilityProcedureStats, facilitySettings])
+  }, [caseStats, surgeonProcedureStats, facilityProcedureStats, facilitySettings, periodStartDate])
 }

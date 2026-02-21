@@ -400,6 +400,10 @@ export interface MonthlyTrendPoint {
   totalProfit: number
   avgProfit: number
   totalReimbursement: number
+  totalDebits: number
+  totalCredits: number
+  totalORCost: number
+  totalCosts: number
   marginPercent: number
   medianDuration: number | null
   profitPerORHour: number | null

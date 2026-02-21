@@ -67,6 +67,7 @@ interface SurgeonDetailProps {
   metrics: FinancialsMetrics
   facilityId: string
   onBack: () => void
+  onCaseClick?: (caseId: string) => void
 }
 
 interface MonthlyPoint {
@@ -225,6 +226,7 @@ export default function SurgeonDetail({
   metrics,
   facilityId,
   onBack,
+  onCaseClick,
 }: SurgeonDetailProps) {
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'daily' | 'procedures'>('overview')
   const { showToast } = useToast()
@@ -667,6 +669,7 @@ export default function SurgeonDetail({
           casePhaseDurations={casePhaseDurations}
           loadingPhases={loadingPhases}
           onSwitchToDaily={() => setActiveSubTab('daily')}
+          onCaseClick={onCaseClick}
         />
       )}
 
@@ -676,6 +679,7 @@ export default function SurgeonDetail({
           casePhaseDurations={casePhaseDurations}
           loadingPhases={loadingPhases}
           surgeonMedians={surgeonMedians}
+          onCaseClick={onCaseClick}
         />
       )}
 
@@ -708,6 +712,7 @@ function OverviewSubTab({
   casePhaseDurations,
   loadingPhases,
   onSwitchToDaily,
+  onCaseClick,
 }: {
   surgeon: SurgeonStats
   cases: CaseCompletionStats[]
@@ -735,6 +740,7 @@ function OverviewSubTab({
   casePhaseDurations: Map<string, CasePhaseDuration[]>
   loadingPhases: boolean
   onSwitchToDaily: () => void
+  onCaseClick?: (caseId: string) => void
 }) {
   return (
     <div className="space-y-4">
@@ -1103,6 +1109,7 @@ function OverviewSubTab({
           casePhaseDurations={casePhaseDurations}
           loadingPhases={loadingPhases}
           onSwitchToDaily={onSwitchToDaily}
+          onCaseClick={onCaseClick}
         />
       </div>
     </div>
@@ -1119,12 +1126,14 @@ function RecentCasesSection({
   casePhaseDurations,
   loadingPhases,
   onSwitchToDaily,
+  onCaseClick,
 }: {
   recentCases: CaseCompletionStats[]
   surgeonMedians: Record<string, { medianDuration: number | null; medianProfit: number | null }>
   casePhaseDurations: Map<string, CasePhaseDuration[]>
   loadingPhases: boolean
   onSwitchToDaily: () => void
+  onCaseClick?: (caseId: string) => void
 }) {
   if (recentCases.length === 0) return null
 
@@ -1202,7 +1211,8 @@ function RecentCasesSection({
           return (
             <div
               key={caseData.case_id}
-              className="px-5 py-3.5 hover:bg-slate-50/50 transition-colors"
+              onClick={() => onCaseClick?.(caseData.case_id)}
+              className={`px-5 py-3.5 hover:bg-slate-50/50 transition-colors ${onCaseClick ? 'cursor-pointer' : ''}`}
             >
               <div className="flex items-start gap-3">
                 <div className="flex flex-col items-center gap-0.5">

@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
@@ -16,6 +16,8 @@ import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import { getLocalDateString } from '@/lib/date-utils'
+import CaseDrawer from '@/components/cases/CaseDrawer'
+import { useProcedureCategories } from '@/hooks/useLookups'
 import {
   CaseCompletionStats,
   SurgeonProcedureStats,
@@ -44,6 +46,19 @@ export default function SurgeonDetailPage() {
 
   // UI state
   const [dateRange, setDateRange] = useState('mtd')
+  const [drawerCaseId, setDrawerCaseId] = useState<string | null>(null)
+
+  // Category map for CaseDrawer
+  const { data: procedureCategories } = useProcedureCategories()
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    if (procedureCategories) {
+      for (const cat of procedureCategories) {
+        map.set(cat.id, cat.name)
+      }
+    }
+    return map
+  }, [procedureCategories])
 
   // Compute metrics
   const metrics = useFinancialsMetrics(
@@ -245,8 +260,15 @@ export default function SurgeonDetailPage() {
           metrics={metrics}
           facilityId={effectiveFacilityId!}
           onBack={() => router.push('/analytics/financials')}
+          onCaseClick={(caseId) => setDrawerCaseId(caseId)}
         />
       )}
+
+      <CaseDrawer
+        caseId={drawerCaseId}
+        onClose={() => setDrawerCaseId(null)}
+        categoryNameById={categoryNameById}
+      />
     </DashboardLayout>
   )
 }

@@ -17,10 +17,9 @@ import {
   ReferenceLine,
 } from 'recharts'
 
-import { EnrichedFinancialsMetrics, ProcedureStats, SurgeonStats } from './types'
-import { formatCurrency, formatPercent, formatDuration, fmtK } from './utils'
+import { EnrichedFinancialsMetrics, MonthlyTrendPoint, ProcedureStats, SurgeonStats } from './types'
+import { formatCurrency, formatPercent, formatDuration, fmtK, fmt } from './utils'
 import { AnimatedNumber, Sparkline, MicroBar, MarginDot, RankBadge } from './shared'
-import { WaterfallChart } from './WaterfallChart'
 
 // ============================================
 // PROPS
@@ -61,15 +60,90 @@ export default function OverviewTab({
   onProcedureClick,
   onSurgeonClick,
 }: OverviewTabProps) {
+  // Prior period data from monthly trend
+  const priorPeriod: MonthlyTrendPoint | null = useMemo(() => {
+    if (metrics.monthlyTrend.length < 2) return null
+    return metrics.monthlyTrend[metrics.monthlyTrend.length - 2]
+  }, [metrics.monthlyTrend])
+
   // Profit trend comparison
   const profitTrendInfo = useMemo(() => {
-    if (metrics.monthlyTrend.length < 2) return null
-    const current = metrics.monthlyTrend[metrics.monthlyTrend.length - 1]
-    const prev = metrics.monthlyTrend[metrics.monthlyTrend.length - 2]
-    if (prev.totalProfit === 0) return null
-    const pctChange = ((current.totalProfit - prev.totalProfit) / Math.abs(prev.totalProfit)) * 100
+    if (!priorPeriod || priorPeriod.totalProfit === 0) return null
+    const pctChange = ((metrics.totalProfit - priorPeriod.totalProfit) / Math.abs(priorPeriod.totalProfit)) * 100
     return { pct: pctChange, up: pctChange > 0 }
-  }, [metrics.monthlyTrend])
+  }, [metrics.totalProfit, priorPeriod])
+
+  // Cost composition for revenue split bar
+  const costComposition = useMemo(() => {
+    const rev = metrics.totalReimbursement || 1
+    const implants = metrics.totalDebits
+    const other = metrics.totalCredits
+    const orCost = metrics.totalORCost
+    const profit = metrics.totalProfit
+    return {
+      implantPct: ((implants / rev) * 100).toFixed(1),
+      otherPct: ((other / rev) * 100).toFixed(1),
+      orPct: ((orCost / rev) * 100).toFixed(1),
+      profitPct: ((Math.max(profit, 0) / rev) * 100).toFixed(1),
+    }
+  }, [metrics])
+
+  // P&L line items for breakdown section
+  const plLineItems = useMemo(() => {
+    const totalCases = metrics.totalCases || 1
+    const rev = metrics.totalReimbursement || 1
+    const totalORHours = metrics.totalORMinutes / 60
+    return [
+      {
+        label: 'Reimbursement',
+        value: metrics.totalReimbursement,
+        color: '#3b82f6',
+        sub: `${formatCurrency(Math.round(metrics.totalReimbursement / totalCases))}/case avg`,
+        prior: priorPeriod?.totalReimbursement ?? null,
+        isRevenue: true,
+      },
+      {
+        label: 'Implants & Supplies',
+        value: -metrics.totalDebits,
+        color: '#ef4444',
+        sub: `${((metrics.totalDebits / rev) * 100).toFixed(1)}% of revenue`,
+        prior: priorPeriod ? -priorPeriod.totalDebits : null,
+        isRevenue: false,
+      },
+      {
+        label: 'Other Costs',
+        value: -metrics.totalCredits,
+        color: '#f97316',
+        sub: `${((metrics.totalCredits / rev) * 100).toFixed(1)}% of revenue`,
+        prior: priorPeriod ? -priorPeriod.totalCredits : null,
+        isRevenue: false,
+      },
+      {
+        label: 'OR Time Cost',
+        value: -metrics.totalORCost,
+        color: '#f59e0b',
+        sub: `${formatCurrency(metrics.orRate)}/hr × ${totalORHours.toFixed(1)} hrs`,
+        prior: priorPeriod ? -priorPeriod.totalORCost : null,
+        isRevenue: false,
+      },
+    ]
+  }, [metrics, priorPeriod])
+
+  // Period comparison metrics
+  const periodComparison = useMemo(() => {
+    if (!priorPeriod) return null
+    const totalCosts = metrics.totalDebits - metrics.totalCredits + metrics.totalORCost
+    const profitPerCase = metrics.totalCases > 0 ? metrics.totalProfit / metrics.totalCases : 0
+    const priorProfitPerCase = priorPeriod.caseCount > 0 ? priorPeriod.totalProfit / priorPeriod.caseCount : 0
+    return [
+      { label: 'Revenue', current: metrics.totalReimbursement, prior: priorPeriod.totalReimbursement, prefix: '$', goodWhenUp: true },
+      { label: 'Total Costs', current: totalCosts, prior: priorPeriod.totalCosts, prefix: '$', goodWhenUp: false },
+      { label: 'Profit', current: metrics.totalProfit, prior: priorPeriod.totalProfit, prefix: '$', goodWhenUp: true },
+      { label: 'Margin', current: metrics.avgMargin, prior: priorPeriod.marginPercent, suffix: '%', goodWhenUp: true },
+      { label: 'Cases', current: metrics.totalCases, prior: priorPeriod.caseCount, goodWhenUp: true },
+      { label: 'Profit/Case', current: profitPerCase, prior: priorProfitPerCase, prefix: '$', goodWhenUp: true },
+    ]
+  }, [metrics, priorPeriod])
 
   // Secondary KPI cards data
   const secondaryCards = useMemo(() => {
@@ -78,6 +152,9 @@ export default function OverviewTab({
     const profitTrend = computeTrend(metrics.sparklines.profit)
     const volumeTrend = computeTrend(metrics.sparklines.volume)
 
+    const priorProfitPerHour = priorPeriod?.profitPerORHour
+    const priorMedianProfit = priorPeriod?.avgProfit
+
     return [
       {
         label: 'Profit / OR Hour',
@@ -85,6 +162,7 @@ export default function OverviewTab({
         trend: profitPerHourTrend,
         spark: metrics.sparklines.profitPerHour,
         color: '#3b82f6',
+        detail: priorProfitPerHour != null ? `vs ${formatCurrency(Math.round(priorProfitPerHour))} last month` : undefined,
       },
       {
         label: 'Average Margin',
@@ -92,6 +170,7 @@ export default function OverviewTab({
         trend: marginTrend,
         spark: metrics.sparklines.margin,
         color: '#8b5cf6',
+        detail: monthlyTarget ? `Target: ${formatPercent((monthlyTarget / (metrics.totalReimbursement || 1)) * 100)}` : undefined,
       },
       {
         label: 'Median Profit / Case',
@@ -99,6 +178,7 @@ export default function OverviewTab({
         trend: profitTrend,
         spark: metrics.sparklines.profit,
         color: '#0ea5e9',
+        detail: priorMedianProfit != null ? `vs ${formatCurrency(Math.round(priorMedianProfit))} last month` : undefined,
       },
       {
         label: 'Total OR Hours',
@@ -106,9 +186,10 @@ export default function OverviewTab({
         trend: volumeTrend,
         spark: metrics.sparklines.volume,
         color: '#6366f1',
+        detail: `${metrics.totalCases} cases completed`,
       },
     ]
-  }, [metrics])
+  }, [metrics, priorPeriod, monthlyTarget])
 
   // Cumulative profit trend for ComposedChart
   const chartData = useMemo(() => {
@@ -163,71 +244,202 @@ export default function OverviewTab({
       `}</style>
 
       {/* ==========================================
-          HERO P&L CARD
+          HERO P&L CARD — v6 Design
           ========================================== */}
       <div
-        className="bg-white rounded-xl border border-slate-200 shadow-sm p-6"
+        className="bg-white rounded-xl border border-slate-200 shadow-sm mb-0"
         style={{ animation: 'fadeSlideIn 0.4s ease-out both' }}
       >
-        <div className="grid grid-cols-12 gap-6 items-center">
-          {/* Left: Net Profit */}
-          <div className="col-span-4 border-r border-slate-100 pr-6">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
-              Net Profit
-            </p>
-            <div
-              className={`text-4xl font-bold tracking-tight ${
-                metrics.totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'
-              }`}
-            >
-              {metrics.totalProfit < 0 && '('}
-              <AnimatedNumber value={Math.abs(metrics.totalProfit)} />
-              {metrics.totalProfit < 0 && ')'}
+        <div className="p-6">
+          <div className="grid grid-cols-12 gap-6">
+
+            {/* Net Profit hero — col 1-3 */}
+            <div className="col-span-3 border-r border-slate-100 pr-6">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
+                Net Profit
+              </p>
+              <div
+                className={`text-4xl font-bold tracking-tight ${
+                  metrics.totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'
+                }`}
+                style={{ fontFeatureSettings: "'tnum'" }}
+              >
+                {metrics.totalProfit < 0 && '('}
+                <AnimatedNumber value={Math.abs(metrics.totalProfit)} />
+                {metrics.totalProfit < 0 && ')'}
+              </div>
+
+              {profitTrendInfo && (
+                <div className="flex items-center gap-3 mt-2">
+                  <span
+                    className={`inline-flex items-center gap-1 text-sm font-medium px-2 py-0.5 rounded-full ${
+                      profitTrendInfo.up
+                        ? 'text-emerald-700 bg-emerald-50'
+                        : 'text-red-700 bg-red-50'
+                    }`}
+                  >
+                    <TrendArrow up={profitTrendInfo.up} />
+                    {profitTrendInfo.up ? '+' : ''}{profitTrendInfo.pct.toFixed(1)}%
+                  </span>
+                  <span className="text-xs text-slate-400">vs last month</span>
+                </div>
+              )}
+
+              <div className="mt-3 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Margin</span>
+                  <span className="font-semibold text-slate-700">{formatPercent(metrics.avgMargin)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Per Case</span>
+                  <span className="font-semibold text-slate-700">
+                    {formatCurrency(metrics.totalCases > 0 ? Math.round(metrics.totalProfit / metrics.totalCases) : 0)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Per OR Hour</span>
+                  <span className="font-semibold text-blue-700">
+                    {metrics.profitPerORHour !== null ? formatCurrency(Math.round(metrics.profitPerORHour)) : '—'}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {profitTrendInfo && (
-              <div className="flex items-center gap-3 mt-2">
-                <span
-                  className={`inline-flex items-center gap-1 text-sm font-medium px-2 py-0.5 rounded-full ${
-                    profitTrendInfo.up
-                      ? 'text-emerald-700 bg-emerald-50'
-                      : 'text-red-700 bg-red-50'
-                  }`}
-                >
-                  <TrendArrow up={profitTrendInfo.up} />
-                  {profitTrendInfo.up ? '+' : ''}{profitTrendInfo.pct.toFixed(1)}%
-                </span>
-                <span className="text-xs text-slate-400">vs last month</span>
+            {/* P&L Breakdown — col 4-8 */}
+            <div className="col-span-5 border-r border-slate-100 pr-6">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">P&L Breakdown</p>
+                <p className="text-[10px] text-slate-400">{metrics.totalCases} cases</p>
               </div>
-            )}
+              <div className="space-y-2">
+                {plLineItems.map((row, i) => {
+                  const pctChange = row.prior !== null && row.prior !== 0
+                    ? (((Math.abs(row.value) - Math.abs(row.prior)) / Math.abs(row.prior)) * 100)
+                    : null
+                  const changeIsGood = pctChange !== null
+                    ? (row.isRevenue ? pctChange > 0 : pctChange < 0)
+                    : null
+                  return (
+                    <div key={i} className="group">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
+                          <span className="text-sm text-slate-700">{row.label}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-sm font-semibold tabular-nums ${row.value < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                            {row.value < 0 ? `(${fmt(Math.abs(row.value))})` : fmt(row.value)}
+                          </span>
+                          {pctChange !== null && (
+                            <span className={`text-[10px] font-medium tabular-nums ${
+                              changeIsGood ? 'text-emerald-600' : 'text-red-500'
+                            }`}>
+                              {pctChange > 0 ? '+' : ''}{pctChange.toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="ml-[18px] mt-1 flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                              width: `${(Math.abs(row.value) / (metrics.totalReimbursement || 1)) * 100}%`,
+                              backgroundColor: row.color,
+                              opacity: 0.5,
+                            }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-slate-400 w-24 shrink-0">{row.sub}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
 
-            <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-              <span>{formatPercent(metrics.avgMargin)} margin</span>
-              <span className="text-slate-200">&middot;</span>
-              <span>
-                {formatCurrency(
-                  metrics.totalCases > 0 ? metrics.totalProfit / metrics.totalCases : 0
-                )}
-                /case
-              </span>
+            {/* Period comparison — col 9-12 */}
+            <div className="col-span-4">
+              {periodComparison ? (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">vs Prior Month</p>
+                    <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                      {priorPeriod?.label} · {priorPeriod?.caseCount} cases
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {periodComparison.map((m, i) => {
+                      const delta = m.suffix === '%'
+                        ? m.current - m.prior
+                        : m.prior !== 0 ? ((m.current - m.prior) / Math.abs(m.prior)) * 100 : 0
+                      const positive = delta > 0
+                      const good = m.goodWhenUp ? positive : !positive
+                      return (
+                        <div key={i} className="rounded-lg bg-slate-50/80 p-2.5 hover:bg-slate-100/80 transition-colors">
+                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">{m.label}</p>
+                          <div className="flex items-end justify-between mt-1">
+                            <span className="text-sm font-bold text-slate-800 tabular-nums">
+                              {m.prefix || ''}{typeof m.current === 'number' && Math.abs(m.current) >= 1000
+                                ? Math.round(m.current).toLocaleString()
+                                : m.suffix === '%' ? m.current.toFixed(1) : Math.round(m.current)}{m.suffix || ''}
+                            </span>
+                            <span className={`text-[10px] font-semibold tabular-nums ${
+                              good ? 'text-emerald-600' : 'text-red-500'
+                            }`}>
+                              {positive ? '+' : ''}{delta.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-full text-sm text-slate-400">
+                  No prior period data available
+                </div>
+              )}
             </div>
           </div>
+        </div>
 
-          {/* Right: Waterfall */}
-          <div className="col-span-8">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Revenue &rarr; Profit Flow
-              </p>
-              <WaterfallLegend credits={metrics.totalCredits} />
+        {/* Revenue Split composition bar */}
+        <div className="px-6 pb-5 pt-4 mt-2 border-t border-slate-100">
+          <div className="flex items-center gap-4">
+            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider shrink-0">Revenue Split</p>
+            <div className="flex-1 flex items-center h-4 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-red-400 transition-all duration-700 flex items-center justify-center"
+                style={{ width: `${costComposition.implantPct}%` }}
+              >
+                <span className="text-[8px] font-bold text-white/80">{costComposition.implantPct}%</span>
+              </div>
+              <div
+                className="h-full bg-orange-400 transition-all duration-700 flex items-center justify-center"
+                style={{ width: `${costComposition.otherPct}%` }}
+              >
+                <span className="text-[8px] font-bold text-white/80">{costComposition.otherPct}%</span>
+              </div>
+              <div
+                className="h-full bg-amber-400 transition-all duration-700 flex items-center justify-center"
+                style={{ width: `${costComposition.orPct}%` }}
+              >
+                <span className="text-[8px] font-bold text-white/80">{costComposition.orPct}%</span>
+              </div>
+              <div
+                className="h-full bg-emerald-500 transition-all duration-700 rounded-r-full flex items-center justify-center"
+                style={{ width: `${costComposition.profitPct}%` }}
+              >
+                <span className="text-[8px] font-bold text-white/90">{costComposition.profitPct}%</span>
+              </div>
             </div>
-            <WaterfallChart
-              revenue={metrics.totalReimbursement}
-              debits={metrics.totalDebits}
-              credits={metrics.totalCredits}
-              orCost={metrics.totalORCost}
-              profit={metrics.totalProfit}
-            />
+            <div className="flex items-center gap-3 shrink-0 text-[10px] text-slate-400">
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />Implants</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-400" />Other</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />OR</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Profit</span>
+            </div>
           </div>
         </div>
       </div>
@@ -255,8 +467,8 @@ export default function OverviewTab({
                 </div>
               )}
             </div>
-            {card.trend && (
-              <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2">
+              {card.trend && (
                 <span
                   className={`inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded-full ${
                     card.trend.up
@@ -267,8 +479,11 @@ export default function OverviewTab({
                   <TrendArrow up={card.trend.up} />
                   {card.trend.pct}
                 </span>
-              </div>
-            )}
+              )}
+              {card.detail && (
+                <span className="text-xs text-slate-400">{card.detail}</span>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -636,28 +851,3 @@ function TrendArrow({ up }: { up: boolean }) {
   )
 }
 
-// ============================================
-// WATERFALL LEGEND
-// ============================================
-
-function WaterfallLegend({ credits }: { credits: number }) {
-  const items: [string, string][] = [
-    ['Revenue', 'bg-blue-500'],
-    ['Implants', 'bg-red-500'],
-  ]
-  if (credits > 0) {
-    items.push(['Credits', 'bg-green-500'])
-  }
-  items.push(['OR Cost', 'bg-amber-500'], ['Profit', 'bg-emerald-500'])
-
-  return (
-    <div className="flex items-center gap-3 text-[10px] text-slate-400">
-      {items.map(([label, bg]) => (
-        <span key={label} className="flex items-center gap-1">
-          <span className={`w-2 h-2 rounded-sm ${bg}`} />
-          {label}
-        </span>
-      ))}
-    </div>
-  )
-}

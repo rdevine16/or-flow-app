@@ -24,6 +24,7 @@ interface SurgeonDailyActivityProps {
   casePhaseDurations: Map<string, CasePhaseDuration[]>
   loadingPhases: boolean
   surgeonMedians: Record<string, { medianDuration: number | null; medianProfit: number | null }>
+  onCaseClick?: (caseId: string) => void
 }
 
 interface DaySummary {
@@ -81,6 +82,7 @@ export default function SurgeonDailyActivity({
   casePhaseDurations,
   loadingPhases,
   surgeonMedians,
+  onCaseClick,
 }: SurgeonDailyActivityProps) {
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set())
 
@@ -199,6 +201,7 @@ export default function SurgeonDailyActivity({
                   casePhaseDurations={casePhaseDurations}
                   loadingPhases={loadingPhases}
                   surgeonMedians={surgeonMedians}
+                  onCaseClick={onCaseClick}
                 />
               )}
             </div>
@@ -218,11 +221,13 @@ function DayExpanded({
   casePhaseDurations,
   loadingPhases,
   surgeonMedians,
+  onCaseClick,
 }: {
   cases: CaseCompletionStats[]
   casePhaseDurations: Map<string, CasePhaseDuration[]>
   loadingPhases: boolean
   surgeonMedians: Record<string, { medianDuration: number | null; medianProfit: number | null }>
+  onCaseClick?: (caseId: string) => void
 }) {
   // Sort by start time ascending
   const sorted = [...cases].sort((a, b) => {
@@ -264,9 +269,10 @@ function DayExpanded({
         return (
           <div
             key={caseData.case_id}
+            onClick={() => onCaseClick?.(caseData.case_id)}
             className={`px-5 py-4 ml-4 transition-colors ${
               isLoss ? 'border-l-2 border-l-red-400 bg-red-50/30' : ''
-            }`}
+            } ${onCaseClick ? 'cursor-pointer hover:bg-slate-50/50' : ''}`}
           >
             <div className="flex items-start gap-3">
               <div className="flex-1 min-w-0">
