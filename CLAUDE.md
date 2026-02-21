@@ -72,7 +72,7 @@ apps/web/or-flow-app/.claude/agents/        → Subagents (tester, reviewer, exp
 **Model routing:**
 - Main session: Opus (complex reasoning, coordination, implementation)
 - Subagents: Sonnet (focused tasks — scanning, testing, reviewing)
-- Set via: `export CLAUDE_CODE_SUBAGENT_MODEL="claude-sonnet-4-5-20250929"`
+- Set via: `export CLAUDE_CODE_SUBAGENT_MODEL="claude-sonnet-4-6-20250514"`
 
 ## Context Loading
 - Always read `apps/web/or-flow-app/CLAUDE.md` (this file) at session start
