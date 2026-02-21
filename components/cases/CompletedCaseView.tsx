@@ -88,7 +88,6 @@ interface CompletedCaseViewProps {
     procedure: string | null
   }
   surgeon: { firstName: string; lastName: string } | null
-  anesthesiologist: { firstName: string; lastName: string } | null
   milestones: MilestoneData[]
   staff: StaffMember[]
   facilityId: string
@@ -414,7 +413,6 @@ function MetricCard({
 export default function CompletedCaseView({
   caseData,
   surgeon,
-  anesthesiologist,
   milestones,
   staff,
   facilityId,
@@ -694,19 +692,11 @@ export default function CompletedCaseView({
                 }`}>{formatTimeShort(patientIn)}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Surgeon</p>
-                <p className="text-sm font-semibold text-slate-900 mt-0.5">
-                  {surgeon ? `Dr. ${surgeon.firstName} ${surgeon.lastName}` : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Anesthesiologist</p>
-                <p className="text-sm font-semibold text-slate-900 mt-0.5">
-                  {anesthesiologist ? `Dr. ${anesthesiologist.firstName} ${anesthesiologist.lastName}` : '—'}
-                </p>
-              </div>
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Surgeon</p>
+              <p className="text-sm font-semibold text-slate-900 mt-0.5">
+                {surgeon ? `Dr. ${surgeon.firstName} ${surgeon.lastName}` : '—'}
+              </p>
             </div>
           </div>
         </div>
@@ -868,20 +858,7 @@ export default function CompletedCaseView({
               </div>
             )}
             
-            {/* Anesthesiologist */}
-            {anesthesiologist && (
-              <div className="flex items-center justify-between py-1">
-                <div className="flex items-center gap-2">
-                  <SurgeonAvatar name={`${anesthesiologist.firstName} ${anesthesiologist.lastName}`} size="sm" />
-                  <span className="text-sm text-slate-700">Dr. {anesthesiologist.firstName} {anesthesiologist.lastName}</span>
-                </div>
-                <span className={`px-2 py-0.5 text-xs font-semibold rounded ${getRoleBadgeClass('anesthesiologist')}`}>
-                  Anesthesia
-                </span>
-              </div>
-            )}
-            
-            {/* Other Staff */}
+            {/* Staff (includes anesthesiologists from case_staff) */}
             {staff.map((s) => (
               <div key={s.id} className="flex items-center justify-between py-1">
                 <div className="flex items-center gap-2">
@@ -894,7 +871,7 @@ export default function CompletedCaseView({
               </div>
             ))}
             
-            {!surgeon && !anesthesiologist && staff.length === 0 && (
+            {!surgeon && staff.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-2">No staff assigned</p>
             )}
           </div>

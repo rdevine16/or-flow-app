@@ -42,7 +42,6 @@ interface CaseSummaryProps {
     procedure: string | null
     status: string
     surgeon: { firstName: string; lastName: string } | null
-    anesthesiologist: { firstName: string; lastName: string } | null
   }
   milestones: MilestoneRecord[]
   staff: StaffMember[]
@@ -354,28 +353,7 @@ export default function CaseSummary({
                   </span>
                 </div>
 
-                {/* Anesthesiologist */}
-                {caseData.anesthesiologist && (
-                  <div className="flex items-center gap-3">
-                    <SurgeonAvatar 
-                      name={`${caseData.anesthesiologist.firstName} ${caseData.anesthesiologist.lastName}`} 
-                      size="md" 
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 truncate">
-                        Dr. {caseData.anesthesiologist.lastName}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {caseData.anesthesiologist.firstName} {caseData.anesthesiologist.lastName}
-                      </p>
-                    </div>
-                    <span className="px-2 py-1 text-xs font-semibold rounded-lg bg-amber-100 text-amber-700 border border-amber-200">
-                      Anesthesia
-                    </span>
-                  </div>
-                )}
-
-                {/* Other Staff */}
+                {/* Other Staff (includes anesthesiologists from case_staff) */}
                 {staff.length > 0 && (
                   <div className="pt-3 border-t border-slate-100">
                     <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">Additional Staff</p>
