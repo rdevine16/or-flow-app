@@ -1,348 +1,262 @@
 // app/settings/notifications/page.tsx
-// Notifications: Configure facility-wide notification preferences (Coming Soon)
+// Facility notification preferences — toggle notifications on/off and choose channels
 
 'use client'
 
-import { Bell, CalendarDays, ClipboardList, Clock, FileBarChart, FlaskConical, Mail, Smartphone } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { PageLoader } from '@/components/ui/Loading'
+import {
+  Bell,
+  CalendarDays,
+  ClipboardList,
+  FileBarChart,
+  FlaskConical,
+} from 'lucide-react'
 
 // =====================================================
 // TYPES
 // =====================================================
 
-interface NotificationCategory {
+interface FacilityNotification {
   id: string
-  title: string
-  description: string
-  icon: React.ReactNode
-  settings: NotificationSetting[]
-}
-
-interface NotificationSetting {
-  id: string
-  label: string
-  description: string
-  defaultEnabled: boolean
+  facility_id: string
+  notification_type: string
+  category: string
+  display_label: string
+  is_enabled: boolean
+  channels: string[]
+  display_order: number
 }
 
 // =====================================================
-// NOTIFICATION CONFIGURATION (Preview of what's coming)
+// CONSTANTS
 // =====================================================
 
-const notificationCategories: NotificationCategory[] = [
-  {
-    id: 'case-alerts',
-    title: 'Case Alerts',
-    description: 'Real-time notifications during surgical cases',
-    icon: (
-      <ClipboardList className="w-5 h-5" />
-    ),
-    settings: [
-      {
-        id: 'call-next-patient',
-        label: 'Call Next Patient',
-        description: 'Notify when a room is ready for the next patient',
-        defaultEnabled: true,
-      },
-      {
-        id: 'case-started',
-        label: 'Case Started',
-        description: 'Notify when a case begins (Patient In recorded)',
-        defaultEnabled: false,
-      },
-      {
-        id: 'case-completed',
-        label: 'Case Completed',
-        description: 'Notify when a case finishes (Patient Out recorded)',
-        defaultEnabled: false,
-      },
-      {
-        id: 'delay-recorded',
-        label: 'Delay Recorded',
-        description: 'Notify when a delay is logged on a case',
-        defaultEnabled: true,
-      },
-    ],
-  },
-  {
-    id: 'schedule-alerts',
-    title: 'Schedule Alerts',
-    description: 'Notifications about scheduling and timing',
-    icon: (
-      <CalendarDays className="w-5 h-5" />
-    ),
-    settings: [
-      {
-        id: 'first-case-reminder',
-        label: 'First Case Reminder',
-        description: 'Remind staff before the first case of the day',
-        defaultEnabled: true,
-      },
-      {
-        id: 'case-running-long',
-        label: 'Case Running Long',
-        description: 'Alert when a case exceeds expected duration',
-        defaultEnabled: true,
-      },
-      {
-        id: 'turnover-alert',
-        label: 'Turnover Time Alert',
-        description: 'Alert if turnover exceeds target time',
-        defaultEnabled: false,
-      },
-    ],
-  },
-  {
-    id: 'tray-management',
-    title: 'Tray Management',
-    description: 'Notifications for device rep coordination',
-    icon: (
-      <FlaskConical className="w-5 h-5" />
-    ),
-    settings: [
-      {
-        id: 'tray-confirmation-needed',
-        label: 'Tray Confirmation Needed',
-        description: 'Remind reps to confirm tray availability',
-        defaultEnabled: true,
-      },
-      {
-        id: 'tray-delivered',
-        label: 'Tray Delivered',
-        description: 'Notify staff when trays are delivered',
-        defaultEnabled: true,
-      },
-      {
-        id: 'tray-missing',
-        label: 'Missing Tray Alert',
-        description: 'Alert if trays not confirmed before case',
-        defaultEnabled: true,
-      },
-    ],
-  },
-  {
-    id: 'reports',
-    title: 'Reports & Summaries',
-    description: 'Scheduled report notifications',
-    icon: (
-      <FileBarChart className="w-5 h-5" />
-    ),
-    settings: [
-      {
-        id: 'daily-summary',
-        label: 'Daily Summary',
-        description: 'End-of-day summary of all cases',
-        defaultEnabled: false,
-      },
-      {
-        id: 'weekly-report',
-        label: 'Weekly Efficiency Report',
-        description: 'Weekly OR efficiency metrics',
-        defaultEnabled: true,
-      },
-      {
-        id: 'monthly-report',
-        label: 'Monthly Analytics',
-        description: 'Comprehensive monthly performance report',
-        defaultEnabled: true,
-      },
-    ],
-  },
-]
+const CATEGORIES = [
+  { key: 'case_alerts', label: 'Case Alerts', description: 'Real-time notifications during surgical cases', icon: ClipboardList },
+  { key: 'schedule_alerts', label: 'Schedule Alerts', description: 'Notifications about scheduling and timing', icon: CalendarDays },
+  { key: 'tray_management', label: 'Tray Management', description: 'Notifications for device rep coordination', icon: FlaskConical },
+  { key: 'reports', label: 'Reports & Summaries', description: 'Scheduled report notifications', icon: FileBarChart },
+] as const
+
+const CHANNEL_OPTIONS = [
+  { key: 'push', label: 'Push' },
+  { key: 'in_app', label: 'In-App' },
+  { key: 'email', label: 'Email' },
+] as const
 
 // =====================================================
 // COMPONENT
 // =====================================================
 
 export default function NotificationsPage() {
+  const supabase = createClient()
+  const { userData, loading: userLoading } = useUser()
+  const { showToast } = useToast()
+  const facilityId = userData.facilityId
+
+  const [savingId, setSavingId] = useState<string | null>(null)
+
+  const { data: notifications, loading, error, refetch } = useSupabaseQuery<FacilityNotification[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('facility_notification_settings')
+        .select('id, facility_id, notification_type, category, display_label, is_enabled, channels, display_order')
+        .eq('facility_id', facilityId!)
+        .is('deleted_at', null)
+        .order('display_order')
+        .order('display_label')
+
+      if (error) throw error
+      return data || []
+    },
+    { deps: [facilityId], enabled: !!facilityId }
+  )
+
+  const items = notifications || []
+
+  // Group by category
+  const groupedNotifications = CATEGORIES.map((cat) => ({
+    ...cat,
+    items: items.filter((n) => n.category === cat.key),
+  })).filter((g) => g.items.length > 0)
+
+  const handleToggle = useCallback(
+    async (notification: FacilityNotification) => {
+      setSavingId(notification.id)
+
+      try {
+        const { error } = await supabase
+          .from('facility_notification_settings')
+          .update({ is_enabled: !notification.is_enabled })
+          .eq('id', notification.id)
+
+        if (error) throw error
+        refetch()
+      } catch (err) {
+        showToast({
+          type: 'error',
+          title: 'Error updating notification',
+          message: err instanceof Error ? err.message : 'Please try again',
+        })
+      } finally {
+        setSavingId(null)
+      }
+    },
+    [supabase, refetch, showToast]
+  )
+
+  const handleChannelToggle = useCallback(
+    async (notification: FacilityNotification, channel: string) => {
+      setSavingId(notification.id)
+
+      const newChannels = notification.channels.includes(channel)
+        ? notification.channels.filter((c) => c !== channel)
+        : [...notification.channels, channel]
+
+      try {
+        const { error } = await supabase
+          .from('facility_notification_settings')
+          .update({ channels: newChannels })
+          .eq('id', notification.id)
+
+        if (error) throw error
+        refetch()
+      } catch (err) {
+        showToast({
+          type: 'error',
+          title: 'Error updating channels',
+          message: err instanceof Error ? err.message : 'Please try again',
+        })
+      } finally {
+        setSavingId(null)
+      }
+    },
+    [supabase, refetch, showToast]
+  )
+
+  if (userLoading || !facilityId) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Notifications</h1>
+        <p className="text-slate-500 mb-6">Configure how your facility receives alerts and updates</p>
+        <PageLoader message="Loading notifications..." />
+      </>
+    )
+  }
+
   return (
     <>
       <h1 className="text-2xl font-semibold text-slate-900 mb-1">Notifications</h1>
       <p className="text-slate-500 mb-6">Configure how your facility receives alerts and updates</p>
-      {/* Coming Soon Banner */}
-          <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-                <Clock className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-slate-900">Coming Soon</h3>
-                <p className="text-sm text-slate-600 mt-1">
-                  Customizable notification preferences are in development. Below is a preview of the settings you&apos;ll be able to configure.
-                </p>
-              </div>
-            </div>
-          </div>
 
-          {/* Notification Categories */}
-          <div className="space-y-6">
-            {notificationCategories.map((category) => (
-              <div key={category.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden opacity-75">
+      <ErrorBanner message={error} />
+
+      {loading ? (
+        <PageLoader message="Loading notifications..." />
+      ) : items.length === 0 ? (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
+          <Bell className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-slate-900 mb-2">No Notifications Configured</h3>
+          <p className="text-slate-600">
+            Notification types haven&apos;t been set up for your facility yet. Contact your administrator to configure notifications.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {groupedNotifications.map((group) => {
+            const Icon = group.icon
+            return (
+              <div
+                key={group.key}
+                className="bg-white rounded-xl border border-slate-200 overflow-hidden"
+              >
                 {/* Category Header */}
                 <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-500">
-                      {category.icon}
+                      <Icon className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-medium text-slate-900">{category.title}</h3>
-                      <p className="text-sm text-slate-500">{category.description}</p>
+                      <h3 className="font-medium text-slate-900">{group.label}</h3>
+                      <p className="text-sm text-slate-500">{group.description}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Settings List */}
                 <div className="divide-y divide-slate-100">
-                  {category.settings.map((setting) => (
-                    <div key={setting.id} className="px-6 py-4 flex items-center justify-between">
-                      <div className="flex-1 min-w-0 pr-4">
-                        <p className="font-medium text-slate-900">{setting.label}</p>
-                        <p className="text-sm text-slate-500 mt-0.5">{setting.description}</p>
+                  {group.items.map((notification) => {
+                    const isSaving = savingId === notification.id
+
+                    return (
+                      <div key={notification.id} className="px-6 py-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0 pr-4">
+                            <p className="font-medium text-slate-900">
+                              {notification.display_label}
+                            </p>
+                          </div>
+
+                          {/* Enable/Disable Toggle */}
+                          <button
+                            onClick={() => handleToggle(notification)}
+                            disabled={isSaving}
+                            className={`relative w-11 h-6 rounded-full transition-colors ${
+                              isSaving ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                            } ${
+                              notification.is_enabled ? 'bg-blue-600' : 'bg-slate-300'
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                                notification.is_enabled ? 'translate-x-5' : ''
+                              }`}
+                            />
+                          </button>
+                        </div>
+
+                        {/* Channel checkboxes — only show when enabled */}
+                        {notification.is_enabled && (
+                          <div className="mt-3 flex items-center gap-4 pl-0">
+                            <span className="text-xs text-slate-400 uppercase tracking-wider">
+                              Channels:
+                            </span>
+                            {CHANNEL_OPTIONS.map((ch) => (
+                              <label
+                                key={ch.key}
+                                className={`flex items-center gap-1.5 cursor-pointer ${
+                                  isSaving ? 'opacity-50 pointer-events-none' : ''
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={notification.channels.includes(ch.key)}
+                                  onChange={() =>
+                                    handleChannelToggle(notification, ch.key)
+                                  }
+                                  disabled={isSaving}
+                                  className="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-slate-600">{ch.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      
-                      {/* Disabled Toggle */}
-                      <div className="flex items-center gap-3">
-                        <button
-                          disabled
-                          className={`relative w-11 h-6 rounded-full transition-colors cursor-not-allowed ${
-                            setting.defaultEnabled ? 'bg-blue-300' : 'bg-slate-200'
-                          }`}
-                        >
-                          <span 
-                            className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                              setting.defaultEnabled ? 'translate-x-5' : ''
-                            }`} 
-                          />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
-            ))}
-          </div>
-
-          {/* Delivery Preferences (Coming Soon) */}
-          <div className="mt-6 bg-white rounded-xl border border-slate-200 overflow-hidden opacity-75">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="font-medium text-slate-900">Delivery Preferences</h3>
-              <p className="text-sm text-slate-500 mt-0.5">Choose how notifications are delivered to your team</p>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Push Notifications */}
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-white border border-slate-200 rounded-lg flex items-center justify-center">
-                      <Smartphone className="w-5 h-5 text-slate-500" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-slate-900">Push Notifications</p>
-                      <p className="text-xs text-slate-500">iOS & Android</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">Enabled</span>
-                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-green-600 bg-green-100 rounded">
-                      Active
-                    </span>
-                  </div>
-                </div>
-
-                {/* In-App Notifications */}
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-white border border-slate-200 rounded-lg flex items-center justify-center">
-                      <Bell className="w-5 h-5 text-slate-500" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-slate-900">In-App Alerts</p>
-                      <p className="text-xs text-slate-500">Web & Mobile</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">Enabled</span>
-                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-green-600 bg-green-100 rounded">
-                      Active
-                    </span>
-                  </div>
-                </div>
-
-                {/* Email */}
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-white border border-slate-200 rounded-lg flex items-center justify-center">
-                      <Mail className="w-5 h-5 text-slate-500" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-slate-900">Email</p>
-                      <p className="text-xs text-slate-500">Reports only</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">Enabled</span>
-                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-slate-500 bg-slate-100 rounded">
-                      Coming Soon
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quiet Hours */}
-          <div className="mt-6 bg-white rounded-xl border border-slate-200 overflow-hidden opacity-75">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="font-medium text-slate-900">Quiet Hours</h3>
-              <p className="text-sm text-slate-500 mt-0.5">Suppress non-urgent notifications during off hours</p>
-            </div>
-            <div className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-600">From</span>
-                    <div className="px-3 py-2 bg-slate-100 rounded-lg text-sm text-slate-500 cursor-not-allowed">
-                      10:00 PM
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-600">To</span>
-                    <div className="px-3 py-2 bg-slate-100 rounded-lg text-sm text-slate-500 cursor-not-allowed">
-                      6:00 AM
-                    </div>
-                  </div>
-                </div>
-                <button
-                  disabled
-                  className="relative w-11 h-6 rounded-full bg-slate-200 cursor-not-allowed"
-                >
-                  <span className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Role-Based Recipients (Coming Soon) */}
-          <div className="mt-6 bg-white rounded-xl border border-slate-200 overflow-hidden opacity-75">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="font-medium text-slate-900">Default Recipients by Role</h3>
-              <p className="text-sm text-slate-500 mt-0.5">Configure which roles receive specific notification types</p>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {['Surgeons', 'Anesthesiologists', 'Nurses', 'Techs', 'OR Directors', 'Device Reps'].map((role) => (
-                  <div key={role} className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <input
-                      type="checkbox"
-                      disabled
-                      defaultChecked={['Nurses', 'Techs', 'OR Directors'].includes(role)}
-                      className="w-4 h-4 text-blue-600 rounded border-slate-300 cursor-not-allowed"
-                    />
-                    <span className="text-sm text-slate-600">{role}</span>
-                  </div>
-                ))}
-            </div>
-          </div>
+            )
+          })}
         </div>
+      )}
     </>
   )
 }
