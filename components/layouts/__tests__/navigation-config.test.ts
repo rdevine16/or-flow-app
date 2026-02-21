@@ -1,9 +1,75 @@
 import { describe, it, expect } from 'vitest'
 import {
+  adminNavGroups,
   facilityNavigation,
   isNavItemActive,
   getFilteredNavigation,
 } from '@/components/layouts/navigation-config'
+
+// ============================================
+// ADMIN NAV GROUPS
+// ============================================
+describe('adminNavGroups', () => {
+  it('has a configuration group', () => {
+    const configGroup = adminNavGroups.find(g => g.id === 'configuration')
+    expect(configGroup).toBeDefined()
+    expect(configGroup!.label).toBe('Configuration')
+  })
+
+  it('configuration group contains all 5 new admin settings pages', () => {
+    const configGroup = adminNavGroups.find(g => g.id === 'configuration')!
+    const hrefs = configGroup.items.map(i => i.href)
+
+    expect(hrefs).toContain('/admin/settings/phases')
+    expect(hrefs).toContain('/admin/settings/flag-rules')
+    expect(hrefs).toContain('/admin/settings/analytics')
+    expect(hrefs).toContain('/admin/settings/payers')
+    expect(hrefs).toContain('/admin/settings/notifications')
+  })
+
+  it('all admin nav items require global_admin role', () => {
+    for (const group of adminNavGroups) {
+      for (const item of group.items) {
+        expect(item.allowedRoles).toContain('global_admin')
+      }
+    }
+  })
+
+  it('every admin item has name, href, icon, and allowedRoles', () => {
+    for (const group of adminNavGroups) {
+      for (const item of group.items) {
+        expect(item.name).toBeTruthy()
+        expect(item.href).toMatch(/^\//)
+        expect(item.icon).toBeDefined()
+        expect(item.allowedRoles.length).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('has no duplicate hrefs across all admin groups', () => {
+    const allHrefs = adminNavGroups.flatMap(g => g.items.map(i => i.href))
+    expect(new Set(allHrefs).size).toBe(allHrefs.length)
+  })
+
+  it('new admin pages use correct icons', () => {
+    const configGroup = adminNavGroups.find(g => g.id === 'configuration')!
+
+    const flagRules = configGroup.items.find(i => i.href === '/admin/settings/flag-rules')
+    expect(flagRules!.name).toBe('Flag Rules')
+
+    const analytics = configGroup.items.find(i => i.href === '/admin/settings/analytics')
+    expect(analytics!.name).toBe('Analytics Defaults')
+
+    const payers = configGroup.items.find(i => i.href === '/admin/settings/payers')
+    expect(payers!.name).toBe('Payers')
+
+    const notifications = configGroup.items.find(i => i.href === '/admin/settings/notifications')
+    expect(notifications!.name).toBe('Notifications')
+
+    const phases = configGroup.items.find(i => i.href === '/admin/settings/phases')
+    expect(phases!.name).toBe('Phases')
+  })
+})
 
 // ============================================
 // NAV STRUCTURE

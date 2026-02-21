@@ -2,7 +2,7 @@
 // Centralized navigation configuration for DashboardLayout
 
 import { ReactNode } from 'react'
-import { AlertTriangle, Ban, BarChart3, BookOpen, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, FileText, Flag, FlaskConical, Home, KeyRound, Layers, LayoutGrid, Package, Settings, ShieldCheck, User, Wrench } from 'lucide-react'
+import { AlertTriangle, Ban, BarChart3, Bell, BookOpen, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, CreditCard, FileText, Flag, FlaskConical, Home, KeyRound, Layers, LayoutGrid, Package, Settings, ShieldCheck, User, Wrench } from 'lucide-react'
 
 // ============================================
 // Types
@@ -72,6 +72,8 @@ export const navIcons = {
   permissionTemplates: <KeyRound className={iconClass} />,
   flags: <Flag className={iconClass} />,
   phases: <Layers className={iconClass} />,
+  payers: <CreditCard className={iconClass} />,
+  notifications: <Bell className={iconClass} />,
 }
 
 // ============================================
@@ -141,6 +143,24 @@ export const adminNavGroups: NavGroup[] = [
         name: 'Flag Rules',
         href: '/admin/settings/flag-rules',
         icon: navIcons.flags,
+        allowedRoles: ['global_admin'],
+      },
+      {
+        name: 'Analytics Defaults',
+        href: '/admin/settings/analytics',
+        icon: navIcons.analytics,
+        allowedRoles: ['global_admin'],
+      },
+      {
+        name: 'Payers',
+        href: '/admin/settings/payers',
+        icon: navIcons.payers,
+        allowedRoles: ['global_admin'],
+      },
+      {
+        name: 'Notifications',
+        href: '/admin/settings/notifications',
+        icon: navIcons.notifications,
         allowedRoles: ['global_admin'],
       },
       {
