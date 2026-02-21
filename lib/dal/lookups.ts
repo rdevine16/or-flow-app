@@ -61,7 +61,6 @@ export interface UserRole {
 export interface Payer {
   id: string
   name: string
-  payer_type: string | null
   is_active: boolean
 }
 
@@ -212,7 +211,7 @@ export const lookupsDAL = {
   ): Promise<DALListResult<Payer>> {
     const { data, error } = await supabase
       .from('payers')
-      .select('id, name, payer_type, is_active')
+      .select('id, name, is_active')
       .or(`facility_id.is.null,facility_id.eq.${facilityId}`)
       .eq('is_active', true)
       .order('name')
