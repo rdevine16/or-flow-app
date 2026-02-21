@@ -337,13 +337,18 @@ export function PhaseTemplateSection() {
   // ── Render ────────────────────────────────────────────────
 
   return (
-    <div className="mb-10">
-      {/* Section Header */}
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="text-lg font-semibold text-slate-900">Phase Definition Templates</h2>
+    <div>
+      {/* Header */}
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Phase Templates</h1>
+          <p className="text-slate-500 mt-1">
+            Define default surgical phases seeded to new facilities. Drag to reorder.
+          </p>
+        </div>
         <button
           onClick={() => setShowFormModal(true)}
-          className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Plus className="w-4 h-4" />
           Add Template
@@ -351,11 +356,13 @@ export function PhaseTemplateSection() {
       </div>
 
       {/* Info banner */}
-      <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-blue-50 border-l-[3px] border-blue-400 rounded-r-lg text-sm text-blue-700">
-        <Info className="w-4 h-4 text-blue-400 flex-shrink-0" />
-        <span>
-          Phase templates define the default phases for new facilities. Changes here do not affect existing facilities.
-        </span>
+      <div className="mb-5 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex gap-2">
+          <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-blue-700">
+            Changes apply to new facilities only. Existing facilities manage their own phases independently.
+          </p>
+        </div>
       </div>
 
       {error && (
