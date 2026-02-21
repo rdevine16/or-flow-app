@@ -252,10 +252,6 @@ describe('Impact calculation filtering (isFromCase)', () => {
 
     const impact = calculateImpact(milestones)
 
-    // Emergence Time requires closing_complete + patient_out — both are not from case
-    expect(impact.canCalculate).not.toContain('Emergence Time')
-    expect(impact.cannotCalculate).not.toContain('Emergence Time')
-
     // Surgical Time requires incision + closing — both are from case and recorded
     expect(impact.canCalculate).toContain('Surgical Time')
   })
@@ -284,14 +280,14 @@ describe('Impact calculation filtering (isFromCase)', () => {
 
   it('excludes metric when only one of two required milestones is from case', () => {
     const milestones = [
-      makeMilestone('closing_complete', { isFromCase: true, recorded_at: '2026-02-20T09:45:00Z' }),
-      makeMilestone('patient_out', { isFromCase: false }), // issue-injected
+      makeMilestone('closing', { isFromCase: true, recorded_at: '2026-02-20T09:30:00Z' }),
+      makeMilestone('closing_complete', { isFromCase: false }), // issue-injected
     ]
 
     const impact = calculateImpact(milestones)
 
-    // Emergence Time requires both — patient_out is not from case
-    expect(impact.canCalculate).not.toContain('Emergence Time')
-    expect(impact.cannotCalculate).not.toContain('Emergence Time')
+    // Closing Duration requires both — closing_complete is not from case
+    expect(impact.canCalculate).not.toContain('Closing Duration')
+    expect(impact.cannotCalculate).not.toContain('Closing Duration')
   })
 })

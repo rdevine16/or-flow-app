@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Search, User, Building2, ClipboardList, ChevronDown, Check, X } from 'lucide-react'
+import DateRangeSelector from '@/components/ui/DateRangeSelector'
 
 // ============================================================================
 // TYPES
@@ -16,6 +17,10 @@ interface CasesFilterBarProps {
   // Search
   searchInput: string
   onSearchChange: (value: string) => void
+
+  // Date range
+  dateRangePreset: string
+  onDateRangeChange: (range: string, startDate: string, endDate: string) => void
 
   // Filters
   surgeonIds: string[]
@@ -362,6 +367,8 @@ function SearchInput({
 export default function CasesFilterBar({
   searchInput,
   onSearchChange,
+  dateRangePreset,
+  onDateRangeChange,
   surgeonIds,
   onSurgeonIdsChange,
   roomIds,
@@ -463,6 +470,12 @@ export default function CasesFilterBar({
 
         {/* Divider */}
         <div className="h-8 w-px bg-slate-200" />
+
+        {/* Date Range Filter */}
+        <DateRangeSelector
+          value={dateRangePreset}
+          onChange={onDateRangeChange}
+        />
 
         {/* Surgeon Filter */}
         <FilterDropdown

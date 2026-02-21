@@ -6,9 +6,10 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 
 import { dataQualityAudit } from '@/lib/audit-logger'
+import { logger } from '@/lib/logger'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { AlertTriangle, Check, Clock, RefreshCw, Shield, X } from 'lucide-react'
+import { AlertTriangle, Check, Clock, RefreshCw, X } from 'lucide-react'
 import SummaryRow from './SummaryRow'
 import ScanProgress from './ScanProgress'
 import FilterBar from './FilterBar'
@@ -70,6 +71,8 @@ function storeLastScan(date: Date): void {
 // ============================================
 // MAIN COMPONENT
 // ============================================
+
+const log = logger('DataQualityPage')
 
 export default function DataQualityPage() {
   const supabase = createClient()
@@ -798,19 +801,66 @@ export default function DataQualityPage() {
     }
 
     // ============================================
-    // MARK CASE AS VALIDATED
+    // MARK CASE AS VALIDATED + AUTO-COMPLETE
     // Now that all issues are resolved, this case's
-    // data is approved for inclusion in analytics
+    // data is approved for inclusion in analytics.
+    // If still in_progress, move to completed.
     // ============================================
     if (modalState.issue.case_id) {
-      await supabase
+      const updatePayload: Record<string, unknown> = {
+        data_validated: true,
+        validated_at: new Date().toISOString(),
+        validated_by: currentUserId
+      }
+
+      // Auto-complete in-progress cases on validation or exclusion
+      const { data: caseData } = await supabase
         .from('cases')
-        .update({
-          data_validated: true,
-          validated_at: new Date().toISOString(),
-          validated_by: currentUserId
-        })
+        .select('status_id, case_statuses(name)')
         .eq('id', modalState.issue.case_id)
+        .single()
+
+      const statusName = Array.isArray(caseData?.case_statuses)
+        ? caseData.case_statuses[0]?.name
+        : (caseData?.case_statuses as unknown as { name: string } | null)?.name
+
+      if (statusName === 'in_progress') {
+        const { data: completedStatus } = await supabase
+          .from('case_statuses')
+          .select('id')
+          .eq('name', 'completed')
+          .single()
+
+        if (completedStatus) {
+          updatePayload.status_id = completedStatus.id
+        }
+      }
+
+      const { error: updateError } = await supabase
+        .from('cases')
+        .update(updatePayload)
+        .eq('id', modalState.issue.case_id)
+
+      if (updateError) {
+        log.error('Failed to update case after validation', {
+          caseId: modalState.issue.case_id,
+          error: updateError.message,
+          payload: updatePayload,
+        })
+        // If the combined update failed (e.g. trigger conflict), retry with just validation fields
+        if (updatePayload.status_id) {
+          const { status_id: _dropped, ...validationOnly } = updatePayload
+          await supabase
+            .from('cases')
+            .update(validationOnly)
+            .eq('id', modalState.issue.case_id)
+          // Then try the status change separately
+          await supabase
+            .from('cases')
+            .update({ status_id: updatePayload.status_id })
+            .eq('id', modalState.issue.case_id)
+        }
+      }
     }
 
     // Audit log
@@ -952,12 +1002,9 @@ export default function DataQualityPage() {
         <div className="flex items-center justify-between py-6 border-b border-slate-200 mb-6 animate-in fade-in duration-300">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #2563EB, #7C3AED)' }}>
-                <Shield className="w-4 h-4 text-white" />
-              </div>
               <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">Data Quality</h1>
             </div>
-            <p className="text-[13px] text-slate-500 pl-[42px]">
+            <p className="text-[13px] text-slate-500">
               Monitor and resolve data integrity issues across surgical cases
             </p>
           </div>
@@ -1366,8 +1413,13 @@ export default function DataQualityPage() {
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                   <h4 className="text-sm font-semibold text-red-800 mb-2">Exclude from Metrics</h4>
                   <p className="text-sm text-red-600">
-                    You are about to exclude {modalState.bulkIds.length} cases from all analytics calculations.
-                    This action marks the issues as resolved but removes the cases from aggregate metrics.
+                    {(() => {
+                      const caseCount = new Set(
+                        issues.filter(i => modalState.bulkIds.includes(i.id)).map(i => i.case_id)
+                      ).size
+                      return `You are about to exclude ${caseCount} ${caseCount === 1 ? 'case' : 'cases'} (${modalState.bulkIds.length} ${modalState.bulkIds.length === 1 ? 'issue' : 'issues'}) from all analytics calculations.`
+                    })()}
+                    {' '}This action marks the issues as resolved but removes the cases from aggregate metrics.
                   </p>
                   <div className="mt-3">
                     <textarea
@@ -1392,7 +1444,12 @@ export default function DataQualityPage() {
                   disabled={saving}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-sm font-medium"
                 >
-                  {saving ? 'Excluding...' : `Exclude ${modalState.bulkIds.length} Cases`}
+                  {saving ? 'Excluding...' : (() => {
+                    const caseCount = new Set(
+                      issues.filter(i => modalState.bulkIds.includes(i.id)).map(i => i.case_id)
+                    ).size
+                    return `Exclude ${caseCount} ${caseCount === 1 ? 'Case' : 'Cases'}`
+                  })()}
                 </button>
               </div>
             </div>

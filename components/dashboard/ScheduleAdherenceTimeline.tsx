@@ -18,6 +18,7 @@ import type {
 interface ScheduleAdherenceTimelineProps {
   data: ScheduleTimelineData | null
   loading?: boolean
+  onCaseClick?: (caseId: string) => void
 }
 
 // ============================================
@@ -142,9 +143,10 @@ function GanttTooltip({ tooltip }: { tooltip: TooltipState }) {
 
 interface GanttChartProps {
   data: ScheduleTimelineData
+  onCaseClick?: (caseId: string) => void
 }
 
-function GanttChart({ data }: GanttChartProps) {
+function GanttChart({ data, onCaseClick }: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
@@ -301,6 +303,7 @@ function GanttChart({ data }: GanttChartProps) {
                       )
                     }}
                     onMouseLeave={() => setTooltip(null)}
+                    onClick={() => onCaseClick?.(c.caseId)}
                     className="cursor-pointer"
                   >
                     {/* ── UPCOMING: dashed outline at scheduled position ── */}
@@ -519,7 +522,7 @@ function GanttLegend() {
 // Main component
 // ============================================
 
-export function ScheduleAdherenceTimeline({ data, loading }: ScheduleAdherenceTimelineProps) {
+export function ScheduleAdherenceTimeline({ data, loading, onCaseClick }: ScheduleAdherenceTimelineProps) {
   if (loading) return <TimelineSkeleton />
 
   // Empty state
@@ -558,7 +561,7 @@ export function ScheduleAdherenceTimeline({ data, loading }: ScheduleAdherenceTi
       </div>
 
       {/* Gantt chart */}
-      <GanttChart data={data} />
+      <GanttChart data={data} onCaseClick={onCaseClick} />
     </div>
   )
 }

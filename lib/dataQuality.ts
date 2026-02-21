@@ -44,10 +44,6 @@ export const METRIC_REQUIREMENTS: Record<string, { name: string; requires: strin
   closing_time: {
     name: 'Closing Duration',
     requires: ['closing', 'closing_complete']
-  },
-  emergence_time: {
-    name: 'Emergence Time',
-    requires: ['closing_complete', 'patient_out']
   }
 }
 
@@ -479,12 +475,14 @@ export async function runDetectionForFacility(
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - daysBack)
 
-  // Get cases from the last N days
+  // Get cases from the last N days (skip validated and excluded cases)
   const { data: cases, error: casesError } = await supabase
     .from('cases')
     .select('id')
     .eq('facility_id', facilityId)
     .gte('scheduled_date', getLocalDateString(startDate))
+    .not('data_validated', 'is', true)
+    .not('is_excluded_from_metrics', 'is', true)
 
   if (casesError || !cases) {
     log.error('Error fetching cases:', casesError)
@@ -629,7 +627,7 @@ async function detectStaleInProgress(
   
   if (!patientInMilestone) return []
   
-  // Find stale cases
+  // Find stale cases (skip validated and excluded)
   const { data: cases } = await supabase
     .from('cases')
     .select(`
@@ -640,6 +638,8 @@ async function detectStaleInProgress(
     `)
     .eq('facility_id', facilityId)
     .eq('status_id', statusData.id)
+    .not('data_validated', 'is', true)
+    .not('is_excluded_from_metrics', 'is', true)
     .eq('case_milestones.facility_milestone_id', patientInMilestone.id)
     .lt('case_milestones.recorded_at', twentyFourHoursAgo)
   
@@ -680,11 +680,14 @@ async function detectAbandonedScheduled(
   
   if (!statusData) return []
   
+  // Skip validated and excluded cases
   const { data: cases } = await supabase
     .from('cases')
     .select('id, case_number, facility_id, scheduled_date')
     .eq('facility_id', facilityId)
     .eq('status_id', statusData.id)
+    .not('data_validated', 'is', true)
+    .not('is_excluded_from_metrics', 'is', true)
     .lt('scheduled_date', twoDaysAgo)
   
   return (cases || []).map(c => {
@@ -719,7 +722,7 @@ async function detectNoActivity(
   
   if (!statusData) return []
   
-  // Get all in-progress cases
+  // Get all in-progress cases (skip validated and excluded)
   const { data: cases } = await supabase
     .from('cases')
     .select(`
@@ -730,6 +733,8 @@ async function detectNoActivity(
     `)
     .eq('facility_id', facilityId)
     .eq('status_id', statusData.id)
+    .not('data_validated', 'is', true)
+    .not('is_excluded_from_metrics', 'is', true)
   
   const staleCases: StaleCase[] = []
   

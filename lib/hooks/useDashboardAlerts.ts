@@ -96,15 +96,16 @@ async function queryMissingMilestones(
   const todayStr = getLocalDateString(today)
   const yesterdayStr = getLocalDateString(yesterday)
 
-  // Get statuses that should NOT be checked (cancelled, scheduled)
-  const { data: excludedStatuses } = await supabase
+  // Only check completed cases — in_progress cases naturally have unrecorded milestones
+  const { data: completedStatus } = await supabase
     .from('case_statuses')
     .select('id')
-    .in('name', ['cancelled', 'scheduled'])
+    .eq('name', 'completed')
+    .single()
 
-  const excludedIds = excludedStatuses?.map((s) => s.id) ?? []
+  if (!completedStatus) return null
 
-  // Fetch cases from today/yesterday that are not cancelled or scheduled
+  // Fetch completed cases from today/yesterday that are NOT validated
   // and have at least one milestone with recorded_at IS NULL
   const { data: cases, error } = await supabase
     .from('cases')
@@ -117,7 +118,8 @@ async function queryMissingMilestones(
     .eq('facility_id', facilityId)
     .gte('scheduled_date', yesterdayStr)
     .lte('scheduled_date', todayStr)
-    .not('status_id', 'in', `(${excludedIds.join(',')})`)
+    .eq('status_id', completedStatus.id)
+    .not('data_validated', 'is', true)
     .is('case_milestones.recorded_at', null)
 
   if (error) {
@@ -136,7 +138,7 @@ async function queryMissingMilestones(
     type: 'missing_milestones',
     priority: 'medium',
     title: `${count} case${count === 1 ? '' : 's'} missing milestones`,
-    description: 'Recent cases that should have milestone data recorded.',
+    description: 'Completed cases with missing milestone timestamps.',
     count,
     linkTo: '/cases?filter=missing_milestones',
   }

@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
-import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import CasesStatusTabs from '@/components/cases/CasesStatusTabs'
 import CasesTable from '@/components/cases/CasesTable'
 import CasesFilterBar from '@/components/cases/CasesFilterBar'
@@ -194,10 +193,6 @@ function CasesPageContent() {
             <Download className="w-4 h-4" />
             Export
           </button>
-          <DateRangeSelector
-            value={dateRange.preset}
-            onChange={setDateRange}
-          />
           {can('cases.create') && <CreateCaseSplitButton />}
         </div>
       </div>
@@ -215,6 +210,8 @@ function CasesPageContent() {
         <CasesFilterBar
           searchInput={searchInput}
           onSearchChange={setSearchInput}
+          dateRangePreset={dateRange.preset}
+          onDateRangeChange={setDateRange}
           surgeonIds={filters.surgeonIds}
           onSurgeonIdsChange={setSurgeonIds}
           roomIds={filters.roomIds}

@@ -144,6 +144,16 @@ function ValidationBadge({ caseItem, dqCaseIds }: { caseItem: CaseListItem; dqCa
     return <span className="text-sm text-slate-400">{'\u2014'}</span>
   }
 
+  // Excluded from metrics
+  if (caseItem.is_excluded_from_metrics) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-500">
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+        Excluded
+      </span>
+    )
+  }
+
   // Has unresolved DQ issues
   if (dqCaseIds.has(caseItem.id)) {
     const colors = statusColors.needs_validation

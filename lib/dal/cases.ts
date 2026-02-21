@@ -19,6 +19,7 @@ export interface CaseListItem {
   start_time: string | null
   status_id: string | null
   data_validated: boolean
+  is_excluded_from_metrics: boolean
   or_room_id: string | null
   surgeon_id: string | null
   facility_id: string
@@ -127,7 +128,7 @@ export interface CaseForAnalytics {
 
 const CASE_LIST_SELECT = `
   id, case_number,
-  scheduled_date, start_time, status_id, data_validated, or_room_id, surgeon_id, facility_id,
+  scheduled_date, start_time, status_id, data_validated, is_excluded_from_metrics, or_room_id, surgeon_id, facility_id,
   created_at, created_by,
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
   or_room:or_rooms(name),

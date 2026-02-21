@@ -22,6 +22,8 @@ import { useDashboardKPIs, type TimeRange } from '@/lib/hooks/useDashboardKPIs'
 import { useDashboardAlerts } from '@/lib/hooks/useDashboardAlerts'
 import { useTodayStatus } from '@/lib/hooks/useTodayStatus'
 import { useScheduleTimeline } from '@/lib/hooks/useScheduleTimeline'
+import CaseDrawer from '@/components/cases/CaseDrawer'
+import { useProcedureCategories } from '@/hooks/useLookups'
 
 const TIME_RANGE_OPTIONS: { label: string; value: TimeRange }[] = [
   { label: 'Today', value: 'today' },
@@ -70,6 +72,18 @@ export default function DashboardPage() {
   const { data: todayStatus, loading: todayStatusLoading } = useTodayStatus()
   const { data: timeline, loading: timelineLoading } = useScheduleTimeline()
   const { userData } = useUser()
+  const [drawerCaseId, setDrawerCaseId] = useState<string | null>(null)
+  const { data: procedureCategories } = useProcedureCategories()
+
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    if (procedureCategories) {
+      for (const cat of procedureCategories) {
+        map.set(cat.id, cat.name)
+      }
+    }
+    return map
+  }, [procedureCategories])
 
   const trendLabel = getTrendLabel(timeRange)
   const greeting = useMemo(() => getGreeting(), [])
@@ -176,7 +190,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Schedule Adherence Timeline (Gantt) — full width, 60s polling */}
-        <ScheduleAdherenceTimeline data={timeline ?? null} loading={timelineLoading} />
+        <ScheduleAdherenceTimeline data={timeline ?? null} loading={timelineLoading} onCaseClick={setDrawerCaseId} />
 
         {/* Alerts + Insights (50/50) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -228,6 +242,12 @@ export default function DashboardPage() {
           <QuickAccessCards />
         </div>
       </div>
+
+      <CaseDrawer
+        caseId={drawerCaseId}
+        onClose={() => setDrawerCaseId(null)}
+        categoryNameById={categoryNameById}
+      />
     </DashboardLayout>
   )
 }

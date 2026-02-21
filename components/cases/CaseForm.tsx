@@ -31,6 +31,7 @@ interface StaffSelection {
 interface RoomConflict {
   case_number: string
   start_time: string
+  end_time: string
   surgeon_name: string | null
 }
 
@@ -59,6 +60,22 @@ interface ProcedureType {
   requires_rep: boolean
   requires_operative_side: boolean
   procedure_category_id: string | null
+  expected_duration_minutes: number | null
+}
+
+const DEFAULT_CASE_DURATION_MINUTES = 60
+
+/** Convert "HH:MM" to total minutes since midnight */
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** Convert total minutes since midnight back to "HH:MM" */
+function minutesToTime(minutes: number): string {
+  const h = Math.floor(minutes / 60) % 24
+  const m = minutes % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
 // Operative side options
@@ -192,8 +209,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     }, 300)
   }, [userFacilityId, mode, caseId, supabase])
 
-  // Phase 3.3: Room conflict detection
-  const checkRoomConflicts = useCallback((roomId: string, date: string, time: string) => {
+  // Phase 3.3: Room conflict detection — checks for time-overlapping cases in the same room
+  const checkRoomConflicts = useCallback((roomId: string, date: string, time: string, procedureTypeId: string) => {
     if (conflictTimerRef.current) {
       clearTimeout(conflictTimerRef.current)
     }
@@ -206,7 +223,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     conflictTimerRef.current = setTimeout(async () => {
       const query = supabase
         .from('cases')
-        .select('id, case_number, start_time, surgeon:users!cases_surgeon_id_fkey(first_name, last_name)')
+        .select('id, case_number, start_time, procedure_type:procedure_types(expected_duration_minutes), surgeon:users!cases_surgeon_id_fkey(first_name, last_name)')
         .eq('or_room_id', roomId)
         .eq('scheduled_date', date)
         .eq('facility_id', userFacilityId)
@@ -224,23 +241,41 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         return
       }
 
-      const conflicts: RoomConflict[] = (data || []).map((c: Record<string, unknown>) => {
-        const surgeon = c.surgeon as { first_name: string; last_name: string } | null
-        return {
-          case_number: c.case_number as string,
-          start_time: c.start_time ? (c.start_time as string).slice(0, 5) : '',
-          surgeon_name: surgeon ? `Dr. ${surgeon.first_name} ${surgeon.last_name}` : null,
-        }
-      })
+      // Determine the new case's duration from its procedure type
+      const newProc = procedureTypes.find(p => p.id === procedureTypeId)
+      const newDuration = newProc?.expected_duration_minutes ?? DEFAULT_CASE_DURATION_MINUTES
+      const newStart = timeToMinutes(time)
+      const newEnd = newStart + newDuration
+
+      // Filter to only cases whose time window overlaps with the new case
+      const conflicts: RoomConflict[] = (data || [])
+        .map((c: Record<string, unknown>) => {
+          const surgeon = c.surgeon as { first_name: string; last_name: string } | null
+          const procType = c.procedure_type as { expected_duration_minutes: number | null } | null
+          const existingDuration = procType?.expected_duration_minutes ?? DEFAULT_CASE_DURATION_MINUTES
+          const startStr = c.start_time ? (c.start_time as string).slice(0, 5) : ''
+          const existingStart = startStr ? timeToMinutes(startStr) : 0
+          const existingEnd = existingStart + existingDuration
+
+          return {
+            case_number: c.case_number as string,
+            start_time: startStr,
+            end_time: minutesToTime(existingEnd),
+            surgeon_name: surgeon ? `Dr. ${surgeon.first_name} ${surgeon.last_name}` : null,
+            _overlaps: startStr ? (newStart < existingEnd && newEnd > existingStart) : true,
+          }
+        })
+        .filter(c => c._overlaps)
+        .map(({ _overlaps, ...rest }) => rest)
 
       setRoomConflicts(conflicts)
     }, 300)
-  }, [userFacilityId, mode, caseId, supabase])
+  }, [userFacilityId, mode, caseId, supabase, procedureTypes])
 
-  // Re-check conflicts when room, date, or time changes
+  // Re-check conflicts when room, date, time, or procedure changes
   useEffect(() => {
-    checkRoomConflicts(formData.or_room_id, formData.scheduled_date, formData.start_time)
-  }, [formData.or_room_id, formData.scheduled_date, formData.start_time, checkRoomConflicts])
+    checkRoomConflicts(formData.or_room_id, formData.scheduled_date, formData.start_time, formData.procedure_type_id)
+  }, [formData.or_room_id, formData.scheduled_date, formData.start_time, formData.procedure_type_id, checkRoomConflicts])
 
   // Compute effective rep required status
   const selectedProcedure = procedureTypes.find(p => p.id === formData.procedure_type_id)
@@ -336,7 +371,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       const [roomsRes, proceduresRes, statusesRes, usersRes, companiesRes, payersRes] = await Promise.all([
         supabase.from('or_rooms').select('id, name').eq('facility_id', userFacilityId).order('name'),
         // UPDATED: Fetch requires_rep along with procedure types
-        supabase.from('procedure_types').select('id, name, requires_rep, requires_operative_side, procedure_category_id')
+        supabase.from('procedure_types').select('id, name, requires_rep, requires_operative_side, procedure_category_id, expected_duration_minutes')
           .or(`facility_id.is.null,facility_id.eq.${userFacilityId}`)
           .order('name'),
         supabase.from('case_statuses').select('id, name').order('display_order'),
@@ -1200,7 +1235,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         error={fieldErrors.or_room_id}
       />
 
-      {/* Room conflict warning */}
+      {/* Room conflict warning — only shown for time-overlapping cases */}
       {roomConflicts.length > 0 && (
         <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg" data-testid="room-conflict-warning">
           <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1208,12 +1243,12 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           </svg>
           <div>
             <p className="text-sm font-medium text-amber-800">
-              Room has {roomConflicts.length} other case{roomConflicts.length !== 1 ? 's' : ''} on this date
+              {roomConflicts.length} overlapping case{roomConflicts.length !== 1 ? 's' : ''} in this room
             </p>
             <ul className="text-xs text-amber-700 mt-1 space-y-0.5">
               {roomConflicts.map(c => (
                 <li key={c.case_number}>
-                  {c.case_number} at {c.start_time}{c.surgeon_name ? ` (${c.surgeon_name})` : ''}
+                  {c.case_number} {c.start_time}\u2013{c.end_time}{c.surgeon_name ? ` (${c.surgeon_name})` : ''}
                 </li>
               ))}
             </ul>
