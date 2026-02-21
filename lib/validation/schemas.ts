@@ -51,8 +51,6 @@ export const createCaseSchema = z.object({
 
   status_id: z.string().min(1, 'Status is required'),
 
-  anesthesiologist_id: z.string().optional().or(z.literal('')),
-
   operative_side: z.enum(['left', 'right', 'bilateral', 'n/a', '']).optional(),
 
   payer_id: z.string().optional().or(z.literal('')),
@@ -82,8 +80,6 @@ export const draftCaseSchema = z.object({
   or_room_id: z.string().optional().or(z.literal('')),
 
   status_id: z.string().optional().or(z.literal('')),
-
-  anesthesiologist_id: z.string().optional().or(z.literal('')),
 
   operative_side: z.enum(['left', 'right', 'bilateral', 'n/a', '']).optional(),
 

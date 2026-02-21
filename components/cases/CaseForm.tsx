@@ -48,7 +48,6 @@ interface FormData {
   procedure_type_id: string
   status_id: string
   surgeon_id: string
-  anesthesiologist_id: string
   operative_side: string
   payer_id: string
   notes: string
@@ -106,7 +105,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     procedure_type_id: '',
     status_id: '',
     surgeon_id: '',
-    anesthesiologist_id: '',
     operative_side: '',
     payer_id: '',
     notes: '',
@@ -141,8 +139,10 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const [procedureTypes, setProcedureTypes] = useState<ProcedureType[]>([])
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([])
   const [surgeons, setSurgeons] = useState<{ id: string; first_name: string; last_name: string }[]>([])
-  const [anesthesiologists, setAnesthesiologists] = useState<{ id: string; first_name: string; last_name: string }[]>([])
-  
+
+  // Anesthesiologist role ID for missing-anesthesia warning
+  const [anesthRoleId, setAnesthRoleId] = useState<string | null>(null)
+
   // Payers state
   const [payers, setPayers] = useState<{ id: string; name: string }[]>([])
   
@@ -403,13 +403,11 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         .eq('name', 'anesthesiologist')
         .single()
 
-      if (usersRes.data) {
-        if (surgeonRole) {
-          setSurgeons(usersRes.data.filter(u => u.role_id === surgeonRole.id))
-        }
-        if (anesthRole) {
-          setAnesthesiologists(usersRes.data.filter(u => u.role_id === anesthRole.id))
-        }
+      if (usersRes.data && surgeonRole) {
+        setSurgeons(usersRes.data.filter(u => u.role_id === surgeonRole.id))
+      }
+      if (anesthRole) {
+        setAnesthRoleId(anesthRole.id)
       }
 
       if (mode === 'create') {
@@ -423,7 +421,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           procedure_type_id: '',
           status_id: scheduledStatus?.id || '',
           surgeon_id: '',
-          anesthesiologist_id: '',
           operative_side: '',
           payer_id: '',
           notes: '',
@@ -463,7 +460,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         procedure_type_id: data.procedure_type_id || '',
         status_id: data.status_id || '',
         surgeon_id: data.surgeon_id || '',
-        anesthesiologist_id: data.anesthesiologist_id || '',
         operative_side: data.operative_side || '',
         payer_id: data.payer_id || '',
         notes: data.notes || '',
@@ -1395,44 +1391,45 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             excludeUserIds={formData.surgeon_id ? [formData.surgeon_id] : []}
           />
           <p className="text-xs text-slate-500 mt-1.5">
-            Assign nurses, techs, and other staff to this case (optional)
+            Assign nurses, techs, anesthesiologists, and other staff to this case
           </p>
+          {/* Missing anesthesiologist warning */}
+          {anesthRoleId && !selectedStaff.some(s => s.role_id === anesthRoleId) && (
+            <div className="flex items-start gap-2 p-3 mt-2 bg-amber-50 border border-amber-200 rounded-lg" data-testid="missing-anesthesia-warning">
+              <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-sm text-amber-800">
+                No anesthesiologist assigned. Add one from the staff list above.
+              </span>
+            </div>
+          )}
         </div>
       )}
 
-      {/* 8. Anesthesiologist & Payer */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <SearchableDropdown
-          label="Anesthesiologist"
-          placeholder="Select Anesthesiologist"
-          value={formData.anesthesiologist_id}
-          onChange={(id) => setFormData({ ...formData, anesthesiologist_id: id })}
-          options={anesthesiologists.map(a => ({ id: a.id, label: `Dr. ${a.first_name} ${a.last_name}` }))}
-        />
-
-        {payers.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Payer
-            </label>
-            <select
-              value={formData.payer_id}
-              onChange={(e) => setFormData({ ...formData, payer_id: e.target.value })}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-            >
-              <option value="">Default Reimbursement</option>
-              {payers.map(payer => (
-                <option key={payer.id} value={payer.id}>
-                  {payer.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-slate-500 mt-1.5">
-              Select payer for profitability tracking (optional)
-            </p>
-          </div>
-        )}
-      </div>
+      {/* 8. Payer */}
+      {payers.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Payer
+          </label>
+          <select
+            value={formData.payer_id}
+            onChange={(e) => setFormData({ ...formData, payer_id: e.target.value })}
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          >
+            <option value="">Default Reimbursement</option>
+            {payers.map(payer => (
+              <option key={payer.id} value={payer.id}>
+                {payer.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-500 mt-1.5">
+            Select payer for profitability tracking (optional)
+          </p>
+        </div>
+      )}
 
       {/* Status - Only show in edit mode */}
       {mode === 'edit' && (

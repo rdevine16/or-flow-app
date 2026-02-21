@@ -10,7 +10,6 @@ describe('createCaseSchema — Phase 1.3', () => {
     procedure_type_id: 'some-procedure-id',
     or_room_id: 'some-room-id',
     status_id: 'some-status-id',
-    anesthesiologist_id: '',
     operative_side: '',
     payer_id: '',
     notes: '',
@@ -77,7 +76,6 @@ describe('createCaseSchema — Phase 1.3', () => {
   it('accepts empty optional fields', () => {
     const result = createCaseSchema.safeParse({
       ...validData,
-      anesthesiologist_id: '',
       operative_side: '',
       payer_id: '',
       notes: '',
@@ -372,7 +370,6 @@ describe('draftCaseSchema — Phase 5.3', () => {
       procedure_type_id: '',
       or_room_id: '',
       status_id: '',
-      anesthesiologist_id: '',
       operative_side: '',
       payer_id: '',
       notes: '',
