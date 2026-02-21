@@ -4,27 +4,34 @@ import IssuesTable from '../IssuesTable'
 import type { MetricIssue, IssueType } from '@/lib/dataQuality'
 
 const mockIssueTypes: IssueType[] = [
-  { id: '1', name: 'missing', display_name: 'Missing Milestone', severity: 'error' },
-  { id: '2', name: 'too_fast', display_name: 'Too Fast', severity: 'warning' },
-  { id: '3', name: 'timeout', display_name: 'Timeout', severity: 'warning' },
+  { id: '1', name: 'missing', display_name: 'Missing Milestone', description: null, severity: 'error' },
+  { id: '2', name: 'too_fast', display_name: 'Too Fast', description: null, severity: 'warning' },
+  { id: '3', name: 'timeout', display_name: 'Timeout', description: null, severity: 'warning' },
 ]
 
 const createMockIssue = (overrides?: Partial<MetricIssue>): MetricIssue => ({
   id: 'issue-1',
+  facility_id: 'facility-1',
   case_id: 'case-1',
   issue_type_id: '1',
   issue_type: mockIssueTypes[0],
   facility_milestone_id: 'fm-1',
-  facility_milestone: { display_name: 'Incision' },
+  milestone_id: null,
+  facility_milestone: { name: 'incision', display_name: 'Incision' },
   detected_at: '2026-02-20T10:00:00Z',
   detected_value: null,
   expected_min: null,
   expected_max: null,
+  resolution_type_id: null,
   resolved_at: null,
+  resolved_by: null,
+  resolution_notes: null,
   expires_at: '2026-02-27T10:00:00Z',
+  created_at: '2026-02-20T10:00:00Z',
   cases: {
     case_number: 'OR-001',
-    surgeon: { last_name: 'Smith' },
+    scheduled_date: '2026-02-20',
+    surgeon: { first_name: 'John', last_name: 'Smith' },
     procedure_types: { name: 'Total Hip Replacement' },
     operative_side: 'left',
   },
@@ -76,7 +83,7 @@ describe('IssuesTable', () => {
     it('creates separate rows for different cases', () => {
       const issues = [
         createMockIssue({ id: 'issue-1', case_id: 'case-1' }),
-        createMockIssue({ id: 'issue-2', case_id: 'case-2', cases: { case_number: 'OR-002' } }),
+        createMockIssue({ id: 'issue-2', case_id: 'case-2', cases: { case_number: 'OR-002', scheduled_date: '2026-02-20' } }),
       ]
 
       const { container } = render(<IssuesTable {...defaultProps} issues={issues} />)
@@ -237,7 +244,7 @@ describe('IssuesTable', () => {
     })
 
     it('shows en-dash when no expiration date', () => {
-      const issues = [createMockIssue({ expires_at: null })]
+      const issues = [createMockIssue({ expires_at: undefined as unknown as string })]
 
       render(<IssuesTable {...defaultProps} issues={issues} />)
 
@@ -460,7 +467,7 @@ describe('IssuesTable', () => {
 
   describe('milestone summary', () => {
     it('displays single milestone name', () => {
-      const issues = [createMockIssue({ facility_milestone: { display_name: 'Incision' } })]
+      const issues = [createMockIssue({ facility_milestone: { name: 'incision', display_name: 'Incision' } })]
 
       render(<IssuesTable {...defaultProps} issues={issues} />)
 
@@ -469,9 +476,9 @@ describe('IssuesTable', () => {
 
     it('displays up to 3 unique milestone names', () => {
       const issues = [
-        createMockIssue({ id: 'i1', facility_milestone_id: 'fm-1', facility_milestone: { display_name: 'Incision' } }),
-        createMockIssue({ id: 'i2', facility_milestone_id: 'fm-2', facility_milestone: { display_name: 'Closure' } }),
-        createMockIssue({ id: 'i3', facility_milestone_id: 'fm-3', facility_milestone: { display_name: 'Exit OR' } }),
+        createMockIssue({ id: 'i1', facility_milestone_id: 'fm-1', facility_milestone: { name: 'incision', display_name: 'Incision' } }),
+        createMockIssue({ id: 'i2', facility_milestone_id: 'fm-2', facility_milestone: { name: 'closure', display_name: 'Closure' } }),
+        createMockIssue({ id: 'i3', facility_milestone_id: 'fm-3', facility_milestone: { name: 'exit_or', display_name: 'Exit OR' } }),
       ]
 
       render(<IssuesTable {...defaultProps} issues={issues} />)
@@ -481,11 +488,11 @@ describe('IssuesTable', () => {
 
     it('shows "+N more" when more than 3 milestones', () => {
       const issues = [
-        createMockIssue({ id: 'i1', facility_milestone_id: 'fm-1', facility_milestone: { display_name: 'Incision' } }),
-        createMockIssue({ id: 'i2', facility_milestone_id: 'fm-2', facility_milestone: { display_name: 'Closure' } }),
-        createMockIssue({ id: 'i3', facility_milestone_id: 'fm-3', facility_milestone: { display_name: 'Exit OR' } }),
-        createMockIssue({ id: 'i4', facility_milestone_id: 'fm-4', facility_milestone: { display_name: 'PACU In' } }),
-        createMockIssue({ id: 'i5', facility_milestone_id: 'fm-5', facility_milestone: { display_name: 'PACU Out' } }),
+        createMockIssue({ id: 'i1', facility_milestone_id: 'fm-1', facility_milestone: { name: 'incision', display_name: 'Incision' } }),
+        createMockIssue({ id: 'i2', facility_milestone_id: 'fm-2', facility_milestone: { name: 'closure', display_name: 'Closure' } }),
+        createMockIssue({ id: 'i3', facility_milestone_id: 'fm-3', facility_milestone: { name: 'exit_or', display_name: 'Exit OR' } }),
+        createMockIssue({ id: 'i4', facility_milestone_id: 'fm-4', facility_milestone: { name: 'pacu_in', display_name: 'PACU In' } }),
+        createMockIssue({ id: 'i5', facility_milestone_id: 'fm-5', facility_milestone: { name: 'pacu_out', display_name: 'PACU Out' } }),
       ]
 
       render(<IssuesTable {...defaultProps} issues={issues} />)

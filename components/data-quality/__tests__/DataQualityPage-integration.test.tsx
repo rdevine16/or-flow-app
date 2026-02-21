@@ -13,7 +13,8 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 import SummaryRow from '../SummaryRow'
-import type { DataQualitySummary } from '@/lib/dataQuality'
+import { METRIC_REQUIREMENTS, type DataQualitySummary } from '@/lib/dataQuality'
+import type { EditableMilestone } from '../MilestoneTimeline'
 
 describe('SummaryRow Integration with Child Components', () => {
   const mockSummary: DataQualitySummary = {
@@ -187,5 +188,110 @@ describe('SummaryRow Integration with Child Components', () => {
       expect(screen.getByText('Expiring Soon')).toBeInTheDocument()
       expect(screen.getByText('By Severity')).toBeInTheDocument()
     })
+  })
+})
+
+// ============================================
+// Impact calculation filtering logic
+// Tests the isFromCase-based metric availability logic
+// that lives inside DataQualityPage.calculateImpact
+// ============================================
+
+describe('Impact calculation filtering (isFromCase)', () => {
+  // Mirror the calculateImpact logic from DataQualityPage
+  function calculateImpact(milestones: EditableMilestone[]) {
+    const caseMilestoneNames = new Set(
+      milestones.filter(m => m.isFromCase).map(m => m.name)
+    )
+    const recordedNames = new Set(
+      milestones.filter(m => m.recorded_at).map(m => m.name)
+    )
+
+    const canCalculate: string[] = []
+    const cannotCalculate: string[] = []
+
+    Object.values(METRIC_REQUIREMENTS).forEach((config) => {
+      const allRequirementsExist = config.requires.every(req => caseMilestoneNames.has(req))
+      if (!allRequirementsExist) return
+
+      const hasAll = config.requires.every(req => recordedNames.has(req))
+      if (hasAll) {
+        canCalculate.push(config.name)
+      } else {
+        cannotCalculate.push(config.name)
+      }
+    })
+
+    return { canCalculate, cannotCalculate }
+  }
+
+  const makeMilestone = (name: string, opts?: Partial<EditableMilestone>): EditableMilestone => ({
+    id: `fm-${name}`,
+    name,
+    display_name: name.replace(/_/g, ' '),
+    display_order: 0,
+    pair_with_id: null,
+    recorded_at: null,
+    original_recorded_at: null,
+    isEditing: false,
+    hasChanged: false,
+    canEdit: true,
+    isFromCase: true,
+    ...opts,
+  })
+
+  it('excludes metrics whose milestones are not from the case', () => {
+    // Simulate: closing_complete and patient_out are issue-injected, not actual case milestones
+    const milestones = [
+      makeMilestone('patient_in', { recorded_at: '2026-02-20T08:00:00Z' }),
+      makeMilestone('incision', { recorded_at: '2026-02-20T08:30:00Z' }),
+      makeMilestone('closing', { recorded_at: '2026-02-20T09:30:00Z' }),
+      makeMilestone('closing_complete', { isFromCase: false }), // issue-injected
+      makeMilestone('patient_out', { isFromCase: false }),       // issue-injected
+    ]
+
+    const impact = calculateImpact(milestones)
+
+    // Emergence Time requires closing_complete + patient_out — both are not from case
+    expect(impact.canCalculate).not.toContain('Emergence Time')
+    expect(impact.cannotCalculate).not.toContain('Emergence Time')
+
+    // Surgical Time requires incision + closing — both are from case and recorded
+    expect(impact.canCalculate).toContain('Surgical Time')
+  })
+
+  it('includes metrics when all required milestones are from the case', () => {
+    const milestones = [
+      makeMilestone('patient_in', { recorded_at: '2026-02-20T08:00:00Z' }),
+      makeMilestone('incision', { recorded_at: '2026-02-20T08:30:00Z' }),
+      makeMilestone('closing'),
+      makeMilestone('patient_out', { recorded_at: '2026-02-20T10:00:00Z' }),
+    ]
+
+    const impact = calculateImpact(milestones)
+
+    // Pre-Incision Time requires patient_in + incision — both recorded
+    expect(impact.canCalculate).toContain('Pre-Incision Time')
+    // Surgical Time requires incision + closing — closing not recorded
+    expect(impact.cannotCalculate).toContain('Surgical Time')
+  })
+
+  it('shows case_count as always calculable', () => {
+    const milestones = [makeMilestone('patient_in')]
+    const impact = calculateImpact(milestones)
+    expect(impact.canCalculate).toContain('Case Count')
+  })
+
+  it('excludes metric when only one of two required milestones is from case', () => {
+    const milestones = [
+      makeMilestone('closing_complete', { isFromCase: true, recorded_at: '2026-02-20T09:45:00Z' }),
+      makeMilestone('patient_out', { isFromCase: false }), // issue-injected
+    ]
+
+    const impact = calculateImpact(milestones)
+
+    // Emergence Time requires both — patient_out is not from case
+    expect(impact.canCalculate).not.toContain('Emergence Time')
+    expect(impact.cannotCalculate).not.toContain('Emergence Time')
   })
 })

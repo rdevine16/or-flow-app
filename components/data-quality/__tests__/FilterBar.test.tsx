@@ -3,9 +3,9 @@ import { describe, it, expect, vi } from 'vitest'
 import FilterBar from '../FilterBar'
 
 const mockIssueTypes = [
-  { id: '1', name: 'missing', display_name: 'Missing Milestone', severity: 'error' as const },
-  { id: '2', name: 'too_fast', display_name: 'Too Fast', severity: 'warning' as const },
-  { id: '3', name: 'timeout', display_name: 'Timeout', severity: 'warning' as const },
+  { id: '1', name: 'missing', display_name: 'Missing Milestone', description: null, severity: 'error' as const },
+  { id: '2', name: 'too_fast', display_name: 'Too Fast', description: null, severity: 'warning' as const },
+  { id: '3', name: 'timeout', display_name: 'Timeout', description: null, severity: 'warning' as const },
 ]
 
 describe('FilterBar', () => {

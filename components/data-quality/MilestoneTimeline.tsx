@@ -18,6 +18,7 @@ export interface EditableMilestone {
   isEditing: boolean
   hasChanged: boolean
   canEdit: boolean
+  isFromCase: boolean
 }
 
 interface MilestoneTimelineProps {
@@ -44,6 +45,29 @@ function formatTimeWithSeconds(isoString: string): string {
   } catch {
     return isoString
   }
+}
+
+/** Split ISO string into { date: "YYYY-MM-DD", time: "HH:mm" } */
+function splitDateTime(isoString: string | null): { date: string; time: string } {
+  if (!isoString) {
+    // Default to today + 08:00 for new timestamps
+    const today = new Date()
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    return { date: dateStr, time: '08:00' }
+  }
+  try {
+    const d = new Date(isoString)
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    return { date: dateStr, time: timeStr }
+  } catch {
+    return { date: '', time: '08:00' }
+  }
+}
+
+/** Combine "YYYY-MM-DD" + "HH:mm" into ISO string */
+function combineDateTime(dateStr: string, timeStr: string): string {
+  return new Date(`${dateStr}T${timeStr}:00`).toISOString()
 }
 
 // ============================================
@@ -150,6 +174,17 @@ function TimelineNode({
   // Track line color
   const trackColor = 'bg-slate-200'
 
+  // Split datetime for pickers
+  const { date: editDate, time: editTime } = splitDateTime(milestone.recorded_at)
+
+  const handleDateChange = (newDate: string) => {
+    onTimeChange(index, combineDateTime(newDate, editTime))
+  }
+
+  const handleTimeChange = (newTime: string) => {
+    onTimeChange(index, combineDateTime(editDate, newTime))
+  }
+
   return (
     <div className="flex gap-3">
       {/* Vertical track column */}
@@ -197,19 +232,9 @@ function TimelineNode({
             )}
           </div>
 
-          {/* Right: time + edit button */}
+          {/* Right: time display + edit button */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {milestone.isEditing ? (
-              <input
-                type="datetime-local"
-                step="1"
-                value={milestone.recorded_at ? milestone.recorded_at.slice(0, 19) : ''}
-                onChange={(e) =>
-                  onTimeChange(index, e.target.value ? new Date(e.target.value).toISOString() : '')
-                }
-                className="px-1.5 py-0.5 text-xs font-mono border-[1.5px] border-blue-500 rounded-md bg-blue-50 focus:ring-2 focus:ring-blue-500 outline-none"
-              />
-            ) : (
+            {!milestone.isEditing && (
               <span
                 className={`text-[13px] font-mono font-medium ${
                   isMissing ? 'text-slate-400 italic' : 'text-slate-700'
@@ -232,6 +257,24 @@ function TimelineNode({
             )}
           </div>
         </div>
+
+        {/* Expanded edit row — inline date + time inputs */}
+        {milestone.isEditing && (
+          <div className="mt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="date"
+              value={editDate}
+              onChange={(e) => handleDateChange(e.target.value)}
+              className="h-8 px-2 text-[13px] font-mono bg-white border border-slate-200 rounded-md text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <input
+              type="time"
+              value={editTime}
+              onChange={(e) => handleTimeChange(e.target.value)}
+              className="h-8 px-2 text-[13px] font-mono bg-white border border-slate-200 rounded-md text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        )}
       </div>
     </div>
   )

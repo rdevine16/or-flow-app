@@ -300,6 +300,7 @@ export default function DataQualityPage() {
         display_order: number
         pair_with_id: string | null
         recorded_at: string | null
+        isFromCase: boolean
       }>()
 
       caseMilestones?.forEach(cm => {
@@ -312,7 +313,8 @@ export default function DataQualityPage() {
               display_name: fm.display_name,
               display_order: fm.display_order || 0,
               pair_with_id: fm.pair_with_id || null,
-              recorded_at: cm.recorded_at
+              recorded_at: cm.recorded_at,
+              isFromCase: true
             })
           }
         }
@@ -330,7 +332,8 @@ export default function DataQualityPage() {
               display_name: fm.display_name,
               display_order: fm.display_order || 0,
               pair_with_id: fm.pair_with_id || null,
-              recorded_at: null // Not recorded - that's why it's an issue
+              recorded_at: null, // Not recorded - that's why it's an issue
+              isFromCase: false // Added from issues, not from case_milestones
             })
           }
         }
@@ -368,14 +371,8 @@ export default function DataQualityPage() {
         }
       })
 
-      // Build the editable milestone list
+      // Build the editable milestone list — all milestones are editable
       const editable: EditableMilestone[] = milestoneList.map(fm => {
-        // Can edit if:
-        // 1. This milestone has an issue, OR
-        // 2. This milestone is paired with one that has an issue, OR
-        // 3. ANY unrecorded milestone (user is already reviewing, let them fix everything)
-        const canEdit = editableMilestoneIds.has(fm.id) || !fm.recorded_at
-
         return {
           id: fm.id,
           name: fm.name,
@@ -386,7 +383,8 @@ export default function DataQualityPage() {
           original_recorded_at: fm.recorded_at,
           isEditing: false,
           hasChanged: false,
-          canEdit
+          canEdit: true,
+          isFromCase: fm.isFromCase
         }
       })
 
@@ -455,6 +453,10 @@ export default function DataQualityPage() {
   // ============================================
 
   const calculateImpact = (milestones: EditableMilestone[]) => {
+    // Only consider milestones that are part of the actual case (not issue-injected ones)
+    const caseMilestoneNames = new Set(
+      milestones.filter(m => m.isFromCase).map(m => m.name)
+    )
     const recordedNames = new Set(
       milestones.filter(m => m.recorded_at).map(m => m.name)
     )
@@ -463,6 +465,10 @@ export default function DataQualityPage() {
     const cannotCalculate: string[] = []
 
     Object.values(METRIC_REQUIREMENTS).forEach((config) => {
+      // Only show metrics whose required milestones are actual case milestones
+      const allRequirementsExist = config.requires.every(req => caseMilestoneNames.has(req))
+      if (!allRequirementsExist) return // Skip — not part of this case's milestone set
+
       const hasAll = config.requires.every(req => recordedNames.has(req))
       if (hasAll) {
         canCalculate.push(config.name)
@@ -943,7 +949,7 @@ export default function DataQualityPage() {
   return (
     <DashboardLayout>
         {/* Header */}
-        <div className="flex items-center justify-between py-6 border-b border-slate-200 mb-6">
+        <div className="flex items-center justify-between py-6 border-b border-slate-200 mb-6 animate-in fade-in duration-300">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #2563EB, #7C3AED)' }}>
@@ -1010,52 +1016,93 @@ export default function DataQualityPage() {
 
         {/* Detection result banner */}
         {detectionResult && !runningDetection && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-600">
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-600 animate-in">
             {detectionResult}
           </div>
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <div data-testid="loading-skeleton" className="space-y-4">
+            {/* Summary skeleton */}
+            <div className="grid grid-cols-4 gap-4">
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} className="bg-white border border-slate-200 rounded-xl p-5 animate-pulse">
+                  <div className="h-3 bg-slate-200 rounded w-20 mb-3" />
+                  <div className="h-7 bg-slate-200 rounded w-16" />
+                </div>
+              ))}
+            </div>
+            {/* Filter bar skeleton */}
+            <div className="bg-white border border-slate-200 rounded-[10px] px-4 py-3 animate-pulse flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-7 bg-slate-200 rounded w-32" />
+                <div className="h-4 bg-slate-200 rounded w-24" />
+              </div>
+              <div className="h-3 bg-slate-200 rounded w-20" />
+            </div>
+            {/* Table skeleton */}
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-stone-200 bg-stone-50 animate-pulse">
+                <div className="h-3 bg-slate-200 rounded w-full max-w-md" />
+              </div>
+              {[0, 1, 2, 3, 4].map(i => (
+                <div key={i} className="px-4 py-3 border-b border-stone-100 animate-pulse flex items-center gap-4">
+                  <div className="w-3.5 h-3.5 bg-slate-200 rounded" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-slate-200 rounded w-48" />
+                    <div className="h-3 bg-slate-100 rounded w-32" />
+                  </div>
+                  <div className="h-5 bg-slate-200 rounded w-24" />
+                  <div className="h-4 bg-slate-200 rounded w-16" />
+                  <div className="h-4 bg-slate-200 rounded w-12" />
+                  <div className="h-7 bg-slate-200 rounded w-16" />
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <>
             {/* Summary Row — Quality Gauge + 3 Stat Cards */}
-            {summary && <SummaryRow summary={summary} />}
+            <div className="stagger-item">
+              {summary && <SummaryRow summary={summary} />}
+            </div>
 
             {/* Filter Bar */}
-            <FilterBar
-              filterType={filterType}
-              onFilterTypeChange={setFilterType}
-              showResolved={showResolved}
-              onShowResolvedChange={setShowResolved}
-              issueTypes={issueTypes}
-              selectedCount={selectedIds.size}
-              onBulkExclude={() => openBulkModal(Array.from(selectedIds))}
-              caseCount={new Set(issues.map(i => i.case_id)).size}
-              issueCount={issues.length}
-              filterCaseId={filterCaseId}
-              filterCaseNumber={filterCaseNumber}
-              onClearCaseFilter={() => {
-                const params = new URLSearchParams(searchParams.toString())
-                params.delete('caseId')
-                const newUrl = params.toString()
-                  ? `${window.location.pathname}?${params.toString()}`
-                  : window.location.pathname
-                router.replace(newUrl)
-              }}
-            />
+            <div className="stagger-item">
+              <FilterBar
+                filterType={filterType}
+                onFilterTypeChange={setFilterType}
+                showResolved={showResolved}
+                onShowResolvedChange={setShowResolved}
+                issueTypes={issueTypes}
+                selectedCount={selectedIds.size}
+                onBulkExclude={() => openBulkModal(Array.from(selectedIds))}
+                caseCount={new Set(issues.map(i => i.case_id)).size}
+                issueCount={issues.length}
+                filterCaseId={filterCaseId}
+                filterCaseNumber={filterCaseNumber}
+                onClearCaseFilter={() => {
+                  const params = new URLSearchParams(searchParams.toString())
+                  params.delete('caseId')
+                  const newUrl = params.toString()
+                    ? `${window.location.pathname}?${params.toString()}`
+                    : window.location.pathname
+                  router.replace(newUrl)
+                }}
+              />
+            </div>
 
             {/* Issues Table */}
-            <IssuesTable
-              issues={issues}
-              issueTypes={issueTypes}
-              selectedIds={selectedIds}
-              onSelectionChange={setSelectedIds}
-              onReview={openModal}
-              activeCaseId={modalState.isOpen && modalState.issue ? modalState.issue.case_id : null}
-            />
+            <div className="stagger-item">
+              <IssuesTable
+                issues={issues}
+                issueTypes={issueTypes}
+                selectedIds={selectedIds}
+                onSelectionChange={setSelectedIds}
+                onReview={openModal}
+                activeCaseId={modalState.isOpen && modalState.issue ? modalState.issue.case_id : null}
+              />
+            </div>
           </>
         )}
 

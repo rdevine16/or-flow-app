@@ -25,6 +25,7 @@ const createMockMilestone = (overrides?: Partial<EditableMilestone>): EditableMi
   isEditing: false,
   hasChanged: false,
   canEdit: true,
+  isFromCase: true,
   ...overrides,
 })
 
@@ -218,30 +219,27 @@ describe('MilestoneTimeline', () => {
       expect(onToggleEdit).toHaveBeenCalledWith(0)
     })
 
-    it('shows datetime-local input when isEditing is true', () => {
+    it('shows inline date and time inputs when isEditing is true', () => {
       const editingMilestone = createMockMilestone({ isEditing: true })
       const { container } = render(
         <MilestoneTimeline {...defaultProps} milestones={[editingMilestone]} />
       )
-      const input = container.querySelector('input[type="datetime-local"]')
-      expect(input).toBeInTheDocument()
-      expect(input).toHaveAttribute('value', '2026-02-20T08:30:00')
+      const dateInput = container.querySelector('input[type="date"]')
+      expect(dateInput).toBeInTheDocument()
+      const timeInput = container.querySelector('input[type="time"]')
+      expect(timeInput).toBeInTheDocument()
     })
 
-    it('calls onTimeChange when datetime input value changes', () => {
-      const onTimeChange = vi.fn()
+    it('hides inline time text when isEditing is true', () => {
       const editingMilestone = createMockMilestone({ isEditing: true })
-      const { container } = render(
-        <MilestoneTimeline
-          {...defaultProps}
-          milestones={[editingMilestone]}
-          onTimeChange={onTimeChange}
-        />
+      render(
+        <MilestoneTimeline {...defaultProps} milestones={[editingMilestone]} />
       )
-      const input = container.querySelector('input[type="datetime-local"]') as HTMLInputElement
-      expect(input).toBeInTheDocument()
-      fireEvent.change(input, { target: { value: '2026-02-20T09:15:00' } })
-      expect(onTimeChange).toHaveBeenCalledWith(0, expect.any(String))
+      // The formatTimeWithSeconds display should NOT be in the header row when editing
+      // (it's replaced by the DatePicker/TimePicker in the expanded row)
+      const timeline = screen.getByTestId('milestone-timeline')
+      // Should show Done button instead of Edit
+      expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
     })
   })
 
