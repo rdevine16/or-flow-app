@@ -304,6 +304,8 @@ export default function CreateFacilityPage() {
             <AdminStep
               data={adminData}
               onChange={setAdminData}
+              sendWelcomeEmail={sendWelcomeEmail}
+              onSendWelcomeEmailChange={setSendWelcomeEmail}
             />
           )}
           {currentStep === 3 && (

@@ -154,6 +154,8 @@ export interface FacilityStepProps {
 export interface AdminStepProps {
   data: AdminData
   onChange: (data: AdminData) => void
+  sendWelcomeEmail: boolean
+  onSendWelcomeEmailChange: (value: boolean) => void
 }
 
 export interface ClinicalTemplatesStepProps {
