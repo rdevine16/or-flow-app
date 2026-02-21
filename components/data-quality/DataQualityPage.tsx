@@ -8,8 +8,9 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { dataQualityAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { AlertTriangle, ArrowDown, ArrowUp, Check, Clock, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Clock, RefreshCw, Shield, X } from 'lucide-react'
 import SummaryRow from './SummaryRow'
+import ScanProgress from './ScanProgress'
 import {
   fetchMetricIssues,
   fetchIssueTypes,
@@ -1025,58 +1026,74 @@ export default function DataQualityPage() {
 
   return (
     <DashboardLayout>
-        <div className="flex items-center justify-between mb-6">
+        {/* Header */}
+        <div className="flex items-center justify-between py-6 border-b border-slate-200 mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Data Quality</h1>
-            <p className="text-slate-500 mt-1">Monitor and resolve data quality issues</p>
+            <div className="flex items-center gap-2.5 mb-1">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #2563EB, #7C3AED)' }}>
+                <Shield className="w-4 h-4 text-white" />
+              </div>
+              <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">Data Quality</h1>
+            </div>
+            <p className="text-[13px] text-slate-500 pl-[42px]">
+              Monitor and resolve data integrity issues across surgical cases
+            </p>
           </div>
-          <button
-            onClick={handleRunDetection}
-            disabled={runningDetection}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm font-medium"
-          >
-            {runningDetection ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Running...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4" />
-                Run Detection
-              </>
-            )}
-          </button>
+
+          <div className="flex items-center gap-3">
+            {/* Scan status indicator */}
+            {lastScanTime && (() => {
+              const hourAgo = new Date(Date.now() - 60 * 60 * 1000)
+              const isCurrent = lastScanTime > hourAgo
+
+              return (
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className={`w-[7px] h-[7px] rounded-full ${isCurrent ? 'bg-green-600' : 'bg-amber-500'}`}
+                    style={{ boxShadow: isCurrent ? '0 0 6px rgba(5,150,105,0.25)' : '0 0 6px rgba(217,119,6,0.25)' }}
+                  />
+                  <span className="text-xs text-slate-500">
+                    {lastScanTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                    {' · '}
+                    {lastScanTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </div>
+              )
+            })()}
+
+            {/* Run Detection button */}
+            <button
+              onClick={handleRunDetection}
+              disabled={runningDetection}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all disabled:opacity-60 disabled:cursor-default text-white shadow-md hover:shadow-lg"
+              style={{
+                background: runningDetection
+                  ? '#F5F5F4'
+                  : 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                color: runningDetection ? '#78716C' : 'white',
+                boxShadow: runningDetection ? 'none' : '0 2px 8px rgba(37,99,235,0.19)',
+              }}
+            >
+              {runningDetection ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                  Scanning...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Run Detection
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Last Scan Info - Always visible if we have a time */}
-        {lastScanTime && (() => {
-          const hourAgo = new Date(Date.now() - 60 * 60 * 1000)
-          const isCurrent = lastScanTime > hourAgo
+        {/* Inline scan progress */}
+        {runningDetection && <ScanProgress step={detectionStep} />}
 
-          return (
-            <div className="mb-4 flex items-center gap-2">
-              {isCurrent ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-600 rounded-full text-xs font-medium">
-                  <Check className="w-3 h-3" />
-                  Current
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">
-                  <Clock className="w-3 h-3" />
-                  Not Current
-                </span>
-              )}
-              <span className="text-sm text-slate-500">
-                Last scan: {lastScanTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                {' · '}
-                {lastScanTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </span>
-            </div>
-          )
-        })()}
-
-        {detectionResult && (
+        {/* Detection result banner */}
+        {detectionResult && !runningDetection && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-600">
             {detectionResult}
           </div>
@@ -1358,63 +1375,6 @@ export default function DataQualityPage() {
               )}
             </div>
           </>
-        )}
-
-        {/* Detection Progress Modal */}
-        {runningDetection && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-              <div className="px-6 py-4 border-b border-slate-200">
-                <h3 className="text-lg font-semibold text-slate-900">Running Data Quality Check</h3>
-              </div>
-              <div className="p-6">
-                <div className="mb-6">
-                  <div className="flex justify-between text-sm text-slate-600 mb-2">
-                    <span>Progress</span>
-                    <span>{Math.round((detectionStep / 7) * 100)}%</span>
-                  </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-blue-600 rounded-full transition-all duration-300 ease-out"
-                      style={{ width: `${(detectionStep / 7) * 100}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {[
-                    { step: 1, label: 'Expiring old issues' },
-                    { step: 2, label: 'Loading recent cases' },
-                    { step: 3, label: 'Checking impossible values' },
-                    { step: 4, label: 'Checking negative durations' },
-                    { step: 5, label: 'Checking milestone sequences' },
-                    { step: 6, label: 'Checking missing milestones' },
-                    { step: 7, label: 'Finalizing results' },
-                  ].map(({ step, label }) => (
-                    <div key={step} className="flex items-center gap-3">
-                      {detectionStep > step ? (
-                        <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
-                          <Check className="w-3 h-3 text-green-600" />
-                        </div>
-                      ) : detectionStep === step ? (
-                        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                          <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
-                        </div>
-                      ) : (
-                        <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center">
-                          <div className="w-2 h-2 bg-slate-300 rounded-full" />
-                        </div>
-                      )}
-                      <span className={`text-sm ${
-                        detectionStep > step ? 'text-green-600' : detectionStep === step ? 'text-blue-700 font-medium' : 'text-slate-400'
-                      }`}>
-                        {label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
         )}
 
         {/* Modal */}
