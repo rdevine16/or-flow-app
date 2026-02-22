@@ -4,6 +4,8 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { generateDemoData, purgeCaseData, type GenerationConfig, type ProgressCallback, type SurgeonDurationMap, type SurgeonProfileInput } from '@/lib/demo-data-generator'
+import type { OutlierProfile } from '@/lib/demo-outlier-engine'
+import type { OutlierType, OutlierSetting } from '@/app/admin/demo/types'
 import { env, serverEnv } from '@/lib/env'
 import { logger } from '@/lib/logger'
 
@@ -37,6 +39,20 @@ function mapWizardProfiles(profiles: Record<string, WizardSurgeonProfile>): Surg
       dayRoomAssignments[Number(dayStr)] = rooms
     }
 
+    // Build outlier profile from wizard config (if any outlier is enabled)
+    let outlierProfile: OutlierProfile | undefined
+    if (p.outliers) {
+      const outliers = {} as Record<OutlierType, OutlierSetting>
+      for (const [key, val] of Object.entries(p.outliers)) {
+        outliers[key as OutlierType] = {
+          enabled: val.enabled,
+          frequency: val.frequency,
+          magnitude: val.magnitude,
+        }
+      }
+      outlierProfile = { outliers, badDaysPerMonth: p.badDaysPerMonth || 0 }
+    }
+
     return {
       surgeonId: p.surgeonId,
       speedProfile: p.speedProfile,
@@ -45,6 +61,7 @@ function mapWizardProfiles(profiles: Record<string, WizardSurgeonProfile>): Surg
       dayRoomAssignments,
       preferredVendor: p.preferredVendor as 'Stryker' | 'Zimmer Biomet' | 'DePuy Synthes' | null,
       procedureTypeIds: p.procedureTypeIds,
+      outlierProfile,
     }
   })
 }

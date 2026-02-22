@@ -10,6 +10,15 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getLocalDateString } from '@/lib/date-utils'
 import { getHolidayDateSet } from '@/lib/us-holidays'
+import type { OutlierProfile } from '@/lib/demo-outlier-engine'
+import {
+  scheduleBadDays,
+  computeLateStartDelay,
+  computeCascadeDelay,
+  adjustSurgicalTime as outlierAdjustSurgicalTime,
+  adjustTurnoverTime as outlierAdjustTurnover,
+  computeCallbackDelay as outlierComputeCallbackDelay,
+} from '@/lib/demo-outlier-engine'
 
 // =====================================================
 // TYPES
@@ -26,6 +35,8 @@ export interface SurgeonProfileInput {
   dayRoomAssignments: DayRoomMap
   preferredVendor: 'Stryker' | 'Zimmer Biomet' | 'DePuy Synthes' | null
   procedureTypeIds: string[]      // user-selected procedure types
+  /** Outlier profile from wizard config. If omitted, no outliers are applied. */
+  outlierProfile?: OutlierProfile
 }
 
 interface ResolvedSurgeon extends SurgeonProfileInput {
@@ -560,7 +571,8 @@ export async function generateDemoData(
       const result = generateSurgeonCases(
         surgeon, startDate, endDate, procedureTypes, milestoneTypes, procMilestoneMap, payers,
         roomDayStaffMap, completedStatus.id, scheduledStatus?.id || completedStatus.id, prefix, caseNum,
-        facility.timezone || 'America/New_York', fmToMtMap, systemUserId, surgeonDurationMap
+        facility.timezone || 'America/New_York', fmToMtMap, systemUserId, surgeonDurationMap,
+        surgeon.outlierProfile
       )
       allCases.push(...result.cases)
       allMilestones.push(...result.milestones)
@@ -745,7 +757,8 @@ function generateSurgeonCases(
   facilityTz: string,
   _fmToMtMap: Map<string, string>,
   createdByUserId: string | null,
-  surgeonDurationMap: SurgeonDurationMap
+  surgeonDurationMap: SurgeonDurationMap,
+  outlierProfile?: OutlierProfile
 ) {
   const cases: CaseRecord[] = []
   const milestones: MilestoneRecord[] = []
@@ -762,6 +775,23 @@ function generateSurgeonCases(
   const specialtyCfg = surgeon.specialty === 'hand_wrist' ? HAND_WRIST_CONFIG : surgeon.specialty === 'spine' ? SPINE_CONFIG : null
   const casesPerDay = specialtyCfg?.casesPerDay ?? speedCfg.casesPerDay
   const dayStartTime = specialtyCfg?.startTime ?? speedCfg.startTime
+
+  // ── Pre-compute bad days for outlier engine ──
+  let badDays = new Set<string>()
+  if (outlierProfile && outlierProfile.badDaysPerMonth > 0) {
+    // Collect all operating dates for this surgeon
+    const operatingDates: string[] = []
+    const scanDate = new Date(startDate)
+    while (scanDate <= endDate) {
+      const dow = scanDate.getUTCDay()
+      if (surgeon.operatingDays.includes(dow) && !isWeekend(scanDate) && !isHoliday(scanDate)) {
+        const dayRooms = surgeon.dayRoomAssignments[dow] || []
+        if (dayRooms.length > 0) operatingDates.push(dateKey(scanDate))
+      }
+      scanDate.setUTCDate(scanDate.getUTCDate() + 1)
+    }
+    badDays = scheduleBadDays(operatingDates, outlierProfile.badDaysPerMonth)
+  }
 
   const currentDate = new Date(startDate)
 
@@ -783,10 +813,23 @@ function generateSurgeonCases(
     const [h, m] = dayStartTime.split(':').map(Number)
     let currentTime = facilityDate(dk, h, m, facilityTz)
 
+    // ── Outlier: day-level late start check ──
+    const isBadDay = badDays.has(dk)
+    let dayLateStartDelay = 0
+    if (outlierProfile) {
+      dayLateStartDelay = computeLateStartDelay(outlierProfile, isBadDay)
+    }
+    const isLateStartDay = dayLateStartDelay > 0
+
     let roomIdx = 0
     let prevCaseLinkId: string | null = null
 
     for (let i = 0; i < numCases; i++) {
+      // ── Outlier: cascade delay for subsequent cases on late start days ──
+      if (isLateStartDay && i > 0 && outlierProfile) {
+        currentTime = addMinutes(currentTime, computeCascadeDelay(outlierProfile, isBadDay))
+      }
+
       const proc = randomChoice(surgeonProcs)
 
       // Determine which room this case is in (alternate for flip rooms)
@@ -818,8 +861,21 @@ function generateSurgeonCases(
       // Apply speed profile scaling (fast=0.7x, slow=1.3x)
       surgicalTime = Math.round(surgicalTime * speedMultiplier)
 
+      // ── Outlier: adjust surgical time (extended phases / fast cases) ──
+      if (outlierProfile) {
+        surgicalTime = outlierAdjustSurgicalTime(outlierProfile, surgicalTime, isBadDay)
+      }
+
       // Start variance: 80% on time (±10min), 20% late
-      const variance = Math.random() < 0.8 ? randomInt(-5, 10) : randomInt(10, 30)
+      // On late start days, first case gets significant additional delay
+      let variance: number
+      if (i === 0 && isLateStartDay) {
+        // Late start: patient arrives dayLateStartDelay minutes late (+ small jitter)
+        // Keep start_time at original schedule so analytics shows the FCOTS violation
+        variance = dayLateStartDelay + randomInt(0, 5)
+      } else {
+        variance = Math.random() < 0.8 ? randomInt(-5, 10) : randomInt(10, 30)
+      }
       const scheduledStart = new Date(currentTime)
       const patientInTime = addMinutes(scheduledStart, variance)
 
@@ -892,7 +948,17 @@ function generateSurgeonCases(
               callbackPct = randomInt(50, 70) / 100  // average caller
             }
             const callbackOffset = Math.round(surgicalTime * callbackPct)
-            caseData.called_back_at = addMinutes(incisionTime, callbackOffset).toISOString()
+            let callbackTime = addMinutes(incisionTime, callbackOffset)
+
+            // ── Outlier: additional callback delay for flip room transitions ──
+            if (outlierProfile) {
+              const extraDelay = outlierComputeCallbackDelay(outlierProfile, isBadDay)
+              if (extraDelay > 0) {
+                callbackTime = addMinutes(callbackTime, extraDelay)
+              }
+            }
+
+            caseData.called_back_at = callbackTime.toISOString()
           }
         }
 
@@ -933,18 +999,28 @@ function generateSurgeonCases(
 
       // ── Advance time ──
       if (isFlipRoomDay) {
-        // Flip room: advance by procedure duration + transit gap (3-8 min between rooms)
-        const interval = surgeonDurationMap.get(`${surgeon.surgeonId}::${proc.id}`)
-          ?? proc.expected_duration_minutes
-          ?? speedCfg.flipInterval
+        // Flip room: advance based on surgeon_left_at (actual case timing) for correct cascading
+        // Falls back to interval-based advance if milestones weren't generated
         const transitGap = randomInt(3, 8) // transit + scrub gap between rooms
-        currentTime = addMinutes(currentTime, (interval > 0 ? interval : 90) + transitGap)
+        if (caseData.surgeon_left_at) {
+          currentTime = addMinutes(new Date(caseData.surgeon_left_at), transitGap)
+        } else {
+          const interval = surgeonDurationMap.get(`${surgeon.surgeonId}::${proc.id}`)
+            ?? proc.expected_duration_minutes
+            ?? speedCfg.flipInterval
+          currentTime = addMinutes(currentTime, (interval > 0 ? interval : 90) + transitGap)
+        }
         roomIdx++
       } else {
         // Single room: advance based on patient_out milestone + turnover
         const poMs = milestones.filter(ms => ms.case_id === caseId).find(ms =>
           milestoneTypes.find(mt => mt.id === ms.facility_milestone_id && mt.name === 'patient_out'))
-        currentTime = poMs ? addMinutes(new Date(poMs.recorded_at!), randomInt(15, 25)) : addMinutes(currentTime, 90)
+        // ── Outlier: long turnover adjustment ──
+        let turnoverMinutes = randomInt(15, 25)
+        if (outlierProfile) {
+          turnoverMinutes = outlierAdjustTurnover(outlierProfile, turnoverMinutes, isBadDay)
+        }
+        currentTime = poMs ? addMinutes(new Date(poMs.recorded_at!), turnoverMinutes) : addMinutes(currentTime, 90)
       }
 
       caseNum++
