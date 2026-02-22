@@ -12,6 +12,8 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import DemoWizardShell from './DemoWizardShell'
 import FacilityStep from './steps/FacilityStep'
 import SurgeonProfilesStep from './steps/SurgeonProfilesStep'
+import RoomScheduleStep from './steps/RoomScheduleStep'
+import OutlierConfigStep from './steps/OutlierConfigStep'
 import { Loader2 } from 'lucide-react'
 
 import type {
@@ -32,6 +34,7 @@ import {
   SPECIALTY_PROC_NAMES,
   isFacilityStepValid,
   isSurgeonProfilesStepValid,
+  isRoomScheduleStepValid,
   estimateTotalCases,
   createDefaultOutlierProfile,
   parseBlockSchedules,
@@ -228,9 +231,10 @@ export default function DemoDataWizardPage() {
           return isFacilityStepValid(wizardState) && !loadingFacility
         case 2:
           return isSurgeonProfilesStepValid(wizardState.surgeonProfiles).valid
-        // Steps 3-5 validation will be added in later phases
         case 3:
+          return isRoomScheduleStepValid(wizardState.surgeonProfiles).valid
         case 4:
+          return true // Outlier config is optional — always valid
         case 5:
           return true
         case 6:
@@ -346,16 +350,22 @@ export default function DemoDataWizardPage() {
             onExpandSurgeon={setExpandedSurgeonId}
           />
         )}
+        {/* Step 3: Room Schedule */}
         {currentStep === 3 && (
-          <PlaceholderStep
-            title="Room Schedule"
-            description="Visual day/room grid for per-day room assignments. Coming in Phase 3."
+          <RoomScheduleStep
+            surgeons={surgeons}
+            rooms={rooms}
+            profiles={wizardState.surgeonProfiles}
+            onUpdateProfile={handleUpdateProfile}
           />
         )}
+
+        {/* Step 4: Outlier Config */}
         {currentStep === 4 && (
-          <PlaceholderStep
-            title="Outlier Config"
-            description="Per-surgeon outlier controls with frequency and magnitude sliders. Coming in Phase 3."
+          <OutlierConfigStep
+            surgeons={surgeons}
+            profiles={wizardState.surgeonProfiles}
+            onUpdateProfile={handleUpdateProfile}
           />
         )}
         {currentStep === 5 && (

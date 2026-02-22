@@ -322,6 +322,19 @@ export function isRoomScheduleStepValid(
   return { valid: errors.length === 0, errors }
 }
 
+/** Outlier config is always valid (outliers are optional). Returns summary for display. */
+export function isOutlierConfigStepValid(
+  profiles: Record<string, SurgeonProfile>,
+): { valid: boolean; enabledCount: number } {
+  let enabledCount = 0
+  for (const profile of Object.values(profiles)) {
+    for (const setting of Object.values(profile.outliers)) {
+      if (setting.enabled) enabledCount++
+    }
+  }
+  return { valid: true, enabledCount }
+}
+
 // ============================================================================
 // CASE ESTIMATION
 // ============================================================================
