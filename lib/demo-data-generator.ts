@@ -370,7 +370,7 @@ export async function purgeCaseData(
 
 export async function getDetailedStatus(supabase: SupabaseClient, facilityId: string) {
   // Pre-fetch surgeon role ID to avoid fragile nested await inside Promise.all
-  const { data: surgeonRole } = await supabase.from('user_roles').select('id').eq('name', 'Surgeon').single()
+  const { data: surgeonRole } = await supabase.from('user_roles').select('id').eq('name', 'surgeon').single()
   const surgeonRoleId = surgeonRole?.id ?? ''
 
   const qs = await Promise.all([
