@@ -75,15 +75,15 @@ export async function createFacilityWithTemplates(
 
     // Step 2: Seed templates via RPC
     const { error: rpcError } = await supabase.rpc('seed_facility_with_templates', {
-      p_facility_id: facility.id,
-      p_template_config: {
+      target_facility_id: facility.id,
+      template_config: {
         milestones: templateConfig.milestones,
         procedures: templateConfig.procedures,
         procedure_milestone_config: templateConfig.procedureMilestoneConfig,
         delay_types: templateConfig.delayTypes,
         cancellation_reasons: templateConfig.cancellationReasons,
         complexities: templateConfig.complexities,
-        checklist_fields: templateConfig.checklistFields,
+        preop_checklist_fields: templateConfig.checklistFields,
         cost_categories: templateConfig.costCategories,
         implant_companies: templateConfig.implantCompanies,
         payers: templateConfig.payers,

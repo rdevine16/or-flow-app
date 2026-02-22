@@ -138,18 +138,6 @@ export const DEFAULT_TEMPLATE_COUNTS: TemplateCounts = {
 }
 
 // ============================================================================
-// WIZARD STATE
-// ============================================================================
-
-export interface WizardState {
-  currentStep: WizardStep
-  facilityData: FacilityData
-  adminData: AdminData
-  templateConfig: TemplateConfig
-  sendWelcomeEmail: boolean
-}
-
-// ============================================================================
 // STEP COMPONENT PROPS
 // ============================================================================
 

@@ -253,15 +253,15 @@ describe('createFacilityWithTemplates', () => {
       await createFacilityWithTemplates(params)
 
       expect(mocks.mockRpc).toHaveBeenCalledWith('seed_facility_with_templates', {
-        p_facility_id: 'new-facility-id',
-        p_template_config: {
+        target_facility_id: 'new-facility-id',
+        template_config: {
           milestones: true,
           procedures: true,
           procedure_milestone_config: true,
           delay_types: true,
           cancellation_reasons: true,
           complexities: true,
-          checklist_fields: true,
+          preop_checklist_fields: true,
           cost_categories: true,
           implant_companies: true,
           payers: true,
@@ -289,7 +289,7 @@ describe('createFacilityWithTemplates', () => {
       expect(mocks.mockRpc).toHaveBeenCalledWith(
         'seed_facility_with_templates',
         expect.objectContaining({
-          p_template_config: expect.objectContaining({
+          template_config: expect.objectContaining({
             milestones: false,
             flag_rules: false,
             payers: false,

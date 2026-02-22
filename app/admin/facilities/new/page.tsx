@@ -1,6 +1,5 @@
 // app/admin/facilities/new/page.tsx
 // Create Facility Wizard — 5-step decomposed wizard with WizardShell
-// Phase 2: Full scaffold with step navigation, progress indicator, and stub step components
 
 'use client'
 
