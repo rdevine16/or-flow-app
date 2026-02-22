@@ -1,6 +1,5 @@
 // app/admin/facilities/new/actions.ts
 // Submission logic for the facility creation wizard
-// Phase 2: skeleton only — full implementation in Phase 5
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { FacilityData, AdminData, TemplateConfig } from './types'
@@ -75,7 +74,6 @@ export async function createFacilityWithTemplates(
     }
 
     // Step 2: Seed templates via RPC
-    // TODO (Phase 5): Call seed_facility_with_templates with JSONB config
     const { error: rpcError } = await supabase.rpc('seed_facility_with_templates', {
       p_facility_id: facility.id,
       p_template_config: {
