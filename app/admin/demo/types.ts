@@ -160,6 +160,64 @@ export interface DemoORRoom {
 export interface DemoProcedureType {
   id: string
   name: string
+  expected_duration_minutes: number | null
+}
+
+// ============================================================================
+// BLOCK SCHEDULE ENTRIES (fetched from API for auto-fill)
+// ============================================================================
+
+export interface BlockScheduleEntry {
+  surgeon_id: string
+  day_of_week: number // 0=Sun, 1=Mon, ..., 6=Sat
+  start_time: string  // "07:00:00"
+  end_time: string    // "15:00:00"
+}
+
+/** Parse block schedule entries into operating days + formatted time strings per surgeon */
+export function parseBlockSchedules(
+  blocks: BlockScheduleEntry[],
+  surgeonId: string,
+): { days: DayOfWeek[]; scheduleLabel: string } {
+  const surgeonBlocks = blocks
+    .filter((b) => b.surgeon_id === surgeonId && b.day_of_week >= 1 && b.day_of_week <= 5)
+  const uniqueDays = [...new Set(surgeonBlocks.map((b) => b.day_of_week as DayOfWeek))].sort()
+
+  const scheduleLabel = uniqueDays
+    .map((d) => {
+      const block = surgeonBlocks.find((b) => b.day_of_week === d)
+      const dayLabel = WEEKDAY_LABELS[d - 1]
+      if (block) {
+        const start = block.start_time.slice(0, 5) // "07:00"
+        const end = block.end_time.slice(0, 5)
+        return `${dayLabel} ${start}-${end}`
+      }
+      return dayLabel
+    })
+    .join(', ')
+
+  return { days: uniqueDays, scheduleLabel }
+}
+
+// ============================================================================
+// SURGEON DURATION ENTRIES (fetched from API)
+// ============================================================================
+
+export interface SurgeonDurationEntry {
+  surgeon_id: string
+  procedure_type_id: string
+  expected_duration_minutes: number
+}
+
+/** Build a lookup map: "surgeonId::procedureTypeId" → duration */
+export function buildDurationMap(
+  entries: SurgeonDurationEntry[],
+): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const e of entries) {
+    map.set(`${e.surgeon_id}::${e.procedure_type_id}`, e.expected_duration_minutes)
+  }
+  return map
 }
 
 // ============================================================================

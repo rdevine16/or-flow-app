@@ -42,9 +42,34 @@ export async function POST(request: Request) {
 
       case 'list-procedure-types': {
         if (!facilityId) return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
-        const { data, error } = await supabase.from('procedure_types').select('id, name').eq('facility_id', facilityId).eq('is_active', true).order('name')
+        const { data, error } = await supabase.from('procedure_types').select('id, name, expected_duration_minutes').eq('facility_id', facilityId).eq('is_active', true).order('name')
         if (error) return NextResponse.json({ error: error.message }, { status: 500 })
         return NextResponse.json({ procedureTypes: data || [] })
+      }
+
+      case 'list-block-schedules': {
+        if (!facilityId) return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
+        const { data, error } = await supabase
+          .from('block_schedules')
+          .select('surgeon_id, day_of_week, start_time, end_time')
+          .eq('facility_id', facilityId)
+          .is('deleted_at', null)
+          .order('day_of_week')
+          .order('start_time')
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ blockSchedules: data || [] })
+      }
+
+      case 'list-surgeon-durations': {
+        if (!facilityId) return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
+        const { data, error } = await supabase
+          .from('surgeon_procedure_duration')
+          .select('surgeon_id, procedure_type_id, expected_duration_minutes')
+          .eq('facility_id', facilityId)
+          .eq('is_active', true)
+          .is('deleted_at', null)
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ surgeonDurations: data || [] })
       }
 
       case 'status': {

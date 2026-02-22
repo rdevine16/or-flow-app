@@ -6,9 +6,13 @@ import {
   isRoomScheduleStepValid,
   estimateTotalCases,
   createDefaultOutlierProfile,
+  parseBlockSchedules,
+  buildDurationMap,
   DEFAULT_WIZARD_STATE,
   type DemoWizardState,
   type SurgeonProfile,
+  type BlockScheduleEntry,
+  type SurgeonDurationEntry,
   OUTLIER_DEFS,
 } from '../types'
 
@@ -242,6 +246,114 @@ describe('types.ts — Validation helpers', () => {
 
       profile1.fastCases.frequency = 50
       expect(profile2.fastCases.frequency).toBe(30)
+    })
+  })
+
+  describe('parseBlockSchedules', () => {
+    const mockBlocks: BlockScheduleEntry[] = [
+      { surgeon_id: 'surgeon-1', day_of_week: 1, start_time: '07:00:00', end_time: '15:00:00' },
+      { surgeon_id: 'surgeon-1', day_of_week: 3, start_time: '07:30:00', end_time: '14:30:00' },
+      { surgeon_id: 'surgeon-1', day_of_week: 5, start_time: '08:00:00', end_time: '16:00:00' },
+      { surgeon_id: 'surgeon-2', day_of_week: 2, start_time: '09:00:00', end_time: '17:00:00' },
+      { surgeon_id: 'surgeon-2', day_of_week: 4, start_time: '10:00:00', end_time: '18:00:00' },
+    ]
+
+    it('filters blocks by surgeon ID', () => {
+      const result = parseBlockSchedules(mockBlocks, 'surgeon-1')
+      expect(result.days).toEqual([1, 3, 5])
+    })
+
+    it('returns empty days array for surgeon with no blocks', () => {
+      const result = parseBlockSchedules(mockBlocks, 'surgeon-99')
+      expect(result.days).toEqual([])
+      expect(result.scheduleLabel).toBe('')
+    })
+
+    it('filters out weekend days (0=Sun, 6=Sat)', () => {
+      const blocksWithWeekends: BlockScheduleEntry[] = [
+        { surgeon_id: 'surgeon-1', day_of_week: 0, start_time: '07:00:00', end_time: '15:00:00' },
+        { surgeon_id: 'surgeon-1', day_of_week: 1, start_time: '07:00:00', end_time: '15:00:00' },
+        { surgeon_id: 'surgeon-1', day_of_week: 6, start_time: '07:00:00', end_time: '15:00:00' },
+      ]
+      const result = parseBlockSchedules(blocksWithWeekends, 'surgeon-1')
+      expect(result.days).toEqual([1]) // Only Monday
+    })
+
+    it('formats schedule label with day names and times', () => {
+      const result = parseBlockSchedules(mockBlocks, 'surgeon-1')
+      expect(result.scheduleLabel).toBe('Mon 07:00-15:00, Wed 07:30-14:30, Fri 08:00-16:00')
+    })
+
+    it('sorts days in ascending order', () => {
+      const unsortedBlocks: BlockScheduleEntry[] = [
+        { surgeon_id: 'surgeon-1', day_of_week: 5, start_time: '08:00:00', end_time: '16:00:00' },
+        { surgeon_id: 'surgeon-1', day_of_week: 1, start_time: '07:00:00', end_time: '15:00:00' },
+        { surgeon_id: 'surgeon-1', day_of_week: 3, start_time: '07:30:00', end_time: '14:30:00' },
+      ]
+      const result = parseBlockSchedules(unsortedBlocks, 'surgeon-1')
+      expect(result.days).toEqual([1, 3, 5])
+    })
+
+    it('handles duplicate days by removing duplicates', () => {
+      const duplicateBlocks: BlockScheduleEntry[] = [
+        { surgeon_id: 'surgeon-1', day_of_week: 1, start_time: '07:00:00', end_time: '12:00:00' },
+        { surgeon_id: 'surgeon-1', day_of_week: 1, start_time: '13:00:00', end_time: '17:00:00' },
+      ]
+      const result = parseBlockSchedules(duplicateBlocks, 'surgeon-1')
+      expect(result.days).toEqual([1])
+      expect(result.scheduleLabel).toBe('Mon 07:00-12:00')
+    })
+
+    it('truncates time strings to HH:MM format', () => {
+      const blocksWithSeconds: BlockScheduleEntry[] = [
+        { surgeon_id: 'surgeon-1', day_of_week: 1, start_time: '07:30:45', end_time: '15:45:30' },
+      ]
+      const result = parseBlockSchedules(blocksWithSeconds, 'surgeon-1')
+      expect(result.scheduleLabel).toBe('Mon 07:30-15:45')
+    })
+  })
+
+  describe('buildDurationMap', () => {
+    const mockDurations: SurgeonDurationEntry[] = [
+      { surgeon_id: 'surgeon-1', procedure_type_id: 'proc-1', expected_duration_minutes: 45 },
+      { surgeon_id: 'surgeon-1', procedure_type_id: 'proc-2', expected_duration_minutes: 90 },
+      { surgeon_id: 'surgeon-2', procedure_type_id: 'proc-1', expected_duration_minutes: 60 },
+      { surgeon_id: 'surgeon-2', procedure_type_id: 'proc-3', expected_duration_minutes: 120 },
+    ]
+
+    it('builds map with composite keys "surgeonId::procedureTypeId"', () => {
+      const map = buildDurationMap(mockDurations)
+      expect(map.get('surgeon-1::proc-1')).toBe(45)
+      expect(map.get('surgeon-1::proc-2')).toBe(90)
+      expect(map.get('surgeon-2::proc-1')).toBe(60)
+      expect(map.get('surgeon-2::proc-3')).toBe(120)
+    })
+
+    it('returns undefined for non-existent keys', () => {
+      const map = buildDurationMap(mockDurations)
+      expect(map.get('surgeon-1::proc-3')).toBeUndefined()
+      expect(map.get('surgeon-99::proc-1')).toBeUndefined()
+    })
+
+    it('handles empty entries array', () => {
+      const map = buildDurationMap([])
+      expect(map.size).toBe(0)
+    })
+
+    it('handles duplicate keys by keeping the last entry', () => {
+      const duplicates: SurgeonDurationEntry[] = [
+        { surgeon_id: 'surgeon-1', procedure_type_id: 'proc-1', expected_duration_minutes: 45 },
+        { surgeon_id: 'surgeon-1', procedure_type_id: 'proc-1', expected_duration_minutes: 60 },
+      ]
+      const map = buildDurationMap(duplicates)
+      expect(map.get('surgeon-1::proc-1')).toBe(60)
+      expect(map.size).toBe(1)
+    })
+
+    it('preserves duration values accurately', () => {
+      const map = buildDurationMap(mockDurations)
+      expect(map.get('surgeon-2::proc-3')).toBe(120)
+      expect(map.get('surgeon-1::proc-1')).not.toBe(60) // Different surgeon
     })
   })
 })

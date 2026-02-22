@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import DemoWizardShell from './DemoWizardShell'
 import FacilityStep from './steps/FacilityStep'
+import SurgeonProfilesStep from './steps/SurgeonProfilesStep'
 import { Loader2 } from 'lucide-react'
 
 import type {
@@ -22,14 +23,18 @@ import type {
   ConfigStatusKey,
   SurgeonProfile,
   DemoWizardState,
+  BlockScheduleEntry,
+  SurgeonDurationEntry,
 } from './types'
 import {
   DEFAULT_WIZARD_STATE,
   DEMO_STEP_COUNT,
   SPECIALTY_PROC_NAMES,
   isFacilityStepValid,
+  isSurgeonProfilesStepValid,
   estimateTotalCases,
   createDefaultOutlierProfile,
+  parseBlockSchedules,
 } from './types'
 
 // ============================================================================
@@ -67,6 +72,11 @@ export default function DemoDataWizardPage() {
   const [rooms, setRooms] = useState<DemoORRoom[]>([])
   const [procs, setProcs] = useState<DemoProcedureType[]>([])
   const [configStatus, setConfigStatus] = useState<Record<ConfigStatusKey, number> | null>(null)
+  const [blockSchedules, setBlockSchedules] = useState<BlockScheduleEntry[]>([])
+  const [surgeonDurations, setSurgeonDurations] = useState<SurgeonDurationEntry[]>([])
+
+  // ── Step 2 UI state ──
+  const [expandedSurgeonId, setExpandedSurgeonId] = useState<string | null>(null)
 
   // ── Loading states ──
   const [loadingFacilities, setLoadingFacilities] = useState(true)
@@ -95,20 +105,26 @@ export default function DemoDataWizardPage() {
     async (facilityId: string) => {
       setLoadingFacility(true)
       try {
-        const [sData, rData, pData, statusData] = await Promise.all([
+        const [sData, rData, pData, statusData, bsData, sdData] = await Promise.all([
           apiCall('list-surgeons', { facilityId }),
           apiCall('list-rooms', { facilityId }),
           apiCall('list-procedure-types', { facilityId }),
           apiCall('status-detailed', { facilityId }),
+          apiCall('list-block-schedules', { facilityId }),
+          apiCall('list-surgeon-durations', { facilityId }),
         ])
 
         const s: DemoSurgeon[] = sData.surgeons || []
         const r: DemoORRoom[] = rData.rooms || []
         const p: DemoProcedureType[] = pData.procedureTypes || []
+        const bs: BlockScheduleEntry[] = bsData.blockSchedules || []
+        const sd: SurgeonDurationEntry[] = sdData.surgeonDurations || []
 
         setSurgeons(s)
         setRooms(r)
         setProcs(p)
+        setBlockSchedules(bs)
+        setSurgeonDurations(sd)
 
         // Map status-detailed response to ConfigStatusKey counts
         setConfigStatus({
@@ -123,18 +139,23 @@ export default function DemoDataWizardPage() {
           cases: statusData.cases ?? 0,
         })
 
-        // Initialize surgeon profiles with smart defaults
+        // Initialize surgeon profiles with smart defaults from block schedules
         const newProfiles: Record<string, SurgeonProfile> = {}
         s.forEach((surgeon, idx) => {
+          const blockInfo = parseBlockSchedules(bs, surgeon.id)
+          const defaultDays = blockInfo.days.length > 0 ? blockInfo.days : ([1, 3] as (1 | 2 | 3 | 4 | 5)[])
           const defaultRoomId = r.length > 0 ? r[idx % r.length].id : null
+          const dayRoomAssignments: Record<number, string[]> = {}
+          for (const day of defaultDays) {
+            if (defaultRoomId) dayRoomAssignments[day] = [defaultRoomId]
+          }
+
           newProfiles[surgeon.id] = {
             surgeonId: surgeon.id,
             speedProfile: 'average',
             specialty: 'joint',
-            operatingDays: [1, 3],
-            dayRoomAssignments: defaultRoomId
-              ? { 1: [defaultRoomId], 3: [defaultRoomId] }
-              : {},
+            operatingDays: defaultDays,
+            dayRoomAssignments,
             procedureTypeIds: p
               .filter((pt) => SPECIALTY_PROC_NAMES.joint.includes(pt.name))
               .map((pt) => pt.id),
@@ -172,14 +193,42 @@ export default function DemoDataWizardPage() {
     [loadFacilityDetails],
   )
 
+  // ── Surgeon profile handlers ──
+  const handleUpdateProfile = useCallback(
+    (surgeonId: string, updates: Partial<SurgeonProfile>) => {
+      setWizardState((prev) => ({
+        ...prev,
+        surgeonProfiles: {
+          ...prev.surgeonProfiles,
+          [surgeonId]: { ...prev.surgeonProfiles[surgeonId], ...updates },
+        },
+      }))
+    },
+    [],
+  )
+
+  const handleToggleSurgeon = useCallback(
+    (surgeonId: string, included: boolean) => {
+      if (!included) {
+        setWizardState((prev) => {
+          const { [surgeonId]: _, ...rest } = prev.surgeonProfiles
+          return { ...prev, surgeonProfiles: rest }
+        })
+      }
+      // When including, the SurgeonProfilesStep will call onUpdateProfile to set the profile
+    },
+    [],
+  )
+
   // ── Wizard navigation ──
   const canAdvanceFromStep = useCallback(
     (step: DemoWizardStep): boolean => {
       switch (step) {
         case 1:
           return isFacilityStepValid(wizardState) && !loadingFacility
-        // Steps 2-5 validation will be added in later phases
         case 2:
+          return isSurgeonProfilesStepValid(wizardState.surgeonProfiles).valid
+        // Steps 3-5 validation will be added in later phases
         case 3:
         case 4:
         case 5:
@@ -282,11 +331,19 @@ export default function DemoDataWizardPage() {
           />
         )}
 
-        {/* Steps 2-6: Placeholder until later phases */}
+        {/* Step 2: Surgeon Profiles */}
         {currentStep === 2 && (
-          <PlaceholderStep
-            title="Surgeon Profiles"
-            description="Configure speed profiles, specialties, and procedures for each surgeon. Coming in Phase 2."
+          <SurgeonProfilesStep
+            surgeons={surgeons}
+            profiles={wizardState.surgeonProfiles}
+            onUpdateProfile={handleUpdateProfile}
+            onToggleSurgeon={handleToggleSurgeon}
+            blockSchedules={blockSchedules}
+            surgeonDurations={surgeonDurations}
+            procedureTypes={procs}
+            rooms={rooms}
+            expandedSurgeonId={expandedSurgeonId}
+            onExpandSurgeon={setExpandedSurgeonId}
           />
         )}
         {currentStep === 3 && (
