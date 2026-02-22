@@ -497,21 +497,18 @@ describe('CreateFacilityPage (WizardShell)', () => {
       })
     })
 
-    it('shows success toast and redirects on successful submission', async () => {
+    it('shows success screen on successful submission', async () => {
       const user = userEvent.setup()
       await navigateToStep5(user)
 
       await user.click(screen.getByText('Create Facility'))
 
       await waitFor(() => {
-        expect(mockShowToast).toHaveBeenCalledWith(
-          expect.objectContaining({
-            type: 'success',
-            title: 'Facility Created',
-          }),
-        )
+        expect(screen.getByTestId('success-screen')).toBeTruthy()
       })
-      expect(mockPush).toHaveBeenCalledWith('/admin/facilities/new-facility-id')
+      expect(screen.getByText('Facility Created')).toBeTruthy()
+      expect(screen.getByTestId('view-facility-btn')).toBeTruthy()
+      expect(screen.getByTestId('create-another-btn')).toBeTruthy()
     })
 
     it('shows error toast on failed submission', async () => {
@@ -533,11 +530,11 @@ describe('CreateFacilityPage (WizardShell)', () => {
           }),
         )
       })
-      // Should NOT redirect
-      expect(mockPush).not.toHaveBeenCalledWith(expect.stringContaining('/admin/facilities/'))
+      // Should NOT show success screen or redirect
+      expect(screen.queryByTestId('success-screen')).toBeNull()
     })
 
-    it('shows invite warning toast when inviteWarning is returned', async () => {
+    it('shows invite warning toast and success screen when inviteWarning is returned', async () => {
       mockCreateFacilityWithTemplates.mockResolvedValue({
         success: true,
         facilityId: 'new-facility-id',
@@ -558,8 +555,8 @@ describe('CreateFacilityPage (WizardShell)', () => {
           }),
         )
       })
-      // Should still redirect (facility was created)
-      expect(mockPush).toHaveBeenCalledWith('/admin/facilities/new-facility-id')
+      // Should still show success screen (facility was created)
+      expect(screen.getByTestId('success-screen')).toBeTruthy()
     })
   })
 

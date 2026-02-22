@@ -49,7 +49,7 @@ describe('ClinicalTemplatesStep', () => {
     it('renders the clinical templates step with heading and description', () => {
       setup()
       expect(screen.getByText('Clinical Templates')).toBeTruthy()
-      expect(screen.getByText(/Select which clinical data templates/)).toBeTruthy()
+      expect(screen.getByText(/Select which clinical configurations to provision/)).toBeTruthy()
     })
 
     it('renders Clinical Data section header', () => {
@@ -82,9 +82,9 @@ describe('ClinicalTemplatesStep', () => {
 
     it('renders category descriptions', () => {
       setup()
-      expect(screen.getByText(/Surgical workflow milestone types/)).toBeTruthy()
-      expect(screen.getByText(/Procedure type definitions/)).toBeTruthy()
-      expect(screen.getByText(/Standard delay reason/)).toBeTruthy()
+      expect(screen.getByText(/Standard surgical workflow milestones/)).toBeTruthy()
+      expect(screen.getByText(/Common surgical procedure templates/)).toBeTruthy()
+      expect(screen.getByText(/Standardized delay reason codes/)).toBeTruthy()
     })
 
     it('renders loading skeletons when counts are loading', () => {
@@ -93,11 +93,11 @@ describe('ClinicalTemplatesStep', () => {
       expect(screen.queryByText('12')).toBeNull()
     })
 
-    it('renders all checkboxes as checked when all config is true', () => {
+    it('renders all template rows as checked when all config is true', () => {
       setup()
       const checkboxes = screen.getAllByRole('checkbox')
       checkboxes.forEach((cb) => {
-        expect((cb as HTMLInputElement).checked).toBe(true)
+        expect(cb.getAttribute('aria-checked')).toBe('true')
       })
     })
 
@@ -124,9 +124,7 @@ describe('ClinicalTemplatesStep', () => {
   describe('Individual Toggles', () => {
     it('toggles milestones off when clicked', () => {
       setup()
-      const card = screen.getByTestId('template-card-milestones')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      fireEvent.click(checkbox)
+      fireEvent.click(screen.getByTestId('template-card-milestones'))
       expect(mockOnChange).toHaveBeenCalledWith(
         expect.objectContaining({ milestones: false }),
       )
@@ -134,9 +132,7 @@ describe('ClinicalTemplatesStep', () => {
 
     it('toggles delayTypes off when clicked', () => {
       setup()
-      const card = screen.getByTestId('template-card-delayTypes')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      fireEvent.click(checkbox)
+      fireEvent.click(screen.getByTestId('template-card-delayTypes'))
       expect(mockOnChange).toHaveBeenCalledWith(
         expect.objectContaining({ delayTypes: false }),
       )
@@ -144,9 +140,7 @@ describe('ClinicalTemplatesStep', () => {
 
     it('toggles a category on when clicked from off', () => {
       setup({ cancellationReasons: false })
-      const card = screen.getByTestId('template-card-cancellationReasons')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      fireEvent.click(checkbox)
+      fireEvent.click(screen.getByTestId('template-card-cancellationReasons'))
       expect(mockOnChange).toHaveBeenCalledWith(
         expect.objectContaining({ cancellationReasons: true }),
       )
@@ -160,9 +154,7 @@ describe('ClinicalTemplatesStep', () => {
   describe('Auto-Link Behavior', () => {
     it('auto-disables procedureMilestoneConfig when milestones is toggled off', () => {
       setup({ milestones: true, procedures: true, procedureMilestoneConfig: true })
-      const card = screen.getByTestId('template-card-milestones')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      fireEvent.click(checkbox)
+      fireEvent.click(screen.getByTestId('template-card-milestones'))
       expect(mockOnChange).toHaveBeenCalledWith(
         expect.objectContaining({
           milestones: false,
@@ -173,9 +165,7 @@ describe('ClinicalTemplatesStep', () => {
 
     it('auto-disables procedureMilestoneConfig when procedures is toggled off', () => {
       setup({ milestones: true, procedures: true, procedureMilestoneConfig: true })
-      const card = screen.getByTestId('template-card-procedures')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      fireEvent.click(checkbox)
+      fireEvent.click(screen.getByTestId('template-card-procedures'))
       expect(mockOnChange).toHaveBeenCalledWith(
         expect.objectContaining({
           procedures: false,
@@ -186,9 +176,7 @@ describe('ClinicalTemplatesStep', () => {
 
     it('auto-enables procedureMilestoneConfig when both milestones and procedures are on', () => {
       setup({ milestones: false, procedures: true, procedureMilestoneConfig: false })
-      const card = screen.getByTestId('template-card-milestones')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      fireEvent.click(checkbox)
+      fireEvent.click(screen.getByTestId('template-card-milestones'))
       expect(mockOnChange).toHaveBeenCalledWith(
         expect.objectContaining({
           milestones: true,
@@ -208,50 +196,10 @@ describe('ClinicalTemplatesStep', () => {
       expect(screen.queryByText(/Auto-enabled when both Milestones and Procedures/)).toBeNull()
     })
 
-    it('disables procedureMilestoneConfig checkbox when dependencies are not met', () => {
+    it('disables procedureMilestoneConfig button when dependencies are not met', () => {
       setup({ milestones: false, procedures: true })
-      const card = screen.getByTestId('template-card-procedureMilestoneConfig')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      expect(checkbox.disabled).toBe(true)
-    })
-  })
-
-  // ============================================================================
-  // SECTION TOGGLES
-  // ============================================================================
-
-  describe('Section Toggles', () => {
-    it('deselects all clinical data categories when section toggle is clicked', () => {
-      setup()
-      const sectionButtons = screen.getAllByText('Deselect Section')
-      fireEvent.click(sectionButtons[0]) // Clinical Data section
-      expect(mockOnChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          milestones: false,
-          procedures: false,
-          procedureMilestoneConfig: false,
-        }),
-      )
-    })
-
-    it('selects all workflow categories when section toggle is clicked', () => {
-      setup({
-        delayTypes: false,
-        cancellationReasons: false,
-        complexities: false,
-        checklistFields: false,
-      })
-      const sectionButtons = screen.getAllByText('Select Section')
-      // The second "Select Section" is Workflow & Policies
-      fireEvent.click(sectionButtons[sectionButtons.length - 1])
-      expect(mockOnChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          delayTypes: true,
-          cancellationReasons: true,
-          complexities: true,
-          checklistFields: true,
-        }),
-      )
+      const card = screen.getByTestId('template-card-procedureMilestoneConfig') as HTMLButtonElement
+      expect(card.disabled).toBe(true)
     })
   })
 
@@ -298,27 +246,24 @@ describe('ClinicalTemplatesStep', () => {
   // ============================================================================
 
   describe('Disabled State', () => {
-    it('disables checkbox when template count is 0', () => {
+    it('disables button when template count is 0', () => {
       const zeroCounts = {
         ...LOADED_COUNTS,
         complexities: 0,
       }
       setup({}, zeroCounts)
-      const card = screen.getByTestId('template-card-complexities')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      expect(checkbox.disabled).toBe(true)
+      const card = screen.getByTestId('template-card-complexities') as HTMLButtonElement
+      expect(card.disabled).toBe(true)
     })
 
-    it('shows amber badge for zero-count categories', () => {
+    it('shows zero count badge for zero-count categories', () => {
       const zeroCounts = {
         ...LOADED_COUNTS,
         complexities: 0,
       }
       setup({}, zeroCounts)
       const card = screen.getByTestId('template-card-complexities')
-      const badge = card.querySelector('.bg-amber-50')
-      expect(badge).toBeTruthy()
-      expect(badge?.textContent).toBe('0')
+      expect(card.textContent).toContain('0')
     })
   })
 })

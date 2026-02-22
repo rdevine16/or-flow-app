@@ -278,6 +278,53 @@ export function isStep2Valid(data: AdminData): boolean {
 }
 
 // ============================================================================
+// STEP DESCRIPTIONS (for sidebar nav)
+// ============================================================================
+
+export const STEP_DESCRIPTIONS: Record<WizardStep, string> = {
+  1: 'Name, location, and contact info',
+  2: 'Initial admin user setup',
+  3: 'Milestones, procedures, delays',
+  4: 'Costs, payers, analytics',
+  5: 'Confirm and provision',
+}
+
+// ============================================================================
+// TEMPLATE EMOJI MAPPINGS (for TemplateRow pattern)
+// ============================================================================
+
+export const TEMPLATE_EMOJIS: Record<keyof TemplateConfig, string> = {
+  milestones: '\u{1F3C1}',
+  procedures: '\u{1F52C}',
+  procedureMilestoneConfig: '\u{1F517}',
+  delayTypes: '\u{23F1}\uFE0F',
+  cancellationReasons: '\u2715',
+  complexities: '\u{1F4CA}',
+  checklistFields: '\u2611\uFE0F',
+  costCategories: '\u{1F4B0}',
+  implantCompanies: '\u{1F9B4}',
+  payers: '\u{1F3E5}',
+  analyticsSettings: '\u{1F4C8}',
+  flagRules: '\u{1F6A9}',
+  phaseDefinitions: '\u231B',
+  notificationSettings: '\u{1F514}',
+}
+
+// ============================================================================
+// CONFIG KEY ARRAYS (for provision summary counts)
+// ============================================================================
+
+export const CLINICAL_CONFIG_KEYS: (keyof TemplateConfig)[] = [
+  'milestones', 'procedures', 'procedureMilestoneConfig',
+  'delayTypes', 'cancellationReasons', 'complexities', 'checklistFields',
+]
+
+export const OPERATIONAL_CONFIG_KEYS: (keyof TemplateConfig)[] = [
+  'costCategories', 'implantCompanies', 'payers',
+  'analyticsSettings', 'flagRules', 'phaseDefinitions', 'notificationSettings',
+]
+
+// ============================================================================
 // HELPERS
 // ============================================================================
 

@@ -1,75 +1,62 @@
 // app/admin/facilities/new/OperationalTemplatesStep.tsx
-// Step 4: Operational template selection — cost categories, payers, analytics, flags, etc.
+// Step 4: Operational template selection — TemplateRow pattern with emojis
 
 'use client'
 
 import { useCallback } from 'react'
-import {
-  DollarSign,
-  Package,
-  Wallet,
-  BarChart3,
-  Flag,
-  GitBranch,
-  Bell,
-} from 'lucide-react'
+import { Check } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import type { LucideIcon } from 'lucide-react'
-import type { OperationalTemplatesStepProps, TemplateConfig, TemplateCategoryDef } from './types'
+import type { OperationalTemplatesStepProps, TemplateConfig } from './types'
+import { TEMPLATE_EMOJIS } from './types'
 
 // ============================================================================
 // CATEGORY DEFINITIONS
 // ============================================================================
 
-interface CategoryWithIcon extends TemplateCategoryDef {
-  icon: LucideIcon
+interface TemplateCategory {
+  key: keyof TemplateConfig
+  label: string
+  description: string
 }
 
-const FINANCIAL_CATEGORIES: CategoryWithIcon[] = [
+const FINANCIAL_CATEGORIES: TemplateCategory[] = [
   {
     key: 'costCategories',
     label: 'Cost Categories',
-    description: 'Financial cost tracking categories for case costing',
-    icon: DollarSign,
+    description: 'Financial cost tracking categories',
   },
   {
     key: 'implantCompanies',
     label: 'Implant Companies',
-    description: 'Implant vendor definitions for supply tracking',
-    icon: Package,
+    description: 'Medical device vendor directory',
   },
   {
     key: 'payers',
-    label: 'Payers',
-    description: 'Insurance payer definitions for reimbursement tracking',
-    icon: Wallet,
+    label: 'Payer Templates',
+    description: 'Insurance payer configurations',
   },
 ]
 
-const ANALYTICS_CATEGORIES: CategoryWithIcon[] = [
+const ANALYTICS_CATEGORIES: TemplateCategory[] = [
   {
     key: 'analyticsSettings',
     label: 'Analytics Settings',
-    description: 'Default analytics dashboard configuration',
-    icon: BarChart3,
+    description: 'Default analytics configurations',
   },
   {
     key: 'flagRules',
     label: 'Flag Rules',
-    description: 'Automated alert and flag rule definitions',
-    icon: Flag,
+    description: 'Automated alert rule templates',
   },
   {
     key: 'phaseDefinitions',
     label: 'Phase Definitions',
-    description: 'Surgical workflow phase configurations',
-    icon: GitBranch,
+    description: 'Surgical phase time boundaries',
   },
   {
     key: 'notificationSettings',
     label: 'Notification Settings',
-    description: 'Default notification preferences and channels',
-    icon: Bell,
+    description: 'Default notification preferences',
   },
 ]
 
@@ -85,24 +72,11 @@ export default function OperationalTemplatesStep({
   loadingCounts,
   onChange,
 }: OperationalTemplatesStepProps) {
-  const allFinancialSelected = FINANCIAL_CATEGORIES.every(c => config[c.key])
-  const allAnalyticsSelected = ANALYTICS_CATEGORIES.every(c => config[c.key])
   const allSelected = ALL_OPERATIONAL_KEYS.every(k => config[k])
 
   const toggleCategory = useCallback(
     (key: keyof TemplateConfig) => {
       onChange({ ...config, [key]: !config[key] })
-    },
-    [config, onChange],
-  )
-
-  const toggleSection = useCallback(
-    (categories: CategoryWithIcon[], enable: boolean) => {
-      const next = { ...config }
-      for (const cat of categories) {
-        next[cat.key] = enable
-      }
-      onChange(next)
     },
     [config, onChange],
   )
@@ -119,122 +93,76 @@ export default function OperationalTemplatesStep({
   )
 
   return (
-    <div className="p-6 sm:p-8" data-testid="operational-templates-step">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Operational Templates</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Select which operational and analytics templates to seed for this facility
-          </p>
+    <div data-testid="operational-templates-step">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        {/* Header with Select All */}
+        <div className="px-7 pt-6 flex justify-between items-start">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Operational Configuration</h3>
+            <p className="text-sm text-slate-500 mt-0.5">Financial, analytics, and notification defaults</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => toggleAll(!allSelected)}
+            className="text-xs font-medium text-blue-600 bg-blue-50 px-3 py-1.5 rounded-md hover:bg-blue-100 transition-colors shrink-0"
+            data-testid="operational-select-all"
+          >
+            {allSelected ? 'Deselect All' : 'Select All'}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => toggleAll(!allSelected)}
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
-          data-testid="operational-select-all"
-        >
-          {allSelected ? 'Deselect All' : 'Select All'}
-        </button>
-      </div>
 
-      {/* Financial Section */}
-      <TemplateSection
-        title="Financial"
-        categories={FINANCIAL_CATEGORIES}
-        config={config}
-        counts={counts}
-        loadingCounts={loadingCounts}
-        allSelected={allFinancialSelected}
-        onToggleCategory={toggleCategory}
-        onToggleSection={(enable) => toggleSection(FINANCIAL_CATEGORIES, enable)}
-      />
+        <div className="px-7 pt-5 pb-7">
+          {/* Financial Section */}
+          <div className="mb-5">
+            <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              Financial
+            </h4>
+            <div className="flex flex-col gap-0.5">
+              {FINANCIAL_CATEGORIES.map((cat) => (
+                <TemplateRow
+                  key={cat.key}
+                  category={cat}
+                  checked={config[cat.key]}
+                  count={counts[cat.key]}
+                  loadingCount={loadingCounts}
+                  disabled={counts[cat.key] === 0 && !loadingCounts}
+                  onToggle={() => toggleCategory(cat.key)}
+                />
+              ))}
+            </div>
+          </div>
 
-      {/* Analytics & Alerts Section */}
-      <TemplateSection
-        title="Analytics & Alerts"
-        categories={ANALYTICS_CATEGORIES}
-        config={config}
-        counts={counts}
-        loadingCounts={loadingCounts}
-        allSelected={allAnalyticsSelected}
-        onToggleCategory={toggleCategory}
-        onToggleSection={(enable) => toggleSection(ANALYTICS_CATEGORIES, enable)}
-        className="mt-6"
-      />
-    </div>
-  )
-}
-
-// ============================================================================
-// SECTION COMPONENT
-// ============================================================================
-
-interface TemplateSectionProps {
-  title: string
-  categories: CategoryWithIcon[]
-  config: TemplateConfig
-  counts: Record<string, number>
-  loadingCounts: boolean
-  allSelected: boolean
-  onToggleCategory: (key: keyof TemplateConfig) => void
-  onToggleSection: (enable: boolean) => void
-  className?: string
-}
-
-function TemplateSection({
-  title,
-  categories,
-  config,
-  counts,
-  loadingCounts,
-  allSelected,
-  onToggleCategory,
-  onToggleSection,
-  className = '',
-}: TemplateSectionProps) {
-  return (
-    <div className={className}>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-          {title}
-        </h3>
-        <button
-          type="button"
-          onClick={() => onToggleSection(!allSelected)}
-          className="text-xs text-slate-500 hover:text-slate-700 transition-colors"
-        >
-          {allSelected ? 'Deselect Section' : 'Select Section'}
-        </button>
-      </div>
-      <div className="grid grid-cols-1 gap-2">
-        {categories.map((cat) => {
-          const count = counts[cat.key]
-          const isDisabled = count === 0 && !loadingCounts
-
-          return (
-            <TemplateCategoryCard
-              key={cat.key}
-              category={cat}
-              checked={config[cat.key]}
-              count={count}
-              loadingCount={loadingCounts}
-              disabled={isDisabled}
-              onToggle={() => onToggleCategory(cat.key)}
-            />
-          )
-        })}
+          {/* Analytics & Alerts Section */}
+          <div>
+            <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              Analytics & Alerts
+            </h4>
+            <div className="flex flex-col gap-0.5">
+              {ANALYTICS_CATEGORIES.map((cat) => (
+                <TemplateRow
+                  key={cat.key}
+                  category={cat}
+                  checked={config[cat.key]}
+                  count={counts[cat.key]}
+                  loadingCount={loadingCounts}
+                  disabled={counts[cat.key] === 0 && !loadingCounts}
+                  onToggle={() => toggleCategory(cat.key)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
 // ============================================================================
-// CARD COMPONENT
+// TEMPLATE ROW COMPONENT
 // ============================================================================
 
-interface TemplateCategoryCardProps {
-  category: CategoryWithIcon
+interface TemplateRowProps {
+  category: TemplateCategory
   checked: boolean
   count: number
   loadingCount: boolean
@@ -242,54 +170,68 @@ interface TemplateCategoryCardProps {
   onToggle: () => void
 }
 
-function TemplateCategoryCard({
+function TemplateRow({
   category,
   checked,
   count,
   loadingCount,
   disabled,
   onToggle,
-}: TemplateCategoryCardProps) {
-  const Icon = category.icon
+}: TemplateRowProps) {
+  const emoji = TEMPLATE_EMOJIS[category.key]
 
   return (
-    <label
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
       data-testid={`template-card-${category.key}`}
-      className={`flex items-start gap-3 p-4 rounded-lg border transition-all cursor-pointer ${
+      onClick={disabled ? undefined : onToggle}
+      disabled={disabled}
+      className={`flex items-center justify-between w-full px-3.5 py-3 rounded-[10px] border-none text-left transition-all ${
         disabled
-          ? 'opacity-50 cursor-not-allowed border-slate-200 bg-slate-50'
+          ? 'opacity-50 cursor-not-allowed'
           : checked
-          ? 'border-blue-200 bg-blue-50/50 hover:border-blue-300'
-          : 'border-slate-200 bg-white hover:border-slate-300'
-      }`}
+          ? 'bg-blue-50/60 hover:bg-blue-50'
+          : 'bg-transparent hover:bg-slate-50'
+      } ${!disabled ? 'cursor-pointer' : ''}`}
     >
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={onToggle}
-        className="w-4 h-4 mt-0.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 disabled:opacity-50"
-      />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 text-slate-400 flex-shrink-0" />
-          <span className="text-sm font-medium text-slate-700">{category.label}</span>
-          {loadingCount ? (
-            <Skeleton className="h-5 w-8 rounded-full" />
-          ) : (
-            <span
-              className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                count > 0
-                  ? 'bg-slate-100 text-slate-600'
-                  : 'bg-amber-50 text-amber-600'
-              }`}
-            >
-              {count}
-            </span>
-          )}
+      <div className="flex items-center gap-3">
+        {/* Visual checkbox */}
+        <div
+          className={`w-5 h-5 rounded-[5px] flex items-center justify-center shrink-0 transition-all ${
+            checked
+              ? 'bg-blue-600'
+              : 'bg-transparent border-2 border-slate-300'
+          }`}
+        >
+          {checked && <Check className="w-3 h-3 text-white" />}
         </div>
-        <p className="text-xs text-slate-500 mt-0.5">{category.description}</p>
+
+        {/* Emoji icon */}
+        <span className="text-[17px] leading-none">{emoji}</span>
+
+        {/* Label + description */}
+        <div>
+          <p className="text-sm font-medium text-slate-900">{category.label}</p>
+          <p className="text-xs text-slate-500">{category.description}</p>
+        </div>
       </div>
-    </label>
+
+      {/* Count badge */}
+      {loadingCount ? (
+        <Skeleton className="h-6 w-10 rounded-md" />
+      ) : (
+        <span
+          className={`text-xs font-semibold px-2.5 py-1 rounded-md font-mono transition-all shrink-0 ${
+            checked
+              ? 'bg-blue-100 text-blue-600'
+              : 'bg-slate-100 text-slate-500'
+          }`}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   )
 }

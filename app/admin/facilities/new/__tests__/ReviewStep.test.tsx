@@ -77,10 +77,10 @@ describe('ReviewStep', () => {
   // ============================================================================
 
   describe('Rendering', () => {
-    it('renders the review step with heading and description', () => {
+    it('renders the review step with provision banner', () => {
       setup()
-      expect(screen.getByText('Review & Create')).toBeTruthy()
-      expect(screen.getByText(/Confirm the details below/)).toBeTruthy()
+      expect(screen.getByText('Ready to provision')).toBeTruthy()
+      expect(screen.getByText('All validations passed')).toBeTruthy()
     })
 
     it('renders all four review sections', () => {
@@ -141,7 +141,6 @@ describe('ReviewStep', () => {
           zipCode: '',
         },
       })
-      // The MapPin icon and address are not rendered
       const section = screen.getByTestId('review-section-step-1')
       expect(section.textContent).not.toContain('123 Main St')
     })
@@ -195,58 +194,49 @@ describe('ReviewStep', () => {
   // ============================================================================
 
   describe('Clinical Templates Section', () => {
-    it('displays clinical template count summary', () => {
+    it('displays enabled clinical template chips', () => {
       setup()
-      // All 7 clinical templates enabled = "Clinical Templates (7/7)"
-      expect(screen.getByText('Clinical Templates (7/7)')).toBeTruthy()
+      expect(screen.getByTestId('review-template-milestones')).toBeTruthy()
+      expect(screen.getByTestId('review-template-procedures')).toBeTruthy()
+      expect(screen.getByTestId('review-template-delayTypes')).toBeTruthy()
     })
 
-    it('displays correct count when some templates are disabled', () => {
-      setup({ templateConfig: { milestones: false, delayTypes: false } })
-      expect(screen.getByText('Clinical Templates (5/7)')).toBeTruthy()
-    })
-
-    it('shows checkmark icons for enabled templates', () => {
+    it('shows count in chip for enabled templates', () => {
       setup()
-      const milestoneRow = screen.getByTestId('review-template-milestones')
-      expect(milestoneRow.textContent).toContain('Milestones')
-      expect(milestoneRow.querySelector('.text-green-500')).toBeTruthy()
+      const milestoneChip = screen.getByTestId('review-template-milestones')
+      expect(milestoneChip.textContent).toContain('(12)')
     })
 
-    it('shows X icons for disabled templates', () => {
+    it('does not show chip for disabled templates', () => {
       setup({ templateConfig: { milestones: false } })
-      const milestoneRow = screen.getByTestId('review-template-milestones')
-      expect(milestoneRow.querySelector('.text-slate-300')).toBeTruthy()
+      expect(screen.queryByTestId('review-template-milestones')).toBeNull()
     })
 
-    it('shows line-through text for disabled templates', () => {
-      setup({ templateConfig: { milestones: false } })
-      const milestoneRow = screen.getByTestId('review-template-milestones')
-      expect(milestoneRow.querySelector('.line-through')).toBeTruthy()
-    })
-
-    it('shows count in parentheses for enabled templates', () => {
-      setup()
-      const milestoneRow = screen.getByTestId('review-template-milestones')
-      expect(milestoneRow.textContent).toContain('(12)')
-    })
-
-    it('does not show count for disabled templates', () => {
-      setup({ templateConfig: { milestones: false } })
-      const milestoneRow = screen.getByTestId('review-template-milestones')
-      expect(milestoneRow.textContent).not.toContain('(12)')
-    })
-
-    it('renders Clinical Data sub-section header', () => {
-      setup()
+    it('shows "None selected" when all clinical templates are disabled', () => {
+      setup({
+        templateConfig: {
+          milestones: false,
+          procedures: false,
+          procedureMilestoneConfig: false,
+          delayTypes: false,
+          cancellationReasons: false,
+          complexities: false,
+          checklistFields: false,
+        },
+      })
       const section = screen.getByTestId('review-section-step-3')
-      expect(section.textContent).toContain('Clinical Data')
+      expect(section.textContent).toContain('None selected')
     })
 
-    it('renders Workflow & Policies sub-section header', () => {
+    it('shows all 7 clinical template chips when all are enabled', () => {
       setup()
-      const section = screen.getByTestId('review-section-step-3')
-      expect(section.textContent).toContain('Workflow & Policies')
+      expect(screen.getByTestId('review-template-milestones')).toBeTruthy()
+      expect(screen.getByTestId('review-template-procedures')).toBeTruthy()
+      expect(screen.getByTestId('review-template-procedureMilestoneConfig')).toBeTruthy()
+      expect(screen.getByTestId('review-template-delayTypes')).toBeTruthy()
+      expect(screen.getByTestId('review-template-cancellationReasons')).toBeTruthy()
+      expect(screen.getByTestId('review-template-complexities')).toBeTruthy()
+      expect(screen.getByTestId('review-template-checklistFields')).toBeTruthy()
     })
   })
 
@@ -255,29 +245,30 @@ describe('ReviewStep', () => {
   // ============================================================================
 
   describe('Operational Templates Section', () => {
-    it('displays operational template count summary', () => {
+    it('displays enabled operational template chips', () => {
       setup()
-      expect(screen.getByText('Operational Templates (7/7)')).toBeTruthy()
+      expect(screen.getByTestId('review-template-costCategories')).toBeTruthy()
+      expect(screen.getByTestId('review-template-implantCompanies')).toBeTruthy()
+      expect(screen.getByTestId('review-template-payers')).toBeTruthy()
     })
 
-    it('displays correct count when some templates are disabled', () => {
-      setup({ templateConfig: { costCategories: false, flagRules: false } })
-      expect(screen.getByText('Operational Templates (5/7)')).toBeTruthy()
-    })
-
-    it('renders Financial sub-section header', () => {
-      setup()
+    it('shows "None selected" when all operational templates are disabled', () => {
+      setup({
+        templateConfig: {
+          costCategories: false,
+          implantCompanies: false,
+          payers: false,
+          analyticsSettings: false,
+          flagRules: false,
+          phaseDefinitions: false,
+          notificationSettings: false,
+        },
+      })
       const section = screen.getByTestId('review-section-step-4')
-      expect(section.textContent).toContain('Financial')
+      expect(section.textContent).toContain('None selected')
     })
 
-    it('renders Analytics & Alerts sub-section header', () => {
-      setup()
-      const section = screen.getByTestId('review-section-step-4')
-      expect(section.textContent).toContain('Analytics & Alerts')
-    })
-
-    it('shows all operational template categories', () => {
+    it('shows all operational template categories when enabled', () => {
       setup()
       expect(screen.getByTestId('review-template-costCategories')).toBeTruthy()
       expect(screen.getByTestId('review-template-implantCompanies')).toBeTruthy()
@@ -342,8 +333,10 @@ describe('ReviewStep', () => {
         notificationSettings: false,
       }
       setup({ templateConfig: allDisabled })
-      expect(screen.getByText('Clinical Templates (0/7)')).toBeTruthy()
-      expect(screen.getByText('Operational Templates (0/7)')).toBeTruthy()
+      const clinicalSection = screen.getByTestId('review-section-step-3')
+      const operationalSection = screen.getByTestId('review-section-step-4')
+      expect(clinicalSection.textContent).toContain('None selected')
+      expect(operationalSection.textContent).toContain('None selected')
     })
 
     it('displays street address 2 when provided', () => {

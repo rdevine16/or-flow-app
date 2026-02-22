@@ -50,8 +50,8 @@ describe('AdminStep', () => {
   describe('Rendering', () => {
     it('renders the admin step with correct heading and description', () => {
       setup()
-      expect(screen.getByText('First Administrator')).toBeTruthy()
-      expect(screen.getByText(/This person will manage the facility/)).toBeTruthy()
+      expect(screen.getByText('Initial Administrator')).toBeTruthy()
+      expect(screen.getByText(/This user will have full facility admin access/)).toBeTruthy()
     })
 
     it('renders all required field labels with asterisks', () => {
@@ -96,14 +96,14 @@ describe('AdminStep', () => {
     it('renders info banner about invitation email', () => {
       setup()
       expect(screen.getByTestId('admin-info-banner')).toBeTruthy()
-      expect(screen.getByText('Invitation Email')).toBeTruthy()
-      expect(screen.getByText(/An invitation email will be sent/)).toBeTruthy()
+      expect(screen.getByText('Send Welcome Email')).toBeTruthy()
+      expect(screen.getByText(/Invite the admin to set up their account immediately/)).toBeTruthy()
     })
 
     it('renders send welcome email toggle', () => {
       setup()
       expect(screen.getByTestId('send-welcome-email-toggle')).toBeTruthy()
-      expect(screen.getByText('Send welcome email')).toBeTruthy()
+      expect(screen.getByTestId('send-welcome-email-toggle')).toBeTruthy()
     })
 
     it('renders welcome email checkbox as checked by default', () => {

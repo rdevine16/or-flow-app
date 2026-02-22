@@ -48,8 +48,8 @@ describe('OperationalTemplatesStep', () => {
   describe('Rendering', () => {
     it('renders the operational templates step with heading and description', () => {
       setup()
-      expect(screen.getByText('Operational Templates')).toBeTruthy()
-      expect(screen.getByText(/Select which operational and analytics templates/)).toBeTruthy()
+      expect(screen.getByText('Operational Configuration')).toBeTruthy()
+      expect(screen.getByText(/Financial, analytics, and notification defaults/)).toBeTruthy()
     })
 
     it('renders Financial section header', () => {
@@ -84,8 +84,8 @@ describe('OperationalTemplatesStep', () => {
     it('renders category descriptions', () => {
       setup()
       expect(screen.getByText(/Financial cost tracking categories/)).toBeTruthy()
-      expect(screen.getByText(/Implant vendor definitions/)).toBeTruthy()
-      expect(screen.getByText(/Insurance payer definitions/)).toBeTruthy()
+      expect(screen.getByText(/Medical device vendor directory/)).toBeTruthy()
+      expect(screen.getByText(/Insurance payer configurations/)).toBeTruthy()
     })
 
     it('renders loading skeletons when counts are loading', () => {
@@ -93,11 +93,11 @@ describe('OperationalTemplatesStep', () => {
       expect(screen.queryByText('8')).toBeNull()
     })
 
-    it('renders all checkboxes as checked when all config is true', () => {
+    it('renders all template rows as checked when all config is true', () => {
       setup()
       const checkboxes = screen.getAllByRole('checkbox')
       checkboxes.forEach((cb) => {
-        expect((cb as HTMLInputElement).checked).toBe(true)
+        expect(cb.getAttribute('aria-checked')).toBe('true')
       })
     })
 
@@ -124,9 +124,7 @@ describe('OperationalTemplatesStep', () => {
   describe('Individual Toggles', () => {
     it('toggles costCategories off when clicked', () => {
       setup()
-      const card = screen.getByTestId('template-card-costCategories')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      fireEvent.click(checkbox)
+      fireEvent.click(screen.getByTestId('template-card-costCategories'))
       expect(mockOnChange).toHaveBeenCalledWith(
         expect.objectContaining({ costCategories: false }),
       )
@@ -134,9 +132,7 @@ describe('OperationalTemplatesStep', () => {
 
     it('toggles flagRules off when clicked', () => {
       setup()
-      const card = screen.getByTestId('template-card-flagRules')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      fireEvent.click(checkbox)
+      fireEvent.click(screen.getByTestId('template-card-flagRules'))
       expect(mockOnChange).toHaveBeenCalledWith(
         expect.objectContaining({ flagRules: false }),
       )
@@ -144,9 +140,7 @@ describe('OperationalTemplatesStep', () => {
 
     it('toggles a category on when clicked from off', () => {
       setup({ payers: false })
-      const card = screen.getByTestId('template-card-payers')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      fireEvent.click(checkbox)
+      fireEvent.click(screen.getByTestId('template-card-payers'))
       expect(mockOnChange).toHaveBeenCalledWith(
         expect.objectContaining({ payers: true }),
       )
@@ -154,68 +148,13 @@ describe('OperationalTemplatesStep', () => {
 
     it('does not affect other categories when toggling one', () => {
       setup()
-      const card = screen.getByTestId('template-card-costCategories')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      fireEvent.click(checkbox)
+      fireEvent.click(screen.getByTestId('template-card-costCategories'))
       expect(mockOnChange).toHaveBeenCalledWith(
         expect.objectContaining({
           costCategories: false,
           implantCompanies: true,
           payers: true,
           flagRules: true,
-        }),
-      )
-    })
-  })
-
-  // ============================================================================
-  // SECTION TOGGLES
-  // ============================================================================
-
-  describe('Section Toggles', () => {
-    it('deselects all financial categories when section toggle is clicked', () => {
-      setup()
-      const sectionButtons = screen.getAllByText('Deselect Section')
-      fireEvent.click(sectionButtons[0]) // Financial section
-      expect(mockOnChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          costCategories: false,
-          implantCompanies: false,
-          payers: false,
-        }),
-      )
-    })
-
-    it('selects all analytics categories when section toggle is clicked', () => {
-      setup({
-        analyticsSettings: false,
-        flagRules: false,
-        phaseDefinitions: false,
-        notificationSettings: false,
-      })
-      const sectionButtons = screen.getAllByText('Select Section')
-      fireEvent.click(sectionButtons[sectionButtons.length - 1])
-      expect(mockOnChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          analyticsSettings: true,
-          flagRules: true,
-          phaseDefinitions: true,
-          notificationSettings: true,
-        }),
-      )
-    })
-
-    it('section toggle does not affect other sections', () => {
-      setup()
-      const sectionButtons = screen.getAllByText('Deselect Section')
-      fireEvent.click(sectionButtons[0]) // Financial section
-      // Analytics categories should remain untouched
-      expect(mockOnChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          analyticsSettings: true,
-          flagRules: true,
-          phaseDefinitions: true,
-          notificationSettings: true,
         }),
       )
     })
@@ -264,34 +203,30 @@ describe('OperationalTemplatesStep', () => {
   // ============================================================================
 
   describe('Disabled State', () => {
-    it('disables checkbox when template count is 0', () => {
+    it('disables button when template count is 0', () => {
+      const zeroCounts = {
+        ...LOADED_COUNTS,
+        notificationSettings: 0,
+      }
+      setup({}, zeroCounts)
+      const card = screen.getByTestId('template-card-notificationSettings') as HTMLButtonElement
+      expect(card.disabled).toBe(true)
+    })
+
+    it('shows zero count badge for zero-count categories', () => {
       const zeroCounts = {
         ...LOADED_COUNTS,
         notificationSettings: 0,
       }
       setup({}, zeroCounts)
       const card = screen.getByTestId('template-card-notificationSettings')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      expect(checkbox.disabled).toBe(true)
+      expect(card.textContent).toContain('0')
     })
 
-    it('shows amber badge for zero-count categories', () => {
-      const zeroCounts = {
-        ...LOADED_COUNTS,
-        notificationSettings: 0,
-      }
-      setup({}, zeroCounts)
-      const card = screen.getByTestId('template-card-notificationSettings')
-      const badge = card.querySelector('.bg-amber-50')
-      expect(badge).toBeTruthy()
-      expect(badge?.textContent).toBe('0')
-    })
-
-    it('does not disable checkbox when count > 0', () => {
+    it('does not disable button when count > 0', () => {
       setup()
-      const card = screen.getByTestId('template-card-flagRules')
-      const checkbox = card.querySelector('input[type="checkbox"]') as HTMLInputElement
-      expect(checkbox.disabled).toBe(false)
+      const card = screen.getByTestId('template-card-flagRules') as HTMLButtonElement
+      expect(card.disabled).toBe(false)
     })
   })
 })

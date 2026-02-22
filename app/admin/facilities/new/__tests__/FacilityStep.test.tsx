@@ -26,8 +26,8 @@ describe('FacilityStep', () => {
   describe('Rendering', () => {
     it('renders the facility step with correct heading and description', () => {
       setup()
-      expect(screen.getByText('Facility Details')).toBeTruthy()
-      expect(screen.getByText('Basic information about the surgery center')).toBeTruthy()
+      expect(screen.getByText('Facility Information')).toBeTruthy()
+      expect(screen.getByText('Core identity and classification')).toBeTruthy()
     })
 
     it('renders all required field labels with asterisks', () => {

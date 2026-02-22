@@ -269,9 +269,50 @@ Add comprehensive test coverage for the new wizard:
 
 ---
 
+## Phase 8: Layout Redesign — Vertical Sidebar + Success Screen
+**Complexity**: Large
+
+### What it does
+Adopt the improved layout from `docs/FacilityWizard.jsx` reference design:
+
+1. Replace horizontal progress bar with **vertical sidebar navigation** (sticky, 264px wide, inside DashboardLayout)
+   - Lucide-react step icons (Building2, User, Stethoscope, Settings, ClipboardCheck)
+   - Completed/active/upcoming visual states
+   - Step descriptions below labels
+   - **Provision Summary** widget showing live template counts + welcome email status
+2. **SectionCard pattern** for all form steps (white rounded-xl cards with title/subtitle)
+3. **TemplateRow pattern** for template selection (clickable button rows with emoji icons + count badges)
+4. **Review step** overhaul: gradient "Ready to provision" banner, colored template chips (blue clinical, green operational)
+5. **Success screen** after facility creation (green check animation, "Create Another" + "View Facility" buttons)
+6. **Step transitions** with fade+translateY animation (150ms)
+7. Gradient styling on Continue and Create Facility buttons
+
+No database changes. No API changes. Visual/structural only + success screen UX.
+
+### Files touched
+- `app/admin/facilities/new/types.ts` (add emoji mappings, step icons/descriptions)
+- `app/admin/facilities/new/page.tsx` (major rewrite: sidebar nav, animations, success screen)
+- `app/admin/facilities/new/FacilityStep.tsx` (SectionCard pattern)
+- `app/admin/facilities/new/AdminStep.tsx` (SectionCard + improved toggle)
+- `app/admin/facilities/new/ClinicalTemplatesStep.tsx` (TemplateRow pattern)
+- `app/admin/facilities/new/OperationalTemplatesStep.tsx` (TemplateRow pattern)
+- `app/admin/facilities/new/ReviewStep.tsx` (gradient banner + chips)
+- `app/admin/facilities/new/__tests__/*.test.tsx` (update DOM selectors)
+
+### Commit message
+`feat(wizard): phase 8 - adopt vertical sidebar layout with success screen`
+
+### 3-stage test gate
+1. **Unit**: All step components render with new structure, SuccessScreen renders
+2. **Integration**: Sidebar nav updates on step change, ProvisionSummary reflects selections
+3. **Workflow**: Full 5-step wizard → success screen → "Create Another" resets → "View Facility" redirects
+
+---
+
 ## Dependencies
 - Phase 1 (DB) must complete before Phase 5 (submission uses the new RPC)
 - Phase 2 (scaffold) must complete before Phases 3, 4, 5
 - Phases 3 and 4 are independent of each other (but both needed before Phase 5)
 - Phase 6 (tests) depends on all implementation phases (1-5)
 - Phase 7 (cleanup) is last
+- Phase 8 (layout redesign) depends on all prior phases
