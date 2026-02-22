@@ -113,6 +113,13 @@ export const DEFAULT_TEMPLATE_CONFIG: TemplateConfig = {
 /** Count of items available in each template category */
 export type TemplateCounts = Record<keyof TemplateConfig, number>
 
+/** Definition for a template category card in the wizard */
+export interface TemplateCategoryDef {
+  key: keyof TemplateConfig
+  label: string
+  description: string
+}
+
 export const DEFAULT_TEMPLATE_COUNTS: TemplateCounts = {
   milestones: 0,
   procedures: 0,
