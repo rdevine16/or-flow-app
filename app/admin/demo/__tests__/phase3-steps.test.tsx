@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest'
 import {
   isOutlierConfigStepValid,
   createDefaultOutlierProfile,
+  OUTLIER_DEFS,
   type SurgeonProfile,
   type OutlierSetting,
   type DayOfWeek,
@@ -18,6 +19,7 @@ describe('isOutlierConfigStepValid', () => {
   const mockProfile: SurgeonProfile = {
     surgeonId: 'surgeon-1',
     speedProfile: 'average',
+    speedMultiplierRange: { min: 90, max: 110 },
     specialty: 'joint',
     operatingDays: [1, 3, 5],
     dayRoomAssignments: { 1: ['room-1'], 3: ['room-2'], 5: ['room-1'] },
@@ -41,7 +43,7 @@ describe('isOutlierConfigStepValid', () => {
       ...mockProfile,
       outliers: {
         ...createDefaultOutlierProfile(),
-        lateStarts: { enabled: true, frequency: 30, magnitude: 2 },
+        lateStarts: { enabled: true, frequency: 30, rangeMin: 15, rangeMax: 45 },
       },
     }
     const result = isOutlierConfigStepValid({ 'surgeon-1': profileWithOneOutlier })
@@ -55,9 +57,9 @@ describe('isOutlierConfigStepValid', () => {
       surgeonId: 'surgeon-1',
       outliers: {
         ...createDefaultOutlierProfile(),
-        lateStarts: { enabled: true, frequency: 30, magnitude: 2 },
-        longTurnovers: { enabled: true, frequency: 20, magnitude: 1 },
-        fastCases: { enabled: true, frequency: 40, magnitude: 3 },
+        lateStarts: { enabled: true, frequency: 30, rangeMin: 15, rangeMax: 45 },
+        longTurnovers: { enabled: true, frequency: 20, rangeMin: 30, rangeMax: 60 },
+        fastCases: { enabled: true, frequency: 40, rangeMin: 15, rangeMax: 25 },
       },
     }
     const profileWithTwoOutliers = {
@@ -65,8 +67,8 @@ describe('isOutlierConfigStepValid', () => {
       surgeonId: 'surgeon-2',
       outliers: {
         ...createDefaultOutlierProfile(),
-        extendedPhases: { enabled: true, frequency: 50, magnitude: 2 },
-        callbackDelays: { enabled: true, frequency: 10, magnitude: 1 },
+        extendedPhases: { enabled: true, frequency: 50, rangeMin: 40, rangeMax: 80 },
+        callbackDelays: { enabled: true, frequency: 10, rangeMin: 10, rangeMax: 25 },
       },
     }
     const result = isOutlierConfigStepValid({
@@ -88,9 +90,9 @@ describe('isOutlierConfigStepValid', () => {
       ...mockProfile,
       outliers: {
         ...createDefaultOutlierProfile(),
-        lateStarts: { enabled: true, frequency: 30, magnitude: 2 },
-        longTurnovers: { enabled: false, frequency: 50, magnitude: 3 }, // Disabled — shouldn't count
-        fastCases: { enabled: true, frequency: 40, magnitude: 1 },
+        lateStarts: { enabled: true, frequency: 30, rangeMin: 15, rangeMax: 45 },
+        longTurnovers: { enabled: false, frequency: 50, rangeMin: 30, rangeMax: 60 }, // Disabled — shouldn't count
+        fastCases: { enabled: true, frequency: 40, rangeMin: 15, rangeMax: 25 },
       },
     }
     const result = isOutlierConfigStepValid({ 'surgeon-1': profileWithMixed })
@@ -163,7 +165,7 @@ describe('Room toggle logic (max 2 rooms per day)', () => {
 
 describe('Outlier state management', () => {
   /**
-   * Simulates the handleOutlierChange logic from OutlierConfigStep.tsx lines 72-86
+   * Simulates the handleOutlierChange logic from OutlierConfigStep.tsx
    * Returns the updated outliers object after applying a partial update to one outlier type.
    */
   function simulateOutlierChange(
@@ -185,7 +187,7 @@ describe('Outlier state management', () => {
     const updated = simulateOutlierChange(current, 'lateStarts', { enabled: true })
     expect(updated.lateStarts.enabled).toBe(true)
     expect(updated.lateStarts.frequency).toBe(30) // Unchanged
-    expect(updated.lateStarts.magnitude).toBe(2) // Unchanged
+    expect(updated.lateStarts.rangeMin).toBe(15) // Default for late starts
   })
 
   it('toggles enabled from true to false', () => {
@@ -201,16 +203,24 @@ describe('Outlier state management', () => {
     const updated = simulateOutlierChange(current, 'longTurnovers', { frequency: 50 })
     expect(updated.longTurnovers.frequency).toBe(50)
     expect(updated.longTurnovers.enabled).toBe(true) // Unchanged
-    expect(updated.longTurnovers.magnitude).toBe(2) // Unchanged
+    expect(updated.longTurnovers.rangeMin).toBe(30) // Default for long turnovers
   })
 
-  it('updates magnitude slider value', () => {
+  it('updates rangeMin value', () => {
     const current = createDefaultOutlierProfile()
     current.extendedPhases.enabled = true
-    const updated = simulateOutlierChange(current, 'extendedPhases', { magnitude: 3 })
-    expect(updated.extendedPhases.magnitude).toBe(3)
+    const updated = simulateOutlierChange(current, 'extendedPhases', { rangeMin: 50 })
+    expect(updated.extendedPhases.rangeMin).toBe(50)
     expect(updated.extendedPhases.enabled).toBe(true) // Unchanged
     expect(updated.extendedPhases.frequency).toBe(30) // Unchanged
+  })
+
+  it('updates rangeMax value', () => {
+    const current = createDefaultOutlierProfile()
+    current.extendedPhases.enabled = true
+    const updated = simulateOutlierChange(current, 'extendedPhases', { rangeMax: 100 })
+    expect(updated.extendedPhases.rangeMax).toBe(100)
+    expect(updated.extendedPhases.rangeMin).toBe(40) // Unchanged default
   })
 
   it('updates multiple properties at once', () => {
@@ -218,11 +228,13 @@ describe('Outlier state management', () => {
     const updated = simulateOutlierChange(current, 'callbackDelays', {
       enabled: true,
       frequency: 60,
-      magnitude: 1,
+      rangeMin: 15,
+      rangeMax: 30,
     })
     expect(updated.callbackDelays.enabled).toBe(true)
     expect(updated.callbackDelays.frequency).toBe(60)
-    expect(updated.callbackDelays.magnitude).toBe(1)
+    expect(updated.callbackDelays.rangeMin).toBe(15)
+    expect(updated.callbackDelays.rangeMax).toBe(30)
   })
 
   it('does not affect other outlier types', () => {
@@ -238,13 +250,12 @@ describe('Outlier state management', () => {
 
   it('preserves original outlier settings when updating a different one', () => {
     const current = createDefaultOutlierProfile()
-    current.longTurnovers = { enabled: true, frequency: 40, magnitude: 2 }
+    current.longTurnovers = { enabled: true, frequency: 40, rangeMin: 30, rangeMax: 60 }
     const updated = simulateOutlierChange(current, 'extendedPhases', { enabled: true })
 
-    expect(updated.longTurnovers).toEqual({ enabled: true, frequency: 40, magnitude: 2 })
+    expect(updated.longTurnovers).toEqual({ enabled: true, frequency: 40, rangeMin: 30, rangeMax: 60 })
     expect(updated.extendedPhases.enabled).toBe(true)
     expect(updated.extendedPhases.frequency).toBe(30) // Default
-    expect(updated.extendedPhases.magnitude).toBe(2) // Default
   })
 })
 
@@ -266,6 +277,7 @@ describe('Bad days per month slider', () => {
   const mockProfile: SurgeonProfile = {
     surgeonId: 'surgeon-1',
     speedProfile: 'average',
+    speedMultiplierRange: { min: 90, max: 110 },
     specialty: 'joint',
     operatingDays: [1, 3, 5],
     dayRoomAssignments: { 1: ['room-1'], 3: ['room-2'], 5: ['room-1'] },
@@ -309,6 +321,7 @@ describe('DayRoomAssignments with max 2 rooms per day', () => {
   const mockProfile: SurgeonProfile = {
     surgeonId: 'surgeon-1',
     speedProfile: 'average',
+    speedMultiplierRange: { min: 90, max: 110 },
     specialty: 'joint',
     operatingDays: [1, 2, 3],
     dayRoomAssignments: {},

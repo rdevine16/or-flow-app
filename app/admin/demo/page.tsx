@@ -159,6 +159,7 @@ export default function DemoDataWizardPage() {
           newProfiles[surgeon.id] = {
             surgeonId: surgeon.id,
             speedProfile: 'average',
+            speedMultiplierRange: { min: 90, max: 110 },
             specialty: 'joint',
             operatingDays: defaultDays,
             dayRoomAssignments,

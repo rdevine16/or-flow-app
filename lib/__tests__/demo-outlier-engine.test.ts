@@ -15,11 +15,11 @@ import {
 function createProfile(overrides?: Partial<OutlierProfile>): OutlierProfile {
   return {
     outliers: {
-      lateStarts: { enabled: false, frequency: 20, magnitude: 2 },
-      longTurnovers: { enabled: false, frequency: 15, magnitude: 2 },
-      extendedPhases: { enabled: false, frequency: 10, magnitude: 2 },
-      callbackDelays: { enabled: false, frequency: 12, magnitude: 2 },
-      fastCases: { enabled: false, frequency: 8, magnitude: 2 },
+      lateStarts: { enabled: false, frequency: 20, rangeMin: 20, rangeMax: 35 },
+      longTurnovers: { enabled: false, frequency: 15, rangeMin: 30, rangeMax: 45 },
+      extendedPhases: { enabled: false, frequency: 10, rangeMin: 50, rangeMax: 65 },
+      callbackDelays: { enabled: false, frequency: 12, rangeMin: 15, rangeMax: 20 },
+      fastCases: { enabled: false, frequency: 8, rangeMin: 18, rangeMax: 22 },
     },
     badDaysPerMonth: 0,
     ...overrides,
@@ -95,7 +95,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          lateStarts: { enabled: true, frequency: 20, magnitude: 2 },
+          lateStarts: { enabled: true, frequency: 20, rangeMin: 20, rangeMax: 35 },
         },
       })
       // Mock Math.random to fail the frequency check (> 20%)
@@ -104,11 +104,11 @@ describe('demo-outlier-engine', () => {
       expect(result).toBe(0)
     })
 
-    it('returns value in range when enabled and frequency fires', () => {
+    it('returns value in configured range when enabled and frequency fires', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          lateStarts: { enabled: true, frequency: 20, magnitude: 2 },
+          lateStarts: { enabled: true, frequency: 20, rangeMin: 20, rangeMax: 35 },
         },
       })
       // Mock Math.random: first call for shouldFire (pass), second for randomInt
@@ -119,16 +119,16 @@ describe('demo-outlier-engine', () => {
         return 0.5 // mid-range for randomInt
       })
       const result = computeLateStartDelay(profile, false)
-      // Magnitude 2 → range 20-35 min
+      // Range 20-35 min
       expect(result).toBeGreaterThanOrEqual(20)
       expect(result).toBeLessThanOrEqual(35)
     })
 
-    it('forces 100% frequency and magnitude 3 on bad days', () => {
+    it('forces 100% frequency on bad days using same configured range', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          lateStarts: { enabled: true, frequency: 5, magnitude: 1 },
+          lateStarts: { enabled: true, frequency: 5, rangeMin: 15, rangeMax: 25 },
         },
       })
       // Mock Math.random: first call for shouldFire (always pass on bad day), second for randomInt
@@ -139,9 +139,9 @@ describe('demo-outlier-engine', () => {
         return 0.5 // mid-range for randomInt
       })
       const result = computeLateStartDelay(profile, true)
-      // Bad day → magnitude 3 → range 30-45 min
-      expect(result).toBeGreaterThanOrEqual(30)
-      expect(result).toBeLessThanOrEqual(45)
+      // Bad day → 100% frequency, same range 15-25 min
+      expect(result).toBeGreaterThanOrEqual(15)
+      expect(result).toBeLessThanOrEqual(25)
     })
   })
 
@@ -152,31 +152,37 @@ describe('demo-outlier-engine', () => {
       expect(result).toBe(0)
     })
 
-    it('returns value in range when enabled', () => {
+    it('returns value derived from first-case range when enabled', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          lateStarts: { enabled: true, frequency: 20, magnitude: 2 },
+          lateStarts: { enabled: true, frequency: 20, rangeMin: 20, rangeMax: 35 },
         },
       })
       Math.random = vi.fn(() => 0.5)
       const result = computeCascadeDelay(profile, false)
-      // Magnitude 2 → cascade range 5-12 min
-      expect(result).toBeGreaterThanOrEqual(5)
+      // Cascade derived as ~20-35% of first-case range:
+      // min = max(2, round(20 * 0.2)) = max(2, 4) = 4
+      // max = max(5, round(35 * 0.35)) = max(5, 12) = 12
+      // Range: 4-12 min
+      expect(result).toBeGreaterThanOrEqual(4)
       expect(result).toBeLessThanOrEqual(12)
     })
 
-    it('uses magnitude 3 on bad days', () => {
+    it('uses same cascade derivation on bad days', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          lateStarts: { enabled: true, frequency: 20, magnitude: 1 },
+          lateStarts: { enabled: true, frequency: 20, rangeMin: 30, rangeMax: 45 },
         },
       })
       Math.random = vi.fn(() => 0.5)
       const result = computeCascadeDelay(profile, true)
-      // Bad day → magnitude 3 → cascade range 8-15 min
-      expect(result).toBeGreaterThanOrEqual(8)
+      // Cascade derived from 30-45:
+      // min = max(2, round(30 * 0.2)) = max(2, 6) = 6
+      // max = max(5, round(45 * 0.35)) = max(5, 15) = 15
+      // Range: 6-15 min
+      expect(result).toBeGreaterThanOrEqual(6)
       expect(result).toBeLessThanOrEqual(15)
     })
   })
@@ -192,7 +198,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          extendedPhases: { enabled: true, frequency: 50, magnitude: 2 },
+          extendedPhases: { enabled: true, frequency: 50, rangeMin: 50, rangeMax: 65 },
         },
       })
       let callCount = 0
@@ -202,7 +208,7 @@ describe('demo-outlier-engine', () => {
         return 0.5 // mid-range → ~57.5% over base
       })
       const result = adjustSurgicalTime(profile, 100, false)
-      // Magnitude 2 → 50-65% over → 150-165 min
+      // Range 50-65% over → 150-165 min
       expect(result).toBeGreaterThan(100)
       expect(result).toBeGreaterThanOrEqual(150)
       expect(result).toBeLessThanOrEqual(165)
@@ -212,7 +218,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          fastCases: { enabled: true, frequency: 40, magnitude: 2 },
+          fastCases: { enabled: true, frequency: 40, rangeMin: 18, rangeMax: 22 },
         },
       })
       let callCount = 0
@@ -222,7 +228,7 @@ describe('demo-outlier-engine', () => {
         return 0.5 // mid-range → ~20% faster
       })
       const result = adjustSurgicalTime(profile, 100, false)
-      // Magnitude 2 → 18-22% faster → 78-82 min
+      // Range 18-22% faster → 78-82 min
       expect(result).toBeLessThan(100)
       expect(result).toBeGreaterThanOrEqual(78)
       expect(result).toBeLessThanOrEqual(82)
@@ -232,8 +238,8 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          extendedPhases: { enabled: true, frequency: 100, magnitude: 2 },
-          fastCases: { enabled: true, frequency: 100, magnitude: 2 },
+          extendedPhases: { enabled: true, frequency: 100, rangeMin: 50, rangeMax: 65 },
+          fastCases: { enabled: true, frequency: 100, rangeMin: 18, rangeMax: 22 },
         },
       })
       Math.random = vi.fn(() => 0.5)
@@ -246,8 +252,8 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          extendedPhases: { enabled: true, frequency: 10, magnitude: 2 },
-          fastCases: { enabled: true, frequency: 100, magnitude: 2 },
+          extendedPhases: { enabled: true, frequency: 10, rangeMin: 50, rangeMax: 65 },
+          fastCases: { enabled: true, frequency: 100, rangeMin: 18, rangeMax: 22 },
         },
       })
       let callCount = 0
@@ -262,11 +268,11 @@ describe('demo-outlier-engine', () => {
       expect(result).toBeLessThan(100)
     })
 
-    it('forces maximum magnitude on bad days', () => {
+    it('uses same configured range on bad days', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          extendedPhases: { enabled: true, frequency: 10, magnitude: 1 },
+          extendedPhases: { enabled: true, frequency: 10, rangeMin: 60, rangeMax: 80 },
         },
       })
       let callCount = 0
@@ -276,7 +282,7 @@ describe('demo-outlier-engine', () => {
         return 0.5
       })
       const result = adjustSurgicalTime(profile, 100, true)
-      // Bad day → magnitude 3 → 60-80% over → 160-180 min
+      // Bad day → 100% frequency, range 60-80% over → 160-180 min
       expect(result).toBeGreaterThanOrEqual(160)
       expect(result).toBeLessThanOrEqual(180)
     })
@@ -293,7 +299,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          longTurnovers: { enabled: true, frequency: 15, magnitude: 2 },
+          longTurnovers: { enabled: true, frequency: 15, rangeMin: 30, rangeMax: 45 },
         },
       })
       Math.random = vi.fn(() => 0.3) // 30% > 15%, does not fire
@@ -305,7 +311,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          longTurnovers: { enabled: true, frequency: 15, magnitude: 2 },
+          longTurnovers: { enabled: true, frequency: 15, rangeMin: 30, rangeMax: 45 },
         },
       })
       let callCount = 0
@@ -315,16 +321,16 @@ describe('demo-outlier-engine', () => {
         return 0.5 // mid-range
       })
       const result = adjustTurnoverTime(profile, 18, false)
-      // Magnitude 2 → 30-45 min (replaces base time)
+      // Range 30-45 min (replaces base time)
       expect(result).toBeGreaterThanOrEqual(30)
       expect(result).toBeLessThanOrEqual(45)
     })
 
-    it('forces magnitude 3 on bad days', () => {
+    it('uses same configured range on bad days', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          longTurnovers: { enabled: true, frequency: 10, magnitude: 1 },
+          longTurnovers: { enabled: true, frequency: 10, rangeMin: 45, rangeMax: 60 },
         },
       })
       let callCount = 0
@@ -334,7 +340,7 @@ describe('demo-outlier-engine', () => {
         return 0.5
       })
       const result = adjustTurnoverTime(profile, 18, true)
-      // Bad day → magnitude 3 → 45-60 min
+      // Bad day → 100% frequency, range 45-60 min
       expect(result).toBeGreaterThanOrEqual(45)
       expect(result).toBeLessThanOrEqual(60)
     })
@@ -351,7 +357,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          callbackDelays: { enabled: true, frequency: 12, magnitude: 2 },
+          callbackDelays: { enabled: true, frequency: 12, rangeMin: 15, rangeMax: 20 },
         },
       })
       Math.random = vi.fn(() => 0.5) // 50% > 12%, does not fire
@@ -363,7 +369,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          callbackDelays: { enabled: true, frequency: 12, magnitude: 2 },
+          callbackDelays: { enabled: true, frequency: 12, rangeMin: 15, rangeMax: 20 },
         },
       })
       let callCount = 0
@@ -373,16 +379,16 @@ describe('demo-outlier-engine', () => {
         return 0.5 // mid-range
       })
       const result = computeCallbackDelay(profile, false)
-      // Magnitude 2 → 15-20 min
+      // Range 15-20 min
       expect(result).toBeGreaterThanOrEqual(15)
       expect(result).toBeLessThanOrEqual(20)
     })
 
-    it('forces magnitude 3 on bad days', () => {
+    it('uses same configured range on bad days', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          callbackDelays: { enabled: true, frequency: 8, magnitude: 1 },
+          callbackDelays: { enabled: true, frequency: 8, rangeMin: 20, rangeMax: 25 },
         },
       })
       let callCount = 0
@@ -392,7 +398,7 @@ describe('demo-outlier-engine', () => {
         return 0.5
       })
       const result = computeCallbackDelay(profile, true)
-      // Bad day → magnitude 3 → 20-25 min
+      // Bad day → 100% frequency, range 20-25 min
       expect(result).toBeGreaterThanOrEqual(20)
       expect(result).toBeLessThanOrEqual(25)
     })
@@ -408,7 +414,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          lateStarts: { enabled: true, frequency: 20, magnitude: 2 },
+          lateStarts: { enabled: true, frequency: 20, rangeMin: 20, rangeMax: 35 },
         },
       })
       expect(hasAnyOutlierEnabled(profile)).toBe(true)
@@ -418,7 +424,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          longTurnovers: { enabled: true, frequency: 15, magnitude: 2 },
+          longTurnovers: { enabled: true, frequency: 15, rangeMin: 30, rangeMax: 45 },
         },
       })
       expect(hasAnyOutlierEnabled(profile)).toBe(true)
@@ -428,7 +434,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          extendedPhases: { enabled: true, frequency: 10, magnitude: 2 },
+          extendedPhases: { enabled: true, frequency: 10, rangeMin: 50, rangeMax: 65 },
         },
       })
       expect(hasAnyOutlierEnabled(profile)).toBe(true)
@@ -438,7 +444,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          callbackDelays: { enabled: true, frequency: 12, magnitude: 2 },
+          callbackDelays: { enabled: true, frequency: 12, rangeMin: 15, rangeMax: 20 },
         },
       })
       expect(hasAnyOutlierEnabled(profile)).toBe(true)
@@ -448,7 +454,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          fastCases: { enabled: true, frequency: 8, magnitude: 2 },
+          fastCases: { enabled: true, frequency: 8, rangeMin: 18, rangeMax: 22 },
         },
       })
       expect(hasAnyOutlierEnabled(profile)).toBe(true)
@@ -458,69 +464,11 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          lateStarts: { enabled: true, frequency: 20, magnitude: 2 },
-          extendedPhases: { enabled: true, frequency: 10, magnitude: 2 },
+          lateStarts: { enabled: true, frequency: 20, rangeMin: 20, rangeMax: 35 },
+          extendedPhases: { enabled: true, frequency: 10, rangeMin: 50, rangeMax: 65 },
         },
       })
       expect(hasAnyOutlierEnabled(profile)).toBe(true)
-    })
-  })
-
-  // ──────────────────────────────────────────
-  // MAGNITUDE CLAMPING (edge cases)
-  // ──────────────────────────────────────────
-
-  describe('magnitude clamping', () => {
-    it('clamps magnitude below 1 to magnitude 1 range', () => {
-      const profile = createProfile({
-        outliers: {
-          ...createProfile().outliers,
-          lateStarts: { enabled: true, frequency: 100, magnitude: 0 },
-        },
-      })
-      Math.random = vi.fn(() => 0.05) // fires, then mid-range
-      const result = computeLateStartDelay(profile, false)
-      // Clamped to magnitude 1 → 15-25 min
-      expect(result).toBeGreaterThanOrEqual(15)
-      expect(result).toBeLessThanOrEqual(25)
-    })
-
-    it('clamps magnitude above 3 to magnitude 3 range', () => {
-      const profile = createProfile({
-        outliers: {
-          ...createProfile().outliers,
-          lateStarts: { enabled: true, frequency: 100, magnitude: 5 },
-        },
-      })
-      let callCount = 0
-      Math.random = vi.fn(() => {
-        callCount++
-        if (callCount === 1) return 0.05
-        return 0.5
-      })
-      const result = computeLateStartDelay(profile, false)
-      // Clamped to magnitude 3 → 30-45 min
-      expect(result).toBeGreaterThanOrEqual(30)
-      expect(result).toBeLessThanOrEqual(45)
-    })
-
-    it('rounds fractional magnitude to nearest integer', () => {
-      const profile = createProfile({
-        outliers: {
-          ...createProfile().outliers,
-          longTurnovers: { enabled: true, frequency: 100, magnitude: 1.7 },
-        },
-      })
-      let callCount = 0
-      Math.random = vi.fn(() => {
-        callCount++
-        if (callCount === 1) return 0.05
-        return 0.5
-      })
-      const result = adjustTurnoverTime(profile, 18, false)
-      // 1.7 rounds to 2 → magnitude 2 → 30-45 min
-      expect(result).toBeGreaterThanOrEqual(30)
-      expect(result).toBeLessThanOrEqual(45)
     })
   })
 
@@ -536,7 +484,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          lateStarts: { enabled: true, frequency: 50, magnitude: 2 },
+          lateStarts: { enabled: true, frequency: 50, rangeMin: 20, rangeMax: 35 },
         },
       })
 
@@ -558,7 +506,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          longTurnovers: { enabled: true, frequency: 100, magnitude: 2 },
+          longTurnovers: { enabled: true, frequency: 100, rangeMin: 30, rangeMax: 45 },
         },
       })
 
@@ -574,7 +522,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          callbackDelays: { enabled: true, frequency: 0, magnitude: 2 },
+          callbackDelays: { enabled: true, frequency: 0, rangeMin: 15, rangeMax: 20 },
         },
       })
 
@@ -585,15 +533,15 @@ describe('demo-outlier-engine', () => {
   })
 
   // ──────────────────────────────────────────
-  // MAGNITUDE RANGE VERIFICATION
+  // RANGE VERIFICATION
   // ──────────────────────────────────────────
 
-  describe('magnitude ranges produce correct bounds', () => {
-    it('callback delay magnitude 1: 10-15 min', () => {
+  describe('configured ranges produce correct bounds', () => {
+    it('callback delay range 10-15 min', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          callbackDelays: { enabled: true, frequency: 100, magnitude: 1 },
+          callbackDelays: { enabled: true, frequency: 100, rangeMin: 10, rangeMax: 15 },
         },
       })
       let callCount = 0
@@ -621,7 +569,7 @@ describe('demo-outlier-engine', () => {
       const profile = createProfile({
         outliers: {
           ...createProfile().outliers,
-          fastCases: { enabled: true, frequency: 100, magnitude: 2 },
+          fastCases: { enabled: true, frequency: 100, rangeMin: 18, rangeMax: 22 },
         },
       })
 
@@ -636,7 +584,7 @@ describe('demo-outlier-engine', () => {
         expect(r).toBeLessThan(baseSurgicalTime)
       }
 
-      // Magnitude 2 fast cases: 18-22% faster → 78-82 range
+      // Fast cases: 18-22% faster → 78-82 range
       const min = Math.min(...results)
       const max = Math.max(...results)
       expect(min).toBeGreaterThanOrEqual(75) // Allow some margin

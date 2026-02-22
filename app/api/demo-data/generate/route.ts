@@ -20,6 +20,7 @@ const supabase = createClient(
 interface WizardSurgeonProfile {
   surgeonId: string
   speedProfile: 'fast' | 'average' | 'slow'
+  speedMultiplierRange?: { min: number; max: number }
   specialty: 'joint' | 'hand_wrist' | 'spine'
   operatingDays: number[]
   dayRoomAssignments: Record<string, string[]>
@@ -27,7 +28,7 @@ interface WizardSurgeonProfile {
   preferredVendor: string | null
   closingWorkflow: string | null
   closingHandoffMinutes: number | null
-  outliers: Record<string, { enabled: boolean; frequency: number; magnitude: number }>
+  outliers: Record<string, { enabled: boolean; frequency: number; rangeMin: number; rangeMax: number }>
   badDaysPerMonth: number
   casesPerDay?: { min: number; max: number }
 }
@@ -48,7 +49,8 @@ function mapWizardProfiles(profiles: Record<string, WizardSurgeonProfile>): Surg
         outliers[key as OutlierType] = {
           enabled: val.enabled,
           frequency: val.frequency,
-          magnitude: val.magnitude,
+          rangeMin: val.rangeMin,
+          rangeMax: val.rangeMax,
         }
       }
       outlierProfile = { outliers, badDaysPerMonth: p.badDaysPerMonth || 0 }
@@ -57,6 +59,7 @@ function mapWizardProfiles(profiles: Record<string, WizardSurgeonProfile>): Surg
     return {
       surgeonId: p.surgeonId,
       speedProfile: p.speedProfile,
+      speedMultiplierRange: p.speedMultiplierRange,
       specialty: p.specialty,
       operatingDays: p.operatingDays,
       dayRoomAssignments,

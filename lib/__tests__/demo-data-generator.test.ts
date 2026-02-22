@@ -505,11 +505,11 @@ describe('Phase 6a: Outlier Profile Integration', () => {
       procedureTypeIds: ['proc-1', 'proc-2'],
       outlierProfile: {
         outliers: {
-          lateStarts: { enabled: true, frequency: 20, magnitude: 2 },
-          longTurnovers: { enabled: false, frequency: 15, magnitude: 2 },
-          extendedPhases: { enabled: true, frequency: 10, magnitude: 2 },
-          callbackDelays: { enabled: false, frequency: 12, magnitude: 2 },
-          fastCases: { enabled: false, frequency: 8, magnitude: 2 },
+          lateStarts: { enabled: true, frequency: 20, rangeMin: 20, rangeMax: 35 },
+          longTurnovers: { enabled: false, frequency: 15, rangeMin: 30, rangeMax: 45 },
+          extendedPhases: { enabled: true, frequency: 10, rangeMin: 50, rangeMax: 65 },
+          callbackDelays: { enabled: false, frequency: 12, rangeMin: 15, rangeMax: 20 },
+          fastCases: { enabled: false, frequency: 8, rangeMin: 18, rangeMax: 22 },
         },
         badDaysPerMonth: 1,
       },
@@ -539,11 +539,11 @@ describe('Phase 6a: Outlier Profile Integration', () => {
   it('outlier profile structure matches engine expectations', () => {
     const outlierProfile = {
       outliers: {
-        lateStarts: { enabled: true, frequency: 20, magnitude: 2 },
-        longTurnovers: { enabled: true, frequency: 15, magnitude: 2 },
-        extendedPhases: { enabled: true, frequency: 10, magnitude: 2 },
-        callbackDelays: { enabled: true, frequency: 12, magnitude: 2 },
-        fastCases: { enabled: true, frequency: 8, magnitude: 2 },
+        lateStarts: { enabled: true, frequency: 20, rangeMin: 20, rangeMax: 35 },
+        longTurnovers: { enabled: true, frequency: 15, rangeMin: 30, rangeMax: 45 },
+        extendedPhases: { enabled: true, frequency: 10, rangeMin: 50, rangeMax: 65 },
+        callbackDelays: { enabled: true, frequency: 12, rangeMin: 15, rangeMax: 20 },
+        fastCases: { enabled: true, frequency: 8, rangeMin: 18, rangeMax: 22 },
       },
       badDaysPerMonth: 2,
     }
@@ -559,10 +559,12 @@ describe('Phase 6a: Outlier Profile Integration', () => {
     Object.values(outlierProfile.outliers).forEach(setting => {
       expect(setting).toHaveProperty('enabled')
       expect(setting).toHaveProperty('frequency')
-      expect(setting).toHaveProperty('magnitude')
+      expect(setting).toHaveProperty('rangeMin')
+      expect(setting).toHaveProperty('rangeMax')
       expect(typeof setting.enabled).toBe('boolean')
       expect(typeof setting.frequency).toBe('number')
-      expect(typeof setting.magnitude).toBe('number')
+      expect(typeof setting.rangeMin).toBe('number')
+      expect(typeof setting.rangeMax).toBe('number')
     })
 
     expect(outlierProfile.badDaysPerMonth).toBeGreaterThanOrEqual(0)
@@ -598,33 +600,31 @@ describe('Phase 6a: Outlier Profile Integration', () => {
     })
   })
 
-  it('bad days force 100% frequency and magnitude 3 for all enabled outliers', () => {
+  it('bad days force 100% frequency using configured ranges for all enabled outliers', () => {
     // On bad days:
     // - All enabled outliers fire (100% frequency override)
-    // - All use maximum magnitude (3) regardless of configured magnitude
+    // - All use the SAME configured ranges (no magnitude override)
     const badDayBehavior = {
       frequencyOverride: 100,
-      magnitudeOverride: 3,
     }
 
     expect(badDayBehavior.frequencyOverride).toBe(100)
-    expect(badDayBehavior.magnitudeOverride).toBe(3)
 
     // This means a bad day will have:
-    // - Late start: 30-45 min (magnitude 3 range)
-    // - Cascade delay per case: 8-15 min (magnitude 3 range)
-    // - Extended phases: 60-80% over median (magnitude 3 range)
-    // - Long turnovers: 45-60 min (magnitude 3 range)
-    // - Callback delays: 20-25 min (magnitude 3 range)
+    // - Late start: uses configured rangeMin-rangeMax (e.g., 20-35 min)
+    // - Cascade delay per case: uses configured rangeMin-rangeMax (e.g., 8-15 min)
+    // - Extended phases: uses configured rangeMin-rangeMax% over median (e.g., 50-65%)
+    // - Long turnovers: uses configured rangeMin-rangeMax (e.g., 30-45 min)
+    // - Callback delays: uses configured rangeMin-rangeMax (e.g., 15-20 min)
   })
 
   it('late start cascade accumulates for subsequent cases', () => {
     // Late start day behavior:
-    // - First case: delayed by 15-45 min (magnitude-dependent)
-    // - Each subsequent case: additional 3-15 min cascade delay
+    // - First case: delayed by rangeMin-rangeMax min (e.g., 20-35 min)
+    // - Each subsequent case: additional cascade delay from configured ranges
     // - Total delay grows: case 1 = X min, case 2 = X + Y, case 3 = X + Y + Z
-    const firstCaseDelay = 30 // late start delay
-    const cascadeDelayPerCase = 10 // subsequent case cascade
+    const firstCaseDelay = 30 // late start delay (from range)
+    const cascadeDelayPerCase = 10 // subsequent case cascade (from range)
 
     const case1Delay = firstCaseDelay
     const case2Delay = firstCaseDelay + cascadeDelayPerCase
@@ -639,9 +639,9 @@ describe('Phase 6a: Outlier Profile Integration', () => {
 
   it('extended phases and fast cases are mutually exclusive per case', () => {
     // Generator checks extended phases first
-    // If extended fires → case is longer (40-80% over median)
+    // If extended fires → case is longer (rangeMin-rangeMax% over median, e.g., 50-65%)
     // If extended does NOT fire → check fast cases
-    // If fast fires → case is shorter (15-25% faster)
+    // If fast fires → case is shorter (rangeMin-rangeMax% faster, e.g., 18-22%)
     // A single case cannot be both extended and fast
 
     const checkMutualExclusivity = (extendedFires: boolean, fastFires: boolean) => {
@@ -685,9 +685,9 @@ describe('Phase 6a: Outlier Profile Integration', () => {
 
   it('turnover adjustment replaces base turnover time when firing', () => {
     // Normal turnover: 15-20 min
-    // Long turnover (magnitude 2): 30-45 min (replaces base, not added)
+    // Long turnover: rangeMin-rangeMax min (e.g., 30-45 min) (replaces base, not added)
     const baseTurnover = 18 // normal turnover
-    const longTurnover = 38 // outlier fires
+    const longTurnover = 38 // outlier fires (from configured range)
 
     const finalTurnover = longTurnover // replaces, not adds
     expect(finalTurnover).toBe(38)

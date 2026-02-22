@@ -32,6 +32,9 @@ export type DayRoomMap = Record<number, string[]>
 export interface SurgeonProfileInput {
   surgeonId: string
   speedProfile: 'fast' | 'average' | 'slow'
+  /** Speed multiplier range as percentages (e.g. { min: 90, max: 110 } → 0.9x to 1.1x per case).
+   *  If omitted, falls back to legacy fixed multipliers (fast=70, average=100, slow=130). */
+  speedMultiplierRange?: { min: number; max: number }
   specialty: 'joint' | 'hand_wrist' | 'spine'
   operatingDays: number[] // 1=Mon … 5=Fri
   dayRoomAssignments: DayRoomMap
@@ -964,7 +967,19 @@ export async function generateDemoData(
 // SPEED PROFILE MULTIPLIERS
 // =====================================================
 
-const SPEED_MULTIPLIER: Record<string, number> = { fast: 0.70, average: 1.00, slow: 1.30 }
+/** Legacy fixed multipliers — used only when speedMultiplierRange is not provided */
+const SPEED_MULTIPLIER_DEFAULTS: Record<string, { min: number; max: number }> = {
+  fast: { min: 65, max: 75 },
+  average: { min: 90, max: 110 },
+  slow: { min: 120, max: 140 },
+}
+
+/** Returns a random speed multiplier for a single case (varies per-case for realism) */
+function randomSpeedMultiplier(surgeon: { speedProfile: string; speedMultiplierRange?: { min: number; max: number } }): number {
+  const range = surgeon.speedMultiplierRange ?? SPEED_MULTIPLIER_DEFAULTS[surgeon.speedProfile] ?? { min: 100, max: 100 }
+  const pct = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min
+  return pct / 100
+}
 
 // =====================================================
 // CASE GENERATION PER SURGEON
@@ -1000,7 +1015,6 @@ function generateSurgeonCases(
   if (!surgeonProcs.length) return { cases, milestones, staffAssignments, implants, flipLinks }
 
   const speedCfg = SPEED_CONFIGS[surgeon.speedProfile]
-  const speedMultiplier = SPEED_MULTIPLIER[surgeon.speedProfile] ?? 1.0
   const specialtyCfg = surgeon.specialty === 'hand_wrist' ? HAND_WRIST_CONFIG : surgeon.specialty === 'spine' ? SPINE_CONFIG : null
   const casesPerDay = surgeon.casesPerDay ?? specialtyCfg?.casesPerDay ?? speedCfg.casesPerDay
   const dayStartTime = specialtyCfg?.startTime ?? speedCfg.startTime
@@ -1087,7 +1101,8 @@ function generateSurgeonCases(
         surgicalTime = override ? randomInt(override.min, override.max) : randomInt(speedCfg.surgicalTime.min, speedCfg.surgicalTime.max)
       }
 
-      // Apply speed profile scaling (fast=0.7x, slow=1.3x)
+      // Apply speed profile scaling with per-case variability
+      const speedMultiplier = randomSpeedMultiplier(surgeon)
       surgicalTime = Math.round(surgicalTime * speedMultiplier)
 
       // ── Outlier: adjust surgical time (extended phases / fast cases) ──

@@ -56,6 +56,7 @@ describe('SurgeonProfilesStep', () => {
   const mockProfile: SurgeonProfile = {
     surgeonId: 'surgeon-1',
     speedProfile: 'average',
+    speedMultiplierRange: { min: 90, max: 110 },
     specialty: 'joint',
     operatingDays: [1, 3],
     dayRoomAssignments: { 1: ['room-1'], 3: ['room-1'] },
@@ -329,6 +330,7 @@ describe('SurgeonProfilesStep', () => {
       expect(mockOnUpdateProfile).toHaveBeenCalledWith('surgeon-1', {
         speedProfile: 'fast',
         casesPerDay: { min: 6, max: 8 },
+        speedMultiplierRange: { min: 65, max: 75 },
       })
     })
   })

@@ -153,9 +153,11 @@ export default function SurgeonProfilesStep({
           .filter((pt) => SPECIALTY_PROC_NAMES.joint.includes(pt.name))
           .map((pt) => pt.id)
 
+        const defaultSpeed = SPEED_PROFILE_DEFS.find((s) => s.value === 'average')!
         const newProfile: SurgeonProfile = {
           surgeonId: surgeon.id,
           speedProfile: 'average',
+          speedMultiplierRange: { ...defaultSpeed.defaultRange },
           specialty: 'joint',
           operatingDays: defaultDays,
           dayRoomAssignments: {},
@@ -241,13 +243,19 @@ export default function SurgeonProfilesStep({
                 onExpand={() => onExpandSurgeon(isExpanded ? null : surgeon.id)}
                 onSpeedChange={(speed) => {
                   const newCpd = getDefaultCasesPerDay(speed, profile?.specialty || 'joint')
-                  onUpdateProfile(surgeon.id, { speedProfile: speed, casesPerDay: newCpd })
+                  const speedDef = SPEED_PROFILE_DEFS.find((s) => s.value === speed)!
+                  onUpdateProfile(surgeon.id, {
+                    speedProfile: speed,
+                    casesPerDay: newCpd,
+                    speedMultiplierRange: { ...speedDef.defaultRange },
+                  })
                 }}
                 onSpecialtyChange={(spec) => handleSpecialtyChange(surgeon.id, spec)}
                 onVendorChange={(vendor) => onUpdateProfile(surgeon.id, { preferredVendor: vendor })}
                 onDayToggle={(day) => handleDayToggle(surgeon.id, day, profile?.operatingDays || [])}
                 onProcToggle={(procId) => handleProcToggle(surgeon.id, procId, profile?.procedureTypeIds || [])}
                 onCasesPerDayChange={(cpd) => onUpdateProfile(surgeon.id, { casesPerDay: cpd })}
+                onSpeedRangeChange={(range) => onUpdateProfile(surgeon.id, { speedMultiplierRange: range })}
               />
             )
           })}
@@ -278,6 +286,7 @@ interface SurgeonCardProps {
   onDayToggle: (day: DayOfWeek) => void
   onProcToggle: (procId: string) => void
   onCasesPerDayChange: (cpd: { min: number; max: number }) => void
+  onSpeedRangeChange: (range: { min: number; max: number }) => void
 }
 
 function SurgeonCard({
@@ -297,6 +306,7 @@ function SurgeonCard({
   onDayToggle,
   onProcToggle,
   onCasesPerDayChange,
+  onSpeedRangeChange,
 }: SurgeonCardProps) {
   return (
     <div
@@ -328,7 +338,7 @@ function SurgeonCard({
             </h3>
             {isIncluded && profile && (
               <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500">
-                <span className="capitalize">{profile.speedProfile}</span>
+                <span className="capitalize">{profile.speedProfile} ({profile.speedMultiplierRange?.min ?? 100}-{profile.speedMultiplierRange?.max ?? 100}%)</span>
                 <span>&middot;</span>
                 <span>{SPECIALTIES.find((s) => s.value === profile.specialty)?.label}</span>
                 <span>&middot;</span>
@@ -336,7 +346,7 @@ function SurgeonCard({
                 <span>&middot;</span>
                 <span>{profile.casesPerDay.min}-{profile.casesPerDay.max} cases/day</span>
                 <span>&middot;</span>
-                <span>{profile.procedureTypeIds.length} procs</span>
+                <span>{profile.procedureTypeIds.length} procedures</span>
               </div>
             )}
             {!isIncluded && blockScheduleLabel && (
@@ -391,11 +401,46 @@ function SurgeonCard({
                   >
                     <Icon className="w-3.5 h-3.5" />
                     {sp.label}
-                    <span className="text-[10px] opacity-70">{sp.desc}</span>
                   </button>
                 )
               })}
             </div>
+            {/* Speed multiplier range */}
+            {(() => {
+              const speedDef = SPEED_PROFILE_DEFS.find((s) => s.value === profile.speedProfile)!
+              const range = profile.speedMultiplierRange ?? speedDef.defaultRange
+              return (
+                <div className="flex items-center gap-2 mt-2.5">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Duration range</span>
+                  <input
+                    type="number"
+                    min={30}
+                    max={range.max}
+                    value={range.min}
+                    onChange={(e) => {
+                      const val = Math.max(30, Math.min(range.max, Number(e.target.value) || 30))
+                      onSpeedRangeChange({ min: val, max: range.max })
+                    }}
+                    data-testid={`speed-range-min-${surgeon.id}`}
+                    className="w-16 px-2 py-1 border border-slate-200 rounded-lg text-xs text-center font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-slate-400">to</span>
+                  <input
+                    type="number"
+                    min={range.min}
+                    max={200}
+                    value={range.max}
+                    onChange={(e) => {
+                      const val = Math.max(range.min, Math.min(200, Number(e.target.value) || range.min))
+                      onSpeedRangeChange({ min: range.min, max: val })
+                    }}
+                    data-testid={`speed-range-max-${surgeon.id}`}
+                    className="w-16 px-2 py-1 border border-slate-200 rounded-lg text-xs text-center font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-slate-400">% of template duration</span>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Cases Per Day */}

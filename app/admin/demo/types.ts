@@ -33,10 +33,18 @@ export const DEMO_STEP_DESCRIPTIONS: Record<DemoWizardStep, string> = {
 
 export type SpeedProfile = 'fast' | 'average' | 'slow'
 
-export const SPEED_PROFILE_DEFS: { value: SpeedProfile; label: string; desc: string; multiplier: number }[] = [
-  { value: 'fast', label: 'Fast', desc: '~70% of template durations', multiplier: 0.7 },
-  { value: 'average', label: 'Average', desc: '~100% of template durations', multiplier: 1.0 },
-  { value: 'slow', label: 'Slow', desc: '~130% of template durations', multiplier: 1.3 },
+export interface SpeedProfileDef {
+  value: SpeedProfile
+  label: string
+  desc: string
+  /** Default range as percentages (e.g. { min: 65, max: 75 } means 65-75% of template duration) */
+  defaultRange: { min: number; max: number }
+}
+
+export const SPEED_PROFILE_DEFS: SpeedProfileDef[] = [
+  { value: 'fast', label: 'Fast', desc: '65-75% of template', defaultRange: { min: 65, max: 75 } },
+  { value: 'average', label: 'Average', desc: '90-110% of template', defaultRange: { min: 90, max: 110 } },
+  { value: 'slow', label: 'Slow', desc: '120-140% of template', defaultRange: { min: 120, max: 140 } },
 ]
 
 // ============================================================================
@@ -78,26 +86,43 @@ export type DayOfWeek = 1 | 2 | 3 | 4 | 5
 
 export type OutlierType = 'lateStarts' | 'longTurnovers' | 'extendedPhases' | 'callbackDelays' | 'fastCases'
 
-export const OUTLIER_DEFS: { type: OutlierType; label: string; description: string }[] = [
-  { type: 'lateStarts', label: 'Late Starts', description: 'First case starts 15-45 min late, cascading' },
-  { type: 'longTurnovers', label: 'Long Turnovers', description: '30-60 min turnovers vs normal 15-20' },
-  { type: 'extendedPhases', label: 'Extended Phases', description: 'Surgical time 40-80% over median' },
-  { type: 'callbackDelays', label: 'Callback Delays', description: 'Surgeon called back 10-25 min late' },
-  { type: 'fastCases', label: 'Fast Cases', description: 'Cases finish 15-25% faster than median' },
+export type OutlierUnit = 'minutes' | 'percent'
+
+export interface OutlierDef {
+  type: OutlierType
+  label: string
+  description: string
+  unit: OutlierUnit
+  unitLabel: string
+  defaultMin: number
+  defaultMax: number
+  absMin: number
+  absMax: number
+}
+
+export const OUTLIER_DEFS: OutlierDef[] = [
+  { type: 'lateStarts', label: 'Late Starts', description: 'First case starts late, cascading delays', unit: 'minutes', unitLabel: 'min late', defaultMin: 15, defaultMax: 45, absMin: 5, absMax: 90 },
+  { type: 'longTurnovers', label: 'Long Turnovers', description: 'Extended turnover time between cases', unit: 'minutes', unitLabel: 'min total', defaultMin: 30, defaultMax: 60, absMin: 20, absMax: 90 },
+  { type: 'extendedPhases', label: 'Extended Phases', description: 'Surgical time over baseline duration', unit: 'percent', unitLabel: '% over baseline', defaultMin: 40, defaultMax: 80, absMin: 10, absMax: 200 },
+  { type: 'callbackDelays', label: 'Callback Delays', description: 'Surgeon called back late for flip rooms', unit: 'minutes', unitLabel: 'min late', defaultMin: 10, defaultMax: 25, absMin: 5, absMax: 60 },
+  { type: 'fastCases', label: 'Fast Cases', description: 'Cases finish faster than baseline duration', unit: 'percent', unitLabel: '% faster', defaultMin: 15, defaultMax: 25, absMin: 5, absMax: 50 },
 ]
 
 export interface OutlierSetting {
   enabled: boolean
   /** % of cases/days affected (0-100) */
   frequency: number
-  /** How far from normal: 1 = low, 2 = medium, 3 = high */
-  magnitude: number
+  /** Custom min value (minutes or %, depending on outlier type) */
+  rangeMin: number
+  /** Custom max value (minutes or %, depending on outlier type) */
+  rangeMax: number
 }
 
 export const DEFAULT_OUTLIER_SETTING: OutlierSetting = {
   enabled: false,
   frequency: 30,
-  magnitude: 2,
+  rangeMin: 0,
+  rangeMax: 0,
 }
 
 // ============================================================================
@@ -110,6 +135,8 @@ export type DayRoomAssignments = Partial<Record<DayOfWeek, string[]>>
 export interface SurgeonProfile {
   surgeonId: string
   speedProfile: SpeedProfile
+  /** Speed multiplier range as percentages (e.g. { min: 90, max: 110 } → 0.9x to 1.1x) */
+  speedMultiplierRange: { min: number; max: number }
   specialty: Specialty
   operatingDays: DayOfWeek[]
   dayRoomAssignments: DayRoomAssignments
@@ -118,7 +145,7 @@ export interface SurgeonProfile {
   closingWorkflow: string | null
   closingHandoffMinutes: number | null
   outliers: Record<OutlierType, OutlierSetting>
-  /** Bad days per month (0-3). All enabled outliers fire with max magnitude. */
+  /** Bad days per month (0-3). All enabled outliers fire at 100% frequency. */
   badDaysPerMonth: number
   /** Target cases per day range (min-max). Generator picks randomly within range. */
   casesPerDay: { min: number; max: number }
@@ -139,13 +166,15 @@ export function getDefaultCasesPerDay(
 }
 
 export function createDefaultOutlierProfile(): Record<OutlierType, OutlierSetting> {
-  return {
-    lateStarts: { ...DEFAULT_OUTLIER_SETTING },
-    longTurnovers: { ...DEFAULT_OUTLIER_SETTING },
-    extendedPhases: { ...DEFAULT_OUTLIER_SETTING },
-    callbackDelays: { ...DEFAULT_OUTLIER_SETTING },
-    fastCases: { ...DEFAULT_OUTLIER_SETTING },
+  const profile = {} as Record<OutlierType, OutlierSetting>
+  for (const def of OUTLIER_DEFS) {
+    profile[def.type] = {
+      ...DEFAULT_OUTLIER_SETTING,
+      rangeMin: def.defaultMin,
+      rangeMax: def.defaultMax,
+    }
   }
+  return profile
 }
 
 // ============================================================================

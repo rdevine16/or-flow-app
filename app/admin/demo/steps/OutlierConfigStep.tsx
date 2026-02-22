@@ -1,5 +1,5 @@
 // app/admin/demo/steps/OutlierConfigStep.tsx
-// Step 4: Per-surgeon outlier controls with toggle + frequency + magnitude sliders
+// Step 4: Per-surgeon outlier controls with toggle, frequency, and custom min/max ranges
 
 'use client'
 
@@ -19,6 +19,7 @@ import type {
   SurgeonProfile,
   OutlierType,
   OutlierSetting,
+  OutlierDef,
 } from '../types'
 import { OUTLIER_DEFS } from '../types'
 
@@ -40,12 +41,6 @@ const OUTLIER_COLORS: Record<OutlierType, { bg: string; border: string; text: st
   extendedPhases: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', badge: 'bg-amber-100 text-amber-700' },
   callbackDelays: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', badge: 'bg-purple-100 text-purple-700' },
   fastCases: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-700', badge: 'bg-cyan-100 text-cyan-700' },
-}
-
-const MAGNITUDE_LABELS: Record<number, string> = {
-  1: 'Low',
-  2: 'Medium',
-  3: 'High',
 }
 
 // ============================================================================
@@ -102,7 +97,7 @@ export default function OutlierConfigStep({
           <h2 className="text-[17px] font-semibold text-slate-900">Outlier Configuration</h2>
           <p className="text-[13px] text-slate-500 mt-1">
             Configure per-surgeon problem patterns. Each outlier type has independent frequency (% of cases affected)
-            and magnitude (how far from normal) controls.
+            and custom min/max range controls.
           </p>
         </div>
       </div>
@@ -178,12 +173,13 @@ function SurgeonOutlierCard({
             const setting = profile.outliers[def.type]
             if (!setting.enabled) return null
             const colors = OUTLIER_COLORS[def.type]
+            const unitSuffix = def.unit === 'percent' ? '%' : 'm'
             return (
               <span
                 key={def.type}
                 className={`text-[10px] font-medium rounded-full px-2 py-0.5 ${colors.badge}`}
               >
-                {def.label} {setting.frequency}%
+                {def.label} {setting.frequency}% · {setting.rangeMin}-{setting.rangeMax}{unitSuffix}
               </span>
             )
           })}
@@ -231,65 +227,20 @@ function SurgeonOutlierCard({
                     </span>
                   </div>
                   <p className={`text-[11px] ${setting.enabled ? 'text-slate-500' : 'text-slate-400'}`}>
-                    {def.description}
+                    {setting.enabled
+                      ? `${def.description} (${setting.rangeMin}-${setting.rangeMax} ${def.unitLabel})`
+                      : def.description
+                    }
                   </p>
 
-                  {/* Sliders — only show when enabled */}
+                  {/* Controls — only show when enabled */}
                   {setting.enabled && (
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Frequency Slider */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">
-                            Frequency
-                          </label>
-                          <span className="text-xs font-bold text-slate-700 font-mono">
-                            {setting.frequency}%
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={5}
-                          max={80}
-                          step={5}
-                          value={setting.frequency}
-                          onChange={(e) => onOutlierChange(def.type, { frequency: Number(e.target.value) })}
-                          data-testid={`freq-slider-${surgeon.id}-${def.type}`}
-                          className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600"
-                        />
-                        <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                          <span>5%</span>
-                          <span>80%</span>
-                        </div>
-                      </div>
-
-                      {/* Magnitude Slider */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">
-                            Magnitude
-                          </label>
-                          <span className="text-xs font-bold text-slate-700">
-                            {MAGNITUDE_LABELS[setting.magnitude]}
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={1}
-                          max={3}
-                          step={1}
-                          value={setting.magnitude}
-                          onChange={(e) => onOutlierChange(def.type, { magnitude: Number(e.target.value) })}
-                          data-testid={`mag-slider-${surgeon.id}-${def.type}`}
-                          className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600"
-                        />
-                        <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                          <span>Low</span>
-                          <span>Med</span>
-                          <span>High</span>
-                        </div>
-                      </div>
-                    </div>
+                    <OutlierControls
+                      def={def}
+                      setting={setting}
+                      surgeonId={surgeon.id}
+                      onOutlierChange={onOutlierChange}
+                    />
                   )}
                 </div>
               </div>
@@ -308,7 +259,7 @@ function SurgeonOutlierCard({
                 <div>
                   <span className="text-xs font-semibold text-slate-900">Bad Days per Month</span>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Days when ALL enabled outliers fire simultaneously with maximum magnitude
+                    Days when ALL enabled outliers fire simultaneously at 100% frequency
                   </p>
                 </div>
                 <span className="text-sm font-bold text-slate-700 font-mono ml-4">
@@ -345,6 +296,89 @@ function SurgeonOutlierCard({
 }
 
 // ============================================================================
+// OUTLIER CONTROLS (frequency + range inputs)
+// ============================================================================
+
+interface OutlierControlsProps {
+  def: OutlierDef
+  setting: OutlierSetting
+  surgeonId: string
+  onOutlierChange: (type: OutlierType, updates: Partial<OutlierSetting>) => void
+}
+
+function OutlierControls({ def, setting, surgeonId, onOutlierChange }: OutlierControlsProps) {
+  return (
+    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Frequency Slider */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+            Frequency
+          </label>
+          <span className="text-xs font-bold text-slate-700 font-mono">
+            {setting.frequency}%
+          </span>
+        </div>
+        <input
+          type="range"
+          min={5}
+          max={80}
+          step={5}
+          value={setting.frequency}
+          onChange={(e) => onOutlierChange(def.type, { frequency: Number(e.target.value) })}
+          data-testid={`freq-slider-${surgeonId}-${def.type}`}
+          className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600"
+        />
+        <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
+          <span>5%</span>
+          <span>80%</span>
+        </div>
+      </div>
+
+      {/* Range Min */}
+      <div>
+        <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider block mb-1.5">
+          Min ({def.unitLabel})
+        </label>
+        <input
+          type="number"
+          min={def.absMin}
+          max={setting.rangeMax}
+          value={setting.rangeMin}
+          onChange={(e) => {
+            const val = Math.max(def.absMin, Math.min(setting.rangeMax, Number(e.target.value) || def.absMin))
+            onOutlierChange(def.type, { rangeMin: val })
+          }}
+          data-testid={`range-min-${surgeonId}-${def.type}`}
+          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs text-center font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <p className="text-[9px] text-slate-400 mt-0.5 text-center">min {def.absMin}</p>
+      </div>
+
+      {/* Range Max */}
+      <div>
+        <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider block mb-1.5">
+          Max ({def.unitLabel})
+        </label>
+        <input
+          type="number"
+          min={setting.rangeMin}
+          max={def.absMax}
+          value={setting.rangeMax}
+          onChange={(e) => {
+            const val = Math.max(setting.rangeMin, Math.min(def.absMax, Number(e.target.value) || setting.rangeMin))
+            onOutlierChange(def.type, { rangeMax: val })
+          }}
+          data-testid={`range-max-${surgeonId}-${def.type}`}
+          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs text-center font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <p className="text-[9px] text-slate-400 mt-0.5 text-center">max {def.absMax}</p>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
 // OUTLIER PREVIEW SUMMARY
 // ============================================================================
 
@@ -374,7 +408,7 @@ function OutlierPreviewSummary({ surgeon, profile }: OutlierPreviewSummaryProps)
               return (
                 <span key={def.type}>
                   {i > 0 && ' + '}
-                  {def.label} ({s.frequency}% freq, {MAGNITUDE_LABELS[s.magnitude].toLowerCase()} magnitude)
+                  {def.label} ({s.frequency}% freq, {s.rangeMin}-{s.rangeMax}{def.unit === 'percent' ? '%' : ' min'})
                 </span>
               )
             })}

@@ -15,58 +15,16 @@ export interface OutlierProfile {
 }
 
 // =====================================================
-// MAGNITUDE → RANGE TABLES
+// CASCADE RANGE (internal — derived from late start range)
 // =====================================================
 
-/** Helper: clamp magnitude to 1-3, return the matching range */
-function magnitudeRange(
-  magnitude: number,
-  ranges: Record<number, { min: number; max: number }>,
-): { min: number; max: number } {
-  const clamped = Math.max(1, Math.min(3, Math.round(magnitude)))
-  return ranges[clamped] ?? ranges[2]
-}
-
-// Late start: first case delay in minutes
-const LATE_START_FIRST_CASE: Record<number, { min: number; max: number }> = {
-  1: { min: 15, max: 25 },
-  2: { min: 20, max: 35 },
-  3: { min: 30, max: 45 },
-}
-
-// Late start: per-subsequent-case cascade in minutes
-const LATE_START_CASCADE: Record<number, { min: number; max: number }> = {
-  1: { min: 3, max: 8 },
-  2: { min: 5, max: 12 },
-  3: { min: 8, max: 15 },
-}
-
-// Long turnovers: total turnover time (vs normal 15-20 min)
-const LONG_TURNOVER_TOTAL: Record<number, { min: number; max: number }> = {
-  1: { min: 25, max: 35 },
-  2: { min: 30, max: 45 },
-  3: { min: 45, max: 60 },
-}
-
-// Extended phases: % OVER median surgical time
-const EXTENDED_PHASE_PCT: Record<number, { min: number; max: number }> = {
-  1: { min: 40, max: 55 },
-  2: { min: 50, max: 65 },
-  3: { min: 60, max: 80 },
-}
-
-// Callback delays: additional minutes added to callback timing
-const CALLBACK_DELAY_MINS: Record<number, { min: number; max: number }> = {
-  1: { min: 10, max: 15 },
-  2: { min: 15, max: 20 },
-  3: { min: 20, max: 25 },
-}
-
-// Fast cases: % FASTER than median surgical time
-const FAST_CASE_PCT: Record<number, { min: number; max: number }> = {
-  1: { min: 15, max: 18 },
-  2: { min: 18, max: 22 },
-  3: { min: 22, max: 25 },
+/** Derive cascade delay range from the late start first-case range.
+ *  Cascade per subsequent case is roughly 20-35% of the first-case range. */
+function cascadeRange(lateStartSetting: OutlierSetting): { min: number; max: number } {
+  return {
+    min: Math.max(2, Math.round(lateStartSetting.rangeMin * 0.2)),
+    max: Math.max(5, Math.round(lateStartSetting.rangeMax * 0.35)),
+  }
 }
 
 // =====================================================
@@ -87,7 +45,7 @@ function shouldFire(frequencyPct: number): boolean {
 
 /**
  * Pre-compute which operating dates are "bad days" for a surgeon.
- * On bad days, ALL enabled outlier types fire with maximum magnitude.
+ * On bad days, ALL enabled outlier types fire at 100% frequency.
  *
  * @param operatingDates All dates the surgeon operates (YYYY-MM-DD strings)
  * @param badDaysPerMonth How many bad days per month (0-3)
@@ -126,7 +84,7 @@ export function scheduleBadDays(
 
 /**
  * Determine if today is a late start day and compute the first-case delay.
- * Late starts: first case 15-45 min late (scaled by magnitude).
+ * Uses the user-defined rangeMin/rangeMax from the outlier setting.
  * Frequency controls % of operating days affected.
  *
  * @returns Delay in minutes for the first case (0 if no late start fires)
@@ -139,29 +97,26 @@ export function computeLateStartDelay(
   if (!setting.enabled) return 0
 
   const frequency = isBadDay ? 100 : setting.frequency
-  const magnitude = isBadDay ? 3 : setting.magnitude
 
   if (!shouldFire(frequency)) return 0
 
-  const range = magnitudeRange(magnitude, LATE_START_FIRST_CASE)
-  return randomInt(range.min, range.max)
+  return randomInt(setting.rangeMin, setting.rangeMax)
 }
 
 /**
  * For subsequent cases on a late start day, compute additional cascade delay.
- * Each case after the first gets an extra 5-15 min delay (things don't recover).
+ * Cascade range is derived from the late start first-case range (~20-35%).
  *
  * @returns Additional delay in minutes for this case (0 if outlier disabled)
  */
 export function computeCascadeDelay(
   profile: OutlierProfile,
-  isBadDay: boolean,
+  _isBadDay: boolean,
 ): number {
   const setting = profile.outliers.lateStarts
   if (!setting.enabled) return 0
 
-  const magnitude = isBadDay ? 3 : setting.magnitude
-  const range = magnitudeRange(magnitude, LATE_START_CASCADE)
+  const range = cascadeRange(setting)
   return randomInt(range.min, range.max)
 }
 
@@ -172,9 +127,7 @@ export function computeCascadeDelay(
 /**
  * Adjust a case's surgical time for Extended Phases and Fast Cases.
  * These are mutually exclusive per case: extended phases checked first.
- *
- * - Extended Phases: surgical time 40-80% over median
- * - Fast Cases: surgical time 15-25% faster than median
+ * Uses user-defined rangeMin/rangeMax percentages from outlier settings.
  *
  * @returns Adjusted surgical time in minutes
  */
@@ -189,11 +142,9 @@ export function adjustSurgicalTime(
   // Check extended phases first (higher demo impact)
   if (extended.enabled) {
     const frequency = isBadDay ? 100 : extended.frequency
-    const magnitude = isBadDay ? 3 : extended.magnitude
 
     if (shouldFire(frequency)) {
-      const pctRange = magnitudeRange(magnitude, EXTENDED_PHASE_PCT)
-      const pct = randomInt(pctRange.min, pctRange.max) / 100
+      const pct = randomInt(extended.rangeMin, extended.rangeMax) / 100
       return Math.round(baseSurgicalTime * (1 + pct))
     }
   }
@@ -201,11 +152,9 @@ export function adjustSurgicalTime(
   // If extended didn't fire, check fast cases
   if (fast.enabled) {
     const frequency = isBadDay ? 100 : fast.frequency
-    const magnitude = isBadDay ? 3 : fast.magnitude
 
     if (shouldFire(frequency)) {
-      const pctRange = magnitudeRange(magnitude, FAST_CASE_PCT)
-      const pct = randomInt(pctRange.min, pctRange.max) / 100
+      const pct = randomInt(fast.rangeMin, fast.rangeMax) / 100
       return Math.round(baseSurgicalTime * (1 - pct))
     }
   }
@@ -219,7 +168,7 @@ export function adjustSurgicalTime(
 
 /**
  * Adjust turnover time between single-room cases.
- * Long turnovers: 25-60 min total (vs normal 15-20).
+ * Uses user-defined rangeMin/rangeMax minutes from outlier settings.
  * Frequency controls % of turnovers affected.
  *
  * @returns Adjusted turnover time in minutes (replaces base time when firing)
@@ -233,12 +182,10 @@ export function adjustTurnoverTime(
   if (!setting.enabled) return baseTurnoverMinutes
 
   const frequency = isBadDay ? 100 : setting.frequency
-  const magnitude = isBadDay ? 3 : setting.magnitude
 
   if (!shouldFire(frequency)) return baseTurnoverMinutes
 
-  const range = magnitudeRange(magnitude, LONG_TURNOVER_TOTAL)
-  return randomInt(range.min, range.max)
+  return randomInt(setting.rangeMin, setting.rangeMax)
 }
 
 // =====================================================
@@ -247,7 +194,7 @@ export function adjustTurnoverTime(
 
 /**
  * Compute additional callback delay for flip room transitions.
- * Surgeon calls back 10-25 min late when this fires.
+ * Uses user-defined rangeMin/rangeMax minutes from outlier settings.
  * Frequency controls % of flip transitions affected.
  *
  * @returns Extra minutes to add to callback timing (0 if not firing)
@@ -260,12 +207,10 @@ export function computeCallbackDelay(
   if (!setting.enabled) return 0
 
   const frequency = isBadDay ? 100 : setting.frequency
-  const magnitude = isBadDay ? 3 : setting.magnitude
 
   if (!shouldFire(frequency)) return 0
 
-  const range = magnitudeRange(magnitude, CALLBACK_DELAY_MINS)
-  return randomInt(range.min, range.max)
+  return randomInt(setting.rangeMin, setting.rangeMax)
 }
 
 // =====================================================

@@ -58,12 +58,6 @@ const OUTLIER_BADGE_COLORS: Record<OutlierType, string> = {
   fastCases: 'bg-cyan-100 text-cyan-700',
 }
 
-const MAGNITUDE_LABELS: Record<number, string> = {
-  1: 'low',
-  2: 'med',
-  3: 'high',
-}
-
 // ============================================================================
 // PROPS
 // ============================================================================
@@ -287,7 +281,7 @@ function SurgeonSummaryCard({
           )}
         </div>
         <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-          <span className="capitalize font-medium">{speedDef?.label || profile.speedProfile}</span>
+          <span className="capitalize font-medium">{speedDef?.label || profile.speedProfile} ({profile.speedMultiplierRange?.min ?? 100}-{profile.speedMultiplierRange?.max ?? 100}%)</span>
           <span>&middot;</span>
           <span className="flex items-center gap-1">
             <Calendar className="w-3 h-3" />
@@ -317,7 +311,7 @@ function SurgeonSummaryCard({
                   className={`inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-2 py-0.5 ${OUTLIER_BADGE_COLORS[def.type]}`}
                 >
                   <Icon className="w-2.5 h-2.5" />
-                  {def.label} {setting.frequency}% {MAGNITUDE_LABELS[setting.magnitude]}
+                  {def.label} {setting.frequency}% · {setting.rangeMin}-{setting.rangeMax}{def.unit === 'percent' ? '%' : 'm'}
                 </span>
               )
             })}

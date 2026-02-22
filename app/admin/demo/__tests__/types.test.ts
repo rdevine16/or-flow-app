@@ -33,6 +33,7 @@ describe('types.ts — Validation helpers', () => {
     const mockProfile: SurgeonProfile = {
       surgeonId: 'surgeon-1',
       speedProfile: 'average',
+      speedMultiplierRange: { min: 90, max: 110 },
       specialty: 'joint',
       operatingDays: [1, 3, 5],
       dayRoomAssignments: { 1: ['room-1'], 3: ['room-2'], 5: ['room-1'] },
@@ -89,6 +90,7 @@ describe('types.ts — Validation helpers', () => {
     const mockProfile: SurgeonProfile = {
       surgeonId: 'surgeon-1',
       speedProfile: 'average',
+      speedMultiplierRange: { min: 90, max: 110 },
       specialty: 'joint',
       operatingDays: [1, 3, 5],
       dayRoomAssignments: { 1: ['room-1'], 3: ['room-2'], 5: ['room-1'] },
@@ -142,6 +144,7 @@ describe('types.ts — Validation helpers', () => {
     const mockProfile: SurgeonProfile = {
       surgeonId: 'surgeon-1',
       speedProfile: 'average',
+      speedMultiplierRange: { min: 90, max: 110 },
       specialty: 'joint',
       operatingDays: [1, 2, 3, 4, 5], // 5 days per week
       dayRoomAssignments: {},
@@ -233,10 +236,11 @@ describe('types.ts — Validation helpers', () => {
       }
     })
 
-    it('sets default magnitude to 2 (medium)', () => {
+    it('sets default rangeMin/rangeMax from OUTLIER_DEFS', () => {
       const profile = createDefaultOutlierProfile()
       for (const def of OUTLIER_DEFS) {
-        expect(profile[def.type].magnitude).toBe(2)
+        expect(profile[def.type].rangeMin).toBe(def.defaultMin)
+        expect(profile[def.type].rangeMax).toBe(def.defaultMax)
       }
     })
 
