@@ -3,7 +3,7 @@
 // Accepts full wizard config via POST body, streams progress events via Server-Sent Events.
 
 import { createClient } from '@supabase/supabase-js'
-import { generateDemoData, purgeCaseData, type GenerationConfig, type ProgressCallback } from '@/lib/demo-data-generator'
+import { generateDemoData, purgeCaseData, type GenerationConfig, type ProgressCallback, type SurgeonDurationMap, type SurgeonProfileInput } from '@/lib/demo-data-generator'
 import { env, serverEnv } from '@/lib/env'
 import { logger } from '@/lib/logger'
 
@@ -29,32 +29,39 @@ interface WizardSurgeonProfile {
   badDaysPerMonth: number
 }
 
-function mapWizardProfiles(profiles: Record<string, WizardSurgeonProfile>) {
+function mapWizardProfiles(profiles: Record<string, WizardSurgeonProfile>): SurgeonProfileInput[] {
   return Object.values(profiles).map((p) => {
-    // Determine primary and flip room from day assignments
-    // For backward compat with v1 generator: pick the most common room as primary
-    const roomCounts = new Map<string, number>()
-    for (const rooms of Object.values(p.dayRoomAssignments)) {
-      for (const roomId of rooms) {
-        roomCounts.set(roomId, (roomCounts.get(roomId) || 0) + 1)
-      }
+    // Convert string-keyed day assignments to number-keyed (JSON serializes number keys as strings)
+    const dayRoomAssignments: Record<number, string[]> = {}
+    for (const [dayStr, rooms] of Object.entries(p.dayRoomAssignments)) {
+      dayRoomAssignments[Number(dayStr)] = rooms
     }
-    const sortedRooms = [...roomCounts.entries()].sort((a, b) => b[1] - a[1])
-    const primaryRoomId = sortedRooms[0]?.[0] || null
-    const flipRoomId = sortedRooms[1]?.[0] || null
 
     return {
       surgeonId: p.surgeonId,
       speedProfile: p.speedProfile,
-      usesFlipRooms: flipRoomId !== null,
       specialty: p.specialty,
       operatingDays: p.operatingDays,
+      dayRoomAssignments,
       preferredVendor: p.preferredVendor as 'Stryker' | 'Zimmer Biomet' | 'DePuy Synthes' | null,
-      primaryRoomId,
-      flipRoomId,
       procedureTypeIds: p.procedureTypeIds,
     }
   })
+}
+
+/** Load surgeon-specific duration overrides from DB and build lookup map */
+async function loadSurgeonDurations(facilityId: string): Promise<SurgeonDurationMap> {
+  const { data } = await supabase
+    .from('surgeon_procedure_duration')
+    .select('surgeon_id, procedure_type_id, expected_duration_minutes')
+    .eq('facility_id', facilityId)
+    .eq('is_active', true)
+    .is('deleted_at', null)
+  const map: SurgeonDurationMap = new Map()
+  for (const row of (data || [])) {
+    map.set(`${row.surgeon_id}::${row.procedure_type_id}`, row.expected_duration_minutes)
+  }
+  return map
 }
 
 export async function POST(request: Request) {
@@ -71,14 +78,16 @@ export async function POST(request: Request) {
       )
     }
 
-    // Convert wizard profiles to generator format
+    // Convert wizard profiles to generator format and load surgeon durations
     const mappedProfiles = mapWizardProfiles(surgeonProfiles)
+    const surgeonDurations = await loadSurgeonDurations(facilityId)
 
     const config: GenerationConfig = {
       facilityId,
       surgeonProfiles: mappedProfiles,
       monthsOfHistory: monthsOfHistory || 6,
       purgeFirst: purgeFirst !== false,
+      surgeonDurations,
     }
 
     // Create SSE stream

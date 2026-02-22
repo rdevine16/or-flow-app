@@ -9,20 +9,22 @@
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getLocalDateString } from '@/lib/date-utils'
+import { getHolidayDateSet } from '@/lib/us-holidays'
 
 // =====================================================
 // TYPES
 // =====================================================
 
+/** Per-day room assignments: key = day of week (1=Mon…5=Fri), value = room IDs (max 2 for flip rooms) */
+export type DayRoomMap = Record<number, string[]>
+
 export interface SurgeonProfileInput {
   surgeonId: string
   speedProfile: 'fast' | 'average' | 'slow'
-  usesFlipRooms: boolean
   specialty: 'joint' | 'hand_wrist' | 'spine'
   operatingDays: number[] // 1=Mon … 5=Fri
+  dayRoomAssignments: DayRoomMap
   preferredVendor: 'Stryker' | 'Zimmer Biomet' | 'DePuy Synthes' | null
-  primaryRoomId: string | null
-  flipRoomId: string | null       // only when usesFlipRooms
   procedureTypeIds: string[]      // user-selected procedure types
 }
 
@@ -34,12 +36,17 @@ interface ResolvedSurgeon extends SurgeonProfileInput {
   closingHandoffMinutes: number
 }
 
+/** Map of "surgeonId::procedureTypeId" → expected_duration_minutes (surgeon-specific overrides) */
+export type SurgeonDurationMap = Map<string, number>
+
 export interface GenerationConfig {
   facilityId: string
   surgeonProfiles: SurgeonProfileInput[]
   monthsOfHistory: number
   purgeFirst: boolean
   createdByUserId?: string
+  /** Surgeon-specific duration overrides from surgeon_procedure_duration table */
+  surgeonDurations?: SurgeonDurationMap
 }
 
 export interface GenerationResult {
@@ -217,14 +224,11 @@ type StaffEntry = { userId: string; roleId: string }
 type RoomDayStaff = { nurse: StaffEntry | null; techs: StaffEntry[]; anes: StaffEntry | null }
 
 // =====================================================
-// HOLIDAYS (US Federal 2024-2026)
+// HOLIDAYS — computed dynamically via us-holidays.ts
 // =====================================================
 
-const HOLIDAYS = new Set([
-  '2024-01-01','2024-01-15','2024-02-19','2024-05-27','2024-06-19','2024-07-04','2024-09-02','2024-10-14','2024-11-11','2024-11-28','2024-12-25',
-  '2025-01-01','2025-01-20','2025-02-17','2025-05-26','2025-06-19','2025-07-04','2025-09-01','2025-10-13','2025-11-11','2025-11-27','2025-12-25',
-  '2026-01-01','2026-01-19','2026-02-16','2026-05-25','2026-06-19','2026-07-03','2026-09-07','2026-10-12','2026-11-11','2026-11-26','2026-12-25',
-])
+// Lazily computed for the date range in use (set during generateDemoData)
+let holidayDateSet: Set<string> = new Set()
 
 // =====================================================
 // UTILITY FUNCTIONS
@@ -241,7 +245,7 @@ function formatTime(d: Date, tz?: string): string {
   }
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
 }
-function isHoliday(d: Date): boolean { return HOLIDAYS.has(getLocalDateString(d)) }
+function isHoliday(d: Date): boolean { return holidayDateSet.has(getLocalDateString(d)) }
 function isWeekend(d: Date): boolean { const dow = d.getUTCDay(); return dow === 0 || dow === 6 }
 function dateKey(d: Date): string { return getLocalDateString(d) }
 
@@ -438,9 +442,13 @@ export async function generateDemoData(
     const roleMap = new Map((roleData || []).map(r => [r.id, r.name]))
 
     const staffByRole = {
-      anesthesiologists: (allStaff || []).filter(u => roleMap.get(u.role_id) === 'anesthesiologist'),
-      nurses:            (allStaff || []).filter(u => roleMap.get(u.role_id) === 'nurse'),
-      techs:             (allStaff || []).filter(u => roleMap.get(u.role_id) === 'tech'),
+      // Pool anesthesiologists + CRNAs as anesthesia providers (round-robin across rooms)
+      anesthesia: (allStaff || []).filter(u => {
+        const role = roleMap.get(u.role_id)
+        return role === 'anesthesiologist' || role === 'crna'
+      }),
+      nurses:     (allStaff || []).filter(u => roleMap.get(u.role_id) === 'nurse'),
+      techs:      (allStaff || []).filter(u => roleMap.get(u.role_id) === 'tech'),
     }
 
     // ── Resolve surgeon profiles ──
@@ -472,11 +480,18 @@ export async function generateDemoData(
     const startDate = new Date(today); startDate.setUTCMonth(startDate.getUTCMonth() - monthsOfHistory)
     const endDate = new Date(today); endDate.setUTCMonth(endDate.getUTCMonth() + 1)
 
-    // Collect all unique rooms used by surgeons
+    // Initialize holiday set for the generation date range (algorithmic, not hardcoded)
+    holidayDateSet = getHolidayDateSet(startDate.getFullYear(), endDate.getFullYear())
+
+    // Build surgeon duration lookup: "surgeonId::procedureTypeId" → duration
+    const surgeonDurationMap: SurgeonDurationMap = config.surgeonDurations ?? new Map()
+
+    // Collect all unique rooms used by surgeons (from per-day assignments)
     const allRoomIds = new Set<string>()
     for (const s of resolved) {
-      if (s.primaryRoomId) allRoomIds.add(s.primaryRoomId)
-      if (s.usesFlipRooms && s.flipRoomId) allRoomIds.add(s.flipRoomId)
+      for (const rooms of Object.values(s.dayRoomAssignments)) {
+        for (const rid of rooms) allRoomIds.add(rid)
+      }
     }
 
     // For each date, determine which rooms are active and assign staff
@@ -489,12 +504,14 @@ export async function generateDemoData(
       const dk = dateKey(tempDate)
       const dow = tempDate.getUTCDay() // 0=Sun … 6=Sat
 
-      // Figure out which rooms are active today
+      // Figure out which rooms are active today (from per-day assignments)
       const activeRoomIds: string[] = []
       for (const s of resolved) {
         if (!s.operatingDays.includes(dow)) continue
-        if (s.primaryRoomId && !activeRoomIds.includes(s.primaryRoomId)) activeRoomIds.push(s.primaryRoomId)
-        if (s.usesFlipRooms && s.flipRoomId && !activeRoomIds.includes(s.flipRoomId)) activeRoomIds.push(s.flipRoomId)
+        const dayRooms = s.dayRoomAssignments[dow] || []
+        for (const rid of dayRooms) {
+          if (!activeRoomIds.includes(rid)) activeRoomIds.push(rid)
+        }
       }
 
       // Assign staff to rooms — round-robin, no double-booking
@@ -507,7 +524,7 @@ export async function generateDemoData(
         const tech1 = staffByRole.techs.find(t => !usedTechs.has(t.id))
         const tech2Candidates = staffByRole.techs.filter(t => !usedTechs.has(t.id) && t.id !== tech1?.id)
         const tech2 = tech2Candidates.length > 0 ? tech2Candidates[0] : null
-        const anes = staffByRole.anesthesiologists.find(a => !usedAnes.has(a.id))
+        const anes = staffByRole.anesthesia.find((a: { id: string }) => !usedAnes.has(a.id))
 
         if (nurse) usedNurses.add(nurse.id)
         if (tech1) usedTechs.add(tech1.id)
@@ -543,7 +560,7 @@ export async function generateDemoData(
       const result = generateSurgeonCases(
         surgeon, startDate, endDate, procedureTypes, milestoneTypes, procMilestoneMap, payers,
         roomDayStaffMap, completedStatus.id, scheduledStatus?.id || completedStatus.id, prefix, caseNum,
-        facility.timezone || 'America/New_York', fmToMtMap, systemUserId
+        facility.timezone || 'America/New_York', fmToMtMap, systemUserId, surgeonDurationMap
       )
       allCases.push(...result.cases)
       allMilestones.push(...result.milestones)
@@ -703,6 +720,12 @@ export async function generateDemoData(
 }
 
 // =====================================================
+// SPEED PROFILE MULTIPLIERS
+// =====================================================
+
+const SPEED_MULTIPLIER: Record<string, number> = { fast: 0.70, average: 1.00, slow: 1.30 }
+
+// =====================================================
 // CASE GENERATION PER SURGEON
 // =====================================================
 
@@ -720,8 +743,9 @@ function generateSurgeonCases(
   prefix: string,
   startingNumber: number,
   facilityTz: string,
-  fmToMtMap: Map<string, string>,
-  createdByUserId: string | null
+  _fmToMtMap: Map<string, string>,
+  createdByUserId: string | null,
+  surgeonDurationMap: SurgeonDurationMap
 ) {
   const cases: CaseRecord[] = []
   const milestones: MilestoneRecord[] = []
@@ -734,14 +758,10 @@ function generateSurgeonCases(
   if (!surgeonProcs.length) return { cases, milestones, staffAssignments, implants, flipLinks }
 
   const speedCfg = SPEED_CONFIGS[surgeon.speedProfile]
+  const speedMultiplier = SPEED_MULTIPLIER[surgeon.speedProfile] ?? 1.0
   const specialtyCfg = surgeon.specialty === 'hand_wrist' ? HAND_WRIST_CONFIG : surgeon.specialty === 'spine' ? SPINE_CONFIG : null
   const casesPerDay = specialtyCfg?.casesPerDay ?? speedCfg.casesPerDay
   const dayStartTime = specialtyCfg?.startTime ?? speedCfg.startTime
-
-  // Determine surgeon's rooms
-  const primaryRoom = surgeon.primaryRoomId
-  const flipRoom = surgeon.usesFlipRooms ? surgeon.flipRoomId : null
-  if (!primaryRoom) return { cases, milestones, staffAssignments, implants, flipLinks }
 
   const currentDate = new Date(startDate)
 
@@ -752,45 +772,51 @@ function generateSurgeonCases(
       continue
     }
 
+    // Get this day's room assignments from per-day map
+    const dayRooms = surgeon.dayRoomAssignments[dow] || []
+    if (dayRooms.length === 0) { currentDate.setUTCDate(currentDate.getUTCDate() + 1); continue }
+
+    const isFlipRoomDay = dayRooms.length >= 2
+
     const dk = dateKey(currentDate)
     const numCases = randomInt(casesPerDay.min, casesPerDay.max)
     const [h, m] = dayStartTime.split(':').map(Number)
-    // Build start time in facility's local timezone → stored as UTC
     let currentTime = facilityDate(dk, h, m, facilityTz)
 
-    // Track room index
     let roomIdx = 0
-
-    // Track previous case data for flip room callback calculation
-    let prevCaseLinkId: string | null = null  // for called_next_case_id deferred linking
+    let prevCaseLinkId: string | null = null
 
     for (let i = 0; i < numCases; i++) {
       const proc = randomChoice(surgeonProcs)
 
-      // Determine which room this case is in
-      let roomId: string
-      if (flipRoom) {
-        roomId = roomIdx % 2 === 0 ? primaryRoom : flipRoom
-      } else {
-        roomId = primaryRoom
-      }
+      // Determine which room this case is in (alternate for flip rooms)
+      const roomId = isFlipRoomDay ? dayRooms[roomIdx % dayRooms.length] : dayRooms[0]
 
-      // Surgical time: derive from expected_duration_minutes when available
-      // Overhead constants from milestone templates:
-      //   joint: incision(28) + exit(12) = ~40 min overhead
-      //   spine: incision(32) + exit(20) = ~48 min overhead
-      //   hand:  incision(18) + exit(10) = ~28 min overhead (use 30)
+      // ── Surgical time: 3-tier resolution ──
+      // 1. Surgeon-specific override (surgeon_procedure_duration table)
+      // 2. Procedure type default (expected_duration_minutes)
+      // 3. Hardcoded fallback (PROCEDURE_SURGICAL_TIMES or speed config)
       const SURGICAL_OVERHEAD: Record<string, number> = { joint: 40, spine: 48, hand_wrist: 30 }
       const overhead = SURGICAL_OVERHEAD[surgeon.specialty] ?? 40
 
       let surgicalTime: number
-      if (proc.expected_duration_minutes != null) {
+      const surgeonDuration = surgeonDurationMap.get(`${surgeon.surgeonId}::${proc.id}`)
+      if (surgeonDuration != null) {
+        // Tier 1: surgeon-specific override
+        const derived = Math.max(15, surgeonDuration - overhead)
+        surgicalTime = derived + randomInt(-5, 5)
+      } else if (proc.expected_duration_minutes != null) {
+        // Tier 2: procedure type default
         const derived = Math.max(15, proc.expected_duration_minutes - overhead)
-        surgicalTime = derived + randomInt(-5, 5) // ±5 min jitter for realism
+        surgicalTime = derived + randomInt(-5, 5)
       } else {
+        // Tier 3: hardcoded fallback
         const override = PROCEDURE_SURGICAL_TIMES[proc.name]
         surgicalTime = override ? randomInt(override.min, override.max) : randomInt(speedCfg.surgicalTime.min, speedCfg.surgicalTime.max)
       }
+
+      // Apply speed profile scaling (fast=0.7x, slow=1.3x)
+      surgicalTime = Math.round(surgicalTime * speedMultiplier)
 
       // Start variance: 80% on time (±10min), 20% late
       const variance = Math.random() < 0.8 ? randomInt(-5, 10) : randomInt(10, 30)
@@ -798,18 +824,16 @@ function generateSurgeonCases(
       const patientInTime = addMinutes(scheduledStart, variance)
 
       const caseId = crypto.randomUUID?.() ?? `c-${caseNum}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-      // Today's cases should be scheduled (not completed) — only past days get milestones
       const todayStr = dateKey(new Date())
       const isFuture = dk >= todayStr
 
-      // Lookup anesthesiologist from room-day staff
+      // Lookup anesthesia provider from room-day staff (pooled anesthesiologists + CRNAs)
       const rdStaffForCase = roomDayStaffMap.get(`${dk}|${roomId}`)
       const anesEntry = rdStaffForCase?.anes
       const skipAnes = surgeon.specialty === 'hand_wrist' && Math.random() < 0.3
       const anesId = (anesEntry && !skipAnes) ? anesEntry.userId : null
 
       // call_time: when patient was called to pre-op (before patient_in)
-      // First case: ~30-45 min before scheduled start; subsequent: ~15-25 min before
       const callTimeOffset = i === 0 ? randomInt(30, 45) : randomInt(15, 25)
       const callTime = addMinutes(scheduledStart, -callTimeOffset)
 
@@ -838,8 +862,8 @@ function generateSurgeonCases(
       // ── Milestones ──
       const allowedMilestones = procMilestoneMap.get(proc.id)
       if (!isFuture) {
-        // Completed cases: insert milestones WITH timestamps
-        const cms = buildMilestones(caseId, surgeon, proc, milestoneTypes, allowedMilestones, patientInTime, surgicalTime)
+        // Completed cases: insert milestones WITH timestamps (speed-scaled)
+        const cms = buildMilestones(caseId, surgeon, milestoneTypes, allowedMilestones, patientInTime, surgicalTime, speedMultiplier)
         milestones.push(...cms)
 
         // surgeon_left_at
@@ -851,38 +875,37 @@ function generateSurgeonCases(
           if (ccMs) caseData.surgeon_left_at = ccMs.recorded_at
         }
 
-        // ── Callback timing for flip room cases ──
-        if (flipRoom && i > 0 && caseData) {
-          const pdcMs = cms.find(ms => milestoneTypes.find(mt => mt.id === ms.facility_milestone_id && mt.name === 'prep_drape_complete'))
-          if (pdcMs) {
-            const pdcTime = new Date(pdcMs.recorded_at!)
-            let callbackOffset: number
+        // ── Callback timing: PARTWAY THROUGH INCISION (not prep_drape_complete) ──
+        // Good caller: 20-40% through surgical time → room ready when surgeon arrives
+        // Average caller: 50-70% through surgical time → slight idle
+        // Late caller: 80-100% through surgical time → significant idle
+        if (isFlipRoomDay && i > 0) {
+          const incisionMs = cms.find(ms => milestoneTypes.find(mt => mt.id === ms.facility_milestone_id && mt.name === 'incision'))
+          if (incisionMs) {
+            const incisionTime = new Date(incisionMs.recorded_at!)
+            let callbackPct: number
             if (surgeon.speedProfile === 'fast') {
-              callbackOffset = randomInt(-3, 3)
+              callbackPct = randomInt(20, 40) / 100  // good caller
             } else if (surgeon.speedProfile === 'slow') {
-              callbackOffset = randomInt(5, 15)
+              callbackPct = randomInt(80, 100) / 100 // late caller
             } else {
-              callbackOffset = randomInt(-2, 8)
+              callbackPct = randomInt(50, 70) / 100  // average caller
             }
-            caseData.called_back_at = addMinutes(pdcTime, callbackOffset).toISOString()
+            const callbackOffset = Math.round(surgicalTime * callbackPct)
+            caseData.called_back_at = addMinutes(incisionTime, callbackOffset).toISOString()
           }
         }
 
         // Link flip room cases (deferred — applied after all cases inserted)
-        if (flipRoom && i > 0 && prevCaseLinkId) {
+        if (isFlipRoomDay && i > 0 && prevCaseLinkId) {
           flipLinks.push({ fromCaseId: prevCaseLinkId, toCaseId: caseId })
         }
-        prevCaseLinkId = flipRoom ? caseId : null
+        prevCaseLinkId = isFlipRoomDay ? caseId : null
       } else {
         // Future/scheduled cases: initialize milestones with recorded_at = NULL
-        // This matches the CaseForm.initializeCaseMilestones pattern
         if (allowedMilestones) {
           for (const fmId of allowedMilestones) {
-            milestones.push({
-              case_id: caseId,
-              facility_milestone_id: fmId,
-              recorded_at: null,
-            })
+            milestones.push({ case_id: caseId, facility_milestone_id: fmId, recorded_at: null })
           }
         }
       }
@@ -903,21 +926,22 @@ function generateSurgeonCases(
         if (specs) {
           for (const [, spec] of Object.entries(specs)) {
             const size = Math.random() < 0.7 ? randomChoice(spec.common) : randomChoice(spec.sizes)
-            implants.push({
-              case_id: caseId, implant_name: spec.name, implant_size: size,
-              manufacturer: surgeon.preferredVendor,
-
-            })
+            implants.push({ case_id: caseId, implant_name: spec.name, implant_size: size, manufacturer: surgeon.preferredVendor })
           }
         }
       }
 
-      // Advance time
-      if (flipRoom && speedCfg.flipInterval > 0) {
-        const interval = proc.expected_duration_minutes ?? speedCfg.flipInterval
-        currentTime = addMinutes(currentTime, interval > 0 ? interval : 90)
+      // ── Advance time ──
+      if (isFlipRoomDay) {
+        // Flip room: advance by procedure duration + transit gap (3-8 min between rooms)
+        const interval = surgeonDurationMap.get(`${surgeon.surgeonId}::${proc.id}`)
+          ?? proc.expected_duration_minutes
+          ?? speedCfg.flipInterval
+        const transitGap = randomInt(3, 8) // transit + scrub gap between rooms
+        currentTime = addMinutes(currentTime, (interval > 0 ? interval : 90) + transitGap)
         roomIdx++
       } else {
+        // Single room: advance based on patient_out milestone + turnover
         const poMs = milestones.filter(ms => ms.case_id === caseId).find(ms =>
           milestoneTypes.find(mt => mt.id === ms.facility_milestone_id && mt.name === 'patient_out'))
         currentTime = poMs ? addMinutes(new Date(poMs.recorded_at!), randomInt(15, 25)) : addMinutes(currentTime, 90)
@@ -932,18 +956,17 @@ function generateSurgeonCases(
 }
 
 // =====================================================
-// MILESTONE BUILDER
+// MILESTONE BUILDER (with speed profile scaling)
 // =====================================================
 
 function buildMilestones(
-  caseId: string, surgeon: ResolvedSurgeon, proc: { id: string; name: string },
+  caseId: string, surgeon: ResolvedSurgeon,
   milestoneTypes: { id: string; name: string; source_milestone_type_id: string | null }[],
   allowedMilestones: Set<string> | undefined,
-  patientInTime: Date, surgicalTime: number
+  patientInTime: Date, surgicalTime: number, speedMultiplier: number
 ): MilestoneRecord[] {
   const ms: MilestoneRecord[] = []
 
-  // Resolve facility_milestone_id by name, but ONLY if it's in the procedure_milestone_config
   const getFmId = (name: string): string | null => {
     const mt = milestoneTypes.find(m => m.name === name)
     if (!mt) return null
@@ -951,18 +974,20 @@ function buildMilestones(
     return mt.id
   }
 
-  const tmpl = surgeon.specialty === 'joint' ? JOINT_MS[surgeon.speedProfile]
+  // Use the 'average' template as base, then scale all offsets by speed multiplier
+  // This replaces the old pattern of having separate fast/average/slow templates
+  const baseTmpl = surgeon.specialty === 'joint' ? JOINT_MS.average
     : surgeon.specialty === 'hand_wrist' ? HAND_MS : SPINE_MS
 
   const base = new Date(patientInTime)
-
-  let lastOff = -1  // Track last offset to enforce chronological order
+  let lastOff = -1
 
   const push = (name: string, offOrFn: number | ((st: number) => number), outlierChance = 0, outlierRange = { min: 0, max: 0 }) => {
     const fmId = getFmId(name); if (!fmId) return
     let off = typeof offOrFn === 'function' ? offOrFn(surgicalTime) : offOrFn
+    // Apply speed multiplier to pre-incision offsets (prep time scales with surgeon speed)
+    if (typeof offOrFn === 'number') off = Math.round(off * speedMultiplier)
     if (outlierChance > 0) off = addOutlier(off, outlierChance, { min: off + outlierRange.min, max: off + outlierRange.max })
-    // Ensure milestones never go backwards — each must be at least 1 min after the previous
     if (off <= lastOff) off = lastOff + 1
     lastOff = off
     ms.push({
@@ -975,16 +1000,17 @@ function buildMilestones(
     })
   }
 
-  push('patient_in', tmpl.patient_in)
-  if ('anes_start' in tmpl) push('anes_start', tmpl.anes_start as number)
-  if ('anes_end' in tmpl) push('anes_end', tmpl.anes_end as number, 0.15, { min: 5, max: 12 })
-  push('prep_drape_start', tmpl.prep_drape_start)
-  push('prep_drape_complete', tmpl.prep_drape_complete)
-  push('incision', tmpl.incision)
-  push('closing', tmpl.closing, 0.15, { min: 5, max: 15 })
-  push('closing_complete', tmpl.closing_complete, 0.15, { min: 5, max: 12 })
-  push('patient_out', tmpl.patient_out)
-  push('room_cleaned', tmpl.room_cleaned)
+  push('patient_in', baseTmpl.patient_in)
+  if ('anes_start' in baseTmpl) push('anes_start', (baseTmpl as typeof JOINT_MS.average).anes_start)
+  if ('anes_end' in baseTmpl) push('anes_end', (baseTmpl as typeof JOINT_MS.average).anes_end, 0.15, { min: 5, max: 12 })
+  push('prep_drape_start', baseTmpl.prep_drape_start)
+  push('prep_drape_complete', baseTmpl.prep_drape_complete)
+  push('incision', baseTmpl.incision)
+  // Post-incision offsets use functions of surgicalTime (already speed-scaled)
+  push('closing', baseTmpl.closing, 0.15, { min: 5, max: 15 })
+  push('closing_complete', baseTmpl.closing_complete, 0.15, { min: 5, max: 12 })
+  push('patient_out', baseTmpl.patient_out)
+  push('room_cleaned', baseTmpl.room_cleaned)
 
   return ms
 }
