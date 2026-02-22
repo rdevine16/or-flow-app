@@ -120,6 +120,22 @@ export interface SurgeonProfile {
   outliers: Record<OutlierType, OutlierSetting>
   /** Bad days per month (0-3). All enabled outliers fire with max magnitude. */
   badDaysPerMonth: number
+  /** Target cases per day range (min-max). Generator picks randomly within range. */
+  casesPerDay: { min: number; max: number }
+}
+
+/** Default cases-per-day based on speed profile + specialty */
+export function getDefaultCasesPerDay(
+  speed: SpeedProfile,
+  specialty: Specialty,
+): { min: number; max: number } {
+  if (specialty === 'hand_wrist') return { min: 5, max: 7 }
+  if (specialty === 'spine') return { min: 3, max: 5 }
+  switch (speed) {
+    case 'fast':    return { min: 6, max: 8 }
+    case 'slow':    return { min: 3, max: 4 }
+    default:        return { min: 4, max: 6 }
+  }
 }
 
 export function createDefaultOutlierProfile(): Record<OutlierType, OutlierSetting> {
@@ -347,10 +363,8 @@ export function estimateTotalCases(
   let total = 0
   for (const profile of Object.values(profiles)) {
     const daysPerMonth = (profile.operatingDays.length / 5) * workingDaysPerMonth
-    const casesPerDay = profile.speedProfile === 'fast' ? 7
-      : profile.speedProfile === 'slow' ? 3.5
-      : 5
-    total += Math.round(daysPerMonth * casesPerDay * (months + 1))
+    const avgCasesPerDay = (profile.casesPerDay.min + profile.casesPerDay.max) / 2
+    total += Math.round(daysPerMonth * avgCasesPerDay * (months + 1))
   }
   return total
 }

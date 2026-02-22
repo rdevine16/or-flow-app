@@ -42,6 +42,7 @@ describe('types.ts — Validation helpers', () => {
       closingHandoffMinutes: null,
       outliers: createDefaultOutlierProfile(),
       badDaysPerMonth: 0,
+      casesPerDay: { min: 4, max: 6 },
     }
 
     it('returns invalid with error when profiles is empty', () => {
@@ -97,6 +98,7 @@ describe('types.ts — Validation helpers', () => {
       closingHandoffMinutes: null,
       outliers: createDefaultOutlierProfile(),
       badDaysPerMonth: 0,
+      casesPerDay: { min: 4, max: 6 },
     }
 
     it('returns valid when all operating days have room assignments', () => {
@@ -149,6 +151,7 @@ describe('types.ts — Validation helpers', () => {
       closingHandoffMinutes: null,
       outliers: createDefaultOutlierProfile(),
       badDaysPerMonth: 0,
+      casesPerDay: { min: 4, max: 6 },
     }
 
     it('returns 0 when profiles is empty', () => {
@@ -164,18 +167,18 @@ describe('types.ts — Validation helpers', () => {
       expect(result).toBe(220)
     })
 
-    it('estimates based on speed profile: fast = 7 cases/day', () => {
+    it('estimates based on casesPerDay: fast = 6-8, avg 7 cases/day', () => {
       const result = estimateTotalCases(
-        { 'surgeon-1': { ...mockProfile, speedProfile: 'fast', operatingDays: [1, 2, 3, 4, 5] } },
+        { 'surgeon-1': { ...mockProfile, speedProfile: 'fast', casesPerDay: { min: 6, max: 8 }, operatingDays: [1, 2, 3, 4, 5] } },
         1,
       )
       // 5 days/week * 22 working days/month = 22 days/month * 7 cases/day * 2 months = 308
       expect(result).toBe(308)
     })
 
-    it('estimates based on speed profile: slow = 3.5 cases/day', () => {
+    it('estimates based on casesPerDay: slow = 3-4, avg 3.5 cases/day', () => {
       const result = estimateTotalCases(
-        { 'surgeon-1': { ...mockProfile, speedProfile: 'slow', operatingDays: [1, 2, 3, 4, 5] } },
+        { 'surgeon-1': { ...mockProfile, speedProfile: 'slow', casesPerDay: { min: 3, max: 4 }, operatingDays: [1, 2, 3, 4, 5] } },
         1,
       )
       // 5 days/week * 22 working days/month = 22 days/month * 3.5 cases/day * 2 months = 154
@@ -203,8 +206,8 @@ describe('types.ts — Validation helpers', () => {
     it('aggregates across multiple surgeons', () => {
       const result = estimateTotalCases(
         {
-          'surgeon-1': { ...mockProfile, speedProfile: 'fast', operatingDays: [1, 2, 3, 4, 5] },
-          'surgeon-2': { ...mockProfile, speedProfile: 'slow', operatingDays: [1, 2, 3, 4, 5] },
+          'surgeon-1': { ...mockProfile, speedProfile: 'fast', casesPerDay: { min: 6, max: 8 }, operatingDays: [1, 2, 3, 4, 5] },
+          'surgeon-2': { ...mockProfile, speedProfile: 'slow', casesPerDay: { min: 3, max: 4 }, operatingDays: [1, 2, 3, 4, 5] },
         },
         1,
       )

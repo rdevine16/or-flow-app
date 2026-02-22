@@ -39,6 +39,8 @@ export interface SurgeonProfileInput {
   procedureTypeIds: string[]      // user-selected procedure types
   /** Outlier profile from wizard config. If omitted, no outliers are applied. */
   outlierProfile?: OutlierProfile
+  /** User-configured cases per day range. If omitted, falls back to speed/specialty defaults. */
+  casesPerDay?: { min: number; max: number }
 }
 
 interface ResolvedSurgeon extends SurgeonProfileInput {
@@ -1000,7 +1002,7 @@ function generateSurgeonCases(
   const speedCfg = SPEED_CONFIGS[surgeon.speedProfile]
   const speedMultiplier = SPEED_MULTIPLIER[surgeon.speedProfile] ?? 1.0
   const specialtyCfg = surgeon.specialty === 'hand_wrist' ? HAND_WRIST_CONFIG : surgeon.specialty === 'spine' ? SPINE_CONFIG : null
-  const casesPerDay = specialtyCfg?.casesPerDay ?? speedCfg.casesPerDay
+  const casesPerDay = surgeon.casesPerDay ?? specialtyCfg?.casesPerDay ?? speedCfg.casesPerDay
   const dayStartTime = specialtyCfg?.startTime ?? speedCfg.startTime
 
   // ── Pre-compute bad days for outlier engine ──

@@ -29,6 +29,7 @@ interface WizardSurgeonProfile {
   closingHandoffMinutes: number | null
   outliers: Record<string, { enabled: boolean; frequency: number; magnitude: number }>
   badDaysPerMonth: number
+  casesPerDay?: { min: number; max: number }
 }
 
 function mapWizardProfiles(profiles: Record<string, WizardSurgeonProfile>): SurgeonProfileInput[] {
@@ -62,6 +63,7 @@ function mapWizardProfiles(profiles: Record<string, WizardSurgeonProfile>): Surg
       preferredVendor: p.preferredVendor as 'Stryker' | 'Zimmer Biomet' | 'DePuy Synthes' | null,
       procedureTypeIds: p.procedureTypeIds,
       outlierProfile,
+      casesPerDay: p.casesPerDay,
     }
   })
 }

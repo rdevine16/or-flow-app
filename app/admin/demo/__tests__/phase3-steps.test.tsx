@@ -27,6 +27,7 @@ describe('isOutlierConfigStepValid', () => {
     closingHandoffMinutes: null,
     outliers: createDefaultOutlierProfile(),
     badDaysPerMonth: 0,
+    casesPerDay: { min: 4, max: 6 },
   }
 
   it('returns valid=true with enabledCount=0 when no outliers are enabled', () => {
@@ -274,6 +275,7 @@ describe('Bad days per month slider', () => {
     closingHandoffMinutes: null,
     outliers: createDefaultOutlierProfile(),
     badDaysPerMonth: 0,
+    casesPerDay: { min: 4, max: 6 },
   }
 
   it('defaults to 0 bad days per month', () => {
@@ -316,6 +318,7 @@ describe('DayRoomAssignments with max 2 rooms per day', () => {
     closingHandoffMinutes: null,
     outliers: createDefaultOutlierProfile(),
     badDaysPerMonth: 0,
+    casesPerDay: { min: 4, max: 6 },
   }
 
   /**

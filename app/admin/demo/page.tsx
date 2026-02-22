@@ -40,6 +40,7 @@ import {
   estimateTotalCases,
   createDefaultOutlierProfile,
   parseBlockSchedules,
+  getDefaultCasesPerDay,
 } from './types'
 
 // ============================================================================
@@ -169,6 +170,7 @@ export default function DemoDataWizardPage() {
             closingHandoffMinutes: surgeon.closing_handoff_minutes,
             outliers: createDefaultOutlierProfile(),
             badDaysPerMonth: 0,
+            casesPerDay: getDefaultCasesPerDay('average', 'joint'),
           }
         })
 

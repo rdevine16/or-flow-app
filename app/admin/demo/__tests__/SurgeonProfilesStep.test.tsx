@@ -65,6 +65,7 @@ describe('SurgeonProfilesStep', () => {
     closingHandoffMinutes: 15,
     outliers: createDefaultOutlierProfile(),
     badDaysPerMonth: 0,
+    casesPerDay: { min: 4, max: 6 },
   }
 
   const mockOnUpdateProfile = vi.fn()
@@ -325,7 +326,10 @@ describe('SurgeonProfilesStep', () => {
       const fastButton = screen.getByTestId('speed-fast-surgeon-1')
       await user.click(fastButton)
 
-      expect(mockOnUpdateProfile).toHaveBeenCalledWith('surgeon-1', { speedProfile: 'fast' })
+      expect(mockOnUpdateProfile).toHaveBeenCalledWith('surgeon-1', {
+        speedProfile: 'fast',
+        casesPerDay: { min: 6, max: 8 },
+      })
     })
   })
 
@@ -397,10 +401,11 @@ describe('SurgeonProfilesStep', () => {
       const spineButton = screen.getByTestId('specialty-spine-surgeon-1')
       await user.click(spineButton)
 
-      expect(mockOnUpdateProfile).toHaveBeenCalledWith('surgeon-1', {
+      expect(mockOnUpdateProfile).toHaveBeenCalledWith('surgeon-1', expect.objectContaining({
         specialty: 'spine',
         procedureTypeIds: expect.arrayContaining(['proc-4', 'proc-5']),
-      })
+        casesPerDay: { min: 3, max: 5 },
+      }))
     })
   })
 
@@ -654,10 +659,11 @@ describe('SurgeonProfilesStep', () => {
       const handButton = screen.getByTestId('specialty-hand_wrist-surgeon-1')
       await user.click(handButton)
 
-      expect(mockOnUpdateProfile).toHaveBeenCalledWith('surgeon-1', {
+      expect(mockOnUpdateProfile).toHaveBeenCalledWith('surgeon-1', expect.objectContaining({
         specialty: 'hand_wrist',
         procedureTypeIds: expect.arrayContaining(['proc-6', 'proc-7']),
-      })
+        casesPerDay: { min: 5, max: 7 },
+      }))
     })
   })
 })

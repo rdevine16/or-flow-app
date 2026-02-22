@@ -294,6 +294,8 @@ function SurgeonSummaryCard({
             {dayRoomSummary}
           </span>
           <span>&middot;</span>
+          <span>{profile.casesPerDay.min}-{profile.casesPerDay.max} cases/day</span>
+          <span>&middot;</span>
           <span>{profile.procedureTypeIds.length} procedures</span>
           {profile.preferredVendor && (
             <>

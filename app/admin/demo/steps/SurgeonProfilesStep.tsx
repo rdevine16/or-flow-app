@@ -13,6 +13,7 @@ import {
   Zap,
   Gauge,
   Snail,
+  Hash,
 } from 'lucide-react'
 import type {
   DemoSurgeon,
@@ -36,6 +37,7 @@ import {
   parseBlockSchedules,
   buildDurationMap,
   createDefaultOutlierProfile,
+  getDefaultCasesPerDay,
 } from '../types'
 
 // ============================================================================
@@ -108,9 +110,11 @@ export default function SurgeonProfilesStep({
       const matchingIds = procedureTypes
         .filter((pt) => matchingProcNames.includes(pt.name))
         .map((pt) => pt.id)
-      onUpdateProfile(surgeonId, { specialty, procedureTypeIds: matchingIds })
+      const currentSpeed = profiles[surgeonId]?.speedProfile || 'average'
+      const newCpd = getDefaultCasesPerDay(currentSpeed, specialty)
+      onUpdateProfile(surgeonId, { specialty, procedureTypeIds: matchingIds, casesPerDay: newCpd })
     },
-    [procedureTypes, onUpdateProfile],
+    [procedureTypes, onUpdateProfile, profiles],
   )
 
   // ── Toggle operating day ──
@@ -161,6 +165,7 @@ export default function SurgeonProfilesStep({
           closingHandoffMinutes: surgeon.closing_handoff_minutes,
           outliers: createDefaultOutlierProfile(),
           badDaysPerMonth: 0,
+          casesPerDay: getDefaultCasesPerDay('average', 'joint'),
         }
         onToggleSurgeon(surgeon.id, true)
         onUpdateProfile(surgeon.id, newProfile)
@@ -234,11 +239,15 @@ export default function SurgeonProfilesStep({
                 procedureTypes={procedureTypes}
                 onToggle={() => handleSurgeonToggle(surgeon, isIncluded)}
                 onExpand={() => onExpandSurgeon(isExpanded ? null : surgeon.id)}
-                onSpeedChange={(speed) => onUpdateProfile(surgeon.id, { speedProfile: speed })}
+                onSpeedChange={(speed) => {
+                  const newCpd = getDefaultCasesPerDay(speed, profile?.specialty || 'joint')
+                  onUpdateProfile(surgeon.id, { speedProfile: speed, casesPerDay: newCpd })
+                }}
                 onSpecialtyChange={(spec) => handleSpecialtyChange(surgeon.id, spec)}
                 onVendorChange={(vendor) => onUpdateProfile(surgeon.id, { preferredVendor: vendor })}
                 onDayToggle={(day) => handleDayToggle(surgeon.id, day, profile?.operatingDays || [])}
                 onProcToggle={(procId) => handleProcToggle(surgeon.id, procId, profile?.procedureTypeIds || [])}
+                onCasesPerDayChange={(cpd) => onUpdateProfile(surgeon.id, { casesPerDay: cpd })}
               />
             )
           })}
@@ -268,6 +277,7 @@ interface SurgeonCardProps {
   onVendorChange: (vendor: Vendor) => void
   onDayToggle: (day: DayOfWeek) => void
   onProcToggle: (procId: string) => void
+  onCasesPerDayChange: (cpd: { min: number; max: number }) => void
 }
 
 function SurgeonCard({
@@ -286,6 +296,7 @@ function SurgeonCard({
   onVendorChange,
   onDayToggle,
   onProcToggle,
+  onCasesPerDayChange,
 }: SurgeonCardProps) {
   return (
     <div
@@ -322,6 +333,8 @@ function SurgeonCard({
                 <span>{SPECIALTIES.find((s) => s.value === profile.specialty)?.label}</span>
                 <span>&middot;</span>
                 <span>{profile.operatingDays.length} days/wk</span>
+                <span>&middot;</span>
+                <span>{profile.casesPerDay.min}-{profile.casesPerDay.max} cases/day</span>
                 <span>&middot;</span>
                 <span>{profile.procedureTypeIds.length} procs</span>
               </div>
@@ -382,6 +395,51 @@ function SurgeonCard({
                   </button>
                 )
               })}
+            </div>
+          </div>
+
+          {/* Cases Per Day */}
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-2 block">
+              Cases Per Day
+              <span className="font-normal text-slate-400 ml-1">(target range)</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <Hash className="w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={profile.casesPerDay.min}
+                  onChange={(e) => {
+                    const val = Math.max(1, Math.min(20, Number(e.target.value) || 1))
+                    onCasesPerDayChange({
+                      min: val,
+                      max: Math.max(val, profile.casesPerDay.max),
+                    })
+                  }}
+                  data-testid={`cpd-min-${surgeon.id}`}
+                  className="w-16 px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <span className="text-xs text-slate-400">to</span>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={profile.casesPerDay.max}
+                onChange={(e) => {
+                  const val = Math.max(1, Math.min(20, Number(e.target.value) || 1))
+                  onCasesPerDayChange({
+                    min: Math.min(profile.casesPerDay.min, val),
+                    max: val,
+                  })
+                }}
+                data-testid={`cpd-max-${surgeon.id}`}
+                className="w-16 px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-xs text-slate-400">cases/day</span>
             </div>
           </div>
 
