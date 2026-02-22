@@ -126,13 +126,11 @@ export async function POST(request: Request) {
             clearing: 'purging',
             loading: 'generating_cases',
             resolving: 'generating_cases',
+            planning: 'generating_cases',
             generating: 'generating_cases',
-            milestones: 'inserting_milestones',
-            staff: 'assigning_staff',
-            implants: 'assigning_staff',
-            validation: 'detecting_flags',
-            stats: 'detecting_flags',
-            triggers: 'finalizing',
+            inserting: 'inserting_milestones',
+            detecting_flags: 'detecting_flags',
+            finalizing: 'finalizing',
             complete: 'finalizing',
           }
 
@@ -161,11 +159,13 @@ export async function POST(request: Request) {
               type: 'complete',
               result: {
                 casesGenerated: result.casesGenerated,
-                cancelledCount: 0, // Will be populated in Phase 6b
-                delayedCount: 0,
-                flaggedCount: 0,
+                cancelledCount: result.details?.cancelledCount || 0,
+                delayedCount: result.details?.delayedCount || 0,
+                flaggedCount: result.details?.flaggedCount || 0,
+                unvalidatedCount: result.details?.unvalidatedCount || 0,
                 milestonesInserted: result.details?.milestones || 0,
                 staffAssigned: result.details?.staff || 0,
+                implantsInserted: result.details?.implants || 0,
                 duration: Date.now() - startTime,
               },
             })

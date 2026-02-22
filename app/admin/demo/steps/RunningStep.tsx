@@ -18,6 +18,7 @@ import {
   BarChart3,
   XCircle,
   Clock,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import type { DemoWizardState } from '../types'
@@ -52,8 +53,10 @@ export interface GenerationResult {
   cancelledCount: number
   delayedCount: number
   flaggedCount: number
+  unvalidatedCount: number
   milestonesInserted: number
   staffAssigned: number
+  implantsInserted: number
   duration: number
 }
 
@@ -386,11 +389,12 @@ export default function RunningStep({
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-4">
             Generation Totals
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <TotalCard label="Total Cases" value={result.casesGenerated} icon={Database} />
             <TotalCard label="Cancelled" value={result.cancelledCount} icon={XCircle} />
             <TotalCard label="Delayed" value={result.delayedCount} icon={Clock} />
             <TotalCard label="Flagged" value={result.flaggedCount} icon={Flag} />
+            <TotalCard label="Unvalidated" value={result.unvalidatedCount} icon={AlertTriangle} />
           </div>
         </div>
 

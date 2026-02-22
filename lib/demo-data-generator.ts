@@ -19,6 +19,8 @@ import {
   adjustTurnoverTime as outlierAdjustTurnover,
   computeCallbackDelay as outlierComputeCallbackDelay,
 } from '@/lib/demo-outlier-engine'
+import { evaluateCasesBatch } from '@/lib/flagEngine'
+import type { FlagRule, CaseWithFinancials } from '@/types/flag-settings'
 
 // =====================================================
 // TYPES
@@ -64,7 +66,11 @@ export interface GenerationResult {
   success: boolean
   casesGenerated: number
   error?: string
-  details?: { milestones: number; staff: number; implants: number }
+  details?: {
+    milestones: number; staff: number; implants: number
+    cancelledCount: number; delayedCount: number; flaggedCount: number
+    unvalidatedCount: number
+  }
 }
 
 interface CaseRecord {
@@ -86,6 +92,9 @@ interface CaseRecord {
   called_back_at?: string | null
   is_excluded_from_metrics?: boolean
   surgeon_left_at?: string | null
+  cancelled_at?: string | null
+  cancellation_reason_id?: string | null
+  data_validated?: boolean
 }
 
 interface MilestoneRecord {
@@ -291,6 +300,15 @@ function addOutlier(base: number, chance: number, range: { min: number; max: num
   return Math.random() < chance ? randomInt(range.min, range.max) : base
 }
 
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
+}
+
 // =====================================================
 // PURGE — Only case-level data, NEVER users/config
 // =====================================================
@@ -307,6 +325,12 @@ export async function purgeCaseData(
       const ids = cases.map(c => c.id)
       for (let i = 0; i < ids.length; i += BATCH_SIZE) {
         const batch = ids.slice(i, i + BATCH_SIZE)
+        await supabase.from('case_flags').delete().in('case_id', batch).then(() => {}, () => {})
+        await supabase.from('case_complexities').delete().in('case_id', batch).then(() => {}, () => {})
+        await supabase.from('case_device_activity').delete().in('case_id', batch).then(() => {}, () => {})
+        await supabase.from('case_device_companies').delete().in('case_id', batch).then(() => {}, () => {})
+        await supabase.from('case_implant_companies').delete().in('case_id', batch).then(() => {}, () => {})
+        await supabase.from('metric_issues').delete().in('case_id', batch).then(() => {}, () => {})
         await supabase.from('case_implants').delete().in('case_id', batch)
         await supabase.from('case_milestones').delete().in('case_id', batch)
         await supabase.from('case_milestone_stats').delete().in('case_id', batch).then(() => {}, () => {})
@@ -343,10 +367,14 @@ export async function purgeCaseData(
 // =====================================================
 
 export async function getDetailedStatus(supabase: SupabaseClient, facilityId: string) {
+  // Pre-fetch surgeon role ID to avoid fragile nested await inside Promise.all
+  const { data: surgeonRole } = await supabase.from('user_roles').select('id').eq('name', 'surgeon').single()
+  const surgeonRoleId = surgeonRole?.id ?? ''
+
   const qs = await Promise.all([
     supabase.from('cases').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
     supabase.from('users').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId)
-      .eq('role_id', (await supabase.from('user_roles').select('id').eq('name', 'surgeon').single()).data?.id ?? ''),
+      .eq('role_id', surgeonRoleId).eq('is_active', true),
     supabase.from('or_rooms').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId).eq('is_active', true),
     supabase.from('procedure_types').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId).eq('is_active', true),
     supabase.from('payers').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
@@ -360,6 +388,7 @@ export async function getDetailedStatus(supabase: SupabaseClient, facilityId: st
     supabase.from('procedure_reimbursements').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
     supabase.from('procedure_milestone_config').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
     supabase.from('block_schedules').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
+    supabase.from('flag_rules').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId).eq('is_active', true),
   ])
   const s = (i: number) => qs[i]?.count ?? 0
   return {
@@ -368,6 +397,7 @@ export async function getDetailedStatus(supabase: SupabaseClient, facilityId: st
     cancellationReasons: s(8), preopChecklistFields: s(9), complexities: s(10),
     facilityAnalyticsSettings: !!qs[11]?.data,
     procedureReimbursements: s(12), procedureMilestoneConfig: s(13), blockSchedules: s(14),
+    flagRules: s(15),
     milestones: 0, staff: 0, implants: 0,
   }
 }
@@ -445,7 +475,15 @@ export async function generateDemoData(
 
     const { data: completedStatus } = await supabase.from('case_statuses').select('id').eq('name', 'completed').single()
     const { data: scheduledStatus } = await supabase.from('case_statuses').select('id').eq('name', 'scheduled').maybeSingle()
+    const { data: cancelledStatus } = await supabase.from('case_statuses').select('id').eq('name', 'cancelled').maybeSingle()
     if (!completedStatus) return { success: false, casesGenerated: 0, error: 'No "completed" status' }
+
+    // Load Phase 6b dependencies: cancellation reasons, delay types, complexities, implant companies, flag rules
+    const { data: cancReasons } = await supabase.from('cancellation_reasons').select('id').eq('facility_id', facilityId).eq('is_active', true)
+    const { data: delayTypesList } = await supabase.from('delay_types').select('id').eq('facility_id', facilityId).eq('is_active', true)
+    const { data: complexityList } = await supabase.from('complexities').select('id, name').eq('facility_id', facilityId).eq('is_active', true)
+    const { data: implantCompanies } = await supabase.from('implant_companies').select('id, name').eq('facility_id', facilityId).eq('is_active', true)
+    const { data: flagRulesList } = await supabase.from('flag_rules').select('*').eq('facility_id', facilityId).eq('is_active', true)
 
     // Load ALL staff by role
     const { data: allStaff } = await supabase.from('users').select('id, role_id, first_name, last_name').eq('facility_id', facilityId).eq('is_active', true)
@@ -584,6 +622,51 @@ export async function generateDemoData(
         message: `Dr. ${surgeon.lastName}: ${result.cases.length} cases` })
     }
 
+    // ── Post-process: Cancelled cases (~3%) ──
+    // Pre-day cancellations: no milestones, no staff, no implants
+    const cancelledCaseIds = new Set<string>()
+    if (cancelledStatus && cancReasons?.length) {
+      const completedCasePool = allCases.filter(c => c.status_id === completedStatus.id)
+      const cancelCount = Math.round(completedCasePool.length * 0.03)
+      const toCancelIds = shuffle(completedCasePool).slice(0, cancelCount).map(c => c.id)
+
+      for (const cid of toCancelIds) {
+        cancelledCaseIds.add(cid)
+        const caseRec = allCases.find(c => c.id === cid)!
+        caseRec.status_id = cancelledStatus.id
+        // Cancelled the evening before — 6-18 hours before scheduled start
+        const schedDate = new Date(`${caseRec.scheduled_date}T${caseRec.start_time || '07:30'}:00Z`)
+        caseRec.cancelled_at = new Date(schedDate.getTime() - randomInt(6, 18) * 3600000).toISOString()
+        caseRec.cancellation_reason_id = randomChoice(cancReasons).id
+        // Remove from milestones/staff/implants/flipLinks
+        caseRec.surgeon_left_at = null
+        caseRec.called_back_at = null
+        caseRec.call_time = null
+      }
+
+      // Filter out cancelled case data from arrays (mutate in place for efficiency)
+      const filterOut = <T extends { case_id: string }>(arr: T[]) => {
+        let write = 0
+        for (let r = 0; r < arr.length; r++) {
+          if (!cancelledCaseIds.has(arr[r].case_id)) arr[write++] = arr[r]
+        }
+        arr.length = write
+      }
+      filterOut(allMilestones)
+      filterOut(allStaffAssignments)
+      filterOut(allImplants)
+      // Remove flip links involving cancelled cases
+      let flWrite = 0
+      for (let r = 0; r < allFlipLinks.length; r++) {
+        if (!cancelledCaseIds.has(allFlipLinks[r].fromCaseId) && !cancelledCaseIds.has(allFlipLinks[r].toCaseId)) {
+          allFlipLinks[flWrite++] = allFlipLinks[r]
+        }
+      }
+      allFlipLinks.length = flWrite
+
+      onProgress?.({ phase: 'generating', current: 52, total: 100, message: `Marked ${cancelledCaseIds.size} cases as cancelled` })
+    }
+
     // ── Bulk insert ──
     // Disable ALL triggers on cases + case_milestones to prevent trigger errors during bulk insert
     await supabase.rpc('disable_demo_triggers').then(() => {}, () => {
@@ -695,22 +778,153 @@ export async function generateDemoData(
 
     await supabase.rpc('enable_demo_triggers').then(() => {}, () => { supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {}) })
 
-    // Validate completed cases to populate case_completion_stats via trigger
-    // The trigger fires when data_validated changes to TRUE and calls record_case_stats()
-    onProgress?.({ phase: 'finalizing', current: 90, total: 100, message: 'Validating completed cases for financial stats...' })
-    const completedCaseIds = allCases.filter(c => c.status_id === completedStatus.id).map(c => c.id)
-    console.log(`[DEMO-GEN] Validating ${completedCaseIds.length} completed cases for case_completion_stats...`)
-    for (let i = 0; i < completedCaseIds.length; i += BATCH_SIZE) {
-      const batch = completedCaseIds.slice(i, i + BATCH_SIZE)
+    // ── Case delays (~5-8% of completed cases) ──
+    let delayedCount = 0
+    const nonCancelledCompleted = allCases.filter(c => c.status_id === completedStatus.id && !cancelledCaseIds.has(c.id))
+    if (delayTypesList?.length) {
+      const delayRate = 0.05 + Math.random() * 0.03
+      const delayCount = Math.round(nonCancelledCompleted.length * delayRate)
+      const toDelay = shuffle(nonCancelledCompleted).slice(0, delayCount)
+      const delayRecords = toDelay.map(c => ({
+        case_id: c.id,
+        delay_type_id: randomChoice(delayTypesList).id,
+        duration_minutes: randomInt(5, 45),
+        notes: null as string | null,
+        recorded_at: c.start_time ? `${c.scheduled_date}T${c.start_time}:00Z` : new Date().toISOString(),
+      }))
+      onProgress?.({ phase: 'inserting', current: 82, total: 100, message: `Inserting ${delayRecords.length} case delays...` })
+      for (let i = 0; i < delayRecords.length; i += BATCH_SIZE) {
+        const { error } = await supabase.from('case_delays').insert(delayRecords.slice(i, i + BATCH_SIZE))
+        if (error) console.error('Delay insert err:', error.message)
+      }
+      delayedCount = delayRecords.length
+    }
+
+    // ── Case complexities (joint + spine cases) ──
+    if (complexityList?.length) {
+      const complexityRecords: { case_id: string; complexity_id: string }[] = []
+      // Map complexity names for assignment logic
+      const stdComplexity = complexityList.find(c => c.name.toLowerCase().includes('standard'))
+      const complexComplexity = complexityList.find(c => c.name.toLowerCase().includes('complex'))
+
+      for (const c of nonCancelledCompleted) {
+        const surgeon = resolved.find(s => s.surgeonId === c.surgeon_id)
+        if (!surgeon || surgeon.specialty === 'hand_wrist') continue
+
+        if (surgeon.specialty === 'spine') {
+          // Spine cases always get 'Complex' if available
+          if (complexComplexity) complexityRecords.push({ case_id: c.id, complexity_id: complexComplexity.id })
+        } else {
+          // Joint: 70% Standard, 30% Complex
+          const pick = Math.random() < 0.7 ? stdComplexity : complexComplexity
+          if (pick) complexityRecords.push({ case_id: c.id, complexity_id: pick.id })
+          // 10% chance of a second complexity factor
+          if (Math.random() < 0.1) {
+            const other = complexityList.find(cx => cx.id !== pick?.id)
+            if (other) complexityRecords.push({ case_id: c.id, complexity_id: other.id })
+          }
+        }
+      }
+
+      if (complexityRecords.length > 0) {
+        onProgress?.({ phase: 'inserting', current: 84, total: 100, message: `Inserting ${complexityRecords.length} case complexities...` })
+        for (let i = 0; i < complexityRecords.length; i += BATCH_SIZE) {
+          const { error } = await supabase.from('case_complexities').insert(complexityRecords.slice(i, i + BATCH_SIZE))
+          if (error) console.error('Complexity insert err:', error.message)
+        }
+      }
+    }
+
+    // ── Device data (joint cases with implants → case_implant_companies) ──
+    if (implantCompanies?.length) {
+      const deviceRecords: { case_id: string; implant_company_id: string }[] = []
+      // Build vendor name → implant_company_id lookup
+      const vendorMap = new Map<string, string>()
+      for (const ic of implantCompanies) vendorMap.set(ic.name, ic.id)
+
+      for (const c of nonCancelledCompleted) {
+        const surgeon = resolved.find(s => s.surgeonId === c.surgeon_id)
+        if (!surgeon || surgeon.specialty !== 'joint' || !surgeon.preferredVendor) continue
+        const companyId = vendorMap.get(surgeon.preferredVendor)
+        if (companyId) deviceRecords.push({ case_id: c.id, implant_company_id: companyId })
+      }
+
+      if (deviceRecords.length > 0) {
+        onProgress?.({ phase: 'inserting', current: 86, total: 100, message: `Inserting ${deviceRecords.length} device records...` })
+        for (let i = 0; i < deviceRecords.length; i += BATCH_SIZE) {
+          const { error } = await supabase.from('case_implant_companies').insert(deviceRecords.slice(i, i + BATCH_SIZE))
+          if (error) console.error('Device insert err:', error.message)
+        }
+      }
+    }
+
+    // ── Validate completed cases (skip ~2% for data quality page) ──
+    onProgress?.({ phase: 'finalizing', current: 88, total: 100, message: 'Validating completed cases for financial stats...' })
+    const unvalidatedRate = 0.02
+    const unvalidatedCount = Math.round(nonCancelledCompleted.length * unvalidatedRate)
+    const unvalidatedIds = new Set(shuffle(nonCancelledCompleted).slice(0, unvalidatedCount).map(c => c.id))
+    const toValidateIds = nonCancelledCompleted.filter(c => !unvalidatedIds.has(c.id)).map(c => c.id)
+
+    console.log(`[DEMO-GEN] Validating ${toValidateIds.length} completed cases (${unvalidatedIds.size} left unvalidated for Data Quality)...`)
+    for (let i = 0; i < toValidateIds.length; i += BATCH_SIZE) {
+      const batch = toValidateIds.slice(i, i + BATCH_SIZE)
       const { error } = await supabase.from('cases').update({ data_validated: true }).in('id', batch)
       if (error) console.error(`Validation batch ${i} err:`, error.message)
     }
 
-    onProgress?.({ phase: 'finalizing', current: 93, total: 100, message: 'Recalculating averages...' })
+    // ── Flag detection ──
+    let flaggedCount = 0
+    if (!flagRulesList?.length) {
+      onProgress?.({ phase: 'detecting_flags', current: 91, total: 100,
+        message: '⚠ No flag rules configured for this facility — skipping flag detection' })
+    } else {
+      onProgress?.({ phase: 'detecting_flags', current: 91, total: 100,
+        message: `Running flag engine against ${flagRulesList.length} rules...` })
+
+      // Build CaseWithFinancials from in-memory data for flag evaluation
+      const casesForFlags: CaseWithFinancials[] = nonCancelledCompleted.map(c => {
+        const caseMilestones = (msByCaseId.get(c.id) || []).map(ms => ({
+          facility_milestone_id: ms.facility_milestone_id,
+          recorded_at: ms.recorded_at!,
+          facility_milestones: { name: milestoneTypes.find(mt => mt.id === ms.facility_milestone_id)?.name ?? '' },
+        }))
+        return {
+          id: c.id,
+          case_number: c.case_number,
+          facility_id: c.facility_id,
+          scheduled_date: c.scheduled_date,
+          start_time: c.start_time,
+          surgeon_id: c.surgeon_id,
+          or_room_id: c.or_room_id,
+          procedure_type_id: c.procedure_type_id,
+          status_id: c.status_id,
+          surgeon_left_at: c.surgeon_left_at,
+          is_excluded_from_metrics: c.is_excluded_from_metrics,
+          procedure_types: procedureTypes.find(pt => pt.id === c.procedure_type_id)
+            ? { id: c.procedure_type_id!, name: procedureTypes.find(pt => pt.id === c.procedure_type_id)!.name }
+            : null,
+          case_milestones: caseMilestones,
+        }
+      })
+
+      const flags = evaluateCasesBatch(casesForFlags, flagRulesList as FlagRule[])
+      flaggedCount = flags.length
+
+      if (flags.length > 0) {
+        onProgress?.({ phase: 'detecting_flags', current: 93, total: 100,
+          message: `Inserting ${flags.length} case flags...` })
+        for (let i = 0; i < flags.length; i += BATCH_SIZE) {
+          const { error } = await supabase.from('case_flags').insert(flags.slice(i, i + BATCH_SIZE))
+          if (error) console.error('Flag insert err:', error.message)
+        }
+      }
+    }
+
+    onProgress?.({ phase: 'finalizing', current: 95, total: 100, message: 'Recalculating averages...' })
     await supabase.rpc('recalculate_surgeon_averages', { p_facility_id: facilityId }).then(() => {}, (e: Error) => console.warn('Avg recalc:', e.message))
 
     // Refresh materialized views so analytics reflect new data
-    onProgress?.({ phase: 'finalizing', current: 96, total: 100, message: 'Refreshing analytics views...' })
+    onProgress?.({ phase: 'finalizing', current: 97, total: 100, message: 'Refreshing analytics views...' })
     await supabase.rpc('refresh_all_stats').then(
       () => console.log('Refreshed all materialized views'),
       (e: Error) => console.warn('MatView refresh failed:', e.message)
@@ -721,10 +935,23 @@ export async function generateDemoData(
     const { count: dbMsCount } = await supabase.from('case_milestones').select('*', { count: 'exact', head: true }).in('case_id', allCases.slice(0, 5).map(c => c.id))
     const { count: dbStatsCount } = await supabase.from('case_completion_stats').select('*', { count: 'exact', head: true }).eq('facility_id', facilityId)
     console.log(`[DEMO-GEN] Verification — DB cases: ${dbCaseCount}, milestones sample (5 cases): ${dbMsCount}, completion_stats: ${dbStatsCount}`)
-    console.log(`[DEMO-GEN] Expected — cases: ${allCases.length}, milestones: ${allMilestones.length}, validated: ${completedCaseIds.length}`)
+    console.log(`[DEMO-GEN] Expected — cases: ${allCases.length}, milestones: ${allMilestones.length}, validated: ${toValidateIds.length}`)
+    console.log(`[DEMO-GEN] Cancelled: ${cancelledCaseIds.size}, Delays: ${delayedCount}, Flags: ${flaggedCount}, Unvalidated: ${unvalidatedIds.size}`)
 
     onProgress?.({ phase: 'complete', current: 100, total: 100, message: 'Done!' })
-    return { success: true, casesGenerated: allCases.length, details: { milestones: allMilestones.length, staff: allStaffAssignments.length, implants: allImplants.length } }
+    return {
+      success: true,
+      casesGenerated: allCases.length,
+      details: {
+        milestones: allMilestones.length,
+        staff: allStaffAssignments.length,
+        implants: allImplants.length,
+        cancelledCount: cancelledCaseIds.size,
+        delayedCount,
+        flaggedCount,
+        unvalidatedCount: unvalidatedIds.size,
+      },
+    }
   } catch (e) {
     await supabase.rpc('enable_demo_triggers').then(() => {}, () => { supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {}) })
     return { success: false, casesGenerated: 0, error: e instanceof Error ? e.message : 'Unknown' }
