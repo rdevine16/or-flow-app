@@ -14,6 +14,8 @@ import FacilityStep from './steps/FacilityStep'
 import SurgeonProfilesStep from './steps/SurgeonProfilesStep'
 import RoomScheduleStep from './steps/RoomScheduleStep'
 import OutlierConfigStep from './steps/OutlierConfigStep'
+import ReviewStep from './steps/ReviewStep'
+import RunningStep from './steps/RunningStep'
 import { Loader2 } from 'lucide-react'
 
 import type {
@@ -263,6 +265,18 @@ export default function DemoDataWizardPage() {
     setCurrentStep(step)
   }, [])
 
+  // ── Generate handler (from Review step) ──
+  const handleGenerate = useCallback(() => {
+    setCompletedSteps((prev) => new Set([...prev, 5 as DemoWizardStep]))
+    setCurrentStep(6 as DemoWizardStep)
+  }, [])
+
+  // ── Restart handler (from Running step success/error) ──
+  const handleRestart = useCallback(() => {
+    setCurrentStep(1 as DemoWizardStep)
+    setCompletedSteps(new Set())
+  }, [])
+
   // ── Sidebar summary items ──
   const summaryItems = useMemo(() => {
     const items: { label: string; value: string }[] = []
@@ -314,6 +328,7 @@ export default function DemoDataWizardPage() {
         summaryItems={summaryItems}
         hideFooter={currentStep === 6}
         showGenerate={currentStep === 5}
+        onGenerate={handleGenerate}
       >
         {/* Step 1: Facility Selection */}
         {currentStep === 1 && (
@@ -368,16 +383,23 @@ export default function DemoDataWizardPage() {
             onUpdateProfile={handleUpdateProfile}
           />
         )}
+        {/* Step 5: Review */}
         {currentStep === 5 && (
-          <PlaceholderStep
-            title="Review"
-            description="Review all configuration before generating. Coming in Phase 4."
+          <ReviewStep
+            wizardState={wizardState}
+            facilities={facilities}
+            surgeons={surgeons}
+            rooms={rooms}
+            onEditStep={goToStep}
           />
         )}
-        {currentStep === 6 && (
-          <PlaceholderStep
-            title="Running"
-            description="SSE-powered progress indicator. Coming in Phase 4."
+
+        {/* Step 6: Running */}
+        {currentStep === 6 && wizardState.facilityId && (
+          <RunningStep
+            wizardState={wizardState}
+            onRestart={handleRestart}
+            facilityId={wizardState.facilityId}
           />
         )}
       </DemoWizardShell>
@@ -385,15 +407,3 @@ export default function DemoDataWizardPage() {
   )
 }
 
-// ============================================================================
-// PLACEHOLDER STEP (removed in later phases)
-// ============================================================================
-
-function PlaceholderStep({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-      <h2 className="text-xl font-semibold text-slate-900 mb-2">{title}</h2>
-      <p className="text-sm text-slate-500">{description}</p>
-    </div>
-  )
-}

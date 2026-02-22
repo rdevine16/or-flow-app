@@ -1,7 +1,7 @@
 // app/api/demo-data/route.ts
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { generateDemoData, purgeCaseData, getDetailedStatus, type GenerationConfig } from '@/lib/demo-data-generator'
+import { purgeCaseData, getDetailedStatus } from '@/lib/demo-data-generator'
 import { env, serverEnv } from '@/lib/env'
 import { logger } from '@/lib/logger'
 
@@ -82,14 +82,6 @@ export async function POST(request: Request) {
         if (!facilityId) return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
         const status = await getDetailedStatus(supabase, facilityId)
         return NextResponse.json(status)
-      }
-
-      case 'generate-wizard': {
-        const { surgeonProfiles, monthsOfHistory, purgeFirst } = body
-        if (!facilityId || !surgeonProfiles) return NextResponse.json({ success: false, error: 'facilityId and surgeonProfiles required' }, { status: 400 })
-        const config: GenerationConfig = { facilityId, surgeonProfiles, monthsOfHistory: monthsOfHistory || 6, purgeFirst: purgeFirst !== false }
-        const result = await generateDemoData(supabase, config)
-        return NextResponse.json(result)
       }
 
       case 'clear': {
