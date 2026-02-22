@@ -2,7 +2,7 @@
 // Tests for the WizardShell (page.tsx) — navigation, progress indicator, validation gating, submission
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // ============================================================================
@@ -60,39 +60,9 @@ vi.mock('@/hooks/useLookups', () => ({
 }))
 
 // Supabase mock — template count queries all return count values
-const mockSelect = vi.fn()
 const mockRpc = vi.fn()
 const mockInsert = vi.fn()
 const mockGetSession = vi.fn()
-
-function createChainableMock(resolvedValue: Record<string, unknown>) {
-  const chain: Record<string, unknown> = {}
-  const terminal = vi.fn().mockResolvedValue(resolvedValue)
-
-  // Each chainable method returns the chain itself
-  chain.select = vi.fn().mockReturnValue(chain)
-  chain.eq = vi.fn().mockReturnValue(chain)
-  chain.is = vi.fn().mockReturnValue(chain)
-  chain.single = vi.fn().mockResolvedValue(resolvedValue)
-
-  // For count queries, the chain resolves directly via the last method in the chain
-  // Since the actual queries use .eq().is().eq()... chains that resolve via Promise.all,
-  // we make every terminal method resolve to the count value
-  const handler: ProxyHandler<Record<string, unknown>> = {
-    get(_target, prop) {
-      if (prop === 'then') {
-        // Make the chain itself thenable (resolves as a promise)
-        return terminal().then.bind(terminal())
-      }
-      if (typeof prop === 'string') {
-        return vi.fn().mockReturnValue(new Proxy({}, handler))
-      }
-      return undefined
-    },
-  }
-
-  return new Proxy({}, handler)
-}
 
 vi.mock('@/lib/supabase', () => ({
   createClient: () => ({
@@ -357,7 +327,6 @@ describe('CreateFacilityPage (WizardShell)', () => {
 
   describe('Validation Gating', () => {
     it('does not advance past step 1 when name is empty', async () => {
-      const user = userEvent.setup()
       render(<CreateFacilityPage />)
 
       // Try to click Continue (should be disabled)

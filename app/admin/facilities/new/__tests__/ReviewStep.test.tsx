@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import ReviewStep from '../ReviewStep'
 import type { FacilityData, AdminData, TemplateConfig, TemplateCounts } from '../types'
-import { DEFAULT_FACILITY_DATA, DEFAULT_ADMIN_DATA, DEFAULT_TEMPLATE_CONFIG, DEFAULT_TEMPLATE_COUNTS } from '../types'
+import { DEFAULT_FACILITY_DATA, DEFAULT_TEMPLATE_CONFIG } from '../types'
 
 describe('ReviewStep', () => {
   const mockOnEditStep = vi.fn()

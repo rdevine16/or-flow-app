@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createFacilityWithTemplates } from '../actions'
 import type { CreateFacilityParams } from '../actions'
-import { DEFAULT_FACILITY_DATA, DEFAULT_ADMIN_DATA, DEFAULT_TEMPLATE_CONFIG } from '../types'
+import { DEFAULT_FACILITY_DATA, DEFAULT_TEMPLATE_CONFIG } from '../types'
 import type { FacilityData, AdminData, TemplateConfig } from '../types'
 
 // Mock audit logger

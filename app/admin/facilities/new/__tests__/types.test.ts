@@ -8,7 +8,6 @@ import {
   formatPhone,
   buildFullAddress,
   DEFAULT_FACILITY_DATA,
-  DEFAULT_ADMIN_DATA,
 } from '../types'
 import type { FacilityData, AdminData } from '../types'
 
