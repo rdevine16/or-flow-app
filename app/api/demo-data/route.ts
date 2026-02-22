@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
       case 'list-surgeons': {
         if (!facilityId) return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
-        const { data: role } = await supabase.from('user_roles').select('id').eq('name', 'surgeon').single()
+        const { data: role } = await supabase.from('user_roles').select('id').eq('name', 'Surgeon').single()
         if (!role) return NextResponse.json({ error: 'Surgeon role not found' }, { status: 500 })
         const { data, error } = await supabase.from('users').select('id, first_name, last_name, closing_workflow, closing_handoff_minutes').eq('facility_id', facilityId).eq('role_id', role.id).eq('is_active', true).order('last_name')
         if (error) return NextResponse.json({ error: error.message }, { status: 500 })
