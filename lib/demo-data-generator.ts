@@ -160,30 +160,30 @@ const JOINT_MS = {
   fast: {
     patient_in: 0, anes_start: 2, anes_end: 10, prep_drape_start: 12, prep_drape_complete: 18, incision: 20,
     closing: (st: number) => 20 + st, closing_complete: (st: number) => 20 + st + 6,
-    patient_out: (st: number) => 20 + st + 10, room_cleaned: (st: number) => 20 + st + 20,
+    patient_out: (st: number) => 20 + st + 10,
   },
   average: {
     patient_in: 0, anes_start: 3, anes_end: 15, prep_drape_start: 17, prep_drape_complete: 25, incision: 28,
     closing: (st: number) => 28 + st, closing_complete: (st: number) => 28 + st + 8,
-    patient_out: (st: number) => 28 + st + 12, room_cleaned: (st: number) => 28 + st + 25,
+    patient_out: (st: number) => 28 + st + 12,
   },
   slow: {
     patient_in: 0, anes_start: 4, anes_end: 18, prep_drape_start: 20, prep_drape_complete: 30, incision: 35,
     closing: (st: number) => 35 + st, closing_complete: (st: number) => 35 + st + 10,
-    patient_out: (st: number) => 35 + st + 15, room_cleaned: (st: number) => 35 + st + 28,
+    patient_out: (st: number) => 35 + st + 15,
   },
 }
 
 const HAND_MS = {
   patient_in: 0, prep_drape_start: 8, prep_drape_complete: 15, incision: 18,
   closing: (st: number) => 18 + st, closing_complete: (st: number) => 18 + st + 5,
-  patient_out: (st: number) => 18 + st + 10, room_cleaned: (st: number) => 18 + st + 20,
+  patient_out: (st: number) => 18 + st + 10,
 }
 
 const SPINE_MS = {
   patient_in: 0, anes_start: 3, anes_end: 18, prep_drape_start: 20, prep_drape_complete: 28, incision: 32,
   closing: (st: number) => 32 + st, closing_complete: (st: number) => 32 + st + 12,
-  patient_out: (st: number) => 32 + st + 20, room_cleaned: (st: number) => 32 + st + 35,
+  patient_out: (st: number) => 32 + st + 20,
 }
 
 // =====================================================
@@ -1310,11 +1310,13 @@ function buildMilestones(
     if (outlierChance > 0) off = addOutlier(off, outlierChance, { min: off + outlierRange.min, max: off + outlierRange.max })
     if (off <= lastOff) off = lastOff + 1
     lastOff = off
+    // Add random seconds (0-59) for realistic sub-minute precision
+    const offWithSeconds = off + randomInt(0, 59) / 60
     ms.push({
       id: crypto.randomUUID(),
       case_id: caseId,
       facility_milestone_id: fmId,
-      recorded_at: addMinutes(base, off).toISOString(),
+      recorded_at: addMinutes(base, offWithSeconds).toISOString(),
       recorded_by: null,
       created_at: new Date().toISOString(),
     })
@@ -1330,7 +1332,6 @@ function buildMilestones(
   push('closing', baseTmpl.closing, 0.15, { min: 5, max: 15 })
   push('closing_complete', baseTmpl.closing_complete, 0.15, { min: 5, max: 12 })
   push('patient_out', baseTmpl.patient_out)
-  push('room_cleaned', baseTmpl.room_cleaned)
 
   return ms
 }
