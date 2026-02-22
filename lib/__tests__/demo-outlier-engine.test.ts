@@ -465,4 +465,182 @@ describe('demo-outlier-engine', () => {
       expect(hasAnyOutlierEnabled(profile)).toBe(true)
     })
   })
+
+  // ──────────────────────────────────────────
+  // MAGNITUDE CLAMPING (edge cases)
+  // ──────────────────────────────────────────
+
+  describe('magnitude clamping', () => {
+    it('clamps magnitude below 1 to magnitude 1 range', () => {
+      const profile = createProfile({
+        outliers: {
+          ...createProfile().outliers,
+          lateStarts: { enabled: true, frequency: 100, magnitude: 0 },
+        },
+      })
+      Math.random = vi.fn(() => 0.05) // fires, then mid-range
+      const result = computeLateStartDelay(profile, false)
+      // Clamped to magnitude 1 → 15-25 min
+      expect(result).toBeGreaterThanOrEqual(15)
+      expect(result).toBeLessThanOrEqual(25)
+    })
+
+    it('clamps magnitude above 3 to magnitude 3 range', () => {
+      const profile = createProfile({
+        outliers: {
+          ...createProfile().outliers,
+          lateStarts: { enabled: true, frequency: 100, magnitude: 5 },
+        },
+      })
+      let callCount = 0
+      Math.random = vi.fn(() => {
+        callCount++
+        if (callCount === 1) return 0.05
+        return 0.5
+      })
+      const result = computeLateStartDelay(profile, false)
+      // Clamped to magnitude 3 → 30-45 min
+      expect(result).toBeGreaterThanOrEqual(30)
+      expect(result).toBeLessThanOrEqual(45)
+    })
+
+    it('rounds fractional magnitude to nearest integer', () => {
+      const profile = createProfile({
+        outliers: {
+          ...createProfile().outliers,
+          longTurnovers: { enabled: true, frequency: 100, magnitude: 1.7 },
+        },
+      })
+      let callCount = 0
+      Math.random = vi.fn(() => {
+        callCount++
+        if (callCount === 1) return 0.05
+        return 0.5
+      })
+      const result = adjustTurnoverTime(profile, 18, false)
+      // 1.7 rounds to 2 → magnitude 2 → 30-45 min
+      expect(result).toBeGreaterThanOrEqual(30)
+      expect(result).toBeLessThanOrEqual(45)
+    })
+  })
+
+  // ──────────────────────────────────────────
+  // STATISTICAL DISTRIBUTION (frequency slider)
+  // ──────────────────────────────────────────
+
+  describe('frequency slider statistical distribution', () => {
+    it('fires roughly at the configured frequency rate over many trials', () => {
+      // Restore real Math.random for statistical test
+      Math.random = originalRandom
+
+      const profile = createProfile({
+        outliers: {
+          ...createProfile().outliers,
+          lateStarts: { enabled: true, frequency: 50, magnitude: 2 },
+        },
+      })
+
+      let fireCount = 0
+      const trials = 1000
+
+      for (let i = 0; i < trials; i++) {
+        if (computeLateStartDelay(profile, false) > 0) fireCount++
+      }
+
+      // Expect roughly 50% ± 10% margin
+      expect(fireCount).toBeGreaterThan(350)
+      expect(fireCount).toBeLessThan(650)
+    })
+
+    it('100% frequency always fires', () => {
+      Math.random = originalRandom
+
+      const profile = createProfile({
+        outliers: {
+          ...createProfile().outliers,
+          longTurnovers: { enabled: true, frequency: 100, magnitude: 2 },
+        },
+      })
+
+      for (let i = 0; i < 20; i++) {
+        const result = adjustTurnoverTime(profile, 18, false)
+        expect(result).toBeGreaterThan(18)
+      }
+    })
+
+    it('0% frequency never fires', () => {
+      Math.random = originalRandom
+
+      const profile = createProfile({
+        outliers: {
+          ...createProfile().outliers,
+          callbackDelays: { enabled: true, frequency: 0, magnitude: 2 },
+        },
+      })
+
+      for (let i = 0; i < 20; i++) {
+        expect(computeCallbackDelay(profile, false)).toBe(0)
+      }
+    })
+  })
+
+  // ──────────────────────────────────────────
+  // MAGNITUDE RANGE VERIFICATION
+  // ──────────────────────────────────────────
+
+  describe('magnitude ranges produce correct bounds', () => {
+    it('callback delay magnitude 1: 10-15 min', () => {
+      const profile = createProfile({
+        outliers: {
+          ...createProfile().outliers,
+          callbackDelays: { enabled: true, frequency: 100, magnitude: 1 },
+        },
+      })
+      let callCount = 0
+      Math.random = vi.fn(() => {
+        callCount++
+        if (callCount === 1) return 0.05
+        return 0.0 // minimum of range
+      })
+      const min = computeCallbackDelay(profile, false)
+      expect(min).toBe(10)
+
+      callCount = 0
+      Math.random = vi.fn(() => {
+        callCount++
+        if (callCount === 1) return 0.05
+        return 0.99 // maximum of range
+      })
+      const max = computeCallbackDelay(profile, false)
+      expect(max).toBe(15)
+    })
+
+    it('fast cases reduce surgical time by the correct percentage range', () => {
+      Math.random = originalRandom
+
+      const profile = createProfile({
+        outliers: {
+          ...createProfile().outliers,
+          fastCases: { enabled: true, frequency: 100, magnitude: 2 },
+        },
+      })
+
+      const baseSurgicalTime = 100
+      const results: number[] = []
+      for (let i = 0; i < 50; i++) {
+        results.push(adjustSurgicalTime(profile, baseSurgicalTime, false))
+      }
+
+      // All results should be less than base (faster)
+      for (const r of results) {
+        expect(r).toBeLessThan(baseSurgicalTime)
+      }
+
+      // Magnitude 2 fast cases: 18-22% faster → 78-82 range
+      const min = Math.min(...results)
+      const max = Math.max(...results)
+      expect(min).toBeGreaterThanOrEqual(75) // Allow some margin
+      expect(max).toBeLessThanOrEqual(85)
+    })
+  })
 })

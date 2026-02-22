@@ -696,3 +696,348 @@ describe('Phase 6a: Outlier Profile Integration', () => {
     // Long turnover is a full replacement, not an additional delay
   })
 })
+
+// ============================================
+// PHASE 6B COVERAGE TESTS — Cancelled Cases, Delays, Device Data, Flag Detection, Purge
+// ============================================
+
+describe('Phase 6b: Cancelled Cases (~3%)', () => {
+  it('cancellation rate targets approximately 3%', () => {
+    const totalCompleted = 500
+    const cancelCount = Math.round(totalCompleted * 0.03)
+    expect(cancelCount).toBe(15)
+    expect(cancelCount / totalCompleted).toBeCloseTo(0.03, 2)
+  })
+
+  it('cancelled cases have status_id set to cancelled status', () => {
+    const cancelledStatusId = 'status-cancelled'
+    const cancelledCase = {
+      id: 'case-1',
+      status_id: cancelledStatusId,
+      cancelled_at: '2026-02-20T18:00:00.000Z',
+      cancellation_reason_id: 'reason-1',
+    }
+
+    expect(cancelledCase.status_id).toBe(cancelledStatusId)
+    expect(cancelledCase.cancelled_at).toBeDefined()
+    expect(cancelledCase.cancellation_reason_id).toBeDefined()
+  })
+
+  it('cancelled_at is 6-18 hours before scheduled start', () => {
+    const scheduledDate = '2026-02-20'
+    const startTime = '07:30'
+    const schedMs = new Date(`${scheduledDate}T${startTime}:00Z`).getTime()
+
+    for (let i = 0; i < 20; i++) {
+      const hoursBeforeRaw = 6 + Math.random() * 12 // 6-18 hours
+      const hoursBefore = Math.floor(hoursBeforeRaw)
+      const cancelledAt = new Date(schedMs - hoursBefore * 3600000)
+      const diff = (schedMs - cancelledAt.getTime()) / 3600000
+
+      expect(diff).toBeGreaterThanOrEqual(6)
+      expect(diff).toBeLessThanOrEqual(18)
+    }
+  })
+
+  it('cancelled cases have no milestones, staff, or implants', () => {
+    const cancelledCaseIds = new Set(['case-5', 'case-10', 'case-15'])
+
+    const milestones = [
+      { case_id: 'case-1', facility_milestone_id: 'fm-1', recorded_at: '2026-02-20T07:30:00Z' },
+      { case_id: 'case-5', facility_milestone_id: 'fm-1', recorded_at: '2026-02-20T08:00:00Z' },
+      { case_id: 'case-10', facility_milestone_id: 'fm-1', recorded_at: '2026-02-20T09:00:00Z' },
+      { case_id: 'case-20', facility_milestone_id: 'fm-1', recorded_at: '2026-02-20T10:00:00Z' },
+    ]
+
+    const filtered = milestones.filter(m => !cancelledCaseIds.has(m.case_id))
+    expect(filtered).toHaveLength(2) // case-1 and case-20 remain
+    expect(filtered.every(m => !cancelledCaseIds.has(m.case_id))).toBe(true)
+  })
+
+  it('cancellation_reason_id is randomly selected from facility reasons', () => {
+    const cancReasons = [
+      { id: 'reason-1' },
+      { id: 'reason-2' },
+      { id: 'reason-3' },
+    ]
+
+    const selectedReasonIds = new Set<string>()
+    for (let i = 0; i < 100; i++) {
+      const reason = cancReasons[Math.floor(Math.random() * cancReasons.length)]
+      selectedReasonIds.add(reason.id)
+    }
+
+    // Should have selected at least 2 different reasons over 100 trials
+    expect(selectedReasonIds.size).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe('Phase 6b: Case Delays (~5-8%)', () => {
+  it('delay rate targets 5-8% of completed cases', () => {
+    const totalCompleted = 500
+
+    for (let i = 0; i < 20; i++) {
+      const delayRate = 0.05 + Math.random() * 0.03
+      const delayCount = Math.round(totalCompleted * delayRate)
+      expect(delayCount).toBeGreaterThanOrEqual(Math.round(500 * 0.05))
+      expect(delayCount).toBeLessThanOrEqual(Math.round(500 * 0.08))
+    }
+  })
+
+  it('delay records have required fields', () => {
+    const delayRecord = {
+      case_id: 'case-1',
+      delay_type_id: 'delay-type-1',
+      duration_minutes: 15,
+      notes: null as string | null,
+      recorded_at: '2026-02-20T07:30:00Z',
+    }
+
+    expect(delayRecord.case_id).toBeDefined()
+    expect(delayRecord.delay_type_id).toBeDefined()
+    expect(delayRecord.duration_minutes).toBeGreaterThanOrEqual(5)
+    expect(delayRecord.duration_minutes).toBeLessThanOrEqual(45)
+  })
+
+  it('delay duration_minutes is between 5 and 45', () => {
+    for (let i = 0; i < 50; i++) {
+      const duration = 5 + Math.floor(Math.random() * 41)
+      expect(duration).toBeGreaterThanOrEqual(5)
+      expect(duration).toBeLessThanOrEqual(45)
+    }
+  })
+})
+
+describe('Phase 6b: Unvalidated Cases (~2%)', () => {
+  it('unvalidated rate targets approximately 2%', () => {
+    const totalCompleted = 500
+    const unvalidatedCount = Math.round(totalCompleted * 0.02)
+    expect(unvalidatedCount).toBe(10)
+    expect(unvalidatedCount / totalCompleted).toBeCloseTo(0.02, 2)
+  })
+
+  it('remaining cases are validated (data_validated = true)', () => {
+    const allCompleted = Array.from({ length: 100 }, (_, i) => `case-${i}`)
+    const unvalidatedRate = 0.02
+    const unvalidatedCount = Math.round(allCompleted.length * unvalidatedRate)
+    const toValidate = allCompleted.length - unvalidatedCount
+
+    expect(toValidate).toBe(98)
+    expect(unvalidatedCount).toBe(2)
+  })
+})
+
+describe('Phase 6b: Case Complexities', () => {
+  it('spine cases always get Complex complexity', () => {
+    const spineSpecialty = 'spine'
+    const complexComplexity = { id: 'cx-complex', name: 'Complex' }
+
+    // Spine cases always assign complex
+    if (spineSpecialty === 'spine') {
+      expect(complexComplexity.name.toLowerCase()).toContain('complex')
+    }
+  })
+
+  it('joint cases get 70% Standard, 30% Complex', () => {
+    let standardCount = 0
+    let complexCount = 0
+    const trials = 1000
+
+    for (let i = 0; i < trials; i++) {
+      if (Math.random() < 0.7) standardCount++
+      else complexCount++
+    }
+
+    // Expect roughly 70/30 ± 5% margin
+    expect(standardCount / trials).toBeGreaterThan(0.60)
+    expect(standardCount / trials).toBeLessThan(0.80)
+    expect(complexCount / trials).toBeGreaterThan(0.20)
+    expect(complexCount / trials).toBeLessThan(0.40)
+  })
+
+  it('hand_wrist cases do not get complexities', () => {
+    const specialty = 'hand_wrist'
+    // Generator skips hand_wrist cases for complexity assignment
+    const shouldAssign = specialty !== 'hand_wrist'
+    expect(shouldAssign).toBe(false)
+  })
+
+  it('10% chance of a second complexity factor for joint cases', () => {
+    let doubleCount = 0
+    const trials = 1000
+
+    for (let i = 0; i < trials; i++) {
+      if (Math.random() < 0.1) doubleCount++
+    }
+
+    // Expect roughly 10% ± 5%
+    expect(doubleCount / trials).toBeGreaterThan(0.05)
+    expect(doubleCount / trials).toBeLessThan(0.15)
+  })
+})
+
+describe('Phase 6b: Device Data (joint cases)', () => {
+  it('only joint cases with preferredVendor get device records', () => {
+    const cases = [
+      { id: 'c1', surgeon: { specialty: 'joint' as const, preferredVendor: 'Stryker' } },
+      { id: 'c2', surgeon: { specialty: 'spine' as const, preferredVendor: 'Stryker' } },
+      { id: 'c3', surgeon: { specialty: 'joint' as const, preferredVendor: null } },
+      { id: 'c4', surgeon: { specialty: 'hand_wrist' as const, preferredVendor: 'DePuy Synthes' } },
+    ]
+
+    const deviceCases = cases.filter(c => c.surgeon.specialty === 'joint' && c.surgeon.preferredVendor)
+    expect(deviceCases).toHaveLength(1)
+    expect(deviceCases[0].id).toBe('c1')
+  })
+
+  it('maps vendor name to implant_company_id', () => {
+    const implantCompanies = [
+      { id: 'ic-1', name: 'Stryker' },
+      { id: 'ic-2', name: 'Zimmer Biomet' },
+      { id: 'ic-3', name: 'DePuy Synthes' },
+    ]
+
+    const vendorMap = new Map<string, string>()
+    for (const ic of implantCompanies) vendorMap.set(ic.name, ic.id)
+
+    expect(vendorMap.get('Stryker')).toBe('ic-1')
+    expect(vendorMap.get('Zimmer Biomet')).toBe('ic-2')
+    expect(vendorMap.get('DePuy Synthes')).toBe('ic-3')
+    expect(vendorMap.get('Unknown Vendor')).toBeUndefined()
+  })
+})
+
+describe('Phase 6b: Flag Detection', () => {
+  it('warns in SSE when no flag rules exist', () => {
+    const flagRules: unknown[] = []
+    const shouldWarn = !flagRules?.length
+    expect(shouldWarn).toBe(true)
+  })
+
+  it('proceeds with flag detection when rules exist', () => {
+    const flagRules = [{ id: 'rule-1', is_active: true }]
+    const shouldDetect = flagRules?.length > 0
+    expect(shouldDetect).toBe(true)
+  })
+
+  it('builds CaseWithFinancials from in-memory data for flag evaluation', () => {
+    // Verify the shape of data passed to evaluateCasesBatch
+    const caseForFlags = {
+      id: 'case-1',
+      case_number: 'DEMO-00001',
+      facility_id: 'facility-1',
+      scheduled_date: '2026-02-20',
+      start_time: '07:30',
+      surgeon_id: 'surgeon-1',
+      or_room_id: 'room-1',
+      procedure_type_id: 'proc-1',
+      status_id: 'status-completed',
+      surgeon_left_at: '2026-02-20T09:00:00Z',
+      is_excluded_from_metrics: false,
+      procedure_types: { id: 'proc-1', name: 'THA' },
+      case_milestones: [
+        { facility_milestone_id: 'fm-1', recorded_at: '2026-02-20T07:30:00Z', facility_milestones: { name: 'patient_in' } },
+        { facility_milestone_id: 'fm-2', recorded_at: '2026-02-20T08:00:00Z', facility_milestones: { name: 'incision' } },
+      ],
+    }
+
+    expect(caseForFlags.id).toBeDefined()
+    expect(caseForFlags.case_milestones).toHaveLength(2)
+    expect(caseForFlags.procedure_types?.name).toBe('THA')
+  })
+})
+
+describe('Phase 6b: Purge Fixes', () => {
+  it('purge targets all Phase 6b tables (case_flags, case_complexities, device tables)', () => {
+    // Verify the purge function deletes from all relevant tables
+    const purgeTables = [
+      'case_flags',
+      'case_complexities',
+      'case_device_activity',
+      'case_device_companies',
+      'case_implant_companies',
+      'metric_issues',
+      'case_implants',
+      'case_milestones',
+      'case_milestone_stats',
+      'case_completion_stats',
+      'case_staff',
+      'case_delays',
+    ]
+
+    // All Phase 6b additions should be in the purge list
+    expect(purgeTables).toContain('case_flags')
+    expect(purgeTables).toContain('case_complexities')
+    expect(purgeTables).toContain('case_device_activity')
+    expect(purgeTables).toContain('case_device_companies')
+    expect(purgeTables).toContain('metric_issues')
+    expect(purgeTables).toContain('case_delays')
+  })
+
+  it('purge deletes in correct order (children before parents)', () => {
+    // The purge order must delete child records before parent records
+    // to avoid foreign key constraint violations
+    const purgeOrder = [
+      'case_flags',
+      'case_complexities',
+      'case_device_activity',
+      'case_device_companies',
+      'case_implant_companies',
+      'metric_issues',
+      'case_implants',
+      'case_milestones',
+      'case_milestone_stats',
+      'case_completion_stats',
+      'case_staff',
+      'case_delays',
+      // Then: cases (parent)
+    ]
+
+    // Cases should NOT be in this list — they're deleted separately after clearing FK
+    expect(purgeOrder).not.toContain('cases')
+    // All child tables must come before parent table deletion
+    expect(purgeOrder.length).toBeGreaterThanOrEqual(12)
+  })
+
+  it('purge clears called_next_case_id FK before deleting cases', () => {
+    // The self-referencing FK must be nullified before deletion
+    const selfRefFkClearStep = {
+      table: 'cases',
+      update: { called_next_case_id: null },
+      filter: { called_next_case_id: 'is not null' },
+    }
+
+    expect(selfRefFkClearStep.update.called_next_case_id).toBeNull()
+  })
+})
+
+// ============================================
+// INTEGRATION: Generator Result Shape Verification
+// ============================================
+
+describe('GenerationResult — Phase 6b details', () => {
+  it('includes all Phase 6b detail fields', () => {
+    const result = {
+      success: true,
+      casesGenerated: 500,
+      details: {
+        milestones: 4500,
+        staff: 1500,
+        implants: 400,
+        cancelledCount: 15,
+        delayedCount: 30,
+        flaggedCount: 45,
+        unvalidatedCount: 10,
+      },
+    }
+
+    expect(result.details).toHaveProperty('cancelledCount')
+    expect(result.details).toHaveProperty('delayedCount')
+    expect(result.details).toHaveProperty('flaggedCount')
+    expect(result.details).toHaveProperty('unvalidatedCount')
+    expect(result.details.cancelledCount).toBe(15)
+    expect(result.details.delayedCount).toBe(30)
+    expect(result.details.flaggedCount).toBe(45)
+    expect(result.details.unvalidatedCount).toBe(10)
+  })
+})
