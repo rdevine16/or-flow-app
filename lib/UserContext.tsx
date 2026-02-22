@@ -174,10 +174,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('storage', handleStorageChange)
 
+    // Prevent scroll wheel from changing focused number inputs
+    const handleWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'number') {
+        ;(target as HTMLInputElement).blur()
+      }
+    }
+    document.addEventListener('wheel', handleWheel, { passive: true })
+
     return () => {
       isMounted = false
       subscription.unsubscribe()
       window.removeEventListener('storage', handleStorageChange)
+      document.removeEventListener('wheel', handleWheel)
     }
   }, [supabase, router])
 

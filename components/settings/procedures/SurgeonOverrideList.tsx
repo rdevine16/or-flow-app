@@ -226,6 +226,7 @@ export function SurgeonOverrideList({
                   type="number"
                   value={formDuration}
                   onChange={e => setFormDuration(e.target.value)}
+                  onWheel={e => e.currentTarget.blur()}
                   className="w-20 px-2 py-1 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   min={1}
                   placeholder="min"

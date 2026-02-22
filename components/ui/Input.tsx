@@ -18,12 +18,19 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ error, className = '', ...props }, ref) => {
+  ({ error, className = '', onWheel, type, ...props }, ref) => {
+    // Prevent scroll wheel from changing number input values
+    const handleWheel = type === 'number'
+      ? (e: React.WheelEvent<HTMLInputElement>) => { e.currentTarget.blur(); onWheel?.(e) }
+      : onWheel
+
     return (
       <input
         ref={ref}
+        type={type}
+        onWheel={handleWheel}
         className={`
-          w-full px-4 py-2.5 
+          w-full px-4 py-2.5
           border rounded-lg
           text-slate-900 placeholder:text-slate-400
           transition-colors duration-150
