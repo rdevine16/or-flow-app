@@ -108,6 +108,24 @@ export function WeekCalendar({
   const SCROLL_SPEED_MIN = 3
   const SCROLL_SPEED_MAX = 14
 
+  // Recalculate drag end from current mouse + scroll position (shared by auto-scroll & scroll handler).
+  // Clamps the effective Y to the scroll container's visible bounds so that when the cursor
+  // is above/below the container, the drag end tracks the visible edge instead of jumping to 0/24.
+  const recalcDragEnd = useCallback(() => {
+    if (!gridRef.current || !scrollContainerRef.current || !isDraggingRef.current || !dragStartRef.current) return
+    const containerRect = scrollContainerRef.current.getBoundingClientRect()
+    const gridRect = gridRef.current.getBoundingClientRect()
+    const clampedY = Math.max(containerRect.top, Math.min(containerRect.bottom, lastMouseYRef.current))
+    const relativeY = clampedY - gridRect.top
+    const rawHour = relativeY / HOUR_HEIGHT
+    const snappedHour = Math.round(rawHour * 4) / 4
+    const newHour = Math.max(0, Math.min(24, snappedHour))
+
+    const newEnd = { day: dragStartRef.current.day, hour: newHour }
+    dragEndRef.current = newEnd
+    setDragEnd(newEnd)
+  }, [])
+
   const startAutoScroll = useCallback((direction: 'up' | 'down') => {
     // Always restart — direction may have changed
     if (autoScrollRef.current) {
@@ -136,19 +154,13 @@ export function WeekCalendar({
       scrollContainerRef.current.scrollTop += delta
 
       // Update drag end position based on new scroll + mouse position
-      const gridRect = gridRef.current.getBoundingClientRect()
-      const relativeY = mouseY - gridRect.top
-      const rawHour = relativeY / HOUR_HEIGHT
-      const snappedHour = Math.round(rawHour * 4) / 4
-      const newHour = Math.max(0, Math.min(24, snappedHour))
-
-      setDragEnd(prev => prev ? { ...prev, hour: newHour } : null)
+      recalcDragEnd()
 
       autoScrollRef.current = requestAnimationFrame(scroll)
     }
 
     autoScrollRef.current = requestAnimationFrame(scroll)
-  }, [])
+  }, [recalcDragEnd])
 
   const stopAutoScroll = useCallback(() => {
     if (autoScrollRef.current) {
@@ -193,11 +205,7 @@ export function WeekCalendar({
     if (!isDraggingRef.current || !dragStartRef.current) return
 
     lastMouseYRef.current = e.clientY
-
-    const hour = getTimeFromY(e.clientY)
-    const newEnd = { day: dragStartRef.current.day, hour }
-    dragEndRef.current = newEnd
-    setDragEnd(newEnd)
+    recalcDragEnd()
 
     // Auto-scroll when near edges of the scroll container
     if (scrollContainerRef.current) {
@@ -214,11 +222,11 @@ export function WeekCalendar({
         stopAutoScroll()
       }
     }
-  }, [getTimeFromY, startAutoScroll, stopAutoScroll])
+  }, [recalcDragEnd, startAutoScroll, stopAutoScroll])
 
-  // Document-level mouseup — always fires, even outside the grid
-  // Uses the continuously-updated drag state instead of recalculating
-  // from cursor Y to avoid bugs when cursor is outside the grid
+  // Document-level mouseup — always fires, even outside the grid.
+  // Uses the continuously-updated dragEndRef (kept in sync by mousemove,
+  // auto-scroll, and native scroll handlers) for reliable end position.
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const handleDocumentMouseUp = useCallback((e: MouseEvent) => {
     if (!isDraggingRef.current) return
@@ -227,16 +235,9 @@ export function WeekCalendar({
 
     const start = dragStartRef.current
     if (start) {
-      // Try to get end from current cursor position, but fall back to
-      // the last known good drag-end if the cursor is outside the grid
-      let endHour: number
-      const rect = gridRef.current?.getBoundingClientRect()
-      if (rect && e.clientY >= rect.top && e.clientY <= rect.bottom) {
-        endHour = getTimeFromY(e.clientY)
-      } else {
-        // Cursor is outside grid — use the last dragEnd we tracked during mousemove
-        endHour = dragEndRef.current?.hour ?? start.hour + 0.5
-      }
+      // Use the tracked drag end — it's kept in sync during auto-scroll
+      // and native scroll, so it's always accurate regardless of cursor position
+      const endHour = dragEndRef.current?.hour ?? start.hour + 0.5
 
       const startHour = Math.min(start.hour, endHour)
       const rawEndHour = Math.max(start.hour, endHour)
@@ -260,19 +261,28 @@ export function WeekCalendar({
     setIsDragging(false)
     setDragStart(null)
     setDragEnd(null)
-  }, [getTimeFromY, onDragSelect, stopAutoScroll])
+  }, [onDragSelect, stopAutoScroll])
+
+  // Handle native scroll (trackpad, mouse wheel) during drag
+  const handleScrollDuringDrag = useCallback(() => {
+    if (!isDraggingRef.current) return
+    recalcDragEnd()
+  }, [recalcDragEnd])
 
   // Register/unregister document listeners when dragging starts/stops
   useEffect(() => {
+    const container = scrollContainerRef.current
     if (isDragging) {
       document.addEventListener('mousemove', handleDocumentMouseMove)
       document.addEventListener('mouseup', handleDocumentMouseUp)
+      container?.addEventListener('scroll', handleScrollDuringDrag)
     }
     return () => {
       document.removeEventListener('mousemove', handleDocumentMouseMove)
       document.removeEventListener('mouseup', handleDocumentMouseUp)
+      container?.removeEventListener('scroll', handleScrollDuringDrag)
     }
-  }, [isDragging, handleDocumentMouseMove, handleDocumentMouseUp])
+  }, [isDragging, handleDocumentMouseMove, handleDocumentMouseUp, handleScrollDuringDrag])
 
   const handleBlockClick = (block: ExpandedBlock, e: React.MouseEvent) => {
     e.stopPropagation()
