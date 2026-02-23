@@ -18,6 +18,8 @@ import { ArchivedMilestonesSection } from '@/components/settings/milestones/Arch
 import { PhaseLibrary } from '@/components/settings/milestones/PhaseLibrary'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { TemplateBuilder } from '@/components/settings/milestones/TemplateBuilder'
+import { ProcedureTemplateAssignment } from '@/components/settings/milestones/ProcedureTemplateAssignment'
+import { SurgeonOverridePanel } from '@/components/settings/milestones/SurgeonOverridePanel'
 import {
   Plus,
   Link2,
@@ -152,23 +154,9 @@ function MilestonesSettingsContent() {
       {activeTab === 'milestones' && <MilestonesTab />}
       {activeTab === 'phases' && <PhaseLibrary />}
       {activeTab === 'templates' && <TemplateBuilder />}
-      {activeTab === 'procedures' && <PlaceholderTab label="Procedures" description="Procedure template assignment will be available in a future phase." />}
-      {activeTab === 'surgeons' && <PlaceholderTab label="Surgeons" description="Surgeon template overrides will be available in a future phase." />}
+      {activeTab === 'procedures' && <ProcedureTemplateAssignment />}
+      {activeTab === 'surgeons' && <SurgeonOverridePanel />}
     </>
-  )
-}
-
-// ─── Placeholder Tab ─────────────────────────────────────
-
-function PlaceholderTab({ label, description }: { label: string; description: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-        <LayoutTemplate className="w-6 h-6 text-slate-400" />
-      </div>
-      <h3 className="text-lg font-medium text-slate-700 mb-1">{label}</h3>
-      <p className="text-sm text-slate-500 max-w-sm">{description}</p>
-    </div>
   )
 }
 
