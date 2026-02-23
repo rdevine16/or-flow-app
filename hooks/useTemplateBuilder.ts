@@ -229,10 +229,11 @@ export function useTemplateBuilder() {
     return new Set([...fromItems, ...emptyPhaseIds])
   }, [builderState.items, emptyPhaseIds])
 
-  // Available milestones for library (not already in template)
+  // All milestones for library — includes already-assigned ones so users can
+  // add the same milestone to multiple phases (creating shared boundaries).
   const availableMilestones = useMemo(
-    () => (milestones || []).filter(m => !assignedMilestoneIds.has(m.id)),
-    [milestones, assignedMilestoneIds],
+    () => milestones || [],
+    [milestones],
   )
 
   // Available phases for library (not already in template)

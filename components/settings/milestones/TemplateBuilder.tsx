@@ -203,6 +203,7 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
         <LibraryPanel
           availableMilestones={builder.availableMilestones}
           availablePhases={builder.availablePhases}
+          assignedMilestoneIds={builder.assignedMilestoneIds}
           assignedPhaseIds={builder.assignedPhaseIds}
           selectedTemplateId={builder.selectedTemplateId}
           onAddMilestone={builder.addMilestoneToPhase}
@@ -688,6 +689,7 @@ function PhaseHeader({
 interface LibraryPanelProps {
   availableMilestones: UseTemplateBuilderReturn['availableMilestones']
   availablePhases: UseTemplateBuilderReturn['availablePhases']
+  assignedMilestoneIds: Set<string>
   assignedPhaseIds: Set<string>
   selectedTemplateId: string | null
   onAddMilestone: (phaseId: string, milestoneId: string) => void
@@ -697,6 +699,7 @@ interface LibraryPanelProps {
 function LibraryPanel({
   availableMilestones,
   availablePhases,
+  assignedMilestoneIds,
   assignedPhaseIds,
   selectedTemplateId,
   onAddMilestone,
@@ -786,6 +789,7 @@ function LibraryPanel({
                 <DraggableLibraryMilestone
                   key={m.id}
                   milestone={m}
+                  isAssigned={assignedMilestoneIds.has(m.id)}
                   assignedPhasesList={assignedPhasesList}
                   addingMilestoneId={addingMilestoneId}
                   setAddingMilestoneId={setAddingMilestoneId}
@@ -857,12 +861,14 @@ function LibraryPanel({
 
 function DraggableLibraryMilestone({
   milestone,
+  isAssigned,
   assignedPhasesList,
   addingMilestoneId,
   setAddingMilestoneId,
   onQuickAdd,
 }: {
   milestone: { id: string; name: string; display_name: string; pair_position: 'start' | 'end' | null }
+  isAssigned: boolean
   assignedPhasesList: { id: string; display_name: string; color_key: string | null }[]
   addingMilestoneId: string | null
   setAddingMilestoneId: (id: string | null) => void
@@ -885,7 +891,11 @@ function DraggableLibraryMilestone({
   return (
     <div key={milestone.id} className="relative" ref={setNodeRef} style={style}>
       <div
-        className="flex items-center gap-1.5 px-2 py-1.5 mb-[2px] rounded border border-slate-200 bg-white text-[11.5px] font-medium text-slate-700 hover:shadow-sm transition-shadow"
+        className={`flex items-center gap-1.5 px-2 py-1.5 mb-[2px] rounded border text-[11.5px] font-medium hover:shadow-sm transition-shadow ${
+          isAssigned
+            ? 'border-blue-200 bg-blue-50/40 text-slate-500'
+            : 'border-slate-200 bg-white text-slate-700'
+        }`}
       >
         {/* Drag handle */}
         <div className="touch-none" {...attributes} {...listeners}>
@@ -902,9 +912,14 @@ function DraggableLibraryMilestone({
               setAddingMilestoneId(addingMilestoneId === milestone.id ? null : milestone.id)
             }
           }}
-          title={assignedPhasesList.length === 0 ? 'Add phases to the template first' : 'Click to add or drag into builder'}
+          title={isAssigned ? 'Add to another phase to create a shared boundary' : (assignedPhasesList.length === 0 ? 'Add phases to the template first' : 'Click to add or drag into builder')}
         >
           <span className="flex-1 truncate">{milestone.display_name}</span>
+          {isAssigned && (
+            <span className="text-[7.5px] font-bold px-[3px] py-[1px] rounded bg-blue-100 text-blue-500 flex-shrink-0">
+              IN USE
+            </span>
+          )}
           {milestone.pair_position && (
             <span className={`text-[7.5px] font-bold px-[3px] py-[1px] rounded uppercase ${
               milestone.pair_position === 'start'
