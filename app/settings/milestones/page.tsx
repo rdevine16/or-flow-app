@@ -18,6 +18,7 @@ import { ArchivedMilestonesSection } from '@/components/settings/milestones/Arch
 import { PhaseLibrary } from '@/components/settings/milestones/PhaseLibrary'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { TemplateBuilder } from '@/components/settings/milestones/TemplateBuilder'
+import { useTemplateBuilder } from '@/hooks/useTemplateBuilder'
 import { ProcedureTemplateAssignment } from '@/components/settings/milestones/ProcedureTemplateAssignment'
 import { SurgeonOverridePanel } from '@/components/settings/milestones/SurgeonOverridePanel'
 import {
@@ -153,11 +154,18 @@ function MilestonesSettingsContent() {
       {/* Tab content */}
       {activeTab === 'milestones' && <MilestonesTab />}
       {activeTab === 'phases' && <PhaseLibrary />}
-      {activeTab === 'templates' && <TemplateBuilder />}
+      {activeTab === 'templates' && <FacilityTemplateBuilderTab />}
       {activeTab === 'procedures' && <ProcedureTemplateAssignment />}
       {activeTab === 'surgeons' && <SurgeonOverridePanel />}
     </>
   )
+}
+
+// ─── Tab 3 wrapper: passes facility hook to TemplateBuilder ─
+
+function FacilityTemplateBuilderTab() {
+  const builder = useTemplateBuilder()
+  return <TemplateBuilder builder={builder} />
 }
 
 // ─── Tab 1: Milestones ──────────────────────────────────

@@ -22,7 +22,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { useTemplateBuilder } from '@/hooks/useTemplateBuilder'
+import type { UseTemplateBuilderReturn } from '@/hooks/useTemplateBuilder'
 import { buildTemplateRenderList, type RenderItem } from '@/lib/utils/buildTemplateRenderList'
 import { resolveColorKey } from '@/lib/milestone-phase-config'
 import { TemplateList } from './TemplateList'
@@ -69,8 +69,7 @@ interface ActiveDrag {
 
 // ─── Main Component ─────────────────────────────────────────
 
-export function TemplateBuilder() {
-  const builder = useTemplateBuilder()
+export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn }) {
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null)
 
   const sensors = useSensors(
@@ -251,10 +250,10 @@ function DragOverlayContent({ drag }: { drag: ActiveDrag }) {
 // ─── Builder Canvas ─────────────────────────────────────────
 
 interface BuilderCanvasProps {
-  template: ReturnType<typeof useTemplateBuilder>['selectedTemplate']
-  items: ReturnType<typeof useTemplateBuilder>['items']
-  phases: ReturnType<typeof useTemplateBuilder>['phases']
-  milestones: ReturnType<typeof useTemplateBuilder>['milestones']
+  template: UseTemplateBuilderReturn['selectedTemplate']
+  items: UseTemplateBuilderReturn['items']
+  phases: UseTemplateBuilderReturn['phases']
+  milestones: UseTemplateBuilderReturn['milestones']
   emptyPhaseIds: Set<string>
   itemsLoading: boolean
   saving: boolean
@@ -688,12 +687,12 @@ function PhaseHeader({
 // ─── Library Panel ──────────────────────────────────────────
 
 interface LibraryPanelProps {
-  availableMilestones: ReturnType<typeof useTemplateBuilder>['availableMilestones']
-  availablePhases: ReturnType<typeof useTemplateBuilder>['availablePhases']
+  availableMilestones: UseTemplateBuilderReturn['availableMilestones']
+  availablePhases: UseTemplateBuilderReturn['availablePhases']
   assignedPhaseIds: Set<string>
   selectedTemplateId: string | null
   onAddMilestone: (phaseId: string, milestoneId: string) => void
-  phases: ReturnType<typeof useTemplateBuilder>['phases']
+  phases: UseTemplateBuilderReturn['phases']
 }
 
 function LibraryPanel({
