@@ -1,7 +1,6 @@
 // components/settings/milestones/SurgeonOverridePanel.tsx
 // Tab 5: Surgeon template overrides.
-// Left panel: searchable surgeon list with override count badges.
-// Right panel: procedure list for selected surgeon with template pickers.
+// 3-column layout: surgeon list | procedure list | template detail + timeline.
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
@@ -13,7 +12,7 @@ import { TemplateTimelinePreview } from './TemplateTimelinePreview'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { ChevronDown, Check, LayoutTemplate, User, ArrowRight } from 'lucide-react'
+import { ChevronDown, Check, LayoutTemplate, User, FileText } from 'lucide-react'
 import type { MilestoneTemplate } from '@/hooks/useTemplateBuilder'
 import type { TemplateItemData, PhaseLookup, MilestoneLookup } from '@/lib/utils/buildTemplateRenderList'
 
@@ -49,7 +48,8 @@ export function SurgeonOverridePanel() {
   const [surgeonSearch, setSurgeonSearch] = useState('')
   const [procedureSearch, setProcedureSearch] = useState('')
   const [selectedSurgeonId, setSelectedSurgeonId] = useState<string | null>(null)
-  const [saving, setSaving] = useState<string | null>(null) // procedure_type_id being saved
+  const [selectedProcedureId, setSelectedProcedureId] = useState<string | null>(null)
+  const [saving, setSaving] = useState<string | null>(null)
 
   // ── Fetch surgeons ────────────────────────────────────
 
@@ -59,7 +59,6 @@ export function SurgeonOverridePanel() {
     error: surgeonsError,
   } = useSupabaseQuery<Surgeon[]>(
     async (sb) => {
-      // Get surgeon role ID
       const { data: role } = await sb
         .from('user_roles')
         .select('id')
@@ -116,7 +115,7 @@ export function SurgeonOverridePanel() {
     async (sb) => {
       const { data, error } = await sb
         .from('milestone_templates')
-        .select('id, facility_id, name, description, is_default, is_active, deleted_at, deleted_by')
+        .select('id, facility_id, name, description, is_default, is_active, deleted_at, deleted_by, block_order, sub_phase_map')
         .eq('facility_id', effectiveFacilityId!)
         .eq('is_active', true)
         .is('deleted_at', null)
@@ -128,7 +127,7 @@ export function SurgeonOverridePanel() {
     { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId },
   )
 
-  // ── Fetch all surgeon overrides for this facility ─────
+  // ── Fetch all surgeon overrides ───────────────────────
 
   const {
     data: overrides,
@@ -147,7 +146,7 @@ export function SurgeonOverridePanel() {
     { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId },
   )
 
-  // ── Fetch template items for chip previews ────────────
+  // ── Fetch template items ──────────────────────────────
 
   const {
     data: allTemplateItems,
@@ -163,7 +162,7 @@ export function SurgeonOverridePanel() {
     { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId },
   )
 
-  // ── Fetch milestones for chip labels ──────────────────
+  // ── Fetch milestones ──────────────────────────────────
 
   const {
     data: milestones,
@@ -182,7 +181,7 @@ export function SurgeonOverridePanel() {
     { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId },
   )
 
-  // ── Fetch phases for chip colors ──────────────────────
+  // ── Fetch phases ──────────────────────────────────────
 
   const {
     data: phases,
@@ -262,29 +261,37 @@ export function SurgeonOverridePanel() {
     )
   }, [procedures, procedureSearch])
 
-  // Auto-select first surgeon
+  // Reset procedure selection when surgeon changes
   useEffect(() => {
-    if (surgeons && surgeons.length > 0 && !selectedSurgeonId) {
-      setSelectedSurgeonId(surgeons[0].id)
-    }
-  }, [surgeons, selectedSurgeonId])
+    setSelectedProcedureId(null)
+    setProcedureSearch('')
+  }, [selectedSurgeonId])
 
   const selectedSurgeon = useMemo(
     () => (surgeons || []).find(s => s.id === selectedSurgeonId) ?? null,
     [surgeons, selectedSurgeonId],
   )
 
+  const selectedProcedure = useMemo(
+    () => (procedures || []).find(p => p.id === selectedProcedureId) ?? null,
+    [procedures, selectedProcedureId],
+  )
+
   // ── Override mutations ────────────────────────────────
 
-  const handleOverrideChange = useCallback(async (procedureTypeId: string, templateId: string | null) => {
+  const handleOverrideChange = useCallback(async (procedureTypeId: string, rawTemplateId: string | null) => {
     if (!selectedSurgeonId || !effectiveFacilityId) return
+
+    // If the selected template matches the procedure's inherited default, remove the override instead
+    const proc = (procedures || []).find(p => p.id === procedureTypeId)
+    const procDefaultId = proc?.milestone_template_id ?? defaultTemplate?.id ?? null
+    const templateId = (rawTemplateId !== null && rawTemplateId === procDefaultId) ? null : rawTemplateId
 
     setSaving(procedureTypeId)
     const existingOverride = overrideLookup.get(procedureTypeId)
 
     try {
       if (templateId === null) {
-        // Remove override → use procedure default
         if (existingOverride) {
           const { error } = await supabase
             .from('surgeon_template_overrides')
@@ -297,7 +304,6 @@ export function SurgeonOverridePanel() {
           showToast({ type: 'success', title: 'Override removed — using procedure default' })
         }
       } else if (existingOverride) {
-        // Update existing override
         const { error } = await supabase
           .from('surgeon_template_overrides')
           .update({ milestone_template_id: templateId })
@@ -311,7 +317,6 @@ export function SurgeonOverridePanel() {
         const name = (templates || []).find(t => t.id === templateId)?.name ?? 'Unknown'
         showToast({ type: 'success', title: `Override updated to "${name}"` })
       } else {
-        // Create new override
         const { data: inserted, error } = await supabase
           .from('surgeon_template_overrides')
           .insert({
@@ -334,7 +339,7 @@ export function SurgeonOverridePanel() {
     } finally {
       setSaving(null)
     }
-  }, [selectedSurgeonId, effectiveFacilityId, supabase, overrideLookup, overrides, setOverrides, templates, showToast])
+  }, [selectedSurgeonId, effectiveFacilityId, supabase, overrideLookup, overrides, setOverrides, templates, showToast, procedures, defaultTemplate])
 
   // ── Loading / Error ───────────────────────────────────
 
@@ -345,19 +350,15 @@ export function SurgeonOverridePanel() {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-[280px_1fr] gap-4">
-        <div className="space-y-2">
-          <Skeleton className="h-10 w-full rounded-md" />
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-md" />
-          ))}
-        </div>
-        <div className="space-y-2">
-          <Skeleton className="h-10 w-full rounded-md" />
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-md" />
-          ))}
-        </div>
+      <div className="grid grid-cols-[240px_260px_1fr] gap-4" style={{ height: 'calc(100vh - 220px)' }}>
+        {Array.from({ length: 3 }).map((_, col) => (
+          <div key={col} className="space-y-2">
+            <Skeleton className="h-10 w-full rounded-md" />
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full rounded-md" />
+            ))}
+          </div>
+        ))}
       </div>
     )
   }
@@ -376,9 +377,37 @@ export function SurgeonOverridePanel() {
     )
   }
 
+  // ── Compute selected procedure detail ─────────────────
+
+  const selectedOverride = selectedProcedureId ? overrideLookup.get(selectedProcedureId) : undefined
+  const hasOverride = !!selectedOverride
+
+  const effectiveTemplateId = selectedProcedure
+    ? (hasOverride
+        ? selectedOverride.milestone_template_id
+        : selectedProcedure.milestone_template_id ?? defaultTemplate?.id ?? null)
+    : null
+
+  const effectiveTemplate = effectiveTemplateId
+    ? (templates || []).find(t => t.id === effectiveTemplateId) ?? null
+    : null
+
+  const procedureTemplate = selectedProcedure
+    ? (selectedProcedure.milestone_template_id
+        ? (templates || []).find(t => t.id === selectedProcedure.milestone_template_id) ?? null
+        : defaultTemplate)
+    : null
+
+  const templateItems = effectiveTemplate
+    ? templateItemsMap.get(effectiveTemplate.id) || []
+    : []
+
   return (
-    <div className="grid grid-cols-[280px_1fr] gap-4 min-h-[500px]">
-      {/* Left panel: Surgeon list */}
+    <div
+      className="grid grid-cols-[240px_260px_1fr] gap-4"
+      style={{ height: 'calc(100vh - 220px)' }}
+    >
+      {/* Column 1: Surgeon list */}
       <div className="border border-slate-200 rounded-lg overflow-hidden flex flex-col">
         <div className="p-3 border-b border-slate-200 bg-slate-50">
           <SearchInput
@@ -402,7 +431,7 @@ export function SurgeonOverridePanel() {
               return (
                 <button
                   key={surgeon.id}
-                  onClick={() => { setSelectedSurgeonId(surgeon.id); setProcedureSearch('') }}
+                  onClick={() => setSelectedSurgeonId(surgeon.id)}
                   className={`
                     w-full flex items-center justify-between px-3 py-2.5 text-left border-b border-slate-100 last:border-b-0 transition-colors
                     ${isSelected
@@ -419,7 +448,7 @@ export function SurgeonOverridePanel() {
                   {overrideCount > 0 && (
                     <span className={`
                       ml-2 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold
-                      ${isSelected ? 'bg-blue-200 text-blue-800' : 'bg-slate-200 text-slate-600'}
+                      ${isSelected ? 'bg-blue-200 text-blue-800' : 'bg-amber-100 text-amber-700'}
                     `}>
                       {overrideCount}
                     </span>
@@ -435,123 +464,136 @@ export function SurgeonOverridePanel() {
         </div>
       </div>
 
-      {/* Right panel: Procedure list for selected surgeon */}
+      {/* Column 2: Procedure list for selected surgeon */}
       <div className="border border-slate-200 rounded-lg overflow-hidden flex flex-col">
         {selectedSurgeon ? (
           <>
-            {/* Header */}
-            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">
-                  {selectedSurgeon.first_name} {selectedSurgeon.last_name}
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {selectedSurgeonOverrides.length} override{selectedSurgeonOverrides.length !== 1 ? 's' : ''} configured
-                </p>
+            <div className="p-3 border-b border-slate-200 bg-slate-50">
+              <div className="text-xs font-medium text-slate-500 mb-1.5">
+                {selectedSurgeon.first_name} {selectedSurgeon.last_name}
               </div>
               <SearchInput
                 value={procedureSearch}
                 onChange={setProcedureSearch}
                 placeholder="Filter procedures..."
-                className="w-48"
+                className="w-full"
               />
             </div>
 
-            {/* Procedure list */}
             <div className="flex-1 overflow-y-auto">
-              {/* Table header */}
-              <div className="grid grid-cols-[1fr_80px_260px] gap-2 px-4 py-2 bg-white border-b border-slate-100 text-xs font-medium text-slate-500 uppercase tracking-wider sticky top-0">
-                <span>Procedure</span>
-                <span>Status</span>
-                <span>Template</span>
-              </div>
-
               {filteredProcedures.length === 0 ? (
-                <div className="px-4 py-8 text-center text-sm text-slate-400">
+                <div className="px-3 py-6 text-center text-sm text-slate-400">
                   {procedureSearch ? 'No procedures match your filter.' : 'No procedures found.'}
                 </div>
               ) : (
                 filteredProcedures.map(proc => {
-                  const override = overrideLookup.get(proc.id)
-                  const hasOverride = !!override
-                  const isSaving = saving === proc.id
-
-                  // Effective template: override → procedure assignment → facility default
-                  const effectiveTemplateId = hasOverride
-                    ? override.milestone_template_id
-                    : proc.milestone_template_id ?? defaultTemplate?.id ?? null
-
-                  const effectiveTemplate = effectiveTemplateId
-                    ? (templates || []).find(t => t.id === effectiveTemplateId) ?? null
-                    : null
-
-                  // Procedure-level template (for "Use procedure default" label)
-                  const procedureTemplate = proc.milestone_template_id
-                    ? (templates || []).find(t => t.id === proc.milestone_template_id) ?? null
-                    : defaultTemplate
-
-                  const templateItems = effectiveTemplate
-                    ? templateItemsMap.get(effectiveTemplate.id) || []
-                    : []
+                  const isSelected = selectedProcedureId === proc.id
+                  const procOverride = overrideLookup.get(proc.id)
 
                   return (
-                    <div
+                    <button
                       key={proc.id}
-                      className={`px-4 py-3 border-b border-slate-100 last:border-b-0 ${hasOverride ? 'bg-amber-50/30' : ''}`}
+                      onClick={() => setSelectedProcedureId(proc.id)}
+                      className={`
+                        w-full flex items-center justify-between px-3 py-2.5 text-left border-b border-slate-100 last:border-b-0 transition-colors
+                        ${isSelected
+                          ? 'bg-blue-50 border-l-2 border-l-blue-500'
+                          : 'hover:bg-slate-50 border-l-2 border-l-transparent'
+                        }
+                      `}
                     >
-                      {/* Main row */}
-                      <div className="grid grid-cols-[1fr_80px_260px] gap-2 items-center">
-                        {/* Procedure name */}
-                        <div className="min-w-0">
-                          <span className="text-sm font-medium text-slate-900 truncate block">
-                            {proc.name}
-                          </span>
-                        </div>
-
-                        {/* Status badge */}
-                        <div>
-                          {hasOverride ? (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">
-                              Override
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500">
-                              Inherited
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Template picker */}
-                        <SurgeonTemplatePicker
-                          templates={templates || []}
-                          value={hasOverride ? override.milestone_template_id : null}
-                          procedureTemplate={procedureTemplate}
-                          saving={isSaving}
-                          onChange={(templateId) => handleOverrideChange(proc.id, templateId)}
-                        />
-                      </div>
-
-                      {/* Timeline preview */}
-                      {effectiveTemplate && templateItems.length > 0 && (
-                        <div className={`mt-2 ${!hasOverride ? 'opacity-60' : ''}`}>
-                          <TemplateTimelinePreview
-                            items={templateItems}
-                            phases={phases || []}
-                            milestones={milestones || []}
-                          />
-                        </div>
+                      <span className={`text-sm font-medium truncate ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>
+                        {proc.name}
+                      </span>
+                      {procOverride && (
+                        <span className="ml-1.5 flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-700">
+                          Override
+                        </span>
                       )}
-                    </div>
+                    </button>
                   )
                 })
+              )}
+            </div>
+
+            <div className="px-3 py-2 border-t border-slate-200 bg-slate-50 text-xs text-slate-400">
+              {selectedSurgeonOverrides.length} override{selectedSurgeonOverrides.length !== 1 ? 's' : ''}
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center px-4">
+              <User className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-400">Select a surgeon</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Column 3: Template detail */}
+      <div className="border border-slate-200 rounded-lg overflow-hidden flex flex-col">
+        {selectedSurgeon && selectedProcedure ? (
+          <>
+            {/* Header with inline template picker */}
+            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-slate-900 truncate">
+                    {selectedSurgeon.last_name}, {selectedSurgeon.first_name}
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5 truncate">{selectedProcedure.name}</p>
+                </div>
+                {hasOverride ? (
+                  <span className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">
+                    Override
+                  </span>
+                ) : (
+                  <span className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500">
+                    Inherited
+                  </span>
+                )}
+              </div>
+              <SurgeonTemplatePicker
+                templates={templates || []}
+                value={hasOverride ? selectedOverride.milestone_template_id : null}
+                procedureTemplate={procedureTemplate}
+                saving={saving === selectedProcedure.id}
+                onChange={(templateId) => handleOverrideChange(selectedProcedure.id, templateId)}
+              />
+            </div>
+
+            {/* Timeline preview */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {effectiveTemplate && templateItems.length > 0 ? (
+                <div className={!hasOverride ? 'opacity-60' : ''}>
+                  <TemplateTimelinePreview
+                    items={templateItems}
+                    phases={phases || []}
+                    milestones={milestones || []}
+                    subPhaseMap={effectiveTemplate.sub_phase_map}
+                    blockOrder={effectiveTemplate.block_order}
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <LayoutTemplate className="w-8 h-8 text-slate-300 mb-2" />
+                  <p className="text-sm text-slate-400">No template assigned</p>
+                </div>
               )}
             </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <ArrowRight className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-              <p className="text-sm text-slate-400">Select a surgeon to view procedure overrides</p>
+              <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm font-medium text-slate-500">
+                {selectedSurgeon ? 'Select a procedure' : 'Select a surgeon and procedure'}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                {selectedSurgeon
+                  ? 'Choose from the procedure list to view its template'
+                  : 'Choose from the lists on the left'}
+              </p>
             </div>
           </div>
         )}
@@ -564,7 +606,7 @@ export function SurgeonOverridePanel() {
 
 interface SurgeonTemplatePickerProps {
   templates: MilestoneTemplate[]
-  value: string | null // null = no override (use procedure default)
+  value: string | null
   procedureTemplate: MilestoneTemplate | null
   saving: boolean
   onChange: (templateId: string | null) => void
@@ -587,10 +629,10 @@ function SurgeonTemplatePicker({ templates, value, procedureTemplate, saving, on
         onClick={() => setOpen(!open)}
         disabled={saving}
         className={`
-          w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-md border text-sm text-left transition-colors
+          w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md border text-sm text-left transition-colors
           ${hasOverride
             ? 'border-amber-200 bg-amber-50/50 text-slate-900'
-            : 'border-slate-200 bg-slate-50 text-slate-500'
+            : 'border-slate-200 bg-slate-50 text-slate-700'
           }
           ${saving ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-300 cursor-pointer'}
         `}
@@ -604,11 +646,8 @@ function SurgeonTemplatePicker({ templates, value, procedureTemplate, saving, on
 
       {open && (
         <>
-          {/* Backdrop */}
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-
-          {/* Dropdown */}
-          <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-64 overflow-y-auto">
+          <div className="absolute left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-64 overflow-y-auto">
             {/* Use procedure default */}
             <button
               onClick={() => { onChange(null); setOpen(false) }}
@@ -625,7 +664,6 @@ function SurgeonTemplatePicker({ templates, value, procedureTemplate, saving, on
               )}
             </button>
 
-            {/* Template options */}
             {templates.map(t => (
               <button
                 key={t.id}
@@ -655,4 +693,3 @@ function SurgeonTemplatePicker({ templates, value, procedureTemplate, saving, on
     </div>
   )
 }
-

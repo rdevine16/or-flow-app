@@ -1,7 +1,6 @@
 // components/settings/milestones/ProcedureTemplateAssignment.tsx
 // Tab 4: Procedure → Template assignment.
-// Searchable procedure list with template picker per procedure.
-// Shows full visual timeline preview when a template is selected.
+// 2-column layout: searchable procedure list (left) + template picker + timeline preview (right).
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
@@ -13,7 +12,7 @@ import { TemplateTimelinePreview } from './TemplateTimelinePreview'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { ChevronDown, Check, LayoutTemplate } from 'lucide-react'
+import { ChevronDown, Check, LayoutTemplate, FileText } from 'lucide-react'
 import type { MilestoneTemplate } from '@/hooks/useTemplateBuilder'
 import type { TemplateItemData, PhaseLookup, MilestoneLookup } from '@/lib/utils/buildTemplateRenderList'
 
@@ -33,7 +32,8 @@ export function ProcedureTemplateAssignment() {
   const { effectiveFacilityId, loading: userLoading } = useUser()
   const { showToast } = useToast()
   const [search, setSearch] = useState('')
-  const [saving, setSaving] = useState<string | null>(null) // procedure id being saved
+  const [selectedProcedureId, setSelectedProcedureId] = useState<string | null>(null)
+  const [saving, setSaving] = useState<string | null>(null)
 
   // ── Fetch procedures ──────────────────────────────────
 
@@ -71,7 +71,7 @@ export function ProcedureTemplateAssignment() {
     async (sb) => {
       const { data, error } = await sb
         .from('milestone_templates')
-        .select('id, facility_id, name, description, is_default, is_active, deleted_at, deleted_by')
+        .select('id, facility_id, name, description, is_default, is_active, deleted_at, deleted_by, block_order, sub_phase_map')
         .eq('facility_id', effectiveFacilityId!)
         .eq('is_active', true)
         .is('deleted_at', null)
@@ -83,7 +83,7 @@ export function ProcedureTemplateAssignment() {
     { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId },
   )
 
-  // ── Fetch template items for chip previews ────────────
+  // ── Fetch template items ──────────────────────────────
 
   const {
     data: allTemplateItems,
@@ -99,7 +99,7 @@ export function ProcedureTemplateAssignment() {
     { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId },
   )
 
-  // ── Fetch milestones for chip labels ──────────────────
+  // ── Fetch milestones ──────────────────────────────────
 
   const {
     data: milestones,
@@ -118,7 +118,7 @@ export function ProcedureTemplateAssignment() {
     { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId },
   )
 
-  // ── Fetch phases for chip colors ──────────────────────
+  // ── Fetch phases ──────────────────────────────────────
 
   const {
     data: phases,
@@ -144,7 +144,6 @@ export function ProcedureTemplateAssignment() {
     [templates],
   )
 
-  // Group template items by template_id for quick lookup
   const templateItemsMap = useMemo(() => {
     const map = new Map<string, TemplateItemData[]>()
     for (const item of allTemplateItems || []) {
@@ -155,7 +154,15 @@ export function ProcedureTemplateAssignment() {
     return map
   }, [allTemplateItems])
 
-  // Filtered procedures
+  // Template name lookup
+  const templateNameMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const t of templates || []) {
+      map.set(t.id, t.name)
+    }
+    return map
+  }, [templates])
+
   const filteredProcedures = useMemo(() => {
     if (!search.trim()) return procedures || []
     const q = search.toLowerCase()
@@ -164,6 +171,11 @@ export function ProcedureTemplateAssignment() {
       (p.category_name && p.category_name.toLowerCase().includes(q))
     )
   }, [procedures, search])
+
+  const selectedProcedure = useMemo(
+    () => (procedures || []).find(p => p.id === selectedProcedureId) ?? null,
+    [procedures, selectedProcedureId],
+  )
 
   // ── Assign template to procedure ──────────────────────
 
@@ -192,7 +204,7 @@ export function ProcedureTemplateAssignment() {
     }
   }, [supabase, procedures, setProcedures, templates, showToast])
 
-  // ── Helper: get effective template for a procedure ────
+  // ── Helper: get effective template ────────────────────
 
   const getEffectiveTemplate = useCallback((proc: ProcedureWithTemplate) => {
     if (proc.milestone_template_id) {
@@ -210,105 +222,160 @@ export function ProcedureTemplateAssignment() {
 
   if (loading) {
     return (
-      <div className="space-y-2">
-        <Skeleton className="h-10 w-64 rounded-md mb-4" />
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 w-full rounded-md" />
-        ))}
+      <div className="grid grid-cols-[300px_1fr] gap-4" style={{ height: 'calc(100vh - 220px)' }}>
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full rounded-md" />
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full rounded-md" />
+          ))}
+        </div>
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full rounded-md" />
+          <Skeleton className="h-64 w-full rounded-md" />
+        </div>
       </div>
     )
   }
 
-  return (
-    <>
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search procedures..."
-          className="flex-1 max-w-sm"
-        />
-        <span className="text-xs text-slate-400">
-          {filteredProcedures.length} procedure{filteredProcedures.length !== 1 ? 's' : ''}
-        </span>
-      </div>
+  // ── Render: selected procedure detail ─────────────────
 
-      {/* Procedure table */}
-      <div className="border border-slate-200 rounded-lg overflow-hidden">
-        {/* Table header */}
-        <div className="grid grid-cols-[1fr_100px_280px] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-medium text-slate-500 uppercase tracking-wider">
-          <span>Procedure</span>
-          <span>Category</span>
-          <span>Milestone Template</span>
+  const effectiveTemplate = selectedProcedure ? getEffectiveTemplate(selectedProcedure) : null
+  const isExplicit = !!selectedProcedure?.milestone_template_id
+  const templateItems = effectiveTemplate
+    ? templateItemsMap.get(effectiveTemplate.id) || []
+    : []
+
+  return (
+    <div
+      className="grid grid-cols-[300px_1fr] gap-4"
+      style={{ height: 'calc(100vh - 220px)' }}
+    >
+      {/* Left column: Procedure list */}
+      <div className="border border-slate-200 rounded-lg overflow-hidden flex flex-col">
+        <div className="p-3 border-b border-slate-200 bg-slate-50">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search procedures..."
+            className="w-full"
+          />
         </div>
 
-        {/* Rows */}
-        {filteredProcedures.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-slate-400">
-            {search ? 'No procedures match your search.' : 'No procedures configured yet.'}
-          </div>
-        ) : (
-          filteredProcedures.map(proc => {
-            const effectiveTemplate = getEffectiveTemplate(proc)
-            const isExplicit = !!proc.milestone_template_id
-            const isSaving = saving === proc.id
-            const templateItems = effectiveTemplate
-              ? templateItemsMap.get(effectiveTemplate.id) || []
-              : []
+        <div className="flex-1 overflow-y-auto">
+          {filteredProcedures.length === 0 ? (
+            <div className="px-3 py-6 text-center text-sm text-slate-400">
+              {search ? 'No procedures match your search.' : 'No procedures configured yet.'}
+            </div>
+          ) : (
+            filteredProcedures.map(proc => {
+              const isSelected = selectedProcedureId === proc.id
+              const assignedTemplateName = proc.milestone_template_id
+                ? templateNameMap.get(proc.milestone_template_id)
+                : null
 
-            return (
-              <div
-                key={proc.id}
-                className="px-4 py-3 border-b border-slate-100 last:border-b-0"
-              >
-                {/* Main row */}
-                <div className="grid grid-cols-[1fr_100px_280px] gap-2 items-center">
-                  {/* Procedure name */}
-                  <div className="min-w-0">
-                    <span className="text-sm font-medium text-slate-900 truncate block">
+              return (
+                <button
+                  key={proc.id}
+                  onClick={() => setSelectedProcedureId(proc.id)}
+                  className={`
+                    w-full flex items-center justify-between px-3 py-2.5 text-left border-b border-slate-100 last:border-b-0 transition-colors
+                    ${isSelected
+                      ? 'bg-blue-50 border-l-2 border-l-blue-500'
+                      : 'hover:bg-slate-50 border-l-2 border-l-transparent'
+                    }
+                  `}
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className={`text-sm font-medium truncate block ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>
                       {proc.name}
                     </span>
+                    {/* Template name badge */}
+                    <span className="text-[10px] text-slate-400 truncate block mt-0.5">
+                      {assignedTemplateName ?? (defaultTemplate ? `${defaultTemplate.name} (default)` : 'No template')}
+                    </span>
                   </div>
+                  {assignedTemplateName && (
+                    <span className="ml-2 flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-50 text-blue-600 border border-blue-100">
+                      <LayoutTemplate className="w-2.5 h-2.5 mr-0.5" />
+                      {assignedTemplateName.length > 12
+                        ? assignedTemplateName.slice(0, 12) + '...'
+                        : assignedTemplateName}
+                    </span>
+                  )}
+                </button>
+              )
+            })
+          )}
+        </div>
 
-                  {/* Category */}
-                  <div className="text-xs text-slate-500 truncate">
-                    {proc.category_name || <span className="text-slate-300">&mdash;</span>}
-                  </div>
+        <div className="px-3 py-2 border-t border-slate-200 bg-slate-50 text-xs text-slate-400 flex items-center justify-between">
+          <span>{filteredProcedures.length} procedure{filteredProcedures.length !== 1 ? 's' : ''}</span>
+          <span>
+            {(procedures || []).filter(p => p.milestone_template_id).length} assigned
+          </span>
+        </div>
+      </div>
 
-                  {/* Template picker */}
-                  <TemplatePicker
-                    templates={templates || []}
-                    value={proc.milestone_template_id}
-                    defaultTemplate={defaultTemplate}
-                    saving={isSaving}
-                    onChange={(templateId) => handleAssign(proc.id, templateId)}
+      {/* Right column: Template detail */}
+      <div className="border border-slate-200 rounded-lg overflow-hidden flex flex-col">
+        {selectedProcedure ? (
+          <>
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+              <h3 className="text-sm font-semibold text-slate-900">
+                {selectedProcedure.name}
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {isExplicit ? 'Explicit template assignment' : 'Using facility default'}
+              </p>
+            </div>
+
+            {/* Template picker */}
+            <div className="px-4 py-3 border-b border-slate-100">
+              <label className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5 block">
+                Milestone Template
+              </label>
+              <TemplatePicker
+                templates={templates || []}
+                value={selectedProcedure.milestone_template_id}
+                defaultTemplate={defaultTemplate}
+                saving={saving === selectedProcedure.id}
+                onChange={(templateId) => handleAssign(selectedProcedure.id, templateId)}
+              />
+            </div>
+
+            {/* Timeline preview */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {effectiveTemplate && templateItems.length > 0 ? (
+                <div className={!isExplicit ? 'opacity-60' : ''}>
+                  <TemplateTimelinePreview
+                    items={templateItems}
+                    phases={phases || []}
+                    milestones={milestones || []}
+                    subPhaseMap={effectiveTemplate.sub_phase_map}
+                    blockOrder={effectiveTemplate.block_order}
                   />
                 </div>
-
-                {/* Timeline preview */}
-                {effectiveTemplate && templateItems.length > 0 && (
-                  <div className={`mt-2 ${!isExplicit ? 'opacity-60' : ''}`}>
-                    <TemplateTimelinePreview
-                      items={templateItems}
-                      phases={phases || []}
-                      milestones={milestones || []}
-                    />
-                  </div>
-                )}
-              </div>
-            )
-          })
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <LayoutTemplate className="w-8 h-8 text-slate-300 mb-2" />
+                  <p className="text-sm text-slate-400">No template assigned</p>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* Empty state */
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm font-medium text-slate-500">Select a procedure to view its template</p>
+              <p className="text-xs text-slate-400 mt-1">Choose from the list on the left</p>
+            </div>
+          </div>
         )}
       </div>
-
-      {/* Summary */}
-      <div className="mt-3 px-3.5 py-2 bg-white rounded-md border border-slate-100 text-xs text-slate-400 flex items-center justify-between">
-        <span>
-          {(procedures || []).filter(p => p.milestone_template_id).length} of {(procedures || []).length} procedures have explicit template assignments
-        </span>
-      </div>
-    </>
+    </div>
   )
 }
 
@@ -339,7 +406,7 @@ function TemplatePicker({ templates, value, defaultTemplate, saving, onChange }:
         onClick={() => setOpen(!open)}
         disabled={saving}
         className={`
-          w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-md border text-sm text-left transition-colors
+          w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md border text-sm text-left transition-colors
           ${isInherited
             ? 'border-slate-200 bg-slate-50 text-slate-500'
             : 'border-blue-200 bg-blue-50/50 text-slate-900'
@@ -356,11 +423,8 @@ function TemplatePicker({ templates, value, defaultTemplate, saving, onChange }:
 
       {open && (
         <>
-          {/* Backdrop */}
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-
-          {/* Dropdown */}
-          <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-64 overflow-y-auto">
+          <div className="absolute left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-64 overflow-y-auto">
             {/* Use facility default option */}
             <button
               onClick={() => { onChange(null); setOpen(false) }}
@@ -377,7 +441,6 @@ function TemplatePicker({ templates, value, defaultTemplate, saving, onChange }:
               )}
             </button>
 
-            {/* Template options */}
             {templates.map(t => (
               <button
                 key={t.id}
@@ -407,4 +470,3 @@ function TemplatePicker({ templates, value, defaultTemplate, saving, onChange }:
     </div>
   )
 }
-

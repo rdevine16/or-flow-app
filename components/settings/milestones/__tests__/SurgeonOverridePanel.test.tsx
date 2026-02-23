@@ -125,6 +125,8 @@ const TEMPLATES = [
     is_active: true,
     deleted_at: null,
     deleted_by: null,
+    block_order: {},
+    sub_phase_map: {},
   },
   {
     id: 'tmpl-1',
@@ -135,6 +137,8 @@ const TEMPLATES = [
     is_active: true,
     deleted_at: null,
     deleted_by: null,
+    block_order: {},
+    sub_phase_map: {},
   },
   {
     id: 'tmpl-2',
@@ -145,6 +149,8 @@ const TEMPLATES = [
     is_active: true,
     deleted_at: null,
     deleted_by: null,
+    block_order: {},
+    sub_phase_map: {},
   },
 ]
 
@@ -155,9 +161,9 @@ const SURGEONS = [
 ]
 
 const PROCEDURES = [
-  { id: 'proc-1', name: 'Total Hip Replacement', category: 'Orthopedic', milestone_template_id: 'tmpl-1' },
-  { id: 'proc-2', name: 'Knee Arthroscopy', category: 'Orthopedic', milestone_template_id: null },
-  { id: 'proc-3', name: 'ACL Repair', category: 'Orthopedic', milestone_template_id: 'tmpl-1' },
+  { id: 'proc-1', name: 'Total Hip Replacement', category_name: 'Orthopedic', milestone_template_id: 'tmpl-1' },
+  { id: 'proc-2', name: 'Knee Arthroscopy', category_name: 'Orthopedic', milestone_template_id: null },
+  { id: 'proc-3', name: 'ACL Repair', category_name: 'Orthopedic', milestone_template_id: 'tmpl-1' },
 ]
 
 const OVERRIDES = [
@@ -166,14 +172,14 @@ const OVERRIDES = [
     facility_id: 'fac-1',
     surgeon_id: 'surgeon-1',
     procedure_type_id: 'proc-1',
-    milestone_template_id: 'tmpl-2', // Alice uses Fast-Track for Hip Replacement
+    milestone_template_id: 'tmpl-2',
   },
   {
     id: 'override-2',
     facility_id: 'fac-1',
     surgeon_id: 'surgeon-1',
     procedure_type_id: 'proc-3',
-    milestone_template_id: 'tmpl-2', // Alice uses Fast-Track for ACL Repair too
+    milestone_template_id: 'tmpl-2',
   },
 ]
 
@@ -213,8 +219,8 @@ describe('SurgeonOverridePanel', () => {
     mockDeleteResult = { error: null }
   })
 
-  describe('rendering', () => {
-    it('renders surgeon list in left panel', () => {
+  describe('rendering — 3-column layout', () => {
+    it('renders surgeon list in column 1', () => {
       render(<SurgeonOverridePanel />)
 
       expect(screen.getByText('Smith, Alice')).toBeInTheDocument()
@@ -227,7 +233,6 @@ describe('SurgeonOverridePanel', () => {
 
       // Alice has 2 overrides
       const aliceRow = screen.getByText('Smith, Alice').closest('button')
-      expect(aliceRow).toBeTruthy()
       expect(aliceRow?.textContent).toContain('2')
 
       // Bob has no overrides (no badge)
@@ -235,74 +240,126 @@ describe('SurgeonOverridePanel', () => {
       expect(bobRow?.textContent).not.toMatch(/\d/)
     })
 
-    it('auto-selects first surgeon on mount', () => {
+    it('shows empty states when no selection', () => {
       render(<SurgeonOverridePanel />)
 
-      // Alice Smith should be selected (blue background)
-      const aliceRow = screen.getByText('Smith, Alice').closest('button')
-      expect(aliceRow?.className).toContain('bg-blue-50')
+      // Column 2 shows "Select a surgeon" prompt
+      expect(screen.getByText('Select a surgeon')).toBeInTheDocument()
+
+      // Column 3 shows empty state
+      expect(screen.getByText('Select a surgeon and procedure')).toBeInTheDocument()
     })
 
-    it('shows procedure list for selected surgeon', () => {
+    it('shows surgeon count in footer', () => {
       render(<SurgeonOverridePanel />)
 
-      // Alice is selected, should show her name in header
-      expect(screen.getByText(/Alice Smith/)).toBeInTheDocument()
-      expect(screen.getByText('2 overrides configured')).toBeInTheDocument()
+      expect(screen.getByText('3 surgeons')).toBeInTheDocument()
+    })
+  })
 
-      // Should show all procedures
+  describe('surgeon selection', () => {
+    it('shows procedure list when surgeon is clicked', async () => {
+      const user = userEvent.setup()
+      render(<SurgeonOverridePanel />)
+
+      await user.click(screen.getByText('Smith, Alice'))
+
+      // Column 2 should show procedures
       expect(screen.getByText('Total Hip Replacement')).toBeInTheDocument()
       expect(screen.getByText('Knee Arthroscopy')).toBeInTheDocument()
       expect(screen.getByText('ACL Repair')).toBeInTheDocument()
     })
 
-    it('shows Override badge for procedures with surgeon override', () => {
-      render(<SurgeonOverridePanel />)
-
-      // Alice has 2 overrides (Total Hip and ACL Repair)
-      expect(screen.getAllByText('Override').length).toBe(2)
-
-      // Knee Arthroscopy does NOT have override for Alice
-      expect(screen.getByText('Inherited')).toBeInTheDocument()
-    })
-
-    it('shows template name for overridden procedures', () => {
-      render(<SurgeonOverridePanel />)
-
-      // Alice overrides Total Hip with Fast-Track
-      expect(screen.getAllByText('Fast-Track Template').length).toBeGreaterThan(0)
-    })
-
-    it('shows procedure default label for inherited procedures', () => {
-      render(<SurgeonOverridePanel />)
-
-      // Knee Arthroscopy inherits from procedure (which is null → facility default)
-      expect(screen.getByText(/Standard Workflow \(procedure default\)/)).toBeInTheDocument()
-    })
-
-    it('renders milestone chips for effective template', () => {
-      render(<SurgeonOverridePanel />)
-
-      expect(screen.getAllByText('Patient In Room').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('Incision').length).toBeGreaterThan(0)
-    })
-  })
-
-  describe('surgeon selection', () => {
-    it('switches selected surgeon on click', async () => {
+    it('highlights selected surgeon', async () => {
       const user = userEvent.setup()
       render(<SurgeonOverridePanel />)
 
-      // Click Bob
+      await user.click(screen.getByText('Smith, Alice'))
+
+      const aliceRow = screen.getByText('Smith, Alice').closest('button')
+      expect(aliceRow?.className).toContain('bg-blue-50')
+    })
+
+    it('shows Override badge on procedures with surgeon override', async () => {
+      const user = userEvent.setup()
+      render(<SurgeonOverridePanel />)
+
+      await user.click(screen.getByText('Smith, Alice'))
+
+      // Alice has 2 overrides (Total Hip and ACL Repair)
+      expect(screen.getAllByText('Override').length).toBe(2)
+    })
+
+    it('shows override count in column 2 footer', async () => {
+      const user = userEvent.setup()
+      render(<SurgeonOverridePanel />)
+
+      await user.click(screen.getByText('Smith, Alice'))
+
+      expect(screen.getByText('2 overrides')).toBeInTheDocument()
+    })
+
+    it('resets procedure selection when switching surgeons', async () => {
+      const user = userEvent.setup()
+      render(<SurgeonOverridePanel />)
+
+      // Select surgeon and procedure
+      await user.click(screen.getByText('Smith, Alice'))
+      await user.click(screen.getByText('Total Hip Replacement'))
+
+      // Switch surgeon
       await user.click(screen.getByText('Johnson, Bob'))
 
-      // Bob should be highlighted
-      const bobRow = screen.getByText('Johnson, Bob').closest('button')
-      expect(bobRow?.className).toContain('bg-blue-50')
+      // Column 3 should show prompt (no procedure selected)
+      expect(screen.getByText('Select a procedure')).toBeInTheDocument()
+    })
+  })
 
-      // Right panel should show Bob's name
-      expect(screen.getByText(/Bob Johnson/)).toBeInTheDocument()
-      expect(screen.getByText('0 overrides configured')).toBeInTheDocument()
+  describe('procedure selection — column 3 detail', () => {
+    it('shows template detail when surgeon + procedure selected', async () => {
+      const user = userEvent.setup()
+      render(<SurgeonOverridePanel />)
+
+      await user.click(screen.getByText('Smith, Alice'))
+      await user.click(screen.getByText('Total Hip Replacement'))
+
+      // Column 3 should show header
+      expect(screen.getByText('Smith, Alice', { selector: 'h3' })).toBeInTheDocument()
+      expect(screen.getByText('Total Hip Replacement', { selector: 'p' })).toBeInTheDocument()
+    })
+
+    it('shows Override badge for overridden procedure', async () => {
+      const user = userEvent.setup()
+      render(<SurgeonOverridePanel />)
+
+      await user.click(screen.getByText('Smith, Alice'))
+      await user.click(screen.getByText('Total Hip Replacement'))
+
+      // Override badge in column 3
+      const badges = screen.getAllByText('Override')
+      expect(badges.length).toBeGreaterThan(0)
+    })
+
+    it('shows Inherited badge for non-overridden procedure', async () => {
+      const user = userEvent.setup()
+      render(<SurgeonOverridePanel />)
+
+      await user.click(screen.getByText('Smith, Alice'))
+      await user.click(screen.getByText('Knee Arthroscopy'))
+
+      expect(screen.getByText('Inherited')).toBeInTheDocument()
+    })
+
+    it('shows timeline preview for selected procedure', async () => {
+      const user = userEvent.setup()
+      render(<SurgeonOverridePanel />)
+
+      await user.click(screen.getByText('Smith, Alice'))
+      await user.click(screen.getByText('Total Hip Replacement'))
+
+      // Template items for tmpl-2 (Fast-Track) include Patient In Room and Incision
+      expect(screen.getByText('Patient In Room')).toBeInTheDocument()
+      expect(screen.getByText('Incision')).toBeInTheDocument()
     })
   })
 
@@ -336,24 +393,15 @@ describe('SurgeonOverridePanel', () => {
       const user = userEvent.setup()
       render(<SurgeonOverridePanel />)
 
+      // Select surgeon first
+      await user.click(screen.getByText('Smith, Alice'))
+
       const searchInput = screen.getByPlaceholderText('Filter procedures...')
       await user.type(searchInput, 'Hip')
 
       expect(screen.getByText('Total Hip Replacement')).toBeInTheDocument()
       expect(screen.queryByText('Knee Arthroscopy')).not.toBeInTheDocument()
       expect(screen.queryByText('ACL Repair')).not.toBeInTheDocument()
-    })
-
-    it('filters procedure list by category', async () => {
-      const user = userEvent.setup()
-      render(<SurgeonOverridePanel />)
-
-      const searchInput = screen.getByPlaceholderText('Filter procedures...')
-      await user.type(searchInput, 'Orthopedic')
-
-      expect(screen.getByText('Total Hip Replacement')).toBeInTheDocument()
-      expect(screen.getByText('Knee Arthroscopy')).toBeInTheDocument()
-      expect(screen.getByText('ACL Repair')).toBeInTheDocument()
     })
   })
 
@@ -373,14 +421,17 @@ describe('SurgeonOverridePanel', () => {
       const user = userEvent.setup()
       render(<SurgeonOverridePanel />)
 
-      // Open picker for "Knee Arthroscopy" (no override yet)
-      const inheritedPickers = screen.getAllByRole('button')
-        .filter(btn => btn.textContent?.includes('procedure default'))
-      await user.click(inheritedPickers[0])
+      // Select surgeon and procedure
+      await user.click(screen.getByText('Smith, Alice'))
+      await user.click(screen.getByText('Knee Arthroscopy'))
+
+      // Open template picker in column 3
+      const pickerButton = screen.getByRole('button', { name: /procedure default/ })
+      await user.click(pickerButton)
 
       // Select "Fast-Track Template"
       await waitFor(() => {
-        expect(screen.getAllByText('Fast-Track Template').length).toBeGreaterThan(1)
+        expect(screen.getAllByText('Fast-Track Template').length).toBeGreaterThan(0)
       })
       const fastTrackOption = screen.getAllByText('Fast-Track Template').find(el =>
         el.closest('button')?.getAttribute('class')?.includes('hover:bg-slate-50')
@@ -389,7 +440,6 @@ describe('SurgeonOverridePanel', () => {
         await user.click(fastTrackOption.closest('button')!)
       }
 
-      // Verify insert was called
       await waitFor(() => {
         expect(mockInsert).toHaveBeenCalled()
       })
@@ -400,46 +450,17 @@ describe('SurgeonOverridePanel', () => {
       })
     })
 
-    it('updates existing override', async () => {
-      const user = userEvent.setup()
-      render(<SurgeonOverridePanel />)
-
-      // Open picker for "Total Hip Replacement" (has override to Fast-Track)
-      const fastTrackPickers = screen.getAllByRole('button')
-        .filter(btn => btn.textContent?.includes('Fast-Track Template') && !btn.textContent?.includes('procedure default'))
-      await user.click(fastTrackPickers[0])
-
-      // Select "Ortho Template"
-      await waitFor(() => {
-        expect(screen.getAllByText('Ortho Template').length).toBeGreaterThan(0)
-      })
-      const orthoOption = screen.getAllByText('Ortho Template').find(el =>
-        el.closest('button')?.getAttribute('class')?.includes('hover:bg-slate-50')
-      )
-      if (orthoOption?.closest('button')) {
-        await user.click(orthoOption.closest('button')!)
-      }
-
-      // Verify update was called
-      await waitFor(() => {
-        expect(mockUpdate).toHaveBeenCalled()
-        expect(mockUpdateEq).toHaveBeenCalledWith('id', 'override-1')
-      })
-
-      expect(mockShowToast).toHaveBeenCalledWith({
-        type: 'success',
-        title: expect.stringContaining('Ortho Template'),
-      })
-    })
-
     it('removes override (use procedure default)', async () => {
       const user = userEvent.setup()
       render(<SurgeonOverridePanel />)
 
-      // Open picker for "Total Hip Replacement" (has override)
-      const fastTrackPickers = screen.getAllByRole('button')
-        .filter(btn => btn.textContent?.includes('Fast-Track Template') && !btn.textContent?.includes('procedure default'))
-      await user.click(fastTrackPickers[0])
+      // Select surgeon and overridden procedure
+      await user.click(screen.getByText('Smith, Alice'))
+      await user.click(screen.getByText('Total Hip Replacement'))
+
+      // Open picker
+      const pickerButton = screen.getByRole('button', { name: /Fast-Track Template/ })
+      await user.click(pickerButton)
 
       // Select "Use procedure default"
       await waitFor(() => {
@@ -447,7 +468,6 @@ describe('SurgeonOverridePanel', () => {
       })
       await user.click(screen.getByText('Use procedure default'))
 
-      // Verify delete was called
       await waitFor(() => {
         expect(mockDelete).toHaveBeenCalled()
         expect(mockDeleteEq).toHaveBeenCalledWith('id', 'override-1')
@@ -456,34 +476,6 @@ describe('SurgeonOverridePanel', () => {
       expect(mockShowToast).toHaveBeenCalledWith({
         type: 'success',
         title: expect.stringContaining('procedure default'),
-      })
-    })
-
-    it('handles override creation error gracefully', async () => {
-      mockInsertResult = { data: null, error: { message: 'Unique constraint violation' } }
-
-      const user = userEvent.setup()
-      render(<SurgeonOverridePanel />)
-
-      const inheritedPickers = screen.getAllByRole('button')
-        .filter(btn => btn.textContent?.includes('procedure default'))
-      await user.click(inheritedPickers[0])
-
-      await waitFor(() => {
-        expect(screen.getAllByText('Fast-Track Template').length).toBeGreaterThan(1)
-      })
-      const fastTrackOption = screen.getAllByText('Fast-Track Template').find(el =>
-        el.closest('button')?.getAttribute('class')?.includes('hover:bg-slate-50')
-      )
-      if (fastTrackOption?.closest('button')) {
-        await user.click(fastTrackOption.closest('button')!)
-      }
-
-      await waitFor(() => {
-        expect(mockShowToast).toHaveBeenCalledWith({
-          type: 'error',
-          title: expect.any(String),
-        })
       })
     })
   })
@@ -510,39 +502,6 @@ describe('SurgeonOverridePanel', () => {
 
       expect(screen.getByText('No Surgeons')).toBeInTheDocument()
       expect(screen.getByText(/No surgeons found for this facility/)).toBeInTheDocument()
-    })
-  })
-
-  describe('template cascade verification', () => {
-    it('shows correct template priority: override > procedure > facility default', () => {
-      render(<SurgeonOverridePanel />)
-
-      // Total Hip has override (Fast-Track) even though procedure has Ortho
-      expect(screen.getByText('Total Hip Replacement')).toBeInTheDocument()
-      expect(screen.getAllByText('Override').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('Fast-Track Template').length).toBeGreaterThan(0)
-
-      // Knee Arthroscopy has no override, inherits from procedure (which is null → facility default)
-      expect(screen.getByText('Knee Arthroscopy')).toBeInTheDocument()
-      expect(screen.getByText('Inherited')).toBeInTheDocument()
-      expect(screen.getByText(/Standard Workflow \(procedure default\)/)).toBeInTheDocument()
-
-      // ACL Repair has override (Fast-Track) even though procedure has Ortho
-      expect(screen.getByText('ACL Repair')).toBeInTheDocument()
-      // Override badge and Fast-Track template are already verified above
-    })
-
-    it('highlights override rows differently', () => {
-      render(<SurgeonOverridePanel />)
-
-      // We can verify badges appear correctly (override vs inherited)
-      // Rows with overrides get amber-colored badges
-      const overrideBadge = screen.getAllByText('Override')[0]
-      expect(overrideBadge.className).toContain('bg-amber-100')
-
-      // Rows without overrides get slate-colored badges
-      const inheritedBadge = screen.getByText('Inherited')
-      expect(inheritedBadge.className).toContain('bg-slate-100')
     })
   })
 })

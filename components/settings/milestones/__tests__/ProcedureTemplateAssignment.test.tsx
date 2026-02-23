@@ -1,6 +1,6 @@
 // components/settings/milestones/__tests__/ProcedureTemplateAssignment.test.tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // ─── Mocks ───────────────────────────────────────────────
@@ -21,7 +21,6 @@ const mockSetProcedures = vi.fn()
 
 vi.mock('@/hooks/useSupabaseQuery', () => ({
   useSupabaseQuery: (queryFn: () => Promise<unknown[]>) => {
-    // Determine which data to return based on query function
     const fnStr = queryFn.toString()
 
     if (fnStr.includes('procedure_types')) {
@@ -91,6 +90,8 @@ const TEMPLATES = [
     is_active: true,
     deleted_at: null,
     deleted_by: null,
+    block_order: {},
+    sub_phase_map: {},
   },
   {
     id: 'tmpl-1',
@@ -101,6 +102,8 @@ const TEMPLATES = [
     is_active: true,
     deleted_at: null,
     deleted_by: null,
+    block_order: {},
+    sub_phase_map: {},
   },
   {
     id: 'tmpl-2',
@@ -111,6 +114,8 @@ const TEMPLATES = [
     is_active: true,
     deleted_at: null,
     deleted_by: null,
+    block_order: {},
+    sub_phase_map: {},
   },
 ]
 
@@ -118,19 +123,19 @@ const PROCEDURES = [
   {
     id: 'proc-1',
     name: 'Total Hip Replacement',
-    category: 'Orthopedic',
-    milestone_template_id: 'tmpl-1', // explicit assignment
+    category_name: 'Orthopedic',
+    milestone_template_id: 'tmpl-1',
   },
   {
     id: 'proc-2',
     name: 'Knee Arthroscopy',
-    category: 'Orthopedic',
-    milestone_template_id: null, // using facility default
+    category_name: 'Orthopedic',
+    milestone_template_id: null,
   },
   {
     id: 'proc-3',
     name: 'Coronary Bypass',
-    category: 'Cardiac',
+    category_name: 'Cardiac',
     milestone_template_id: 'tmpl-2',
   },
 ]
@@ -152,6 +157,21 @@ const TEMPLATE_ITEMS = [
   { id: 'item-3', template_id: 'tmpl-2', facility_milestone_id: 'ms-3', facility_phase_id: 'ph-2', display_order: 1 },
 ]
 
+// ─── Helpers ────────────────────────────────────────────
+
+/** Get the picker container (div holding "Milestone Template" label and the picker button). */
+function getPickerContainer() {
+  const label = screen.getByText('Milestone Template')
+  return within(label.parentElement as HTMLElement)
+}
+
+/** Get the open dropdown popup (absolute positioned). */
+function getDropdown() {
+  const el = document.querySelector('.absolute.left-0.top-full') as HTMLElement
+  if (!el) throw new Error('Dropdown not open')
+  return within(el)
+}
+
 // ─── Tests ───────────────────────────────────────────────
 
 describe('ProcedureTemplateAssignment', () => {
@@ -169,8 +189,8 @@ describe('ProcedureTemplateAssignment', () => {
     mockUpdateResult = { error: null }
   })
 
-  describe('rendering', () => {
-    it('renders procedure list with template pickers', () => {
+  describe('rendering — 2-column layout', () => {
+    it('renders procedure list in left column', () => {
       render(<ProcedureTemplateAssignment />)
 
       expect(screen.getByText('Total Hip Replacement')).toBeInTheDocument()
@@ -178,37 +198,83 @@ describe('ProcedureTemplateAssignment', () => {
       expect(screen.getByText('Coronary Bypass')).toBeInTheDocument()
     })
 
-    it('shows procedure count', () => {
+    it('shows procedure count in footer', () => {
       render(<ProcedureTemplateAssignment />)
 
       expect(screen.getByText('3 procedures')).toBeInTheDocument()
     })
 
-    it('shows template name for explicit assignments', () => {
+    it('shows assigned count in footer', () => {
       render(<ProcedureTemplateAssignment />)
 
-      expect(screen.getByText('Ortho Template')).toBeInTheDocument()
-      expect(screen.getByText('Cardiac Template')).toBeInTheDocument()
+      expect(screen.getByText('2 assigned')).toBeInTheDocument()
     })
 
-    it('shows facility default label for inherited assignments', () => {
+    it('shows empty state in right column when no procedure selected', () => {
       render(<ProcedureTemplateAssignment />)
 
-      expect(screen.getByText(/Standard Workflow \(facility default\)/)).toBeInTheDocument()
+      expect(screen.getByText('Select a procedure to view its template')).toBeInTheDocument()
     })
 
-    it('renders milestone chips for assigned templates', () => {
+    it('shows template badge on list items with explicit assignment', () => {
       render(<ProcedureTemplateAssignment />)
 
+      // Procedures with explicit template should show a badge
+      const hipButton = screen.getByText('Total Hip Replacement').closest('button')
+      expect(hipButton?.textContent).toContain('Ortho')
+    })
+
+    it('shows default template name for inherited procedures', () => {
+      render(<ProcedureTemplateAssignment />)
+
+      // Knee Arthroscopy has no explicit assignment → shows default
+      const kneeButton = screen.getByText('Knee Arthroscopy').closest('button')
+      expect(kneeButton?.textContent).toContain('Standard Workflow (default)')
+    })
+  })
+
+  describe('procedure selection', () => {
+    it('shows template detail when procedure is clicked', async () => {
+      const user = userEvent.setup()
+      render(<ProcedureTemplateAssignment />)
+
+      await user.click(screen.getByText('Total Hip Replacement'))
+
+      // Right column should show template picker label
+      expect(screen.getByText('Explicit template assignment')).toBeInTheDocument()
+      expect(screen.getByText('Milestone Template')).toBeInTheDocument()
+    })
+
+    it('shows facility default label for inherited procedure', async () => {
+      const user = userEvent.setup()
+      render(<ProcedureTemplateAssignment />)
+
+      await user.click(screen.getByText('Knee Arthroscopy'))
+
+      expect(screen.getByText('Using facility default')).toBeInTheDocument()
+    })
+
+    it('shows timeline preview for selected procedure', async () => {
+      const user = userEvent.setup()
+      render(<ProcedureTemplateAssignment />)
+
+      await user.click(screen.getByText('Total Hip Replacement'))
+
+      // Template items for tmpl-1 include Patient In Room and Incision
       expect(screen.getByText('Patient In Room')).toBeInTheDocument()
       expect(screen.getByText('Incision')).toBeInTheDocument()
-      expect(screen.getByText('Closure')).toBeInTheDocument()
     })
 
-    it('shows summary of explicit assignments', () => {
+    it('highlights selected procedure in the list', async () => {
+      const user = userEvent.setup()
       render(<ProcedureTemplateAssignment />)
 
-      expect(screen.getByText('2 of 3 procedures have explicit template assignments')).toBeInTheDocument()
+      await user.click(screen.getByText('Total Hip Replacement'))
+
+      // After selection, the name appears in both list + header; find the list button
+      const hipButtons = screen.getAllByText('Total Hip Replacement')
+      const listButton = hipButtons.map(el => el.closest('button')).find(Boolean)
+      expect(listButton?.className).toContain('bg-blue-50')
     })
   })
 
@@ -250,48 +316,48 @@ describe('ProcedureTemplateAssignment', () => {
   })
 
   describe('template assignment', () => {
-    it('opens template picker on button click', async () => {
+    it('opens template picker after selecting procedure', async () => {
       const user = userEvent.setup()
       render(<ProcedureTemplateAssignment />)
 
-      // Click the picker button for "Knee Arthroscopy" (has facility default)
-      const pickerButtons = screen.getAllByRole('button', { name: /Standard Workflow/ })
-      await user.click(pickerButtons[0])
+      // Select a procedure first
+      await user.click(screen.getByText('Knee Arthroscopy'))
 
-      // Dropdown should appear with all templates
+      // Click the template picker in the detail panel (scope to picker container)
+      const picker = getPickerContainer()
+      await user.click(picker.getByRole('button'))
+
       await waitFor(() => {
         expect(screen.getByText('Use facility default')).toBeInTheDocument()
       })
-      expect(screen.getAllByText('Ortho Template').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('Cardiac Template').length).toBeGreaterThan(0)
+      const dropdown = getDropdown()
+      expect(dropdown.getByText('Ortho Template')).toBeInTheDocument()
+      expect(dropdown.getByText('Cardiac Template')).toBeInTheDocument()
     })
 
     it('assigns a template to a procedure', async () => {
       const user = userEvent.setup()
       render(<ProcedureTemplateAssignment />)
 
-      // Open picker for "Knee Arthroscopy"
-      const pickerButtons = screen.getAllByRole('button', { name: /Standard Workflow/ })
-      await user.click(pickerButtons[0])
+      // Select Knee Arthroscopy
+      await user.click(screen.getByText('Knee Arthroscopy'))
 
-      // Select "Ortho Template"
+      // Open picker (scoped to picker container)
+      const picker = getPickerContainer()
+      await user.click(picker.getByRole('button'))
+
+      // Select "Ortho Template" from the dropdown
       await waitFor(() => {
-        expect(screen.getAllByText('Ortho Template').length).toBeGreaterThan(1)
+        expect(screen.getByText('Use facility default')).toBeInTheDocument()
       })
-      const orthoOption = screen.getAllByText('Ortho Template').find(el =>
-        el.closest('button')?.getAttribute('class')?.includes('hover:bg-slate-50')
-      )
-      if (orthoOption?.closest('button')) {
-        await user.click(orthoOption.closest('button')!)
-      }
+      const dropdown = getDropdown()
+      await user.click(dropdown.getByText('Ortho Template'))
 
-      // Verify update was called
       await waitFor(() => {
         expect(mockUpdate).toHaveBeenCalled()
         expect(mockUpdateEq).toHaveBeenCalledWith('id', 'proc-2')
       })
 
-      // Verify success toast
       expect(mockShowToast).toHaveBeenCalledWith({
         type: 'success',
         title: expect.stringContaining('Ortho Template'),
@@ -302,18 +368,20 @@ describe('ProcedureTemplateAssignment', () => {
       const user = userEvent.setup()
       render(<ProcedureTemplateAssignment />)
 
-      // Open picker for "Total Hip Replacement" (has explicit Ortho Template)
-      const orthoButtons = screen.getAllByRole('button')
-        .filter(btn => btn.textContent?.includes('Ortho Template'))
-      await user.click(orthoButtons[0])
+      // Select Total Hip (has explicit Ortho Template)
+      await user.click(screen.getByText('Total Hip Replacement'))
+
+      // Open picker (scoped to picker container)
+      const picker = getPickerContainer()
+      await user.click(picker.getByRole('button'))
 
       // Select "Use facility default"
       await waitFor(() => {
         expect(screen.getByText('Use facility default')).toBeInTheDocument()
       })
-      await user.click(screen.getByText('Use facility default'))
+      const dropdown = getDropdown()
+      await user.click(dropdown.getByText('Use facility default'))
 
-      // Verify update was called with null
       await waitFor(() => {
         expect(mockUpdate).toHaveBeenCalled()
       })
@@ -330,18 +398,16 @@ describe('ProcedureTemplateAssignment', () => {
       const user = userEvent.setup()
       render(<ProcedureTemplateAssignment />)
 
-      const pickerButtons = screen.getAllByRole('button', { name: /Standard Workflow/ })
-      await user.click(pickerButtons[0])
+      await user.click(screen.getByText('Knee Arthroscopy'))
+
+      const picker = getPickerContainer()
+      await user.click(picker.getByRole('button'))
 
       await waitFor(() => {
-        expect(screen.getAllByText('Ortho Template').length).toBeGreaterThan(0)
+        expect(screen.getByText('Use facility default')).toBeInTheDocument()
       })
-      const orthoOption = screen.getAllByText('Ortho Template').find(el =>
-        el.closest('button')?.getAttribute('class')?.includes('hover:bg-slate-50')
-      )
-      if (orthoOption?.closest('button')) {
-        await user.click(orthoOption.closest('button')!)
-      }
+      const dropdown = getDropdown()
+      await user.click(dropdown.getByText('Ortho Template'))
 
       await waitFor(() => {
         expect(mockShowToast).toHaveBeenCalledWith({
@@ -357,7 +423,6 @@ describe('ProcedureTemplateAssignment', () => {
       mockQueryLoading = true
       render(<ProcedureTemplateAssignment />)
 
-      // Should render 6 skeleton rows
       const skeletons = document.querySelectorAll('.animate-pulse')
       expect(skeletons.length).toBeGreaterThan(0)
     })
@@ -378,34 +443,27 @@ describe('ProcedureTemplateAssignment', () => {
   })
 
   describe('template cascade visualization', () => {
-    it('shows milestone chips from assigned template', () => {
+    it('shows explicit vs inherited styling in template picker', async () => {
+      const user = userEvent.setup()
       render(<ProcedureTemplateAssignment />)
 
-      // "Total Hip Replacement" uses "Ortho Template" which has ms-1 and ms-2
-      expect(screen.getByText('Patient In Room')).toBeInTheDocument()
-      expect(screen.getByText('Incision')).toBeInTheDocument()
+      // Click explicit assignment (Total Hip → has Ortho Template)
+      await user.click(screen.getByText('Total Hip Replacement'))
+
+      const picker = getPickerContainer()
+      const pickerButton = picker.getByRole('button')
+      expect(pickerButton.className).toContain('border-blue-200')
     })
 
-    it('shows milestone chips from default template when no explicit assignment', () => {
+    it('shows inherited styling for facility default', async () => {
+      const user = userEvent.setup()
       render(<ProcedureTemplateAssignment />)
 
-      // "Knee Arthroscopy" uses facility default (no items in fixture, but component should handle gracefully)
-      // Just verify it renders without crashing
-      expect(screen.getByText('Knee Arthroscopy')).toBeInTheDocument()
-    })
+      await user.click(screen.getByText('Knee Arthroscopy'))
 
-    it('highlights explicit vs inherited assignments differently', () => {
-      render(<ProcedureTemplateAssignment />)
-
-      // Explicit assignment should have blue border
-      const explicitPicker = screen.getAllByRole('button')
-        .find(btn => btn.textContent?.includes('Ortho Template') && !btn.textContent?.includes('facility default'))
-      expect(explicitPicker?.className).toContain('border-blue-200')
-
-      // Inherited assignment should have slate border
-      const inheritedPicker = screen.getAllByRole('button')
-        .find(btn => btn.textContent?.includes('facility default'))
-      expect(inheritedPicker?.className).toContain('border-slate-200')
+      const picker = getPickerContainer()
+      const pickerButton = picker.getByRole('button')
+      expect(pickerButton.className).toContain('border-slate-200')
     })
   })
 })

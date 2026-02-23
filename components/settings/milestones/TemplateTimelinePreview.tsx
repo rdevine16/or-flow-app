@@ -2,6 +2,7 @@
 // Read-only visual timeline preview of a milestone template.
 // Renders the same visual as the builder canvas but without
 // drag-and-drop, remove buttons, or drop zones.
+// Applies blockOrder to match builder item ordering within phases.
 'use client'
 
 import { useMemo } from 'react'
@@ -10,6 +11,7 @@ import type {
   TemplateItemData,
   PhaseLookup,
   MilestoneLookup,
+  RenderItem,
   EdgeMilestoneItem,
   InteriorMilestoneItem,
   BoundaryConnectorItem,
@@ -23,6 +25,96 @@ interface TemplateTimelinePreviewProps {
   items: TemplateItemData[]
   phases: PhaseLookup[]
   milestones: MilestoneLookup[]
+  subPhaseMap?: Record<string, string>
+  blockOrder?: Record<string, string[]>
+}
+
+// Sub-phase block prefix (must match TemplateBuilder)
+const SP_BLOCK_PREFIX = 'sp-block:'
+
+// ─── Block Order Reordering ────────────────────────────────
+
+/** Reorder the flat render list so items within each phase match blockOrder. */
+function applyBlockOrderToRenderList(
+  renderList: RenderItem[],
+  blockOrder: Record<string, string[]>,
+): RenderItem[] {
+  if (Object.keys(blockOrder).length === 0) return renderList
+
+  // Group the render list into phase segments
+  const result: RenderItem[] = []
+  let currentPhaseId: string | null = null
+  let currentPhaseItems: RenderItem[] = [] // sortable items in current phase
+
+  const flush = () => {
+    if (currentPhaseId && currentPhaseItems.length > 0) {
+      const override = blockOrder[currentPhaseId]
+      if (override) {
+        // Build ID → item map
+        const idToItem = new Map<string, RenderItem>()
+        for (const item of currentPhaseItems) {
+          if (item.type === 'sub-phase') {
+            idToItem.set(`${SP_BLOCK_PREFIX}${item.phase.id}`, item)
+          } else if ('templateItem' in item) {
+            idToItem.set((item as { templateItem: { id: string } }).templateItem.id, item)
+          }
+        }
+
+        // Reorder based on override
+        const reordered: RenderItem[] = []
+        const seen = new Set<string>()
+        for (const id of override) {
+          const item = idToItem.get(id)
+          if (item) {
+            reordered.push(item)
+            seen.add(id)
+          }
+        }
+        // Add any items not in the override (defensive)
+        for (const [id, item] of idToItem) {
+          if (!seen.has(id)) {
+            reordered.push(item)
+          }
+        }
+        result.push(...reordered)
+      } else {
+        result.push(...currentPhaseItems)
+      }
+    }
+    currentPhaseItems = []
+  }
+
+  for (const item of renderList) {
+    switch (item.type) {
+      case 'phase-header':
+        flush()
+        currentPhaseId = item.phase.id
+        result.push(item)
+        break
+      case 'edge-milestone':
+      case 'interior-milestone':
+      case 'sub-phase':
+        currentPhaseItems.push(item)
+        break
+      case 'drop-zone':
+        // Flush before drop zone (drop zones are at end of phase)
+        flush()
+        result.push(item)
+        break
+      case 'boundary-connector':
+      case 'unassigned-header':
+      case 'unassigned-milestone':
+        flush()
+        currentPhaseId = null
+        result.push(item)
+        break
+      default:
+        result.push(item)
+    }
+  }
+  flush()
+
+  return result
 }
 
 // ─── Main Component ────────────────────────────────────────
@@ -31,11 +123,16 @@ export function TemplateTimelinePreview({
   items,
   phases,
   milestones,
+  subPhaseMap,
+  blockOrder,
 }: TemplateTimelinePreviewProps) {
-  const renderList = useMemo(
-    () => buildTemplateRenderList(items, phases, milestones),
-    [items, phases, milestones],
-  )
+  const renderList = useMemo(() => {
+    const base = buildTemplateRenderList(items, phases, milestones, undefined, subPhaseMap)
+    if (blockOrder && Object.keys(blockOrder).length > 0) {
+      return applyBlockOrderToRenderList(base, blockOrder)
+    }
+    return base
+  }, [items, phases, milestones, subPhaseMap, blockOrder])
 
   if (renderList.length === 0) return null
 

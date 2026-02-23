@@ -86,6 +86,23 @@ vi.mock('@/components/settings/milestones/PhaseLibrary', () => ({
   PhaseLibrary: () => <div data-testid="phase-library">Phase Library Content</div>,
 }))
 
+// Mock tab components to avoid nested supabase queries
+vi.mock('@/components/settings/milestones/ProcedureTemplateAssignment', () => ({
+  ProcedureTemplateAssignment: () => <div data-testid="procedure-assignment">Procedure Assignment Content</div>,
+}))
+
+vi.mock('@/components/settings/milestones/SurgeonOverridePanel', () => ({
+  SurgeonOverridePanel: () => <div data-testid="surgeon-overrides">Surgeon Overrides Content</div>,
+}))
+
+vi.mock('@/components/settings/milestones/TemplateBuilder', () => ({
+  TemplateBuilder: () => <div data-testid="template-builder">Template Builder Content</div>,
+}))
+
+vi.mock('@/hooks/useTemplateBuilder', () => ({
+  useTemplateBuilder: () => ({}),
+}))
+
 import MilestonesSettingsPage from '../page'
 
 // ─── Fixtures ────────────────────────────────────────────
@@ -158,25 +175,25 @@ describe('MilestonesSettingsPage', () => {
       expect(screen.getByTestId('phase-library')).toBeInTheDocument()
     })
 
-    it('shows Templates placeholder when ?tab=templates', () => {
+    it('shows Templates tab when ?tab=templates', () => {
       mockTabParam = 'templates'
       render(<MilestonesSettingsPage />)
 
-      expect(screen.getByText('Template builder will be available in the next phase.')).toBeInTheDocument()
+      expect(screen.getByTestId('template-builder')).toBeInTheDocument()
     })
 
-    it('shows Procedures placeholder when ?tab=procedures', () => {
+    it('shows Procedures tab when ?tab=procedures', () => {
       mockTabParam = 'procedures'
       render(<MilestonesSettingsPage />)
 
-      expect(screen.getByText('Procedure template assignment will be available in a future phase.')).toBeInTheDocument()
+      expect(screen.getByTestId('procedure-assignment')).toBeInTheDocument()
     })
 
-    it('shows Surgeons placeholder when ?tab=surgeons', () => {
+    it('shows Surgeons tab when ?tab=surgeons', () => {
       mockTabParam = 'surgeons'
       render(<MilestonesSettingsPage />)
 
-      expect(screen.getByText('Surgeon template overrides will be available in a future phase.')).toBeInTheDocument()
+      expect(screen.getByTestId('surgeon-overrides')).toBeInTheDocument()
     })
 
     it('updates URL when tab clicked', async () => {
