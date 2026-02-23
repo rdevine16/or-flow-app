@@ -352,7 +352,9 @@ export async function purgeCaseData(
     const { error } = await supabase.from('cases').delete().eq('facility_id', facilityId)
     if (error) return { success: false, error: `Delete cases: ${error.message}`, casesDeleted: 0 }
 
-    onProgress?.({ phase: 'clearing', current: 85, total: 100, message: 'Clearing computed averages...' })
+    onProgress?.({ phase: 'clearing', current: 85, total: 100, message: 'Clearing computed averages & surgeon overrides...' })
+    // Clean up surgeon template overrides created during demo generation
+    await supabase.from('surgeon_template_overrides').delete().eq('facility_id', facilityId).then(() => {}, () => {})
     const { data: users } = await supabase.from('users').select('id').eq('facility_id', facilityId)
     if (users && users.length > 0) {
       const uids = users.map(u => u.id)
@@ -391,7 +393,7 @@ export async function getDetailedStatus(supabase: SupabaseClient, facilityId: st
     supabase.from('complexities').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId).eq('is_active', true),
     supabase.from('facility_analytics_settings').select('id').eq('facility_id', facilityId).maybeSingle(),
     supabase.from('procedure_reimbursements').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
-    supabase.from('procedure_milestone_config').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
+    supabase.from('milestone_templates').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId).eq('is_active', true),
     supabase.from('block_schedules').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
     supabase.from('flag_rules').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId).eq('is_active', true),
   ])
@@ -401,7 +403,7 @@ export async function getDetailedStatus(supabase: SupabaseClient, facilityId: st
     delayTypes: s(5), costCategories: s(6), facilityMilestones: s(7),
     cancellationReasons: s(8), preopChecklistFields: s(9), complexities: s(10),
     facilityAnalyticsSettings: !!qs[11]?.data,
-    procedureReimbursements: s(12), procedureMilestoneConfig: s(13), blockSchedules: s(14),
+    procedureReimbursements: s(12), milestoneTemplates: s(13), blockSchedules: s(14),
     flagRules: s(15),
     milestones: 0, staff: 0, implants: 0,
   }
@@ -440,7 +442,7 @@ export async function generateDemoData(
       }
     }
 
-    const { data: procedureTypes } = await supabase.from('procedure_types').select('id, name, expected_duration_minutes').eq('facility_id', facilityId).eq('is_active', true)
+    const { data: procedureTypes } = await supabase.from('procedure_types').select('id, name, expected_duration_minutes, milestone_template_id').eq('facility_id', facilityId).eq('is_active', true)
     if (!procedureTypes?.length) return { success: false, casesGenerated: 0, error: 'No procedure types' }
 
     let milestoneTypes: { id: string; name: string; source_milestone_type_id: string | null }[] = []
@@ -449,16 +451,49 @@ export async function generateDemoData(
     else { const { data: gms } = await supabase.from('milestone_types').select('id, name').eq('is_active', true).order('display_order'); milestoneTypes = (gms || []).map(g => ({ ...g, source_milestone_type_id: g.id })) }
     if (!milestoneTypes.length) return { success: false, casesGenerated: 0, error: 'No milestone types' }
 
-    // Load procedure_milestone_config: which milestones apply to each procedure type
-    const { data: procMsConfig } = await supabase.from('procedure_milestone_config')
-      .select('procedure_type_id, facility_milestone_id')
+    // ── Template resolution system ──
+    // Load milestone templates for this facility
+    const { data: facilityTemplates } = await supabase.from('milestone_templates')
+      .select('id, is_default')
       .eq('facility_id', facilityId)
-      .eq('is_enabled', true)
-    // Map: procedure_type_id → Set<facility_milestone_id>
-    const procMilestoneMap = new Map<string, Set<string>>()
-    for (const row of (procMsConfig || [])) {
-      if (!procMilestoneMap.has(row.procedure_type_id)) procMilestoneMap.set(row.procedure_type_id, new Set())
-      procMilestoneMap.get(row.procedure_type_id)!.add(row.facility_milestone_id)
+      .eq('is_active', true)
+    const defaultTemplateId = facilityTemplates?.find(t => t.is_default)?.id ?? null
+
+    // Load template items → Map<templateId, Set<facilityMilestoneId>>
+    const templateIds = (facilityTemplates || []).map(t => t.id)
+    const templateMilestoneMap = new Map<string, Set<string>>()
+    if (templateIds.length > 0) {
+      const { data: items } = await supabase.from('milestone_template_items')
+        .select('template_id, facility_milestone_id')
+        .in('template_id', templateIds)
+      for (const item of (items || [])) {
+        if (!templateMilestoneMap.has(item.template_id)) templateMilestoneMap.set(item.template_id, new Set())
+        templateMilestoneMap.get(item.template_id)!.add(item.facility_milestone_id)
+      }
+    }
+
+    // Build procedure → template_id map
+    const procTemplateMap = new Map<string, string>()
+    for (const pt of (procedureTypes || [])) {
+      if (pt.milestone_template_id) procTemplateMap.set(pt.id, pt.milestone_template_id)
+    }
+
+    // Load existing surgeon template overrides
+    const { data: existingOverrides } = await supabase.from('surgeon_template_overrides')
+      .select('surgeon_id, procedure_type_id, milestone_template_id')
+      .eq('facility_id', facilityId)
+    const surgeonOverrideMap = new Map<string, string>()
+    for (const ov of (existingOverrides || [])) {
+      surgeonOverrideMap.set(`${ov.surgeon_id}::${ov.procedure_type_id}`, ov.milestone_template_id)
+    }
+
+    // Resolver: (surgeonId, procedureTypeId) → Set<facilityMilestoneId>
+    const resolveTemplateMilestones = (surgeonId: string, procedureTypeId: string): Set<string> | undefined => {
+      const templateId = surgeonOverrideMap.get(`${surgeonId}::${procedureTypeId}`)
+        ?? procTemplateMap.get(procedureTypeId)
+        ?? defaultTemplateId
+      if (!templateId) return undefined
+      return templateMilestoneMap.get(templateId)
     }
 
     // Load global milestone_types for case_milestone_stats (the stats pipeline uses these IDs)
@@ -524,6 +559,36 @@ export async function generateDemoData(
       })
     }
     if (!resolved.length) return { success: false, casesGenerated: 0, error: 'No valid surgeons' }
+
+    // ── Create surgeon template overrides for demo variation ──
+    // If multiple templates exist, assign ~30% of surgeons a non-default template for some procedures
+    const nonDefaultTemplates = (facilityTemplates || []).filter(t => !t.is_default)
+    if (nonDefaultTemplates.length > 0) {
+      const overrideRecords: { facility_id: string; surgeon_id: string; procedure_type_id: string; milestone_template_id: string }[] = []
+      const overrideSurgeons = resolved.filter(() => Math.random() < 0.3)
+      for (const s of overrideSurgeons) {
+        // Override ~50% of this surgeon's procedures
+        const procsToOverride = s.procedureTypeIds.filter(() => Math.random() < 0.5)
+        for (const procId of procsToOverride) {
+          const template = randomChoice(nonDefaultTemplates)
+          overrideRecords.push({
+            facility_id: facilityId,
+            surgeon_id: s.surgeonId,
+            procedure_type_id: procId,
+            milestone_template_id: template.id,
+          })
+          // Update in-memory map so case generation uses these overrides
+          surgeonOverrideMap.set(`${s.surgeonId}::${procId}`, template.id)
+        }
+      }
+      if (overrideRecords.length > 0) {
+        // Clear existing overrides first (purge may not have run)
+        await supabase.from('surgeon_template_overrides').delete().eq('facility_id', facilityId).then(() => {}, () => {})
+        const { error: ovErr } = await supabase.from('surgeon_template_overrides').insert(overrideRecords)
+        if (ovErr) console.warn('Surgeon override insert:', ovErr.message)
+        else console.log(`[DEMO-GEN] Created ${overrideRecords.length} surgeon template overrides`)
+      }
+    }
 
     // ── Build room-day staff assignments ──
     // Each room gets 1 nurse, 2 techs, 1 anesthesiologist for the entire day.
@@ -612,7 +677,7 @@ export async function generateDemoData(
     for (let si = 0; si < resolved.length; si++) {
       const surgeon = resolved[si]
       const result = generateSurgeonCases(
-        surgeon, startDate, endDate, procedureTypes, milestoneTypes, procMilestoneMap, payers,
+        surgeon, startDate, endDate, procedureTypes, milestoneTypes, resolveTemplateMilestones, payers,
         roomDayStaffMap, completedStatus.id, scheduledStatus?.id || completedStatus.id, prefix, caseNum,
         facility.timezone || 'America/New_York', fmToMtMap, systemUserId, surgeonDurationMap,
         surgeon.outlierProfile
@@ -991,7 +1056,7 @@ function generateSurgeonCases(
   endDate: Date,
   allProcedureTypes: { id: string; name: string; expected_duration_minutes: number | null }[],
   milestoneTypes: { id: string; name: string; source_milestone_type_id: string | null }[],
-  procMilestoneMap: Map<string, Set<string>>,
+  resolveTemplateMilestones: (surgeonId: string, procedureTypeId: string) => Set<string> | undefined,
   payers: { id: string; name: string }[],
   roomDayStaffMap: Map<string, RoomDayStaff>,
   completedStatusId: string,
@@ -1159,8 +1224,8 @@ function generateSurgeonCases(
 
       cases.push(caseData)
 
-      // ── Milestones ──
-      const allowedMilestones = procMilestoneMap.get(proc.id)
+      // ── Milestones (resolved via template cascade: surgeon override → procedure → facility default) ──
+      const allowedMilestones = resolveTemplateMilestones(surgeon.surgeonId, proc.id)
       if (!isFuture) {
         // Completed cases: insert milestones WITH timestamps (speed-scaled)
         const cms = buildMilestones(caseId, surgeon, milestoneTypes, allowedMilestones, patientInTime, surgicalTime, speedMultiplier)

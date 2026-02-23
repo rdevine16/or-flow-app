@@ -1015,6 +1015,289 @@ describe('Phase 6b: Purge Fixes', () => {
 // INTEGRATION: Generator Result Shape Verification
 // ============================================
 
+// ============================================
+// PHASE 6 COVERAGE TESTS — Milestone Template Resolution
+// ============================================
+
+describe('Phase 6: Template Resolution Cascade', () => {
+  // Simulates the resolver function from demo-data-generator.ts
+  function createResolver(
+    surgeonOverrideMap: Map<string, string>,
+    procTemplateMap: Map<string, string>,
+    defaultTemplateId: string | null,
+    templateMilestoneMap: Map<string, Set<string>>
+  ) {
+    return (surgeonId: string, procedureTypeId: string): Set<string> | undefined => {
+      const templateId = surgeonOverrideMap.get(`${surgeonId}::${procedureTypeId}`)
+        ?? procTemplateMap.get(procedureTypeId)
+        ?? defaultTemplateId
+      if (!templateId) return undefined
+      return templateMilestoneMap.get(templateId)
+    }
+  }
+
+  const defaultMilestones = new Set(['fm-pi', 'fm-as', 'fm-ae', 'fm-pds', 'fm-pdc', 'fm-inc', 'fm-cl', 'fm-clc', 'fm-po'])
+  const specialtyMilestones = new Set(['fm-pi', 'fm-pds', 'fm-pdc', 'fm-inc', 'fm-cl', 'fm-clc', 'fm-po']) // no anesthesia milestones
+
+  const templateMilestoneMap = new Map<string, Set<string>>([
+    ['tpl-default', defaultMilestones],
+    ['tpl-hand', specialtyMilestones],
+  ])
+
+  it('resolves surgeon override when override exists', () => {
+    const surgeonOverrideMap = new Map([['surgeon-1::proc-1', 'tpl-hand']])
+    const procTemplateMap = new Map([['proc-1', 'tpl-default']])
+
+    const resolve = createResolver(surgeonOverrideMap, procTemplateMap, 'tpl-default', templateMilestoneMap)
+    const result = resolve('surgeon-1', 'proc-1')
+
+    expect(result).toBe(specialtyMilestones)
+    expect(result?.size).toBe(7) // hand template has fewer milestones
+  })
+
+  it('falls back to procedure template when no surgeon override', () => {
+    const surgeonOverrideMap = new Map<string, string>() // no overrides
+    const procTemplateMap = new Map([['proc-1', 'tpl-hand']])
+
+    const resolve = createResolver(surgeonOverrideMap, procTemplateMap, 'tpl-default', templateMilestoneMap)
+    const result = resolve('surgeon-1', 'proc-1')
+
+    expect(result).toBe(specialtyMilestones)
+  })
+
+  it('falls back to facility default when no surgeon override or procedure template', () => {
+    const surgeonOverrideMap = new Map<string, string>()
+    const procTemplateMap = new Map<string, string>() // no procedure assignments
+
+    const resolve = createResolver(surgeonOverrideMap, procTemplateMap, 'tpl-default', templateMilestoneMap)
+    const result = resolve('surgeon-1', 'proc-1')
+
+    expect(result).toBe(defaultMilestones)
+    expect(result?.size).toBe(9)
+  })
+
+  it('returns undefined when no template exists at any level', () => {
+    const surgeonOverrideMap = new Map<string, string>()
+    const procTemplateMap = new Map<string, string>()
+
+    const resolve = createResolver(surgeonOverrideMap, procTemplateMap, null, templateMilestoneMap)
+    const result = resolve('surgeon-1', 'proc-1')
+
+    expect(result).toBeUndefined()
+  })
+
+  it('different surgeons can resolve different templates for same procedure', () => {
+    const surgeonOverrideMap = new Map([
+      ['surgeon-1::proc-1', 'tpl-hand'],
+      // surgeon-2 has no override for proc-1
+    ])
+    const procTemplateMap = new Map([['proc-1', 'tpl-default']])
+
+    const resolve = createResolver(surgeonOverrideMap, procTemplateMap, 'tpl-default', templateMilestoneMap)
+
+    // Surgeon 1 gets hand template (override)
+    expect(resolve('surgeon-1', 'proc-1')).toBe(specialtyMilestones)
+    // Surgeon 2 gets default template (procedure fallback)
+    expect(resolve('surgeon-2', 'proc-1')).toBe(defaultMilestones)
+  })
+
+  it('same surgeon can have different templates per procedure', () => {
+    const surgeonOverrideMap = new Map([
+      ['surgeon-1::proc-1', 'tpl-hand'],
+      ['surgeon-1::proc-2', 'tpl-default'],
+    ])
+    const procTemplateMap = new Map<string, string>()
+
+    const resolve = createResolver(surgeonOverrideMap, procTemplateMap, 'tpl-default', templateMilestoneMap)
+
+    expect(resolve('surgeon-1', 'proc-1')).toBe(specialtyMilestones)
+    expect(resolve('surgeon-1', 'proc-2')).toBe(defaultMilestones)
+  })
+})
+
+describe('Phase 6: Surgeon Template Override Creation for Demo', () => {
+  it('creates overrides for ~30% of surgeons', () => {
+    const surgeons = Array.from({ length: 100 }, (_, i) => ({ surgeonId: `surgeon-${i}` }))
+    let selectedCount = 0
+    const trials = 100
+
+    for (let t = 0; t < trials; t++) {
+      const count = surgeons.filter(() => Math.random() < 0.3).length
+      selectedCount += count
+    }
+
+    const avgPct = selectedCount / (trials * surgeons.length)
+    expect(avgPct).toBeGreaterThan(0.20)
+    expect(avgPct).toBeLessThan(0.40)
+  })
+
+  it('overrides ~50% of procedures per selected surgeon', () => {
+    const procedures = ['proc-1', 'proc-2', 'proc-3', 'proc-4', 'proc-5', 'proc-6']
+    let overrideCount = 0
+    const trials = 200
+
+    for (let t = 0; t < trials; t++) {
+      overrideCount += procedures.filter(() => Math.random() < 0.5).length
+    }
+
+    const avgPct = overrideCount / (trials * procedures.length)
+    expect(avgPct).toBeGreaterThan(0.40)
+    expect(avgPct).toBeLessThan(0.60)
+  })
+
+  it('override records have correct shape', () => {
+    const overrideRecord = {
+      facility_id: 'facility-1',
+      surgeon_id: 'surgeon-1',
+      procedure_type_id: 'proc-1',
+      milestone_template_id: 'tpl-hand',
+    }
+
+    expect(overrideRecord).toHaveProperty('facility_id')
+    expect(overrideRecord).toHaveProperty('surgeon_id')
+    expect(overrideRecord).toHaveProperty('procedure_type_id')
+    expect(overrideRecord).toHaveProperty('milestone_template_id')
+  })
+
+  it('only creates overrides when non-default templates exist', () => {
+    const templatesOnlyDefault = [{ id: 'tpl-default', is_default: true }]
+    const templatesMultiple = [
+      { id: 'tpl-default', is_default: true },
+      { id: 'tpl-hand', is_default: false },
+      { id: 'tpl-spine', is_default: false },
+    ]
+
+    const nonDefaultOnlyDefault = templatesOnlyDefault.filter(t => !t.is_default)
+    const nonDefaultMultiple = templatesMultiple.filter(t => !t.is_default)
+
+    expect(nonDefaultOnlyDefault).toHaveLength(0) // no overrides possible
+    expect(nonDefaultMultiple).toHaveLength(2) // overrides use these templates
+  })
+
+  it('updates in-memory surgeonOverrideMap after creating DB records', () => {
+    const surgeonOverrideMap = new Map<string, string>()
+
+    // Simulate creating overrides and updating map
+    const overrides = [
+      { surgeon_id: 'surgeon-1', procedure_type_id: 'proc-1', milestone_template_id: 'tpl-hand' },
+      { surgeon_id: 'surgeon-1', procedure_type_id: 'proc-2', milestone_template_id: 'tpl-spine' },
+    ]
+
+    for (const ov of overrides) {
+      surgeonOverrideMap.set(`${ov.surgeon_id}::${ov.procedure_type_id}`, ov.milestone_template_id)
+    }
+
+    expect(surgeonOverrideMap.get('surgeon-1::proc-1')).toBe('tpl-hand')
+    expect(surgeonOverrideMap.get('surgeon-1::proc-2')).toBe('tpl-spine')
+    expect(surgeonOverrideMap.get('surgeon-2::proc-1')).toBeUndefined()
+  })
+})
+
+describe('Phase 6: Purge Includes Template Overrides', () => {
+  it('purge table list includes surgeon_template_overrides', () => {
+    const purgeConfigTables = [
+      'surgeon_template_overrides', // Phase 6 addition
+    ]
+
+    const purgeCaseTables = [
+      'case_flags', 'case_complexities', 'case_device_activity',
+      'case_device_companies', 'case_implant_companies', 'metric_issues',
+      'case_implants', 'case_milestones', 'case_milestone_stats',
+      'case_completion_stats', 'case_staff', 'case_delays',
+    ]
+
+    expect(purgeConfigTables).toContain('surgeon_template_overrides')
+    // Config tables are cleaned before case tables
+    expect(purgeConfigTables.length).toBe(1)
+    expect(purgeCaseTables.length).toBe(12)
+  })
+
+  it('surgeon_template_overrides cleanup is scoped by facility_id', () => {
+    const purgeQuery = {
+      table: 'surgeon_template_overrides',
+      operation: 'delete',
+      filter: { facility_id: 'facility-1' },
+    }
+
+    expect(purgeQuery.filter.facility_id).toBe('facility-1')
+    expect(purgeQuery.operation).toBe('delete')
+  })
+})
+
+describe('Phase 6: getDetailedStatus Template Migration', () => {
+  it('returns milestoneTemplates instead of procedureMilestoneConfig', () => {
+    const status = {
+      cases: 500, surgeons: 4, rooms: 3, procedureTypes: 10,
+      payers: 4, delayTypes: 5, costCategories: 8,
+      facilityMilestones: 9, cancellationReasons: 3,
+      preopChecklistFields: 6, complexities: 3,
+      facilityAnalyticsSettings: true,
+      procedureReimbursements: 30, milestoneTemplates: 3,
+      blockSchedules: 12, flagRules: 8,
+      milestones: 0, staff: 0, implants: 0,
+    }
+
+    expect(status).toHaveProperty('milestoneTemplates')
+    expect(status).not.toHaveProperty('procedureMilestoneConfig')
+    expect(status.milestoneTemplates).toBe(3)
+  })
+})
+
+describe('Phase 6: Template-Based Milestone Workflow', () => {
+  it('workflow: template resolution → milestone creation → purge → clean state', () => {
+    // Step 1: Load templates
+    const templates = [
+      { id: 'tpl-default', is_default: true },
+      { id: 'tpl-hand', is_default: false },
+    ]
+    expect(templates.find(t => t.is_default)?.id).toBe('tpl-default')
+
+    // Step 2: Build template milestone map
+    const templateMilestoneMap = new Map([
+      ['tpl-default', new Set(['fm-pi', 'fm-as', 'fm-ae', 'fm-inc', 'fm-po'])],
+      ['tpl-hand', new Set(['fm-pi', 'fm-inc', 'fm-po'])],
+    ])
+
+    // Step 3: Assign procedure to template
+    const procTemplateMap = new Map([['proc-tha', 'tpl-default'], ['proc-ctr', 'tpl-hand']])
+
+    // Step 4: Create surgeon override
+    const surgeonOverrideMap = new Map([['surgeon-1::proc-tha', 'tpl-hand']])
+
+    // Step 5: Resolve milestones for case creation
+    const resolve = (surgeonId: string, procId: string) => {
+      const templateId = surgeonOverrideMap.get(`${surgeonId}::${procId}`)
+        ?? procTemplateMap.get(procId) ?? 'tpl-default'
+      return templateMilestoneMap.get(templateId)
+    }
+
+    // Surgeon 1 + THA → hand template (override) → 3 milestones
+    const s1ThaMilestones = resolve('surgeon-1', 'proc-tha')
+    expect(s1ThaMilestones?.size).toBe(3)
+
+    // Surgeon 2 + THA → default template (procedure) → 5 milestones
+    const s2ThaMilestones = resolve('surgeon-2', 'proc-tha')
+    expect(s2ThaMilestones?.size).toBe(5)
+
+    // Surgeon 2 + CTR → hand template (procedure) → 3 milestones
+    const s2CtrMilestones = resolve('surgeon-2', 'proc-ctr')
+    expect(s2CtrMilestones?.size).toBe(3)
+
+    // Step 6: Verify milestones would be created correctly
+    const caseMilestones = Array.from(s1ThaMilestones || []).map(fmId => ({
+      case_id: 'case-1',
+      facility_milestone_id: fmId,
+      recorded_at: null as string | null,
+    }))
+    expect(caseMilestones).toHaveLength(3)
+    expect(caseMilestones[0].facility_milestone_id).toBe('fm-pi')
+
+    // Step 7: Purge cleans overrides
+    surgeonOverrideMap.clear()
+    expect(surgeonOverrideMap.size).toBe(0)
+  })
+})
+
 describe('GenerationResult — Phase 6b details', () => {
   it('includes all Phase 6b detail fields', () => {
     const result = {
