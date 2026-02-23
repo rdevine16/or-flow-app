@@ -60,15 +60,11 @@ export function SubPhaseIndicator({ item }: SubPhaseIndicatorProps) {
               borderBottom: idx < milestones.length - 1 ? `1px solid ${hex}10` : 'none',
             }}
           >
-            {/* Marker */}
+            {/* Marker — filled dot */}
             <div
-              className="w-3 h-3 rounded-[2px] flex items-center justify-center"
+              className="w-3 h-3 rounded-full"
               style={{ background: hex }}
-            >
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-            </div>
+            />
 
             {/* Name */}
             <span className="text-[11.5px] font-medium text-slate-700 flex-1 truncate">

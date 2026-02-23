@@ -166,4 +166,66 @@ describe('FlowNode', () => {
       expect(container.textContent).not.toContain('Surgical')
     })
   })
+
+  describe('Phase 8 — Filled dot rendering', () => {
+    it('EdgeMilestone renders filled circle dot, not checkmark SVG', () => {
+      const item: EdgeMilestoneItem = {
+        type: 'edge-milestone',
+        milestone: { id: 'm1', name: 'patient_in', display_name: 'Patient In', pair_with_id: null, pair_position: null },
+        templateItem: { id: 'i1', template_id: 't1', facility_milestone_id: 'm1', facility_phase_id: 'p1', display_order: 1 },
+        phase: { id: 'p1', name: 'pre_op', display_name: 'Pre-Op', color_key: 'blue', display_order: 1, parent_phase_id: null },
+        color: resolveColorKey('blue'),
+        edge: 'start',
+      }
+
+      const { container } = render(<EdgeMilestone item={item} onRemove={vi.fn()} />)
+
+      // Look for filled circle div (rounded-full)
+      const filledDot = container.querySelector('[class*="rounded-full"]')
+      expect(filledDot).toBeInTheDocument()
+      expect(filledDot).toHaveClass('w-4', 'h-4', 'rounded-full')
+
+      // Ensure no checkmark SVG path exists
+      const checkmarkPath = container.querySelector('path[d*="M20 6L9 17l-5-5"]')
+      expect(checkmarkPath).toBeNull()
+    })
+
+    it('InteriorMilestone renders filled circle dot, not checkmark SVG', () => {
+      const item: InteriorMilestoneItem = {
+        type: 'interior-milestone',
+        milestone: { id: 'm3', name: 'timeout', display_name: 'Timeout', pair_with_id: null, pair_position: null },
+        templateItem: { id: 'i3', template_id: 't1', facility_milestone_id: 'm3', facility_phase_id: 'p1', display_order: 3 },
+        phase: { id: 'p1', name: 'pre_op', display_name: 'Pre-Op', color_key: 'blue', display_order: 1, parent_phase_id: null },
+        color: resolveColorKey('blue'),
+      }
+
+      const { container } = render(<InteriorMilestone item={item} onRemove={vi.fn()} />)
+
+      // Look for filled circle div
+      const filledDot = container.querySelector('[class*="rounded-full"]')
+      expect(filledDot).toBeInTheDocument()
+
+      // No checkmark path
+      const checkmarkPath = container.querySelector('path[d*="M20 6L9 17l-5-5"]')
+      expect(checkmarkPath).toBeNull()
+    })
+
+    it('UnassignedMilestone renders filled circle dot in slate color', () => {
+      const item: UnassignedMilestoneItem = {
+        type: 'unassigned-milestone',
+        milestone: { id: 'm5', name: 'orphan', display_name: 'Orphan Milestone', pair_with_id: null, pair_position: null },
+        templateItem: { id: 'i5', template_id: 't1', facility_milestone_id: 'm5', facility_phase_id: null, display_order: 10 },
+      }
+
+      const { container } = render(<UnassignedMilestone item={item} onRemove={vi.fn()} />)
+
+      // Look for filled circle div
+      const filledDot = container.querySelector('[class*="rounded-full"]')
+      expect(filledDot).toBeInTheDocument()
+
+      // No checkmark path
+      const checkmarkPath = container.querySelector('path[d*="M20 6L9 17l-5-5"]')
+      expect(checkmarkPath).toBeNull()
+    })
+  })
 })

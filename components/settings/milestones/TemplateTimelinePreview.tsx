@@ -133,15 +133,11 @@ function ReadOnlyEdgeMilestone({ item }: { item: EdgeMilestoneItem }) {
         }}
       />
 
-      {/* Marker */}
+      {/* Marker — filled dot */}
       <div
-        className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center relative z-[2]"
+        className="w-4 h-4 rounded-full flex-shrink-0 relative z-[2]"
         style={{ background: hex, boxShadow: '0 0 0 2px #fff' }}
-      >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      </div>
+      />
 
       {/* Name */}
       <span className="text-[12.5px] font-semibold text-slate-900 ml-1.5 flex-1 truncate">
@@ -178,15 +174,11 @@ function ReadOnlyInteriorMilestone({ item }: { item: InteriorMilestoneItem }) {
       {/* Phase rail */}
       <div className="absolute left-[26px] top-0 bottom-0 w-0.5" style={{ background: `${hex}25` }} />
 
-      {/* Marker */}
+      {/* Marker — filled dot */}
       <div
-        className="w-3.5 h-3.5 rounded flex-shrink-0 flex items-center justify-center relative z-[1]"
+        className="w-3.5 h-3.5 rounded-full flex-shrink-0 relative z-[1]"
         style={{ background: hex }}
-      >
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      </div>
+      />
 
       {/* Name */}
       <span className="text-xs font-medium text-slate-700 ml-1.5 flex-1 truncate">
@@ -302,14 +294,11 @@ function ReadOnlySubPhase({ item }: { item: SubPhaseItem }) {
             className="flex items-center gap-1.5 px-2 py-[2.5px]"
             style={{ borderBottom: idx < milestones.length - 1 ? `1px solid ${hex}10` : 'none' }}
           >
+            {/* Marker — filled dot */}
             <div
-              className="w-3 h-3 rounded-[2px] flex items-center justify-center"
+              className="w-3 h-3 rounded-full"
               style={{ background: hex }}
-            >
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-            </div>
+            />
             <span className="text-[11.5px] font-medium text-slate-700 flex-1 truncate">
               {milestone.display_name}
             </span>
@@ -337,11 +326,8 @@ function ReadOnlyUnassignedMilestone({ item }: { item: UnassignedMilestoneItem }
   return (
     <div className="flex items-center gap-0 py-[3px] pl-3 pr-2 relative">
       <div className="absolute left-[26px] top-0 bottom-0 w-0.5 bg-slate-200" />
-      <div className="w-3.5 h-3.5 rounded flex-shrink-0 bg-slate-400 flex items-center justify-center relative z-[1]">
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      </div>
+      {/* Marker — filled dot (slate for unassigned) */}
+      <div className="w-3.5 h-3.5 rounded-full flex-shrink-0 bg-slate-400 relative z-[1]" />
       <span className="text-xs font-medium text-slate-600 ml-1.5 flex-1 truncate">
         {milestone.display_name}
       </span>

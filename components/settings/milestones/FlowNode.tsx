@@ -76,18 +76,14 @@ export function EdgeMilestone({ item, onRemove, sortableId }: EdgeMilestoneProps
         />
       </div>
 
-      {/* Marker */}
+      {/* Marker — filled dot */}
       <div
-        className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center relative z-[2]"
+        className="w-4 h-4 rounded-full flex-shrink-0 relative z-[2]"
         style={{
           background: hex,
           boxShadow: '0 0 0 2px #fff',
         }}
-      >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      </div>
+      />
 
       {/* Name */}
       <span className="text-[12.5px] font-semibold text-slate-900 ml-1.5 flex-1 truncate">
@@ -183,15 +179,11 @@ export function InteriorMilestone({ item, onRemove, sortableId }: InteriorMilest
         />
       </div>
 
-      {/* Marker */}
+      {/* Marker — filled dot */}
       <div
-        className="w-3.5 h-3.5 rounded flex-shrink-0 flex items-center justify-center relative z-[1]"
+        className="w-3.5 h-3.5 rounded-full flex-shrink-0 relative z-[1]"
         style={{ background: hex }}
-      >
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      </div>
+      />
 
       {/* Name */}
       <span className="text-xs font-medium text-slate-700 ml-1.5 flex-1 truncate">
@@ -264,11 +256,8 @@ export function UnassignedMilestone({ item, onRemove, sortableId }: UnassignedMi
         />
       </div>
 
-      <div className="w-3.5 h-3.5 rounded flex-shrink-0 bg-slate-400 flex items-center justify-center relative z-[1]">
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      </div>
+      {/* Marker — filled dot (slate for unassigned) */}
+      <div className="w-3.5 h-3.5 rounded-full flex-shrink-0 bg-slate-400 relative z-[1]" />
 
       <span className="text-xs font-medium text-slate-600 ml-1.5 flex-1 truncate">
         {milestone.display_name}

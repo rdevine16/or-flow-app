@@ -377,18 +377,16 @@ function BuilderCanvas({
       {/* Legend */}
       <div className="mx-3 mt-2 px-2.5 py-1.5 bg-white border border-slate-200 rounded flex gap-3 flex-wrap items-center">
         <div className="flex items-center gap-1">
-          <div className="w-2.5 h-2.5 rounded-[2px] rotate-45" style={{ background: 'linear-gradient(135deg, #F59E0B, #22C55E)' }} />
-          <span className="text-[10px] text-slate-500">Shared boundary</span>
+          <div className="w-3 h-3 rounded-full bg-slate-400" />
+          <span className="text-[10px] text-slate-500">Milestone</span>
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-slate-400 flex items-center justify-center">
-            <Check className="w-2 h-2 text-white" />
-          </div>
-          <span className="text-[10px] text-slate-500">First/last in phase show their role</span>
+          <div className="w-2.5 h-2.5 rounded-[2px] rotate-45" style={{ background: 'linear-gradient(135deg, #F59E0B, #22C55E)' }} />
+          <span className="text-[10px] text-slate-500">Shared boundary (removable)</span>
         </div>
         <div className="flex items-center gap-1">
           <GripVertical className="w-3 h-3 text-slate-400" />
-          <span className="text-[10px] text-slate-500">Drag to reorder within a phase</span>
+          <span className="text-[10px] text-slate-500">Drag to reorder</span>
         </div>
       </div>
 
@@ -419,14 +417,6 @@ function BuilderCanvas({
                     onRemoveMilestone={onRemoveMilestone}
                     onRemovePhase={onRemovePhase}
                     activeDrag={activeDrag}
-                  />
-                )
-              }
-              if (segment.type === 'shared-boundary') {
-                return (
-                  <SharedBoundary
-                    key={`sb-${segment.item.templateItemId}`}
-                    item={segment.item}
                   />
                 )
               }
@@ -505,6 +495,15 @@ function PhaseGroupSegment({
                   item={renderItem}
                   onRemove={onRemoveMilestone}
                   sortableId={renderItem.templateItem.id}
+                />
+              )
+            case 'shared-boundary':
+              return (
+                <SharedBoundary
+                  key={`sb-${renderItem.templateItemId}`}
+                  item={renderItem}
+                  onRemove={onRemoveMilestone}
+                  sortableId={renderItem.templateItemId}
                 />
               )
             case 'sub-phase':
@@ -985,12 +984,7 @@ function DraggableLibraryPhase({ phase }: { phase: { id: string; name: string; d
 
 // ─── groupByPhase helper ────────────────────────────────────
 
-type PhaseSegment = PhaseGroupSegmentData | SharedBoundarySegment | UnassignedSegmentData
-
-interface SharedBoundarySegment {
-  type: 'shared-boundary'
-  item: RenderItem & { type: 'shared-boundary' }
-}
+type PhaseSegment = PhaseGroupSegmentData | UnassignedSegmentData
 
 function groupByPhase(renderList: RenderItem[]): PhaseSegment[] {
   const segments: PhaseSegment[] = []
@@ -1036,12 +1030,13 @@ function groupByPhase(renderList: RenderItem[]): PhaseSegment[] {
         break
       }
       case 'shared-boundary': {
-        // Flush current group before shared boundary
+        // Include shared boundary as the last sortable item in the ending phase group
         if (currentPhaseGroup) {
+          currentPhaseGroup.sortableItems.push(item)
+          currentPhaseGroup.sortableIds.push(item.templateItemId)
           segments.push(currentPhaseGroup)
           currentPhaseGroup = null
         }
-        segments.push({ type: 'shared-boundary', item })
         break
       }
       case 'unassigned-header': {
