@@ -142,7 +142,7 @@ export function useMilestoneComparison({
         if (error) throw new Error(error.message)
 
         type MilestoneNameRow = { facility_milestone: { name: string } | { name: string }[] | null }
-        return ((data ?? []) as MilestoneNameRow[]).map(
+        const names = ((data ?? []) as MilestoneNameRow[]).map(
           (row) => {
             const fm = row.facility_milestone
             if (!fm) return ''
@@ -150,6 +150,8 @@ export function useMilestoneComparison({
             return fm.name
           },
         ).filter(Boolean)
+        // Deduplicate: shared boundary milestones appear in multiple phases
+        return [...new Set(names)]
       },
 
       // Phase definitions with boundary milestone details

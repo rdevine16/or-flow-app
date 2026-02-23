@@ -22,6 +22,8 @@ export interface MilestoneTemplate {
   is_active: boolean
   deleted_at: string | null
   deleted_by: string | null
+  block_order: Record<string, string[]>
+  sub_phase_map: Record<string, string>
 }
 
 // ─── Reducer ─────────────────────────────────────────────
@@ -84,6 +86,8 @@ export function useTemplateBuilder() {
   const [saving, setSaving] = useState(false)
   const [builderState, dispatch] = useReducer(builderReducer, { items: [] })
   const [emptyPhaseIds, setEmptyPhaseIds] = useState<Set<string>>(new Set())
+  const [blockOrder, setBlockOrder] = useState<Record<string, string[]>>({})
+  const [subPhaseMap, setSubPhaseMap] = useState<Record<string, string>>({})
 
   // ── Fetch templates ─────────────────────────────────────
 
@@ -96,7 +100,7 @@ export function useTemplateBuilder() {
     async (sb) => {
       const { data, error } = await sb
         .from('milestone_templates')
-        .select('id, facility_id, name, description, is_default, is_active, deleted_at, deleted_by')
+        .select('id, facility_id, name, description, is_default, is_active, deleted_at, deleted_by, block_order, sub_phase_map')
         .eq('facility_id', effectiveFacilityId!)
         .order('is_default', { ascending: false })
         .order('name')
@@ -114,6 +118,13 @@ export function useTemplateBuilder() {
       setSelectedTemplateId(defaultTemplate?.id ?? activeTemplates[0]?.id ?? null)
     }
   }, [templates, selectedTemplateId])
+
+  // Sync blockOrder and subPhaseMap when selected template changes
+  useEffect(() => {
+    const tpl = (templates || []).find(t => t.id === selectedTemplateId)
+    setBlockOrder(tpl?.block_order ?? {})
+    setSubPhaseMap(tpl?.sub_phase_map ?? {})
+  }, [selectedTemplateId, templates])
 
   // ── Fetch items for selected template ───────────────────
 
@@ -289,6 +300,8 @@ export function useTemplateBuilder() {
           description: source.description,
           is_default: false,
           is_active: true,
+          block_order: source.block_order ?? {},
+          sub_phase_map: source.sub_phase_map ?? {},
         })
         .select()
         .single()
@@ -575,6 +588,120 @@ export function useTemplateBuilder() {
 
   // Clear empty phase when a milestone is added to it (handled by addMilestoneToPhase internally)
 
+  // ── Nest phase as sub-phase (template-specific) ─────────
+
+  const nestPhaseAsSubPhase = useCallback(async (childPhaseId: string, parentPhaseId: string) => {
+    if (!selectedTemplateId) return
+    const child = (phases || []).find(p => p.id === childPhaseId)
+    if (!child) return
+
+    // Prevent nesting under itself or under a phase that is already a sub-phase in this template
+    const parent = (phases || []).find(p => p.id === parentPhaseId)
+    if (!parent || subPhaseMap[parentPhaseId]) return
+
+    // Optimistic: update sub_phase_map and add to empty phases so it renders
+    const prevMap = subPhaseMap
+    const newMap = { ...subPhaseMap, [childPhaseId]: parentPhaseId }
+    setSubPhaseMap(newMap)
+    setEmptyPhaseIds(prev => new Set([...prev, childPhaseId]))
+
+    try {
+      const { error } = await supabase
+        .from('milestone_templates')
+        .update({ sub_phase_map: newMap })
+        .eq('id', selectedTemplateId)
+
+      if (error) throw error
+      showToast({ type: 'success', title: `"${child.display_name}" nested under "${parent.display_name}"` })
+    } catch (err) {
+      // Revert
+      setSubPhaseMap(prevMap)
+      setEmptyPhaseIds(prev => {
+        const next = new Set(prev)
+        next.delete(childPhaseId)
+        return next
+      })
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to nest phase' })
+    }
+  }, [phases, subPhaseMap, selectedTemplateId, supabase, showToast])
+
+  // ── Remove sub-phase (un-nest, template-specific) ──────────
+
+  const removeSubPhase = useCallback(async (childPhaseId: string) => {
+    if (!selectedTemplateId) return
+    const child = (phases || []).find(p => p.id === childPhaseId)
+    if (!child || !subPhaseMap[childPhaseId]) return
+
+    const prevMap = subPhaseMap
+
+    // Optimistic: remove from sub_phase_map and emptyPhaseIds
+    const newMap = { ...subPhaseMap }
+    delete newMap[childPhaseId]
+    setSubPhaseMap(newMap)
+    setEmptyPhaseIds(prev => {
+      const next = new Set(prev)
+      next.delete(childPhaseId)
+      return next
+    })
+
+    // Also remove any template items belonging to this sub-phase
+    const subPhaseItems = builderState.items.filter(i => i.facility_phase_id === childPhaseId)
+    if (subPhaseItems.length > 0) {
+      dispatch({ type: 'BULK_REMOVE_BY_PHASE', phaseId: childPhaseId })
+    }
+
+    try {
+      const { error } = await supabase
+        .from('milestone_templates')
+        .update({ sub_phase_map: newMap })
+        .eq('id', selectedTemplateId)
+
+      if (error) throw error
+
+      // Also delete template items for this sub-phase from DB
+      if (subPhaseItems.length > 0) {
+        await supabase
+          .from('milestone_template_items')
+          .delete()
+          .eq('template_id', selectedTemplateId)
+          .eq('facility_phase_id', childPhaseId)
+      }
+
+      showToast({ type: 'success', title: `"${child.display_name}" removed as sub-phase` })
+    } catch (err) {
+      // Revert
+      setSubPhaseMap(prevMap)
+      setEmptyPhaseIds(prev => new Set([...prev, childPhaseId]))
+      if (subPhaseItems.length > 0) {
+        dispatch({ type: 'SET_ITEMS', items: [...builderState.items, ...subPhaseItems] })
+      }
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to remove sub-phase' })
+    }
+  }, [phases, subPhaseMap, selectedTemplateId, supabase, showToast, builderState.items])
+
+  // ── Block Order Persistence ─────────────────────────────
+
+  const updateBlockOrder = useCallback(async (
+    parentPhaseId: string,
+    orderedIds: string[],
+  ) => {
+    const prevBlockOrder = blockOrder
+    const newBlockOrder = { ...blockOrder, [parentPhaseId]: orderedIds }
+    setBlockOrder(newBlockOrder) // optimistic
+
+    if (!selectedTemplateId) return
+    try {
+      const { error } = await supabase
+        .from('milestone_templates')
+        .update({ block_order: newBlockOrder })
+        .eq('id', selectedTemplateId)
+
+      if (error) throw error
+    } catch {
+      setBlockOrder(prevBlockOrder) // revert
+    }
+  }, [blockOrder, selectedTemplateId, supabase])
+
   // ── Loading / Error ─────────────────────────────────────
 
   const loading = templatesLoading || milestonesLoading || phasesLoading
@@ -615,8 +742,17 @@ export function useTemplateBuilder() {
     removePhaseFromTemplate,
     reorderItemsInPhase,
     addPhaseToTemplate,
+    nestPhaseAsSubPhase,
+    removeSubPhase,
     emptyPhaseIds,
     dispatch,
+
+    // Block ordering
+    blockOrder,
+    updateBlockOrder,
+
+    // Sub-phase nesting (template-specific)
+    subPhaseMap,
   }
 }
 

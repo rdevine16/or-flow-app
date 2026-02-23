@@ -21,9 +21,11 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  arrayMove,
 } from '@dnd-kit/sortable'
 import type { UseTemplateBuilderReturn } from '@/hooks/useTemplateBuilder'
 import { buildTemplateRenderList, type RenderItem, type BoundaryConnectorItem } from '@/lib/utils/buildTemplateRenderList'
+import { detectPairOrderIssues } from '@/lib/utils/pairOrderValidation'
 import { resolveColorKey } from '@/lib/milestone-phase-config'
 import { TemplateList } from './TemplateList'
 import { EdgeMilestone, InteriorMilestone, UnassignedMilestone } from './FlowNode'
@@ -45,7 +47,9 @@ import {
 const LIB_MILESTONE_PREFIX = 'lib-ms:'
 const LIB_PHASE_PREFIX = 'lib-ph:'
 const DROP_PHASE_PREFIX = 'drop-phase:'
+const DROP_PHASE_HEADER_PREFIX = 'drop-phase-header:'
 const DROP_BUILDER_BOTTOM = 'drop-builder-bottom'
+const SP_BLOCK_PREFIX = 'sp-block:'
 
 function parseLibMilestoneId(id: string): string | null {
   return id.startsWith(LIB_MILESTONE_PREFIX) ? id.slice(LIB_MILESTONE_PREFIX.length) : null
@@ -55,6 +59,12 @@ function parseLibPhaseId(id: string): string | null {
 }
 function parseDropPhaseId(id: string): string | null {
   return id.startsWith(DROP_PHASE_PREFIX) ? id.slice(DROP_PHASE_PREFIX.length) : null
+}
+function parseDropPhaseHeaderId(id: string): string | null {
+  return id.startsWith(DROP_PHASE_HEADER_PREFIX) ? id.slice(DROP_PHASE_HEADER_PREFIX.length) : null
+}
+function parseSpBlockId(id: string): string | null {
+  return id.startsWith(SP_BLOCK_PREFIX) ? id.slice(SP_BLOCK_PREFIX.length) : null
 }
 
 // ─── Active drag state type ─────────────────────────────────
@@ -97,6 +107,15 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
       return
     }
 
+    // Sub-phase block
+    const spId = parseSpBlockId(id)
+    if (spId) {
+      const ph = builder.phases.find(p => p.id === spId)
+      const color = ph?.color_key ? resolveColorKey(ph.color_key).hex : undefined
+      setActiveDrag({ type: 'builder-item', id, label: ph?.display_name ?? 'Sub-Phase', color })
+      return
+    }
+
     // Builder item (sortable within phase)
     const item = builder.items.find(i => i.id === id)
     if (item) {
@@ -113,16 +132,28 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
     const activeId = String(active.id)
     const overId = String(over.id)
 
-    // Library milestone → phase drop zone
+    // Library milestone → phase drop zone or sub-phase block
     const libMsId = parseLibMilestoneId(activeId)
     const dropPhaseId = parseDropPhaseId(overId)
+    const overSpBlockId = parseSpBlockId(overId)
     if (libMsId && dropPhaseId) {
       builder.addMilestoneToPhase(dropPhaseId, libMsId)
       return
     }
+    if (libMsId && overSpBlockId) {
+      builder.addMilestoneToPhase(overSpBlockId, libMsId)
+      return
+    }
+
+    // Library phase → phase header (nest as sub-phase)
+    const libPhId = parseLibPhaseId(activeId)
+    const dropHeaderPhaseId = parseDropPhaseHeaderId(overId)
+    if (libPhId && dropHeaderPhaseId) {
+      builder.nestPhaseAsSubPhase(libPhId, dropHeaderPhaseId)
+      return
+    }
 
     // Library phase → builder bottom
-    const libPhId = parseLibPhaseId(activeId)
     if (libPhId && overId === DROP_BUILDER_BOTTOM) {
       builder.addPhaseToTemplate(libPhId)
       return
@@ -130,6 +161,33 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
     // Also allow library phase → any phase drop zone area (adds the phase)
     if (libPhId && dropPhaseId) {
       builder.addPhaseToTemplate(libPhId)
+      return
+    }
+
+    // Sub-phase block reorder within parent phase
+    const activeSpId = parseSpBlockId(activeId)
+    if (activeSpId) {
+      const parentPhaseId = builder.subPhaseMap[activeSpId]
+      if (!parentPhaseId) return
+
+      // Build the current sortable IDs for this parent phase
+      const renderList = buildTemplateRenderList(
+        builder.items, builder.phases, builder.milestones, builder.emptyPhaseIds, builder.subPhaseMap,
+      )
+      const segments = groupByPhase(renderList)
+      const parentSeg = segments.find(
+        (s): s is PhaseGroupSegmentData => s.type === 'phase-group' && s.phaseId === parentPhaseId,
+      )
+      if (!parentSeg) return
+
+      // Use existing override if present (handles cascading moves)
+      const currentIds = builder.blockOrder[parentPhaseId] ?? parentSeg.sortableIds
+      const oldIdx = currentIds.indexOf(activeId)
+      const overIdx = currentIds.indexOf(overId)
+      if (oldIdx === -1 || overIdx === -1 || oldIdx === overIdx) return
+
+      const newIds = arrayMove(currentIds, oldIdx, overIdx)
+      builder.updateBlockOrder(parentPhaseId, newIds)
       return
     }
 
@@ -192,10 +250,14 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
           saving={builder.saving}
           onRemoveMilestone={builder.removeMilestone}
           onRemovePhase={builder.removePhaseFromTemplate}
+          onRemoveSubPhase={builder.removeSubPhase}
+          onReorderMilestones={builder.reorderItemsInPhase}
           onDuplicate={() => builder.selectedTemplateId && builder.duplicateTemplate(builder.selectedTemplateId)}
           onRename={builder.renameTemplate}
           procedureCount={builder.selectedTemplateId ? (builder.procedureCounts[builder.selectedTemplateId] || 0) : 0}
           activeDrag={activeDrag}
+          blockOrder={builder.blockOrder}
+          subPhaseMap={builder.subPhaseMap}
         />
 
         {/* Column 3: Library Panel */}
@@ -259,10 +321,14 @@ interface BuilderCanvasProps {
   saving: boolean
   onRemoveMilestone: (itemId: string) => void
   onRemovePhase: (phaseId: string) => void
+  onRemoveSubPhase: (phaseId: string) => void
+  onReorderMilestones: (phaseId: string, activeId: string, overId: string) => void
   onDuplicate: () => void
   onRename: (templateId: string, name: string) => void
   procedureCount: number
   activeDrag: ActiveDrag | null
+  blockOrder: Record<string, string[]>
+  subPhaseMap: Record<string, string>
 }
 
 function BuilderCanvas({
@@ -275,21 +341,41 @@ function BuilderCanvas({
   saving,
   onRemoveMilestone,
   onRemovePhase,
+  onRemoveSubPhase,
+  onReorderMilestones,
   onDuplicate,
   onRename,
   procedureCount,
   activeDrag,
+  blockOrder,
+  subPhaseMap,
 }: BuilderCanvasProps) {
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState('')
 
   const renderList = useMemo(
-    () => buildTemplateRenderList(items, phases, milestones, emptyPhaseIds),
-    [items, phases, milestones, emptyPhaseIds],
+    () => buildTemplateRenderList(items, phases, milestones, emptyPhaseIds, subPhaseMap),
+    [items, phases, milestones, emptyPhaseIds, subPhaseMap],
   )
 
-  // Group the render list into phase segments for SortableContext
-  const phaseSegments = useMemo(() => groupByPhase(renderList), [renderList])
+  // Detect pair order issues (START after END)
+  const pairIssues = useMemo(
+    () => detectPairOrderIssues(renderList, milestones),
+    [renderList, milestones],
+  )
+
+  // Group the render list into phase segments, applying persisted block order
+  const phaseSegments = useMemo(() => {
+    const base = groupByPhase(renderList)
+    const hasOverrides = Object.keys(blockOrder).length > 0
+    if (!hasOverrides) return base
+    return base.map(seg => {
+      if (seg.type !== 'phase-group') return seg
+      const override = blockOrder[seg.phaseId]
+      if (!override) return seg
+      return applySortOverride(seg, override)
+    })
+  }, [renderList, blockOrder])
 
   const totalMilestones = items.length
 
@@ -416,7 +502,10 @@ function BuilderCanvas({
                     segment={segment}
                     onRemoveMilestone={onRemoveMilestone}
                     onRemovePhase={onRemovePhase}
+                    onRemoveSubPhase={onRemoveSubPhase}
+                    onReorderMilestones={onReorderMilestones}
                     activeDrag={activeDrag}
+                    pairIssues={pairIssues}
                   />
                 )
               }
@@ -434,6 +523,7 @@ function BuilderCanvas({
                     key="unassigned"
                     segment={segment}
                     onRemoveMilestone={onRemoveMilestone}
+                    pairIssues={pairIssues}
                   />
                 )
               }
@@ -465,20 +555,33 @@ function PhaseGroupSegment({
   segment,
   onRemoveMilestone,
   onRemovePhase,
+  onRemoveSubPhase,
+  onReorderMilestones,
   activeDrag,
+  pairIssues,
 }: {
   segment: PhaseGroupSegmentData
   onRemoveMilestone: (itemId: string) => void
   onRemovePhase: (phaseId: string) => void
+  onRemoveSubPhase: (phaseId: string) => void
+  onReorderMilestones: (phaseId: string, activeId: string, overId: string) => void
   activeDrag: ActiveDrag | null
+  pairIssues?: Set<string>
 }) {
+  const hex = segment.header.color.hex
   const isFirst = true // Let CSS handle top border
   return (
-    <div>
+    <div
+      style={{
+        background: `${hex}08`,
+        borderLeft: `3px solid ${hex}`,
+      }}
+    >
       <PhaseHeader
         item={segment.header}
         isFirst={isFirst}
         onRemove={() => onRemovePhase(segment.phaseId)}
+        activeDrag={activeDrag}
       />
 
       <SortableContext
@@ -494,6 +597,7 @@ function PhaseGroupSegment({
                   item={renderItem}
                   onRemove={onRemoveMilestone}
                   sortableId={renderItem.templateItem.id}
+                  pairIssues={pairIssues}
                 />
               )
             case 'interior-milestone':
@@ -503,6 +607,7 @@ function PhaseGroupSegment({
                   item={renderItem}
                   onRemove={onRemoveMilestone}
                   sortableId={renderItem.templateItem.id}
+                  pairIssues={pairIssues}
                 />
               )
             case 'sub-phase':
@@ -510,6 +615,12 @@ function PhaseGroupSegment({
                 <SubPhaseIndicator
                   key={`sp-${renderItem.phase.id}`}
                   item={renderItem}
+                  onRemove={() => onRemoveSubPhase(renderItem.phase.id)}
+                  onRemoveMilestone={onRemoveMilestone}
+                  isDraggingMilestone={activeDrag?.type === 'library-milestone'}
+                  sortableId={`${SP_BLOCK_PREFIX}${renderItem.phase.id}`}
+                  onReorderMilestones={onReorderMilestones}
+                  pairIssues={pairIssues}
                 />
               )
             default:
@@ -583,9 +694,11 @@ interface UnassignedSegmentData {
 function UnassignedSegment({
   segment,
   onRemoveMilestone,
+  pairIssues,
 }: {
   segment: UnassignedSegmentData
   onRemoveMilestone: (itemId: string) => void
+  pairIssues?: Set<string>
 }) {
   return (
     <div>
@@ -608,6 +721,7 @@ function UnassignedSegment({
                 item={renderItem}
                 onRemove={onRemoveMilestone}
                 sortableId={renderItem.templateItem.id}
+                pairIssues={pairIssues}
               />
             )
           }
@@ -640,7 +754,7 @@ function DroppablePhaseZone({
   return (
     <div
       ref={setNodeRef}
-      className="mx-2 my-0.5 ml-9 py-[3px] border-[1.5px] border-dashed rounded text-[10px] text-center font-medium transition-all"
+      className="mx-4 my-1 py-[3px] border-[1.5px] border-dashed rounded text-[10px] text-center font-medium transition-all"
       style={{
         borderColor: isHighlighted ? color.hex : `${color.hex}30`,
         color: isHighlighted ? color.hex : `${color.hex}50`,
@@ -687,20 +801,28 @@ function PhaseHeader({
   item,
   isFirst,
   onRemove,
+  activeDrag,
 }: {
   item: { phase: { id: string; display_name: string; color_key: string | null }; color: ReturnType<typeof resolveColorKey>; itemCount: number }
   isFirst: boolean
   onRemove: () => void
+  activeDrag: ActiveDrag | null
 }) {
   const hex = item.color.hex
+  const droppableId = `${DROP_PHASE_HEADER_PREFIX}${item.phase.id}`
+  const { isOver, setNodeRef } = useDroppable({ id: droppableId })
+
+  const isDraggingPhase = activeDrag?.type === 'library-phase'
+  const isHighlighted = isOver && isDraggingPhase
 
   return (
     <div
-      className="flex items-center gap-1.5 px-2.5 py-1.5"
+      ref={setNodeRef}
+      className="flex items-center gap-1.5 px-2.5 py-1.5 transition-all"
       style={{
-        background: `${hex}0a`,
-        borderLeft: `3px solid ${hex}`,
-        borderTop: !isFirst ? `1px solid ${hex}15` : undefined,
+        background: isHighlighted ? `${hex}30` : `${hex}18`,
+        borderTop: !isFirst ? `1px solid ${hex}20` : undefined,
+        boxShadow: isHighlighted ? `inset 0 0 0 1.5px ${hex}40` : undefined,
       }}
     >
       <div className="cursor-grab text-slate-300">
@@ -710,6 +832,11 @@ function PhaseHeader({
       <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: hex }}>
         {item.phase.display_name}
       </span>
+      {isHighlighted && (
+        <span className="text-[9px] font-medium text-slate-500">
+          Drop to nest as sub-phase
+        </span>
+      )}
       <span className="text-[10px] ml-auto" style={{ color: `${hex}70` }}>
         {item.itemCount}
       </span>
@@ -781,7 +908,7 @@ function LibraryPanel({
   }
 
   return (
-    <div className="w-[220px] min-w-[220px] border-l border-slate-200 flex flex-col bg-white">
+    <div className="w-[280px] min-w-[280px] border-l border-slate-200 flex flex-col bg-white">
       {/* Search + Tab switcher */}
       <div className="p-2 pb-1 space-y-1.5">
         <SearchInput
@@ -1036,6 +1163,44 @@ function DraggableLibraryPhase({ phase }: { phase: { id: string; name: string; d
   )
 }
 
+// ─── Sort Override Helper ────────────────────────────────────
+
+function applySortOverride(
+  segment: PhaseGroupSegmentData,
+  orderedIds: string[],
+): PhaseGroupSegmentData {
+  // Build a map from sortable ID → render item
+  const idToItem = new Map<string, RenderItem>()
+  for (const item of segment.sortableItems) {
+    if (item.type === 'sub-phase') {
+      idToItem.set(`${SP_BLOCK_PREFIX}${item.phase.id}`, item)
+    } else if ('templateItem' in item) {
+      idToItem.set((item as { templateItem: { id: string } }).templateItem.id, item)
+    }
+  }
+
+  const reorderedItems: RenderItem[] = []
+  const reorderedIds: string[] = []
+
+  for (const id of orderedIds) {
+    const item = idToItem.get(id)
+    if (item) {
+      reorderedItems.push(item)
+      reorderedIds.push(id)
+    }
+  }
+
+  // Add any items not in the override (defensive — handles new items added after override was set)
+  for (const [id, item] of idToItem) {
+    if (!reorderedIds.includes(id)) {
+      reorderedItems.push(item)
+      reorderedIds.push(id)
+    }
+  }
+
+  return { ...segment, sortableItems: reorderedItems, sortableIds: reorderedIds }
+}
+
 // ─── groupByPhase helper ────────────────────────────────────
 
 type PhaseSegment = PhaseGroupSegmentData | BoundaryConnectorSegment | UnassignedSegmentData
@@ -1077,7 +1242,9 @@ function groupByPhase(renderList: RenderItem[]): PhaseSegment[] {
       }
       case 'sub-phase': {
         if (currentPhaseGroup) {
+          const spBlockId = `${SP_BLOCK_PREFIX}${item.phase.id}`
           currentPhaseGroup.sortableItems.push(item)
+          currentPhaseGroup.sortableIds.push(spBlockId)
           currentPhaseGroup.subPhases.push(item)
         }
         break
@@ -1154,7 +1321,7 @@ function BuilderSkeleton() {
           <Skeleton key={i} className="h-8 w-full rounded" />
         ))}
       </div>
-      <div className="w-[220px] border-l border-slate-200 p-2 space-y-2">
+      <div className="w-[280px] border-l border-slate-200 p-2 space-y-2">
         <Skeleton className="h-8 w-full rounded" />
         <Skeleton className="h-7 w-full rounded" />
         {Array.from({ length: 6 }).map((_, i) => (

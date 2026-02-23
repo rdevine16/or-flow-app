@@ -76,6 +76,7 @@ function groupByPhase(renderList: RenderItem[]): PhaseSegment[] {
       case 'sub-phase': {
         if (currentPhaseGroup) {
           currentPhaseGroup.sortableItems.push(item)
+          currentPhaseGroup.sortableIds.push(`sp-block:${item.phase.id}`)
           currentPhaseGroup.subPhases.push(item)
         }
         break
@@ -102,7 +103,7 @@ function groupByPhase(renderList: RenderItem[]): PhaseSegment[] {
           currentPhaseGroup = null
         }
         // Collect all unassigned items that follow
-        const unassignedItems: RenderItem[] = []
+        const unassignedItems: UnassignedMilestoneItem[] = []
         const unassignedIds: string[] = []
         // We'll handle this by looking ahead in the next iterations
         segments.push({
@@ -294,6 +295,7 @@ describe('groupByPhase helper', () => {
         type: 'sub-phase',
         phase: phase1Sub,
         parentPhase: phase1,
+        color: resolveColorKey(phase1Sub.color_key),
         milestones: [
           { milestone: milestone2, templateItem: item4 },
           { milestone: milestone3, templateItem: item5 },

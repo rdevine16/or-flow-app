@@ -93,8 +93,7 @@ describe('PhaseLibrary', () => {
     it('renders active phases as table rows', () => {
       render(<PhaseLibrary />)
 
-      // "Pre-Op" appears in its own row AND as parent label on the sub-phase row
-      expect(screen.getAllByText('Pre-Op').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('Pre-Op')).toBeInTheDocument()
       expect(screen.getByText('Surgical')).toBeInTheDocument()
       expect(screen.getByText('Pre-Op Prep')).toBeInTheDocument()
     })
@@ -107,22 +106,13 @@ describe('PhaseLibrary', () => {
       expect(screen.getByText('Teal')).toBeInTheDocument()
     })
 
-    it('shows parent indicator for sub-phases', () => {
+    it('does not show parent column (sub-phase nesting is template-specific)', () => {
       render(<PhaseLibrary />)
 
-      // Pre-Op Prep has parent_phase_id = phase-1 (Pre-Op)
-      // The parent name should appear in that row
-      const rows = screen.getAllByText('Pre-Op')
-      // First "Pre-Op" is the phase itself, second is the parent indicator on the sub-phase row
-      expect(rows.length).toBeGreaterThanOrEqual(2)
-    })
-
-    it('shows dash for top-level phases parent column', () => {
-      render(<PhaseLibrary />)
-
-      // Top-level phases should have dash in parent column
-      const dashes = screen.getAllByText('\u2014')
-      expect(dashes.length).toBeGreaterThanOrEqual(1)
+      // Parent column was removed — sub-phase nesting is now per-template via sub_phase_map
+      // "Pre-Op" should appear exactly once (as the phase itself, not as a parent label)
+      const preOpTexts = screen.getAllByText('Pre-Op')
+      expect(preOpTexts).toHaveLength(1)
     })
 
     it('shows phase count in summary footer', () => {
@@ -217,14 +207,15 @@ describe('PhaseLibrary', () => {
       expect(screen.getByText('Selected: Blue')).toBeInTheDocument()
     })
 
-    it('shows parent phase dropdown with top-level options', async () => {
+    it('does not show parent phase dropdown (nesting is template-specific)', async () => {
       const user = userEvent.setup()
       render(<PhaseLibrary />)
 
       await user.click(screen.getByText('Add Phase'))
 
-      // Parent dropdown should show Pre-Op and Surgical (top-level)
-      expect(screen.getByText('None (top-level phase)')).toBeInTheDocument()
+      // Parent dropdown was removed — sub-phase nesting is per-template
+      expect(screen.queryByText('None (top-level phase)')).not.toBeInTheDocument()
+      expect(screen.queryByText('Parent Phase')).not.toBeInTheDocument()
     })
 
     it('shows auto-generated internal name preview', async () => {

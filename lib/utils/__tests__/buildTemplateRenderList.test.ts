@@ -162,7 +162,7 @@ describe('buildTemplateRenderList', () => {
   it('renders sub-phase within parent phase', () => {
     const phases = [
       makePhase('p1', 'surgical', 1),
-      makePhase('p1_sub', 'closure', 2, 'amber', 'p1'), // sub-phase of p1
+      makePhase('p1_sub', 'closure', 2, 'amber'),
     ]
     const milestones = [
       makeMilestone('m1', 'incision'),
@@ -181,7 +181,8 @@ describe('buildTemplateRenderList', () => {
       makeItem('i6', 't1', 'm3', 'p1_sub', 6),
     ]
 
-    const result = buildTemplateRenderList(items, phases, milestones)
+    // Sub-phase relationship is template-specific via subPhaseMap
+    const result = buildTemplateRenderList(items, phases, milestones, undefined, { p1_sub: 'p1' })
 
     const subPhases = result.filter(r => r.type === 'sub-phase')
     expect(subPhases).toHaveLength(1)
@@ -342,7 +343,7 @@ describe('buildTemplateRenderList', () => {
     const phases = [
       makePhase('p1', 'pre_op', 1, 'blue'),
       makePhase('p2', 'surgical', 2, 'green'),
-      makePhase('p2_sub', 'closure', 3, 'amber', 'p2'),
+      makePhase('p2_sub', 'closure', 3, 'amber'),
       makePhase('p3', 'post_op', 4, 'purple'),
     ]
     const milestones = [
@@ -368,7 +369,8 @@ describe('buildTemplateRenderList', () => {
       makeItem('i11', 't1', 'm7', null, 11), // unassigned
     ]
 
-    const result = buildTemplateRenderList(items, phases, milestones)
+    // Sub-phase relationship via subPhaseMap
+    const result = buildTemplateRenderList(items, phases, milestones, undefined, { p2_sub: 'p2' })
 
     // Verify phase headers
     const phaseHeaders = result.filter(r => r.type === 'phase-header')
@@ -413,6 +415,81 @@ describe('buildTemplateRenderList', () => {
     expect(dropZones).toHaveLength(3) // one per top-level phase
   })
 
+  describe('subPhaseMap parameter', () => {
+    it('same phase renders as top-level when not in subPhaseMap', () => {
+      const phases = [
+        makePhase('p1', 'surgical', 1, 'green'),
+        makePhase('p1_sub', 'closure', 2, 'amber'),
+      ]
+      const milestones = [
+        makeMilestone('m1', 'incision'),
+        makeMilestone('m2', 'suture'),
+      ]
+      const items = [
+        makeItem('i1', 't1', 'm1', 'p1', 1),
+        makeItem('i2', 't1', 'm2', 'p1_sub', 2),
+      ]
+
+      // No subPhaseMap → p1_sub is treated as a top-level phase
+      const result = buildTemplateRenderList(items, phases, milestones)
+
+      const phaseHeaders = result.filter(r => r.type === 'phase-header')
+      expect(phaseHeaders).toHaveLength(2) // both p1 and p1_sub as top-level
+      expect(phaseHeaders.map(h => h.phase.id)).toEqual(['p1', 'p1_sub'])
+    })
+
+    it('same phase renders as sub-phase when in subPhaseMap', () => {
+      const phases = [
+        makePhase('p1', 'surgical', 1, 'green'),
+        makePhase('p1_sub', 'closure', 2, 'amber'),
+      ]
+      const milestones = [
+        makeMilestone('m1', 'incision'),
+        makeMilestone('m2', 'suture'),
+      ]
+      const items = [
+        makeItem('i1', 't1', 'm1', 'p1', 1),
+        makeItem('i2', 't1', 'm2', 'p1', 2),
+        makeItem('i3', 't1', 'm2', 'p1_sub', 3),
+      ]
+
+      // With subPhaseMap → p1_sub is nested under p1
+      const result = buildTemplateRenderList(items, phases, milestones, undefined, { p1_sub: 'p1' })
+
+      const phaseHeaders = result.filter(r => r.type === 'phase-header')
+      expect(phaseHeaders).toHaveLength(1) // only p1 as top-level
+      expect(phaseHeaders[0]).toMatchObject({ phase: phases[0] })
+
+      const subPhases = result.filter(r => r.type === 'sub-phase')
+      expect(subPhases).toHaveLength(1)
+      expect(subPhases[0]).toMatchObject({
+        phase: phases[1],
+        parentPhase: phases[0],
+      })
+    })
+
+    it('ignores parent_phase_id on phase objects (only uses subPhaseMap)', () => {
+      const phases = [
+        makePhase('p1', 'surgical', 1, 'green'),
+        makePhase('p1_sub', 'closure', 2, 'amber', 'p1'), // has parent_phase_id but no subPhaseMap
+      ]
+      const milestones = [
+        makeMilestone('m1', 'incision'),
+        makeMilestone('m2', 'suture'),
+      ]
+      const items = [
+        makeItem('i1', 't1', 'm1', 'p1', 1),
+        makeItem('i2', 't1', 'm2', 'p1_sub', 2),
+      ]
+
+      // No subPhaseMap → parent_phase_id on phase is ignored
+      const result = buildTemplateRenderList(items, phases, milestones)
+
+      const phaseHeaders = result.filter(r => r.type === 'phase-header')
+      expect(phaseHeaders).toHaveLength(2) // both top-level despite parent_phase_id
+    })
+  })
+
   describe('emptyPhaseIds parameter', () => {
     it('renders empty phase header + drop zone when phase has no items', () => {
       const phases = [
@@ -455,14 +532,15 @@ describe('buildTemplateRenderList', () => {
     it('skips sub-phases in emptyPhaseIds (only renders top-level phases)', () => {
       const phases = [
         makePhase('p1', 'surgical', 1, 'green'),
-        makePhase('p1_sub', 'closure', 2, 'amber', 'p1'), // sub-phase
+        makePhase('p1_sub', 'closure', 2, 'amber'),
       ]
       const milestones: MilestoneLookup[] = []
       const items: TemplateItemData[] = []
 
-      const result = buildTemplateRenderList(items, phases, milestones, new Set(['p1', 'p1_sub']))
+      // p1_sub is a sub-phase via subPhaseMap
+      const result = buildTemplateRenderList(items, phases, milestones, new Set(['p1', 'p1_sub']), { p1_sub: 'p1' })
 
-      // Only p1 should render (p1_sub has parent_phase_id so it's skipped)
+      // Only p1 should render (p1_sub is a sub-phase via subPhaseMap so it's skipped)
       const phaseHeaders = result.filter(r => r.type === 'phase-header')
       expect(phaseHeaders).toHaveLength(1)
       expect(phaseHeaders[0]).toMatchObject({ phase: phases[0] })

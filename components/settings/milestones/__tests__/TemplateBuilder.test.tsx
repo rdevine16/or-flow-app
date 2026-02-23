@@ -5,10 +5,10 @@ import { TemplateBuilder } from '../TemplateBuilder'
 
 const defaultHookReturn = {
   templates: [
-    { id: 't1', name: 'Default Template', is_default: true, is_active: true, deleted_at: null, facility_id: 'f1', description: null, deleted_by: null },
-    { id: 't2', name: 'Custom Template', is_default: false, is_active: true, deleted_at: null, facility_id: 'f1', description: 'Custom', deleted_by: null },
+    { id: 't1', name: 'Default Template', is_default: true, is_active: true, deleted_at: null, facility_id: 'f1', description: null, deleted_by: null, block_order: {}, sub_phase_map: {} },
+    { id: 't2', name: 'Custom Template', is_default: false, is_active: true, deleted_at: null, facility_id: 'f1', description: 'Custom', deleted_by: null, block_order: {}, sub_phase_map: {} },
   ],
-  selectedTemplate: { id: 't1', name: 'Default Template', is_default: true, is_active: true, deleted_at: null, facility_id: 'f1', description: null, deleted_by: null },
+  selectedTemplate: { id: 't1', name: 'Default Template', is_default: true, is_active: true, deleted_at: null, facility_id: 'f1', description: null, deleted_by: null, block_order: {}, sub_phase_map: {} },
   selectedTemplateId: 't1',
   items: [
     { id: 'i1', template_id: 't1', facility_milestone_id: 'm1', facility_phase_id: 'p1', display_order: 1 },
@@ -47,8 +47,13 @@ const defaultHookReturn = {
   removePhaseFromTemplate: vi.fn(),
   reorderItemsInPhase: vi.fn(),
   addPhaseToTemplate: vi.fn(),
+  nestPhaseAsSubPhase: vi.fn(),
+  removeSubPhase: vi.fn(),
   emptyPhaseIds: new Set<string>(),
+  subPhaseMap: {},
   dispatch: vi.fn(),
+  blockOrder: {},
+  updateBlockOrder: vi.fn(),
 }
 
 const mockUseTemplateBuilder = vi.fn(() => defaultHookReturn)

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/Button'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { COLOR_KEY_PALETTE, resolveColorKey } from '@/lib/milestone-phase-config'
-import { Plus, Pencil, Archive, CornerDownRight } from 'lucide-react'
+import { Plus, Pencil, Archive } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -98,19 +98,6 @@ export function PhaseLibrary() {
     )
   }, [activePhases, search])
 
-  // Parent phase lookup (for sub-phase indicator)
-  const phaseById = useMemo(() => {
-    const map = new Map<string, FacilityPhase>()
-    for (const p of activePhases) map.set(p.id, p)
-    return map
-  }, [activePhases])
-
-  // Top-level phases (for parent dropdown in form)
-  const topLevelPhases = useMemo(
-    () => activePhases.filter(p => !p.parent_phase_id),
-    [activePhases]
-  )
-
   const closeConfirmModal = () => {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
   }
@@ -130,22 +117,12 @@ export function PhaseLibrary() {
   }
 
   const handleArchive = (phase: FacilityPhase) => {
-    // Check if any sub-phases reference this phase
-    const children = activePhases.filter(p => p.parent_phase_id === phase.id)
-
     setConfirmModal({
       isOpen: true,
       title: 'Archive Phase',
       message: (
         <div>
           <p>Archive <strong>&ldquo;{phase.display_name}&rdquo;</strong>?</p>
-          {children.length > 0 && (
-            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-amber-700 text-sm">
-                This phase has <strong>{children.length} sub-phase{children.length !== 1 ? 's' : ''}</strong> that will become parentless.
-              </p>
-            </div>
-          )}
           <p className="mt-3 text-slate-500 text-sm">
             You can restore this phase from the archived section below.
           </p>
@@ -166,24 +143,11 @@ export function PhaseLibrary() {
 
           if (archiveError) throw archiveError
 
-          // Clear parent references on children
-          if (children.length > 0) {
-            const { error: clearErr } = await supabase
-              .from('facility_phases')
-              .update({ parent_phase_id: null })
-              .eq('parent_phase_id', phase.id)
-            if (clearErr) throw clearErr
-          }
-
-          setPhases((phases || []).map(p => {
-            if (p.id === phase.id) {
-              return { ...p, deleted_at: new Date().toISOString(), deleted_by: currentUserId, is_active: false }
-            }
-            if (p.parent_phase_id === phase.id) {
-              return { ...p, parent_phase_id: null }
-            }
-            return p
-          }))
+          setPhases((phases || []).map(p =>
+            p.id === phase.id
+              ? { ...p, deleted_at: new Date().toISOString(), deleted_by: currentUserId, is_active: false }
+              : p
+          ))
           showToast({ type: 'success', title: `"${phase.display_name}" archived` })
         } catch (err) {
           showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to archive phase' })
@@ -244,10 +208,9 @@ export function PhaseLibrary() {
         <>
           <div className="border border-slate-200 rounded-lg overflow-hidden">
             {/* Table header */}
-            <div className="grid grid-cols-[1fr_100px_120px_80px] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-medium text-slate-500 uppercase tracking-wider">
+            <div className="grid grid-cols-[1fr_100px_80px] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-medium text-slate-500 uppercase tracking-wider">
               <span>Phase</span>
               <span>Color</span>
-              <span>Parent</span>
               <span className="text-right">Actions</span>
             </div>
 
@@ -259,12 +222,11 @@ export function PhaseLibrary() {
             ) : (
               filteredPhases.map(phase => {
                 const colorConfig = resolveColorKey(phase.color_key)
-                const parentPhase = phase.parent_phase_id ? phaseById.get(phase.parent_phase_id) : null
 
                 return (
                   <div
                     key={phase.id}
-                    className="grid grid-cols-[1fr_100px_120px_80px] gap-2 px-4 py-2.5 border-b border-slate-100 last:border-b-0 items-center"
+                    className="grid grid-cols-[1fr_100px_80px] gap-2 px-4 py-2.5 border-b border-slate-100 last:border-b-0 items-center"
                   >
                     {/* Name with color swatch */}
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -278,18 +240,6 @@ export function PhaseLibrary() {
                       <span className={`text-xs font-medium ${colorConfig.accentText}`}>
                         {colorConfig.label}
                       </span>
-                    </div>
-
-                    {/* Parent indicator */}
-                    <div>
-                      {parentPhase ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                          <CornerDownRight className="w-3 h-3" />
-                          <span className="truncate max-w-[80px]">{parentPhase.display_name}</span>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-300">&mdash;</span>
-                      )}
                     </div>
 
                     {/* Actions */}
@@ -366,7 +316,6 @@ export function PhaseLibrary() {
         onClose={() => { setShowFormModal(false); setEditingPhase(null) }}
         mode={formMode}
         phase={editingPhase}
-        parentOptions={topLevelPhases}
         saving={saving}
         onSave={async (data) => {
           setSaving(true)
@@ -384,7 +333,6 @@ export function PhaseLibrary() {
                   display_name: data.displayName,
                   color_key: data.colorKey,
                   display_order: maxOrder + 1,
-                  parent_phase_id: data.parentPhaseId || null,
                   is_active: true,
                 })
                 .select()
@@ -400,7 +348,6 @@ export function PhaseLibrary() {
                 .update({
                   display_name: data.displayName,
                   color_key: data.colorKey,
-                  parent_phase_id: data.parentPhaseId || null,
                 })
                 .eq('id', editingPhase.id)
 
@@ -408,7 +355,7 @@ export function PhaseLibrary() {
 
               setPhases((phases || []).map(p =>
                 p.id === editingPhase.id
-                  ? { ...p, display_name: data.displayName, color_key: data.colorKey, parent_phase_id: data.parentPhaseId || null }
+                  ? { ...p, display_name: data.displayName, color_key: data.colorKey }
                   : p
               ))
               showToast({ type: 'success', title: `"${data.displayName}" updated` })
@@ -444,7 +391,6 @@ interface PhaseFormData {
   name: string
   displayName: string
   colorKey: string
-  parentPhaseId: string | null
 }
 
 interface PhaseFormModalProps {
@@ -452,7 +398,6 @@ interface PhaseFormModalProps {
   onClose: () => void
   mode: 'add' | 'edit'
   phase: FacilityPhase | null
-  parentOptions: FacilityPhase[]
   saving: boolean
   onSave: (data: PhaseFormData) => void
 }
@@ -465,7 +410,7 @@ function generatePhaseName(displayName: string): string {
     .substring(0, 50)
 }
 
-function PhaseFormModal({ open, onClose, mode, phase, parentOptions, saving, onSave }: PhaseFormModalProps) {
+function PhaseFormModal({ open, onClose, mode, phase, saving, onSave }: PhaseFormModalProps) {
   const formKey = `${mode}-${phase?.id ?? 'new'}-${open}`
 
   return (
@@ -479,7 +424,6 @@ function PhaseFormModal({ open, onClose, mode, phase, parentOptions, saving, onS
           key={formKey}
           mode={mode}
           phase={phase}
-          parentOptions={parentOptions}
           saving={saving}
           onSave={onSave}
           onClose={onClose}
@@ -492,14 +436,12 @@ function PhaseFormModal({ open, onClose, mode, phase, parentOptions, saving, onS
 function PhaseFormContent({
   mode,
   phase,
-  parentOptions,
   saving,
   onSave,
   onClose,
 }: Omit<PhaseFormModalProps, 'open'>) {
   const [displayName, setDisplayName] = useState(phase?.display_name ?? '')
   const [colorKey, setColorKey] = useState(phase?.color_key ?? 'blue')
-  const [parentPhaseId, setParentPhaseId] = useState(phase?.parent_phase_id ?? '')
 
   const handleSubmit = () => {
     if (!displayName.trim()) return
@@ -507,12 +449,8 @@ function PhaseFormContent({
       name: mode === 'add' ? generatePhaseName(displayName) : (phase?.name ?? generatePhaseName(displayName)),
       displayName: displayName.trim(),
       colorKey,
-      parentPhaseId: parentPhaseId || null,
     })
   }
-
-  // Filter out self and own children from parent options
-  const availableParents = parentOptions.filter(p => p.id !== phase?.id)
 
   return (
     <>
@@ -559,23 +497,6 @@ function PhaseFormContent({
         <p className="text-xs text-slate-400 mt-1.5">
           Selected: {COLOR_KEY_PALETTE.find(c => c.key === colorKey)?.label ?? 'None'}
         </p>
-      </div>
-
-      {/* Parent Phase (for sub-phases) */}
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Parent Phase <span className="text-slate-400 font-normal">(optional — makes this a sub-phase)</span>
-        </label>
-        <select
-          value={parentPhaseId}
-          onChange={(e) => setParentPhaseId(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-          <option value="">None (top-level phase)</option>
-          {availableParents.map(p => (
-            <option key={p.id} value={p.id}>{p.display_name}</option>
-          ))}
-        </select>
       </div>
 
       {/* Footer */}

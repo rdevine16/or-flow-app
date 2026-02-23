@@ -240,10 +240,17 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             .order('display_order')
 
           if (templateItems && templateItems.length > 0) {
+            // Deduplicate: shared boundary milestones appear in multiple phases
+            const seen = new Set<string>()
             milestoneTypesResult = templateItems
               .map(item => item.facility_milestones as unknown as FacilityMilestone)
               .filter(Boolean)
               .sort((a, b) => a.display_order - b.display_order)
+              .filter(m => {
+                if (seen.has(m.id)) return false
+                seen.add(m.id)
+                return true
+              })
           }
         }
       }

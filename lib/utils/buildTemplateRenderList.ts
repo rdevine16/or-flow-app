@@ -118,9 +118,15 @@ export function buildTemplateRenderList(
   phases: PhaseLookup[],
   milestones: MilestoneLookup[],
   emptyPhaseIds?: Set<string>,
+  subPhaseMap?: Record<string, string>,
 ): RenderItem[] {
   const milestoneMap = new Map(milestones.map(m => [m.id, m]))
   const phaseMap = new Map(phases.map(p => [p.id, p]))
+
+  // Use template-specific sub-phase map to determine parent-child relationships.
+  // A phase is a sub-phase in THIS template if subPhaseMap[childId] = parentId.
+  const spMap = subPhaseMap ?? {}
+  const getParentPhaseId = (phaseId: string): string | null => spMap[phaseId] ?? null
 
   // Group items by phase
   const phaseGroups = new Map<string, PhaseGroup>()
@@ -151,18 +157,33 @@ export function buildTemplateRenderList(
     group.items.push({ item, milestone })
   }
 
-  // Top-level phases sorted by display_order
+  // Top-level phases sorted by display_order (not a sub-phase in this template)
   const topLevel = Array.from(phaseGroups.values())
-    .filter(g => !g.phase.parent_phase_id)
+    .filter(g => !getParentPhaseId(g.phase.id))
     .sort((a, b) => a.phase.display_order - b.phase.display_order)
 
-  // Sub-phases grouped by parent
-  const subPhaseMap = new Map<string, PhaseGroup[]>()
+  // Sub-phases grouped by parent (from items + empty sub-phases)
+  const subPhaseGroupMap = new Map<string, PhaseGroup[]>()
   for (const group of phaseGroups.values()) {
-    if (group.phase.parent_phase_id) {
-      const existing = subPhaseMap.get(group.phase.parent_phase_id) || []
+    const parentId = getParentPhaseId(group.phase.id)
+    if (parentId) {
+      const existing = subPhaseGroupMap.get(parentId) || []
       existing.push(group)
-      subPhaseMap.set(group.phase.parent_phase_id, existing)
+      subPhaseGroupMap.set(parentId, existing)
+    }
+  }
+
+  // Include empty sub-phases (in emptyPhaseIds with a parent in subPhaseMap)
+  if (emptyPhaseIds) {
+    for (const phaseId of emptyPhaseIds) {
+      if (phaseGroups.has(phaseId)) continue
+      const phase = phaseMap.get(phaseId)
+      if (!phase) continue
+      const parentId = getParentPhaseId(phaseId)
+      if (!parentId) continue
+      const existing = subPhaseGroupMap.get(parentId) || []
+      existing.push({ phase, items: [] })
+      subPhaseGroupMap.set(parentId, existing)
     }
   }
 
@@ -186,10 +207,12 @@ export function buildTemplateRenderList(
     result.push({ type: 'phase-header', phase, color, itemCount: items.length })
 
     // Get sub-phases for this phase
-    const subPhases = (subPhaseMap.get(phase.id) || [])
-      .sort((a, b) => a.phase.display_order - b.phase.display_order)
+    const subPhases = (subPhaseGroupMap.get(phase.id) || [])
+      .sort((a: PhaseGroup, b: PhaseGroup) => a.phase.display_order - b.phase.display_order)
 
     // Render milestones — every milestone renders, including boundary edges
+    const renderedSubPhaseIds = new Set<string>()
+
     for (let j = 0; j < items.length; j++) {
       const { item, milestone } = items[j]
       const isFirst = j === 0
@@ -222,9 +245,23 @@ export function buildTemplateRenderList(
             phase: sp.phase,
             parentPhase: phase,
             color: resolveColorKey(sp.phase.color_key),
-            milestones: sp.items.map(si => ({ milestone: si.milestone, templateItem: si.item })),
+            milestones: sp.items.map((si: PhaseGroup['items'][number]) => ({ milestone: si.milestone, templateItem: si.item })),
           })
+          renderedSubPhaseIds.add(sp.phase.id)
         }
+      }
+    }
+
+    // Render any sub-phases not yet rendered (empty or with milestones not in parent)
+    for (const sp of subPhases) {
+      if (!renderedSubPhaseIds.has(sp.phase.id)) {
+        result.push({
+          type: 'sub-phase',
+          phase: sp.phase,
+          parentPhase: phase,
+          color: resolveColorKey(sp.phase.color_key),
+          milestones: sp.items.map(si => ({ milestone: si.milestone, templateItem: si.item })),
+        })
       }
     }
 
@@ -252,7 +289,7 @@ export function buildTemplateRenderList(
     for (const phaseId of emptyPhaseIds) {
       if (phaseGroups.has(phaseId)) continue
       const phase = phaseMap.get(phaseId)
-      if (!phase || phase.parent_phase_id) continue
+      if (!phase || getParentPhaseId(phaseId)) continue
       const color = resolveColorKey(phase.color_key)
       result.push({ type: 'phase-header', phase, color, itemCount: 0 })
       result.push({ type: 'drop-zone', phaseId: phase.id, phaseName: phase.display_name, color })
