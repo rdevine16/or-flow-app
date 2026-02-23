@@ -144,7 +144,7 @@ export default function CreateFacilityPage() {
       ] = await Promise.all([
         supabase.from('milestone_types').select('id', { count: 'exact', head: true }).eq('is_active', true).is('deleted_at', null),
         supabase.from('procedure_type_templates').select('id', { count: 'exact', head: true }).eq('is_active', true).is('deleted_at', null),
-        supabase.from('procedure_milestone_templates').select('id', { count: 'exact', head: true }),
+        supabase.from('milestone_template_type_items').select('id', { count: 'exact', head: true }),
         supabase.from('delay_types').select('id', { count: 'exact', head: true }).is('facility_id', null).eq('is_active', true).is('deleted_at', null),
         supabase.from('cancellation_reason_templates').select('id', { count: 'exact', head: true }).eq('is_active', true).is('deleted_at', null),
         supabase.from('complexity_templates').select('id', { count: 'exact', head: true }).eq('is_active', true).is('deleted_at', null),

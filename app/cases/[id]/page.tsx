@@ -205,24 +205,46 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
       if (caseError) throw caseError
 
-      // Fetch milestones config
+      // Fetch milestones from template cascade: procedure template → facility default
       let milestoneTypesResult: FacilityMilestone[] = []
       if (caseResult?.procedure_type_id) {
-        const { data: configuredMilestones } = await supabase
-          .from('procedure_milestone_config')
-          .select(`
-            facility_milestone_id, display_order,
-            facility_milestones (id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id)
-          `)
-          .eq('procedure_type_id', caseResult.procedure_type_id)
-          .eq('facility_id', effectiveFacilityId)
-          .order('display_order')
+        // Resolve template: procedure assignment → facility default
+        let templateId: string | null = null
 
-        if (configuredMilestones && configuredMilestones.length > 0) {
-          milestoneTypesResult = configuredMilestones
-            .map(cm => cm.facility_milestones as unknown as FacilityMilestone)
-            .filter(Boolean)
-            .sort((a, b) => a.display_order - b.display_order)
+        const { data: procData } = await supabase
+          .from('procedure_types')
+          .select('milestone_template_id')
+          .eq('id', caseResult.procedure_type_id)
+          .single()
+        templateId = procData?.milestone_template_id ?? null
+
+        if (!templateId) {
+          const { data: defaultTemplate } = await supabase
+            .from('milestone_templates')
+            .select('id')
+            .eq('facility_id', effectiveFacilityId)
+            .eq('is_default', true)
+            .eq('is_active', true)
+            .single()
+          templateId = defaultTemplate?.id ?? null
+        }
+
+        if (templateId) {
+          const { data: templateItems } = await supabase
+            .from('milestone_template_items')
+            .select(`
+              display_order,
+              facility_milestones (id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id)
+            `)
+            .eq('template_id', templateId)
+            .order('display_order')
+
+          if (templateItems && templateItems.length > 0) {
+            milestoneTypesResult = templateItems
+              .map(item => item.facility_milestones as unknown as FacilityMilestone)
+              .filter(Boolean)
+              .sort((a, b) => a.display_order - b.display_order)
+          }
         }
       }
 

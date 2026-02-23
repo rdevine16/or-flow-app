@@ -292,7 +292,7 @@ describe('resolveBreadcrumbs', () => {
         '/admin/settings/body-regions', '/admin/settings/cost-categories',
         '/admin/settings/delay-types', '/admin/settings/implant-companies',
         '/admin/settings/milestones', '/admin/settings/procedure-categories',
-        '/admin/settings/procedure-milestones', '/admin/settings/procedures',
+        '/admin/settings/procedures',
       ]
       for (const route of expectedRoutes) {
         expect(ROUTE_BREADCRUMBS[route]).toBeDefined()

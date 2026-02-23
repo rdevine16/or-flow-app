@@ -318,11 +318,6 @@ export const ROUTE_BREADCRUMBS: Record<string, RouteSegment[]> = {
     { label: 'Settings', href: null },
     { label: 'Procedure Categories', href: null },
   ],
-  '/admin/settings/procedure-milestones': [
-    { label: 'Admin', href: '/admin' },
-    { label: 'Settings', href: null },
-    { label: 'Procedure Milestones', href: null },
-  ],
   '/admin/settings/procedures': [
     { label: 'Admin', href: '/admin' },
     { label: 'Settings', href: null },

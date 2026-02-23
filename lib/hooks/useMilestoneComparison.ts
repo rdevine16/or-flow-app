@@ -108,16 +108,39 @@ export function useMilestoneComparison({
         return (data ?? []) as MilestoneMedianRow[]
       },
 
-      // Expected milestone names for this procedure (for missing detection)
+      // Expected milestone names for this procedure (resolved from template cascade)
       expectedNames: async (supabase) => {
         if (!procedureTypeId || !facilityId) return []
+
+        // Resolve template: procedure assignment → facility default
+        let templateId: string | null = null
+
+        const { data: procData } = await supabase
+          .from('procedure_types')
+          .select('milestone_template_id')
+          .eq('id', procedureTypeId)
+          .single()
+        templateId = procData?.milestone_template_id ?? null
+
+        if (!templateId) {
+          const { data: defaultTemplate } = await supabase
+            .from('milestone_templates')
+            .select('id')
+            .eq('facility_id', facilityId)
+            .eq('is_default', true)
+            .eq('is_active', true)
+            .single()
+          templateId = defaultTemplate?.id ?? null
+        }
+
+        if (!templateId) return []
+
         const { data, error } = await supabase
-          .from('procedure_milestone_config')
+          .from('milestone_template_items')
           .select('facility_milestone:facility_milestones ( name )')
-          .eq('procedure_type_id', procedureTypeId)
-          .eq('facility_id', facilityId)
-          .eq('is_enabled', true)
+          .eq('template_id', templateId)
         if (error) throw new Error(error.message)
+
         type MilestoneNameRow = { facility_milestone: { name: string } | { name: string }[] | null }
         return ((data ?? []) as MilestoneNameRow[]).map(
           (row) => {

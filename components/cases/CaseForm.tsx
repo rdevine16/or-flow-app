@@ -685,30 +685,49 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     }
     setFieldErrors({})
 
-    // Phase 0.3: Check milestone config BEFORE creating the case
+    // Check milestone template exists BEFORE creating the case
     if (mode === 'create' && formData.procedure_type_id) {
-      const { data: procedureMilestones, error: pmError } = await supabase
-        .from('procedure_milestone_config')
-        .select('facility_milestone_id')
-        .eq('procedure_type_id', formData.procedure_type_id)
-        .eq('facility_id', userFacilityId)
-        .eq('is_enabled', true)
+      // Resolve template: procedure assignment → facility default
+      let hasTemplate = false
 
-      if (pmError) {
-        showToast({
-          type: 'error',
-          title: 'Milestone Check Failed',
-          message: 'Could not verify milestone configuration. Please try again.',
-        })
-        setLoading(false)
-        return
+      const { data: procData } = await supabase
+        .from('procedure_types')
+        .select('milestone_template_id')
+        .eq('id', formData.procedure_type_id)
+        .single()
+
+      if (procData?.milestone_template_id) {
+        const { count } = await supabase
+          .from('milestone_template_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('template_id', procData.milestone_template_id)
+        hasTemplate = (count ?? 0) > 0
       }
 
-      if (!procedureMilestones || procedureMilestones.length === 0) {
+      if (!hasTemplate) {
+        // Fall back to facility default template
+        const { data: defaultTemplate } = await supabase
+          .from('milestone_templates')
+          .select('id')
+          .eq('facility_id', userFacilityId)
+          .eq('is_default', true)
+          .eq('is_active', true)
+          .single()
+
+        if (defaultTemplate?.id) {
+          const { count } = await supabase
+            .from('milestone_template_items')
+            .select('id', { count: 'exact', head: true })
+            .eq('template_id', defaultTemplate.id)
+          hasTemplate = (count ?? 0) > 0
+        }
+      }
+
+      if (!hasTemplate) {
         showToast({
           type: 'error',
           title: 'No Milestones Configured',
-          message: 'No milestones are configured for this procedure type. Contact an admin to set up milestones before creating a case.',
+          message: 'No milestone template is configured for this procedure type. Contact an admin to set up milestones before creating a case.',
         })
         setLoading(false)
         return

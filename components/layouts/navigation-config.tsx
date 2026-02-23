@@ -52,7 +52,6 @@ export const navIcons = {
   procedures: <ClipboardList className={iconClass} />,
   categories: <Package className={iconClass} />,
   milestones: <Clock className={iconClass} />,
-  procedureMilestones: <ClipboardCheck className={iconClass} />,
   delays: <AlertTriangle className={iconClass} />,
   implants: <FlaskConical className={iconClass} />,
   bodyRegions: <User className={iconClass} />,
@@ -168,12 +167,6 @@ export const adminNavGroups: NavGroup[] = [
         name: 'Notifications',
         href: '/admin/settings/notifications',
         icon: navIcons.notifications,
-        allowedRoles: ['global_admin'],
-      },
-      {
-        name: 'Procedure Milestones',
-        href: '/admin/settings/procedure-milestones',
-        icon: navIcons.procedureMilestones,
         allowedRoles: ['global_admin'],
       },
       {

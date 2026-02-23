@@ -79,7 +79,6 @@ export async function createFacilityWithTemplates(
       template_config: {
         milestones: templateConfig.milestones,
         procedures: templateConfig.procedures,
-        procedure_milestone_config: templateConfig.procedureMilestoneConfig,
         delay_types: templateConfig.delayTypes,
         cancellation_reasons: templateConfig.cancellationReasons,
         complexities: templateConfig.complexities,

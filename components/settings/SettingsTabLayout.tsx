@@ -1,10 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@/lib/UserContext'
-import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import {
   getCategoryForPath,
   getVisibleCategories,
@@ -136,34 +134,11 @@ interface SettingsTabLayoutProps {
 
 export default function SettingsTabLayout({ children }: SettingsTabLayoutProps) {
   const pathname = usePathname()
-  const { can, effectiveFacilityId } = useUser()
+  const { can } = useUser()
 
   const visibleCategories = getVisibleCategories(can)
   const activeCategoryId = getCategoryForPath(pathname)
   const activeCategory = visibleCategories.find(c => c.id === activeCategoryId)
-  // Query for surgeon override existence (lightweight: only checks if any rows exist)
-  const isCaseMgmtTab = activeCategoryId === 'case-management'
-  const { data: surgeonOverrideExists } = useSupabaseQuery<boolean>(
-    async (sb) => {
-      const { count, error } = await sb
-        .from('surgeon_milestone_config')
-        .select('id', { count: 'exact', head: true })
-        .eq('facility_id', effectiveFacilityId!)
-        .limit(1)
-      if (error) return false
-      return (count ?? 0) > 0
-    },
-    {
-      deps: [effectiveFacilityId],
-      enabled: isCaseMgmtTab && !!effectiveFacilityId,
-    }
-  )
-
-  const notificationDots = useMemo(() => {
-    if (!surgeonOverrideExists) return undefined
-    return { 'surgeon-milestones': true } as Record<string, boolean>
-  }, [surgeonOverrideExists])
-
   return (
     <div className="flex flex-col min-h-0">
       {/* Tab Bar */}
@@ -175,7 +150,6 @@ export default function SettingsTabLayout({ children }: SettingsTabLayoutProps) 
           <SubNav
             category={activeCategory}
             pathname={pathname}
-            notificationDots={notificationDots}
           />
         )}
 
