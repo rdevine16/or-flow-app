@@ -23,31 +23,28 @@ facility_milestones (base pool)
 ### New System (template-based)
 ```
 facility_milestones (atom library — unchanged)
-facility_phases (name + color library — new)
-  └─ milestone_templates (named bundles with phase structure)
-       └─ milestone_template_items (ordered milestones in template)
-       └─ milestone_template_phases (phases with start/end boundaries)
+facility_phases (name + color + optional parent_phase_id — new)
+  └─ milestone_templates (named bundles)
+       └─ milestone_template_items (ordered milestones, each with facility_phase_id)
             └─ procedure_types.milestone_template_id (procedure → template)
                  └─ surgeon_template_overrides (surgeon picks different template)
 ```
-1 page, 5 tabs. Templates are reusable. Surgeon overrides are just "pick a different template."
+1 page, 5 tabs. Templates are reusable. Surgeon overrides are just "pick a different template." Phase boundaries are position-based (first/last milestone in a phase group), not explicit start/end refs.
 
 ## Requirements
 
 ### Database
 
 #### New Tables (Facility Level)
-1. **`facility_phases`** — Phase library: name, display_name, color_key, is_active. No milestone references — those live in template phases.
+1. **`facility_phases`** — Phase library: name, display_name, color_key, display_order, parent_phase_id (1 level deep for sub-phases), is_active, soft delete.
 2. **`milestone_templates`** — Named template per facility: name, description, is_default flag (one default per facility), is_active, soft delete.
-3. **`milestone_template_items`** — Flat ordered list of milestones in a template: template_id, facility_milestone_id, display_order. One row per milestone (shared boundaries computed at render time from adjacency).
-4. **`milestone_template_phases`** — Phases within a template: template_id, facility_phase_id, display_order, parent_template_phase_id (for sub-phases, one level deep), start_milestone_id, end_milestone_id (boundary refs within the template).
-5. **`surgeon_template_overrides`** — Surgeon picks a different template per procedure: facility_id, surgeon_id, procedure_type_id, milestone_template_id.
+3. **`milestone_template_items`** — Ordered milestones in a template with phase assignment: template_id, facility_milestone_id, facility_phase_id (which phase this item belongs to), display_order. Phase boundaries computed from adjacency at render time (first item = starts phase, last item = ends phase). Shared boundaries auto-detected when last item of phase A equals first item of phase B.
+4. **`surgeon_template_overrides`** — Surgeon picks a different template per procedure: facility_id, surgeon_id, procedure_type_id, milestone_template_id.
 
 #### New Tables (Global Admin Level)
-6. **`phase_templates`** — Global phase library for seeding new facilities.
-7. **`milestone_template_types`** — Global milestone template definitions.
-8. **`milestone_template_type_items`** — Global template milestone items.
-9. **`milestone_template_type_phases`** — Global template phase definitions.
+5. **`phase_templates`** — Global phase library for seeding new facilities. Includes parent_phase_template_id for sub-phases.
+6. **`milestone_template_types`** — Global milestone template definitions.
+7. **`milestone_template_type_items`** — Global template milestone items with phase_template_id assignment.
 
 #### Modified Tables
 10. **`procedure_types`** — Add `milestone_template_id UUID REFERENCES milestone_templates(id)`.
@@ -63,11 +60,10 @@ facility_phases (name + color library — new)
 - **`surgeon_milestone_config`** — Replaced by surgeon_template_overrides.
 
 #### Data Migration
-1. Create `facility_phases` rows from existing `phase_definitions` (extract name, display_name, color_key).
+1. Create `facility_phases` rows from existing `phase_definitions` (extract name, display_name, color_key, parent mapping).
 2. For each facility, create a "Facility Default" template containing ALL active facility_milestones.
-3. Populate `milestone_template_items` with display_order from facility_milestones.
-4. Create `milestone_template_phases` from phase_definitions boundaries (mapped to facility_phases).
-5. For each procedure type with custom `procedure_milestone_config`: if enabled set differs from default template, create a procedure-specific template; otherwise assign default.
+3. Populate `milestone_template_items` with display_order from facility_milestones, `facility_phase_id` mapped from phase_definitions boundaries.
+4. For each procedure type with custom `procedure_milestone_config`: if enabled set differs from default template, create a procedure-specific template; otherwise assign default.
 6. Set `procedure_types.milestone_template_id` for all procedure types.
 7. Convert `surgeon_milestone_config` to `surgeon_template_overrides`: determine effective milestone set per surgeon+procedure, match to existing template or create new one.
 8. Create global admin equivalents (phase_templates, milestone_template_types, etc.) from existing template tables.
@@ -75,7 +71,8 @@ facility_phases (name + color library — new)
 #### RPC Updates
 - **`create_case_with_milestones()`** — Rewrite milestone resolution: surgeon_template_override → procedure_types.milestone_template_id → facility default template. Resolve template → items → case_milestones.
 - **`finalize_draft_case()`** — Same template resolution (fixes existing bug where surgeon overrides were ignored).
-- **`seed_facility_with_templates()`** — Extend to seed facility_phases, milestone_templates, template items/phases, and assign templates to procedure types.
+- **`seed_facility_with_templates()`** — Extend to seed facility_phases, milestone_templates, template items (with phase assignments), and assign templates to procedure types.
+- **`get_milestone_interval_medians()`** — Rewrite to resolve expected milestones from template cascade instead of `procedure_milestone_config.is_enabled`.
 
 ### UI — Facility Level (`/settings/milestones`)
 
@@ -84,43 +81,47 @@ facility_phases (name + color library — new)
 - All tabs on one page at `/settings/milestones`
 
 #### Tab 1: Milestones
-- Facility milestone library CRUD
+- Simple searchable table of facility milestones (no phase grouping — phases assigned in template builder)
 - Create/edit milestones with validation data (min/max minutes, validation_type)
 - Milestone pairing (link start/end pairs like Anesthesia Start ↔ Anesthesia End)
 - Archive/restore
-- Reuse existing `MilestoneFormModal` component
+- Reuse existing `MilestoneFormModal` component (remove phase_group dropdown)
 
 #### Tab 2: Phases
 - Phase library CRUD: name, display_name, color
-- Simple list — no hierarchy here (nesting happens in templates)
+- Simple list — no hierarchy here (nesting happens in template builder)
+- Sub-phase indicator (shows parent if applicable)
 - Archive/restore
 
 #### Tab 3: Templates (main builder — see mockup `docs/templates-page.jsx`)
 - **3-column layout**: Template list (left) | Builder (center) | Library (right)
 - **Template list**: Searchable, shows name + default badge. Click to select.
 - **Builder**: Phase-grouped vertical flow showing milestones in order.
+  - Items grouped by `facility_phase_id`, phases ordered by display_order.
   - Position-based boundaries: first milestone in a phase starts it, last ends it.
   - Shared boundaries: if the last milestone of phase A equals the first of phase B, render once with gradient diamond + dual "ENDS A / STARTS B" badges.
-  - Sub-phases: drag phase onto existing phase to nest (one level deep). Sub-phases have their own start/end milestone boundaries.
+  - Sub-phases: items assigned to a phase with `parent_phase_id` render nested within parent phase block (one level deep).
   - Drop zones per phase for dragging in milestones.
-  - Drag-to-reorder milestones within phases.
+  - Drag-to-reorder milestones within phases (@dnd-kit).
   - Remove milestone (X button on hover).
 - **Library panel**: Tabbed (Milestones | Phases). Shows unassigned items. Drag from library into builder.
 - **Template CRUD**: Create (name + description), duplicate, set default, archive.
 - No enabled/disabled toggle — if a milestone is in the template, it's active.
 
 #### Tab 4: Procedures
-- Flat searchable procedure list
-- Each procedure shows its assigned template name
-- Click procedure → template picker (dropdown or card grid)
+- Simple searchable procedure list (flat table)
+- Each row shows procedure name + assigned template name
+- Template picker dropdown per procedure
 - Changing assignment updates `procedure_types.milestone_template_id`
-- Optional: flow preview of the selected template
+- Procedures with no assignment show "Using facility default"
 
 #### Tab 5: Surgeons
-- Left: surgeon list with override counts
-- Right: procedure list showing assigned template per procedure
-- Per procedure: dropdown to pick a different template (or "Use procedure default")
+- Left panel: searchable surgeon list with override count badges
+- Right panel: procedure list for selected surgeon
+- Each procedure shows effective template (procedure default or surgeon override)
+- Template dropdown per procedure: pick different template or "Use procedure default"
 - Creates/removes `surgeon_template_overrides` rows
+- Clear visual distinction between inherited (gray) and overridden (highlighted)
 
 ### UI — Global Admin Level (`/admin/settings/milestones`)
 
