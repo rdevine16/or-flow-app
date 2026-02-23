@@ -1,11 +1,29 @@
 // components/settings/milestones/TemplateBuilder.tsx
 // Main 3-column template builder: Template List | Builder Canvas | Library Panel.
-// Phase 3a: rendering + template CRUD + click-to-add/remove. DnD added in Phase 3b.
+// Phase 3b: full @dnd-kit integration — drag from library, reorder within phases.
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
 import { useTemplateBuilder } from '@/hooks/useTemplateBuilder'
-import { buildTemplateRenderList } from '@/lib/utils/buildTemplateRenderList'
+import { buildTemplateRenderList, type RenderItem } from '@/lib/utils/buildTemplateRenderList'
 import { resolveColorKey } from '@/lib/milestone-phase-config'
 import { TemplateList } from './TemplateList'
 import { SharedBoundary } from './SharedBoundary'
@@ -23,8 +41,117 @@ import {
   Layers,
 } from 'lucide-react'
 
+// ─── DnD ID helpers ─────────────────────────────────────────
+
+const LIB_MILESTONE_PREFIX = 'lib-ms:'
+const LIB_PHASE_PREFIX = 'lib-ph:'
+const DROP_PHASE_PREFIX = 'drop-phase:'
+const DROP_BUILDER_BOTTOM = 'drop-builder-bottom'
+
+function parseLibMilestoneId(id: string): string | null {
+  return id.startsWith(LIB_MILESTONE_PREFIX) ? id.slice(LIB_MILESTONE_PREFIX.length) : null
+}
+function parseLibPhaseId(id: string): string | null {
+  return id.startsWith(LIB_PHASE_PREFIX) ? id.slice(LIB_PHASE_PREFIX.length) : null
+}
+function parseDropPhaseId(id: string): string | null {
+  return id.startsWith(DROP_PHASE_PREFIX) ? id.slice(DROP_PHASE_PREFIX.length) : null
+}
+
+// ─── Active drag state type ─────────────────────────────────
+
+interface ActiveDrag {
+  type: 'library-milestone' | 'library-phase' | 'builder-item'
+  id: string
+  label: string
+  color?: string
+}
+
+// ─── Main Component ─────────────────────────────────────────
+
 export function TemplateBuilder() {
   const builder = useTemplateBuilder()
+  const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const { active } = event
+    const id = String(active.id)
+
+    // Library milestone
+    const msId = parseLibMilestoneId(id)
+    if (msId) {
+      const ms = builder.milestones.find(m => m.id === msId)
+      setActiveDrag({ type: 'library-milestone', id: msId, label: ms?.display_name ?? 'Milestone' })
+      return
+    }
+
+    // Library phase
+    const phId = parseLibPhaseId(id)
+    if (phId) {
+      const ph = builder.phases.find(p => p.id === phId)
+      const color = ph?.color_key ? resolveColorKey(ph.color_key).hex : undefined
+      setActiveDrag({ type: 'library-phase', id: phId, label: ph?.display_name ?? 'Phase', color })
+      return
+    }
+
+    // Builder item (sortable within phase)
+    const item = builder.items.find(i => i.id === id)
+    if (item) {
+      const ms = builder.milestones.find(m => m.id === item.facility_milestone_id)
+      setActiveDrag({ type: 'builder-item', id, label: ms?.display_name ?? 'Item' })
+    }
+  }, [builder.milestones, builder.phases, builder.items])
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveDrag(null)
+    const { active, over } = event
+    if (!over) return
+
+    const activeId = String(active.id)
+    const overId = String(over.id)
+
+    // Library milestone → phase drop zone
+    const libMsId = parseLibMilestoneId(activeId)
+    const dropPhaseId = parseDropPhaseId(overId)
+    if (libMsId && dropPhaseId) {
+      builder.addMilestoneToPhase(dropPhaseId, libMsId)
+      return
+    }
+
+    // Library phase → builder bottom
+    const libPhId = parseLibPhaseId(activeId)
+    if (libPhId && overId === DROP_BUILDER_BOTTOM) {
+      builder.addPhaseToTemplate(libPhId)
+      return
+    }
+    // Also allow library phase → any phase drop zone area (adds the phase)
+    if (libPhId && dropPhaseId) {
+      builder.addPhaseToTemplate(libPhId)
+      return
+    }
+
+    // Builder item reorder (both active and over are template item IDs)
+    if (!activeId.startsWith(LIB_MILESTONE_PREFIX) && !activeId.startsWith(LIB_PHASE_PREFIX)) {
+      const activeItem = builder.items.find(i => i.id === activeId)
+      const overItem = builder.items.find(i => i.id === overId)
+      if (activeItem && overItem && activeId !== overId) {
+        const activePhase = activeItem.facility_phase_id ?? 'unassigned'
+        const overPhase = overItem.facility_phase_id ?? 'unassigned'
+        if (activePhase === overPhase) {
+          builder.reorderItemsInPhase(activePhase, activeId, overId)
+        }
+      }
+    }
+  }, [builder])
+
+  const handleDragCancel = useCallback(() => {
+    setActiveDrag(null)
+  }, [])
 
   if (builder.loading) {
     return <BuilderSkeleton />
@@ -35,62 +162,100 @@ export function TemplateBuilder() {
   }
 
   return (
-    <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-white" style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}>
-      {/* Column 1: Template List */}
-      <TemplateList
-        templates={builder.templates}
-        selectedTemplateId={builder.selectedTemplateId}
-        procedureCounts={builder.procedureCounts}
-        saving={builder.saving}
-        onSelect={builder.setSelectedTemplateId}
-        onCreate={builder.createTemplate}
-        onDuplicate={builder.duplicateTemplate}
-        onSetDefault={builder.setDefaultTemplate}
-        onArchive={builder.archiveTemplate}
-      />
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-white" style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}>
+        {/* Column 1: Template List */}
+        <TemplateList
+          templates={builder.templates}
+          selectedTemplateId={builder.selectedTemplateId}
+          procedureCounts={builder.procedureCounts}
+          saving={builder.saving}
+          onSelect={builder.setSelectedTemplateId}
+          onCreate={builder.createTemplate}
+          onDuplicate={builder.duplicateTemplate}
+          onSetDefault={builder.setDefaultTemplate}
+          onArchive={builder.archiveTemplate}
+        />
 
-      {/* Column 2: Builder Canvas */}
-      <BuilderCanvas
-        template={builder.selectedTemplate}
-        items={builder.items}
-        phases={builder.phases}
-        milestones={builder.milestones}
-        itemsLoading={builder.itemsLoading}
-        saving={builder.saving}
-        onRemoveMilestone={builder.removeMilestone}
-        onRemovePhase={builder.removePhaseFromTemplate}
-        onDuplicate={() => builder.selectedTemplateId && builder.duplicateTemplate(builder.selectedTemplateId)}
-        onRename={builder.renameTemplate}
-        procedureCount={builder.selectedTemplateId ? (builder.procedureCounts[builder.selectedTemplateId] || 0) : 0}
-      />
+        {/* Column 2: Builder Canvas */}
+        <BuilderCanvas
+          template={builder.selectedTemplate}
+          items={builder.items}
+          phases={builder.phases}
+          milestones={builder.milestones}
+          emptyPhaseIds={builder.emptyPhaseIds}
+          itemsLoading={builder.itemsLoading}
+          saving={builder.saving}
+          onRemoveMilestone={builder.removeMilestone}
+          onRemovePhase={builder.removePhaseFromTemplate}
+          onDuplicate={() => builder.selectedTemplateId && builder.duplicateTemplate(builder.selectedTemplateId)}
+          onRename={builder.renameTemplate}
+          procedureCount={builder.selectedTemplateId ? (builder.procedureCounts[builder.selectedTemplateId] || 0) : 0}
+          activeDrag={activeDrag}
+        />
 
-      {/* Column 3: Library Panel */}
-      <LibraryPanel
-        availableMilestones={builder.availableMilestones}
-        availablePhases={builder.availablePhases}
-        assignedPhaseIds={builder.assignedPhaseIds}
-        selectedTemplateId={builder.selectedTemplateId}
-        onAddMilestone={builder.addMilestoneToPhase}
-        onAddPhase={(phaseId) => {
-          // For Phase 3a: add phase by creating a placeholder item.
-          // In Phase 3b this will be drag-to-add.
-          // For now we just show a toast that DnD is coming.
-          // Actually, let's add a quick click-to-add.
-          builder.addMilestoneToPhase(phaseId, '')
+        {/* Column 3: Library Panel */}
+        <LibraryPanel
+          availableMilestones={builder.availableMilestones}
+          availablePhases={builder.availablePhases}
+          assignedPhaseIds={builder.assignedPhaseIds}
+          selectedTemplateId={builder.selectedTemplateId}
+          onAddMilestone={builder.addMilestoneToPhase}
+          phases={builder.phases}
+        />
+      </div>
+
+      {/* Drag Overlay */}
+      <DragOverlay dropAnimation={null}>
+        {activeDrag && <DragOverlayContent drag={activeDrag} />}
+      </DragOverlay>
+    </DndContext>
+  )
+}
+
+// ─── Drag Overlay Content ───────────────────────────────────
+
+function DragOverlayContent({ drag }: { drag: ActiveDrag }) {
+  if (drag.type === 'library-phase') {
+    return (
+      <div
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-[11.5px] font-semibold shadow-lg bg-white"
+        style={{
+          borderColor: `${drag.color ?? '#64748b'}40`,
+          color: drag.color ?? '#64748b',
         }}
-        phases={builder.phases}
-      />
+      >
+        <div
+          className="w-[7px] h-[7px] rounded-[1.5px] flex-shrink-0"
+          style={{ background: drag.color ?? '#64748b' }}
+        />
+        {drag.label}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-slate-200 bg-white shadow-lg text-[11.5px] font-medium text-slate-700">
+      <GripVertical className="w-2.5 h-2.5 text-slate-400" />
+      {drag.label}
     </div>
   )
 }
 
-// ─── Builder Canvas ─────────────────────────────────────
+// ─── Builder Canvas ─────────────────────────────────────────
 
 interface BuilderCanvasProps {
   template: ReturnType<typeof useTemplateBuilder>['selectedTemplate']
   items: ReturnType<typeof useTemplateBuilder>['items']
   phases: ReturnType<typeof useTemplateBuilder>['phases']
   milestones: ReturnType<typeof useTemplateBuilder>['milestones']
+  emptyPhaseIds: Set<string>
   itemsLoading: boolean
   saving: boolean
   onRemoveMilestone: (itemId: string) => void
@@ -98,6 +263,7 @@ interface BuilderCanvasProps {
   onDuplicate: () => void
   onRename: (templateId: string, name: string) => void
   procedureCount: number
+  activeDrag: ActiveDrag | null
 }
 
 function BuilderCanvas({
@@ -105,6 +271,7 @@ function BuilderCanvas({
   items,
   phases,
   milestones,
+  emptyPhaseIds,
   itemsLoading,
   saving,
   onRemoveMilestone,
@@ -112,14 +279,18 @@ function BuilderCanvas({
   onDuplicate,
   onRename,
   procedureCount,
+  activeDrag,
 }: BuilderCanvasProps) {
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState('')
 
   const renderList = useMemo(
-    () => buildTemplateRenderList(items, phases, milestones),
-    [items, phases, milestones],
+    () => buildTemplateRenderList(items, phases, milestones, emptyPhaseIds),
+    [items, phases, milestones, emptyPhaseIds],
   )
+
+  // Group the render list into phase segments for SortableContext
+  const phaseSegments = useMemo(() => groupByPhase(renderList), [renderList])
 
   const totalMilestones = items.length
 
@@ -216,6 +387,10 @@ function BuilderCanvas({
           </div>
           <span className="text-[10px] text-slate-500">First/last in phase show their role</span>
         </div>
+        <div className="flex items-center gap-1">
+          <GripVertical className="w-3 h-3 text-slate-400" />
+          <span className="text-[10px] text-slate-500">Drag to reorder within a phase</span>
+        </div>
       </div>
 
       {/* Builder content */}
@@ -231,105 +406,244 @@ function BuilderCanvas({
             <Layers className="w-8 h-8 text-slate-300 mb-2" />
             <p className="text-sm font-medium text-slate-500">Empty template</p>
             <p className="text-xs text-slate-400 mt-1">
-              Add milestones from the library panel on the right
+              Drag milestones and phases from the library panel on the right
             </p>
           </div>
         ) : (
           <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-            {renderList.map((item, idx) => {
-              switch (item.type) {
-                case 'phase-header':
-                  return (
-                    <PhaseHeader
-                      key={`ph-${item.phase.id}`}
-                      item={item}
-                      isFirst={idx === 0}
-                      onRemove={() => onRemovePhase(item.phase.id)}
-                    />
-                  )
-                case 'shared-boundary':
-                  return (
-                    <SharedBoundary
-                      key={`sb-${item.templateItemId}`}
-                      item={item}
-                    />
-                  )
-                case 'edge-milestone':
-                  return (
-                    <EdgeMilestone
-                      key={`em-${item.templateItem.id}`}
-                      item={item}
-                      onRemove={onRemoveMilestone}
-                    />
-                  )
-                case 'interior-milestone':
-                  return (
-                    <InteriorMilestone
-                      key={`im-${item.templateItem.id}`}
-                      item={item}
-                      onRemove={onRemoveMilestone}
-                    />
-                  )
-                case 'sub-phase':
-                  return (
-                    <SubPhaseIndicator
-                      key={`sp-${item.phase.id}`}
-                      item={item}
-                    />
-                  )
-                case 'drop-zone':
-                  return (
-                    <div
-                      key={`dz-${item.phaseId}`}
-                      className="mx-2 my-0.5 ml-9 py-[3px] border-[1.5px] border-dashed rounded text-[10px] text-center font-medium transition-colors"
-                      style={{
-                        borderColor: `${item.color.hex}30`,
-                        color: `${item.color.hex}50`,
-                      }}
-                    >
-                      Drop milestone into {item.phaseName}
-                    </div>
-                  )
-                case 'unassigned-header':
-                  return (
-                    <div
-                      key="unassigned-header"
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 border-t border-slate-200"
-                    >
-                      <div className="w-2 h-2 rounded bg-slate-400" />
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                        Unassigned
-                      </span>
-                      <span className="text-[10px] text-slate-400 ml-auto">
-                        {item.count}
-                      </span>
-                    </div>
-                  )
-                case 'unassigned-milestone':
-                  return (
-                    <UnassignedMilestone
-                      key={`um-${item.templateItem.id}`}
-                      item={item}
-                      onRemove={onRemoveMilestone}
-                    />
-                  )
-                default:
-                  return null
+            {phaseSegments.map((segment) => {
+              if (segment.type === 'phase-group') {
+                return (
+                  <PhaseGroupSegment
+                    key={`pg-${segment.phaseId}`}
+                    segment={segment}
+                    onRemoveMilestone={onRemoveMilestone}
+                    onRemovePhase={onRemovePhase}
+                    activeDrag={activeDrag}
+                  />
+                )
               }
+              if (segment.type === 'shared-boundary') {
+                return (
+                  <SharedBoundary
+                    key={`sb-${segment.item.templateItemId}`}
+                    item={segment.item}
+                  />
+                )
+              }
+              if (segment.type === 'unassigned-group') {
+                return (
+                  <UnassignedSegment
+                    key="unassigned"
+                    segment={segment}
+                    onRemoveMilestone={onRemoveMilestone}
+                  />
+                )
+              }
+              return null
             })}
           </div>
         )}
 
-        {/* Bottom drop zone for phases (visual placeholder for Phase 3b DnD) */}
-        <div className="mt-1.5 py-2 border-[1.5px] border-dashed border-slate-200 rounded-md text-center text-[11px] text-slate-400 font-medium">
-          Drop a phase here to add it
-        </div>
+        {/* Bottom drop zone for phases */}
+        <BottomPhaseDropZone activeDrag={activeDrag} />
       </div>
     </div>
   )
 }
 
-// ─── Phase Header ───────────────────────────────────────
+// ─── Phase Group Segment ────────────────────────────────────
+
+interface PhaseGroupSegmentData {
+  type: 'phase-group'
+  phaseId: string
+  header: RenderItem & { type: 'phase-header' }
+  sortableItems: RenderItem[]
+  sortableIds: string[]
+  dropZone: (RenderItem & { type: 'drop-zone' }) | null
+  subPhases: RenderItem[]
+}
+
+function PhaseGroupSegment({
+  segment,
+  onRemoveMilestone,
+  onRemovePhase,
+  activeDrag,
+}: {
+  segment: PhaseGroupSegmentData
+  onRemoveMilestone: (itemId: string) => void
+  onRemovePhase: (phaseId: string) => void
+  activeDrag: ActiveDrag | null
+}) {
+  const isFirst = true // Let CSS handle top border
+  return (
+    <div>
+      <PhaseHeader
+        item={segment.header}
+        isFirst={isFirst}
+        onRemove={() => onRemovePhase(segment.phaseId)}
+      />
+
+      <SortableContext
+        items={segment.sortableIds}
+        strategy={verticalListSortingStrategy}
+      >
+        {segment.sortableItems.map((renderItem) => {
+          switch (renderItem.type) {
+            case 'edge-milestone':
+              return (
+                <EdgeMilestone
+                  key={`em-${renderItem.templateItem.id}`}
+                  item={renderItem}
+                  onRemove={onRemoveMilestone}
+                  sortableId={renderItem.templateItem.id}
+                />
+              )
+            case 'interior-milestone':
+              return (
+                <InteriorMilestone
+                  key={`im-${renderItem.templateItem.id}`}
+                  item={renderItem}
+                  onRemove={onRemoveMilestone}
+                  sortableId={renderItem.templateItem.id}
+                />
+              )
+            case 'sub-phase':
+              return (
+                <SubPhaseIndicator
+                  key={`sp-${renderItem.phase.id}`}
+                  item={renderItem}
+                />
+              )
+            default:
+              return null
+          }
+        })}
+      </SortableContext>
+
+      {segment.dropZone && (
+        <DroppablePhaseZone
+          phaseId={segment.dropZone.phaseId}
+          phaseName={segment.dropZone.phaseName}
+          color={segment.dropZone.color}
+          activeDrag={activeDrag}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Unassigned Segment ─────────────────────────────────────
+
+interface UnassignedSegmentData {
+  type: 'unassigned-group'
+  header: RenderItem & { type: 'unassigned-header' }
+  items: RenderItem[]
+  sortableIds: string[]
+}
+
+function UnassignedSegment({
+  segment,
+  onRemoveMilestone,
+}: {
+  segment: UnassignedSegmentData
+  onRemoveMilestone: (itemId: string) => void
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 border-t border-slate-200">
+        <div className="w-2 h-2 rounded bg-slate-400" />
+        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+          Unassigned
+        </span>
+        <span className="text-[10px] text-slate-400 ml-auto">
+          {segment.header.count}
+        </span>
+      </div>
+
+      <SortableContext items={segment.sortableIds} strategy={verticalListSortingStrategy}>
+        {segment.items.map((renderItem) => {
+          if (renderItem.type === 'unassigned-milestone') {
+            return (
+              <UnassignedMilestone
+                key={`um-${renderItem.templateItem.id}`}
+                item={renderItem}
+                onRemove={onRemoveMilestone}
+                sortableId={renderItem.templateItem.id}
+              />
+            )
+          }
+          return null
+        })}
+      </SortableContext>
+    </div>
+  )
+}
+
+// ─── Droppable Phase Zone ───────────────────────────────────
+
+function DroppablePhaseZone({
+  phaseId,
+  phaseName,
+  color,
+  activeDrag,
+}: {
+  phaseId: string
+  phaseName: string
+  color: { hex: string }
+  activeDrag: ActiveDrag | null
+}) {
+  const droppableId = `${DROP_PHASE_PREFIX}${phaseId}`
+  const { isOver, setNodeRef } = useDroppable({ id: droppableId })
+
+  const isDraggingMilestone = activeDrag?.type === 'library-milestone'
+  const isHighlighted = isOver && isDraggingMilestone
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="mx-2 my-0.5 ml-9 py-[3px] border-[1.5px] border-dashed rounded text-[10px] text-center font-medium transition-all"
+      style={{
+        borderColor: isHighlighted ? color.hex : `${color.hex}30`,
+        color: isHighlighted ? color.hex : `${color.hex}50`,
+        background: isHighlighted ? `${color.hex}08` : 'transparent',
+        transform: isHighlighted ? 'scale(1.01)' : undefined,
+      }}
+    >
+      {isDraggingMilestone
+        ? (isOver ? `Release to add to ${phaseName}` : `Drop into ${phaseName}`)
+        : `Drop milestone into ${phaseName}`
+      }
+    </div>
+  )
+}
+
+// ─── Bottom Phase Drop Zone ─────────────────────────────────
+
+function BottomPhaseDropZone({ activeDrag }: { activeDrag: ActiveDrag | null }) {
+  const { isOver, setNodeRef } = useDroppable({ id: DROP_BUILDER_BOTTOM })
+  const isDraggingPhase = activeDrag?.type === 'library-phase'
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="mt-1.5 py-2 border-[1.5px] border-dashed rounded-md text-center text-[11px] font-medium transition-all"
+      style={{
+        borderColor: isOver && isDraggingPhase ? '#3b82f6' : '#e2e8f0',
+        color: isOver && isDraggingPhase ? '#3b82f6' : '#94a3b8',
+        background: isOver && isDraggingPhase ? '#eff6ff' : 'transparent',
+        transform: isOver && isDraggingPhase ? 'scale(1.01)' : undefined,
+      }}
+    >
+      {isDraggingPhase
+        ? (isOver ? 'Release to add phase' : 'Drop a phase here to add it')
+        : 'Drop a phase here to add it'
+      }
+    </div>
+  )
+}
+
+// ─── Phase Header ───────────────────────────────────────────
 
 function PhaseHeader({
   item,
@@ -371,7 +685,7 @@ function PhaseHeader({
   )
 }
 
-// ─── Library Panel ──────────────────────────────────────
+// ─── Library Panel ──────────────────────────────────────────
 
 interface LibraryPanelProps {
   availableMilestones: ReturnType<typeof useTemplateBuilder>['availableMilestones']
@@ -379,7 +693,6 @@ interface LibraryPanelProps {
   assignedPhaseIds: Set<string>
   selectedTemplateId: string | null
   onAddMilestone: (phaseId: string, milestoneId: string) => void
-  onAddPhase: (phaseId: string) => void
   phases: ReturnType<typeof useTemplateBuilder>['phases']
 }
 
@@ -454,6 +767,9 @@ function LibraryPanel({
             </button>
           ))}
         </div>
+        <p className="text-[9px] text-slate-400 text-center">
+          Drag items into the builder, or click to add
+        </p>
       </div>
 
       {/* Library items */}
@@ -469,56 +785,14 @@ function LibraryPanel({
               </div>
             ) : (
               filteredMilestones.map(m => (
-                <div key={m.id} className="relative">
-                  <div
-                    className="flex items-center gap-1.5 px-2 py-1.5 mb-[2px] rounded border border-slate-200 bg-white text-[11.5px] font-medium text-slate-700 hover:shadow-sm transition-shadow cursor-pointer"
-                    onClick={() => {
-                      if (assignedPhasesList.length === 1) {
-                        handleQuickAdd(m.id, assignedPhasesList[0].id)
-                      } else if (assignedPhasesList.length > 1) {
-                        setAddingMilestoneId(addingMilestoneId === m.id ? null : m.id)
-                      }
-                    }}
-                    title={assignedPhasesList.length === 0 ? 'Add phases to the template first' : 'Click to add to template'}
-                  >
-                    <GripVertical className="w-2.5 h-2.5 text-slate-300 flex-shrink-0" />
-                    <span className="flex-1 truncate">{m.display_name}</span>
-                    {m.pair_position && (
-                      <span className={`text-[7.5px] font-bold px-[3px] py-[1px] rounded uppercase ${
-                        m.pair_position === 'start'
-                          ? 'bg-green-50 text-green-600'
-                          : 'bg-amber-50 text-amber-600'
-                      }`}>
-                        {m.pair_position}
-                      </span>
-                    )}
-                    {assignedPhasesList.length > 0 && (
-                      <Plus className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                    )}
-                  </div>
-
-                  {/* Phase picker dropdown */}
-                  {addingMilestoneId === m.id && assignedPhasesList.length > 1 && (
-                    <div className="absolute right-0 top-full mt-0.5 z-10 bg-white border border-slate-200 rounded-md shadow-lg py-0.5 min-w-[140px]">
-                      <p className="px-2 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wide">
-                        Add to phase:
-                      </p>
-                      {assignedPhasesList.map(p => {
-                        const pColor = resolveColorKey(p.color_key)
-                        return (
-                          <button
-                            key={p.id}
-                            onClick={() => handleQuickAdd(m.id, p.id)}
-                            className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-                          >
-                            <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: pColor.hex }} />
-                            {p.display_name}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
+                <DraggableLibraryMilestone
+                  key={m.id}
+                  milestone={m}
+                  assignedPhasesList={assignedPhasesList}
+                  addingMilestoneId={addingMilestoneId}
+                  setAddingMilestoneId={setAddingMilestoneId}
+                  onQuickAdd={handleQuickAdd}
+                />
               ))
             )}
           </>
@@ -533,24 +807,9 @@ function LibraryPanel({
                 </div>
               </div>
             ) : (
-              filteredPhases.map(p => {
-                const pColor = resolveColorKey(p.color_key)
-                return (
-                  <div
-                    key={p.id}
-                    className="flex items-center gap-1.5 px-2 py-1.5 mb-[2px] rounded border text-[11.5px] font-semibold cursor-grab"
-                    style={{
-                      borderColor: `${pColor.hex}30`,
-                      background: `${pColor.hex}06`,
-                      color: pColor.hex,
-                    }}
-                  >
-                    <GripVertical className="w-2.5 h-2.5 flex-shrink-0" style={{ color: `${pColor.hex}60` }} />
-                    <div className="w-[7px] h-[7px] rounded-[1.5px] flex-shrink-0" style={{ background: pColor.hex }} />
-                    <span className="truncate">{p.display_name}</span>
-                  </div>
-                )
-              })
+              filteredPhases.map(p => (
+                <DraggableLibraryPhase key={p.id} phase={p} />
+              ))
             )}
 
             {/* Boundary instructions */}
@@ -596,7 +855,235 @@ function LibraryPanel({
   )
 }
 
-// ─── Skeleton ───────────────────────────────────────────
+// ─── Draggable Library Milestone ────────────────────────────
+
+function DraggableLibraryMilestone({
+  milestone,
+  assignedPhasesList,
+  addingMilestoneId,
+  setAddingMilestoneId,
+  onQuickAdd,
+}: {
+  milestone: { id: string; name: string; display_name: string; pair_position: 'start' | 'end' | null }
+  assignedPhasesList: { id: string; display_name: string; color_key: string | null }[]
+  addingMilestoneId: string | null
+  setAddingMilestoneId: (id: string | null) => void
+  onQuickAdd: (milestoneId: string, phaseId: string) => void
+}) {
+  const draggableId = `${LIB_MILESTONE_PREFIX}${milestone.id}`
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({ id: draggableId })
+
+  const style = {
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    opacity: isDragging ? 0.4 : 1,
+  }
+
+  return (
+    <div key={milestone.id} className="relative" ref={setNodeRef} style={style}>
+      <div
+        className="flex items-center gap-1.5 px-2 py-1.5 mb-[2px] rounded border border-slate-200 bg-white text-[11.5px] font-medium text-slate-700 hover:shadow-sm transition-shadow"
+      >
+        {/* Drag handle */}
+        <div className="touch-none" {...attributes} {...listeners}>
+          <GripVertical className="w-2.5 h-2.5 text-slate-300 flex-shrink-0 cursor-grab active:cursor-grabbing" />
+        </div>
+
+        {/* Clickable area for quick-add */}
+        <div
+          className="flex-1 flex items-center gap-1.5 cursor-pointer truncate"
+          onClick={() => {
+            if (assignedPhasesList.length === 1) {
+              onQuickAdd(milestone.id, assignedPhasesList[0].id)
+            } else if (assignedPhasesList.length > 1) {
+              setAddingMilestoneId(addingMilestoneId === milestone.id ? null : milestone.id)
+            }
+          }}
+          title={assignedPhasesList.length === 0 ? 'Add phases to the template first' : 'Click to add or drag into builder'}
+        >
+          <span className="flex-1 truncate">{milestone.display_name}</span>
+          {milestone.pair_position && (
+            <span className={`text-[7.5px] font-bold px-[3px] py-[1px] rounded uppercase ${
+              milestone.pair_position === 'start'
+                ? 'bg-green-50 text-green-600'
+                : 'bg-amber-50 text-amber-600'
+            }`}>
+              {milestone.pair_position}
+            </span>
+          )}
+          {assignedPhasesList.length > 0 && (
+            <Plus className="w-3 h-3 text-slate-400 flex-shrink-0" />
+          )}
+        </div>
+      </div>
+
+      {/* Phase picker dropdown */}
+      {addingMilestoneId === milestone.id && assignedPhasesList.length > 1 && (
+        <div className="absolute right-0 top-full mt-0.5 z-10 bg-white border border-slate-200 rounded-md shadow-lg py-0.5 min-w-[140px]">
+          <p className="px-2 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wide">
+            Add to phase:
+          </p>
+          {assignedPhasesList.map(p => {
+            const pColor = resolveColorKey(p.color_key)
+            return (
+              <button
+                key={p.id}
+                onClick={() => onQuickAdd(milestone.id, p.id)}
+                className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: pColor.hex }} />
+                {p.display_name}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Draggable Library Phase ────────────────────────────────
+
+function DraggableLibraryPhase({ phase }: { phase: { id: string; name: string; display_name: string; color_key: string | null } }) {
+  const draggableId = `${LIB_PHASE_PREFIX}${phase.id}`
+  const pColor = resolveColorKey(phase.color_key)
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({ id: draggableId })
+
+  const style = {
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    opacity: isDragging ? 0.4 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-1.5 px-2 py-1.5 mb-[2px] rounded border text-[11.5px] font-semibold touch-none"
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical className="w-2.5 h-2.5 flex-shrink-0 cursor-grab active:cursor-grabbing" style={{ color: `${pColor.hex}60` }} />
+      <div className="w-[7px] h-[7px] rounded-[1.5px] flex-shrink-0" style={{
+        background: pColor.hex,
+        borderColor: `${pColor.hex}30`,
+      }} />
+      <span className="truncate" style={{ color: pColor.hex }}>{phase.display_name}</span>
+    </div>
+  )
+}
+
+// ─── groupByPhase helper ────────────────────────────────────
+
+type PhaseSegment = PhaseGroupSegmentData | SharedBoundarySegment | UnassignedSegmentData
+
+interface SharedBoundarySegment {
+  type: 'shared-boundary'
+  item: RenderItem & { type: 'shared-boundary' }
+}
+
+function groupByPhase(renderList: RenderItem[]): PhaseSegment[] {
+  const segments: PhaseSegment[] = []
+  let currentPhaseGroup: PhaseGroupSegmentData | null = null
+
+  for (const item of renderList) {
+    switch (item.type) {
+      case 'phase-header': {
+        // Flush previous group
+        if (currentPhaseGroup) {
+          segments.push(currentPhaseGroup)
+        }
+        currentPhaseGroup = {
+          type: 'phase-group',
+          phaseId: item.phase.id,
+          header: item,
+          sortableItems: [],
+          sortableIds: [],
+          dropZone: null,
+          subPhases: [],
+        }
+        break
+      }
+      case 'edge-milestone':
+      case 'interior-milestone': {
+        if (currentPhaseGroup) {
+          currentPhaseGroup.sortableItems.push(item)
+          currentPhaseGroup.sortableIds.push(item.templateItem.id)
+        }
+        break
+      }
+      case 'sub-phase': {
+        if (currentPhaseGroup) {
+          currentPhaseGroup.sortableItems.push(item)
+          currentPhaseGroup.subPhases.push(item)
+        }
+        break
+      }
+      case 'drop-zone': {
+        if (currentPhaseGroup) {
+          currentPhaseGroup.dropZone = item
+        }
+        break
+      }
+      case 'shared-boundary': {
+        // Flush current group before shared boundary
+        if (currentPhaseGroup) {
+          segments.push(currentPhaseGroup)
+          currentPhaseGroup = null
+        }
+        segments.push({ type: 'shared-boundary', item })
+        break
+      }
+      case 'unassigned-header': {
+        // Flush current group
+        if (currentPhaseGroup) {
+          segments.push(currentPhaseGroup)
+          currentPhaseGroup = null
+        }
+        // Collect all unassigned items that follow
+        const unassignedItems: RenderItem[] = []
+        const unassignedIds: string[] = []
+        // We'll handle this by looking ahead in the next iterations
+        segments.push({
+          type: 'unassigned-group',
+          header: item,
+          items: unassignedItems,
+          sortableIds: unassignedIds,
+        })
+        break
+      }
+      case 'unassigned-milestone': {
+        // Add to the last unassigned group
+        const lastSeg = segments[segments.length - 1]
+        if (lastSeg && lastSeg.type === 'unassigned-group') {
+          lastSeg.items.push(item)
+          lastSeg.sortableIds.push(item.templateItem.id)
+        }
+        break
+      }
+    }
+  }
+
+  // Flush final group
+  if (currentPhaseGroup) {
+    segments.push(currentPhaseGroup)
+  }
+
+  return segments
+}
+
+// ─── Skeleton ───────────────────────────────────────────────
 
 function BuilderSkeleton() {
   return (

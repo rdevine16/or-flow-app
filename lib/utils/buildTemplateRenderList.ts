@@ -118,6 +118,7 @@ export function buildTemplateRenderList(
   templateItems: TemplateItemData[],
   phases: PhaseLookup[],
   milestones: MilestoneLookup[],
+  emptyPhaseIds?: Set<string>,
 ): RenderItem[] {
   const milestoneMap = new Map(milestones.map(m => [m.id, m]))
   const phaseMap = new Map(phases.map(p => [p.id, p]))
@@ -264,6 +265,18 @@ export function buildTemplateRenderList(
           startsColor: resolveColorKey(nextGroup.phase.color_key),
         })
       }
+    }
+  }
+
+  // Empty phases (added to builder but no milestones yet)
+  if (emptyPhaseIds) {
+    for (const phaseId of emptyPhaseIds) {
+      if (phaseGroups.has(phaseId)) continue
+      const phase = phaseMap.get(phaseId)
+      if (!phase || phase.parent_phase_id) continue
+      const color = resolveColorKey(phase.color_key)
+      result.push({ type: 'phase-header', phase, color, itemCount: 0 })
+      result.push({ type: 'drop-zone', phaseId: phase.id, phaseName: phase.display_name, color })
     }
   }
 

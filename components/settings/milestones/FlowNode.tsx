@@ -2,9 +2,13 @@
 // Renders milestone rows in the template builder.
 // EdgeMilestone: first/last milestone in a phase with position badge.
 // InteriorMilestone: middle milestones with no position badge.
+// UnassignedMilestone: milestones with no phase assignment.
+// All support @dnd-kit useSortable for drag-to-reorder within phases.
 'use client'
 
 import { useState } from 'react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type {
   EdgeMilestoneItem,
   InteriorMilestoneItem,
@@ -17,19 +21,38 @@ import { GripVertical, X } from 'lucide-react'
 interface EdgeMilestoneProps {
   item: EdgeMilestoneItem
   onRemove: (itemId: string) => void
+  sortableId?: string
 }
 
-export function EdgeMilestone({ item, onRemove }: EdgeMilestoneProps) {
+export function EdgeMilestone({ item, onRemove, sortableId }: EdgeMilestoneProps) {
   const [hover, setHover] = useState(false)
   const { milestone, templateItem, color, edge } = item
   const hex = color.hex
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: sortableId ?? templateItem.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 50 : undefined,
+  }
+
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       className="flex items-center gap-0 py-1 pl-1 pr-2 relative transition-colors"
-      style={{ background: hover ? `${hex}06` : 'transparent' }}
+      data-phase-id={item.phase.id}
     >
       {/* Phase rail */}
       <div
@@ -41,11 +64,15 @@ export function EdgeMilestone({ item, onRemove }: EdgeMilestoneProps) {
         }}
       />
 
-      {/* Drag handle (visual only for 3a, functional in 3b) */}
-      <div className="w-5 flex items-center justify-center flex-shrink-0 relative z-[1]">
+      {/* Drag handle */}
+      <div
+        className="w-5 flex items-center justify-center flex-shrink-0 relative z-[1] touch-none"
+        {...attributes}
+        {...listeners}
+      >
         <GripVertical
-          className="w-2.5 h-2.5 transition-colors"
-          style={{ color: hover ? '#94a3b8' : 'transparent' }}
+          className="w-2.5 h-2.5 transition-colors cursor-grab active:cursor-grabbing"
+          style={{ color: hover || isDragging ? '#94a3b8' : 'transparent' }}
         />
       </div>
 
@@ -88,7 +115,7 @@ export function EdgeMilestone({ item, onRemove }: EdgeMilestoneProps) {
       {milestone.pair_position && <PairBadge position={milestone.pair_position} />}
 
       {/* Remove button */}
-      {hover && (
+      {hover && !isDragging && (
         <button
           onClick={() => onRemove(templateItem.id)}
           className="p-0.5 ml-0.5 text-red-500 hover:text-red-700 transition-colors"
@@ -105,19 +132,38 @@ export function EdgeMilestone({ item, onRemove }: EdgeMilestoneProps) {
 interface InteriorMilestoneProps {
   item: InteriorMilestoneItem
   onRemove: (itemId: string) => void
+  sortableId?: string
 }
 
-export function InteriorMilestone({ item, onRemove }: InteriorMilestoneProps) {
+export function InteriorMilestone({ item, onRemove, sortableId }: InteriorMilestoneProps) {
   const [hover, setHover] = useState(false)
   const { milestone, templateItem, color } = item
   const hex = color.hex
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: sortableId ?? templateItem.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 50 : undefined,
+  }
+
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       className="flex items-center gap-0 py-[3px] pl-1 pr-2 relative transition-colors"
-      style={{ background: hover ? '#f9fafb' : 'transparent' }}
+      data-phase-id={item.phase.id}
     >
       {/* Phase rail */}
       <div
@@ -126,10 +172,14 @@ export function InteriorMilestone({ item, onRemove }: InteriorMilestoneProps) {
       />
 
       {/* Drag handle */}
-      <div className="w-5 flex items-center justify-center flex-shrink-0 relative z-[1]">
+      <div
+        className="w-5 flex items-center justify-center flex-shrink-0 relative z-[1] touch-none"
+        {...attributes}
+        {...listeners}
+      >
         <GripVertical
-          className="w-2.5 h-2.5 transition-colors"
-          style={{ color: hover ? '#94a3b8' : 'transparent' }}
+          className="w-2.5 h-2.5 transition-colors cursor-grab active:cursor-grabbing"
+          style={{ color: hover || isDragging ? '#94a3b8' : 'transparent' }}
         />
       </div>
 
@@ -152,7 +202,7 @@ export function InteriorMilestone({ item, onRemove }: InteriorMilestoneProps) {
       {milestone.pair_position && <PairBadge position={milestone.pair_position} />}
 
       {/* Remove button */}
-      {hover && (
+      {hover && !isDragging && (
         <button
           onClick={() => onRemove(templateItem.id)}
           className="p-0.5 ml-0.5 text-red-500 hover:text-red-700 transition-colors"
@@ -169,26 +219,48 @@ export function InteriorMilestone({ item, onRemove }: InteriorMilestoneProps) {
 interface UnassignedMilestoneProps {
   item: UnassignedMilestoneItem
   onRemove: (itemId: string) => void
+  sortableId?: string
 }
 
-export function UnassignedMilestone({ item, onRemove }: UnassignedMilestoneProps) {
+export function UnassignedMilestone({ item, onRemove, sortableId }: UnassignedMilestoneProps) {
   const [hover, setHover] = useState(false)
   const { milestone, templateItem } = item
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: sortableId ?? templateItem.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 50 : undefined,
+  }
+
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       className="flex items-center gap-0 py-[3px] pl-1 pr-2 relative transition-colors"
-      style={{ background: hover ? '#f9fafb' : 'transparent' }}
     >
       {/* Rail */}
       <div className="absolute left-[26px] top-0 bottom-0 w-0.5 bg-slate-200" />
 
-      <div className="w-5 flex items-center justify-center flex-shrink-0 relative z-[1]">
+      <div
+        className="w-5 flex items-center justify-center flex-shrink-0 relative z-[1] touch-none"
+        {...attributes}
+        {...listeners}
+      >
         <GripVertical
-          className="w-2.5 h-2.5 transition-colors"
-          style={{ color: hover ? '#94a3b8' : 'transparent' }}
+          className="w-2.5 h-2.5 transition-colors cursor-grab active:cursor-grabbing"
+          style={{ color: hover || isDragging ? '#94a3b8' : 'transparent' }}
         />
       </div>
 
@@ -204,7 +276,7 @@ export function UnassignedMilestone({ item, onRemove }: UnassignedMilestoneProps
 
       {milestone.pair_position && <PairBadge position={milestone.pair_position} />}
 
-      {hover && (
+      {hover && !isDragging && (
         <button
           onClick={() => onRemove(templateItem.id)}
           className="p-0.5 ml-0.5 text-red-500 hover:text-red-700 transition-colors"

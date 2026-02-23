@@ -411,4 +411,113 @@ describe('buildTemplateRenderList', () => {
     const dropZones = result.filter(r => r.type === 'drop-zone')
     expect(dropZones).toHaveLength(3) // one per top-level phase
   })
+
+  describe('emptyPhaseIds parameter', () => {
+    it('renders empty phase header + drop zone when phase has no items', () => {
+      const phases = [
+        makePhase('p1', 'pre_op', 1, 'blue'),
+        makePhase('p2', 'surgical', 2, 'green'),
+      ]
+      const milestones = [makeMilestone('m1', 'patient_in')]
+      const items = [makeItem('i1', 't1', 'm1', 'p1', 1)]
+
+      const result = buildTemplateRenderList(items, phases, milestones, new Set(['p2']))
+
+      // p1 has items, p2 is empty but should render because it's in emptyPhaseIds
+      const phaseHeaders = result.filter(r => r.type === 'phase-header')
+      expect(phaseHeaders).toHaveLength(2)
+      expect(phaseHeaders.map(h => h.phase.id)).toEqual(['p1', 'p2'])
+
+      // p2 should have a drop zone
+      const dropZones = result.filter(r => r.type === 'drop-zone')
+      expect(dropZones).toHaveLength(2)
+      expect(dropZones[1]).toMatchObject({ phaseId: 'p2', phaseName: 'Surgical' })
+
+      // p2 header should show itemCount: 0
+      const p2Header = phaseHeaders.find(h => h.phase.id === 'p2')
+      expect(p2Header).toMatchObject({ itemCount: 0 })
+    })
+
+    it('does not duplicate phase if it already has items', () => {
+      const phases = [makePhase('p1', 'pre_op', 1, 'blue')]
+      const milestones = [makeMilestone('m1', 'patient_in')]
+      const items = [makeItem('i1', 't1', 'm1', 'p1', 1)]
+
+      // p1 is in emptyPhaseIds but also has items
+      const result = buildTemplateRenderList(items, phases, milestones, new Set(['p1']))
+
+      const phaseHeaders = result.filter(r => r.type === 'phase-header')
+      expect(phaseHeaders).toHaveLength(1) // only one p1 header
+      expect(phaseHeaders[0]).toMatchObject({ itemCount: 1 }) // shows correct count from items
+    })
+
+    it('skips sub-phases in emptyPhaseIds (only renders top-level phases)', () => {
+      const phases = [
+        makePhase('p1', 'surgical', 1, 'green'),
+        makePhase('p1_sub', 'closure', 2, 'amber', 'p1'), // sub-phase
+      ]
+      const milestones: MilestoneLookup[] = []
+      const items: TemplateItemData[] = []
+
+      const result = buildTemplateRenderList(items, phases, milestones, new Set(['p1', 'p1_sub']))
+
+      // Only p1 should render (p1_sub has parent_phase_id so it's skipped)
+      const phaseHeaders = result.filter(r => r.type === 'phase-header')
+      expect(phaseHeaders).toHaveLength(1)
+      expect(phaseHeaders[0]).toMatchObject({ phase: phases[0] })
+    })
+
+    it('skips phases in emptyPhaseIds that do not exist in phases lookup', () => {
+      const phases = [makePhase('p1', 'pre_op', 1, 'blue')]
+      const milestones: MilestoneLookup[] = []
+      const items: TemplateItemData[] = []
+
+      const result = buildTemplateRenderList(items, phases, milestones, new Set(['p1', 'p999']))
+
+      // p999 does not exist in phases, so only p1 should render
+      const phaseHeaders = result.filter(r => r.type === 'phase-header')
+      expect(phaseHeaders).toHaveLength(1)
+      expect(phaseHeaders[0]).toMatchObject({ phase: phases[0] })
+    })
+
+    it('renders multiple empty phases in order', () => {
+      const phases = [
+        makePhase('p1', 'pre_op', 1, 'blue'),
+        makePhase('p2', 'surgical', 2, 'green'),
+        makePhase('p3', 'post_op', 3, 'purple'),
+      ]
+      const milestones: MilestoneLookup[] = []
+      const items: TemplateItemData[] = []
+
+      const result = buildTemplateRenderList(items, phases, milestones, new Set(['p1', 'p3']))
+
+      // p1 and p3 should render as empty (p2 not in emptyPhaseIds)
+      const phaseHeaders = result.filter(r => r.type === 'phase-header')
+      expect(phaseHeaders).toHaveLength(2)
+      expect(phaseHeaders.map(h => h.phase.id)).toEqual(['p1', 'p3'])
+    })
+
+    it('works when emptyPhaseIds is undefined (backwards compatible)', () => {
+      const phases = [makePhase('p1', 'pre_op', 1, 'blue')]
+      const milestones = [makeMilestone('m1', 'patient_in')]
+      const items = [makeItem('i1', 't1', 'm1', 'p1', 1)]
+
+      const result = buildTemplateRenderList(items, phases, milestones)
+
+      // Should work exactly as before — only phases with items render
+      const phaseHeaders = result.filter(r => r.type === 'phase-header')
+      expect(phaseHeaders).toHaveLength(1)
+    })
+
+    it('works when emptyPhaseIds is empty set', () => {
+      const phases = [makePhase('p1', 'pre_op', 1, 'blue')]
+      const milestones = [makeMilestone('m1', 'patient_in')]
+      const items = [makeItem('i1', 't1', 'm1', 'p1', 1)]
+
+      const result = buildTemplateRenderList(items, phases, milestones, new Set())
+
+      const phaseHeaders = result.filter(r => r.type === 'phase-header')
+      expect(phaseHeaders).toHaveLength(1)
+    })
+  })
 })

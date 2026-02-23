@@ -45,13 +45,16 @@ const defaultHookReturn = {
   addMilestoneToPhase: vi.fn(),
   removeMilestone: vi.fn(),
   removePhaseFromTemplate: vi.fn(),
+  reorderItemsInPhase: vi.fn(),
+  addPhaseToTemplate: vi.fn(),
+  emptyPhaseIds: new Set<string>(),
   dispatch: vi.fn(),
 }
 
 const mockUseTemplateBuilder = vi.fn(() => defaultHookReturn)
 
 vi.mock('@/hooks/useTemplateBuilder', () => ({
-  useTemplateBuilder: (...args: unknown[]) => mockUseTemplateBuilder(...args),
+  useTemplateBuilder: () => mockUseTemplateBuilder(),
 }))
 
 beforeEach(() => {
@@ -106,8 +109,8 @@ describe('TemplateBuilder - Integration', () => {
   it('displays empty template state when no template is selected', () => {
     mockUseTemplateBuilder.mockReturnValue({
       ...defaultHookReturn,
-      selectedTemplate: null,
-      selectedTemplateId: null,
+      selectedTemplate: null as unknown as typeof defaultHookReturn.selectedTemplate,
+      selectedTemplateId: null as unknown as string,
       items: [],
     })
 

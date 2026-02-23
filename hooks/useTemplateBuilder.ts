@@ -4,6 +4,7 @@
 'use client'
 
 import { useReducer, useCallback, useMemo, useEffect, useState } from 'react'
+import { arrayMove } from '@dnd-kit/sortable'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -35,6 +36,7 @@ type BuilderAction =
   | { type: 'REMOVE_ITEM'; itemId: string }
   | { type: 'BULK_REMOVE_BY_PHASE'; phaseId: string }
   | { type: 'REORDER_ITEMS'; items: TemplateItemData[] }
+  | { type: 'MOVE_ITEM_WITHIN_PHASE'; phaseId: string; activeId: string; overId: string }
 
 function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
   switch (action.type) {
@@ -48,6 +50,24 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
       return { items: state.items.filter(i => i.facility_phase_id !== action.phaseId) }
     case 'REORDER_ITEMS':
       return { items: action.items }
+    case 'MOVE_ITEM_WITHIN_PHASE': {
+      const phaseKey = action.phaseId === 'unassigned' ? null : action.phaseId
+      const phaseItems = state.items
+        .filter(i => (i.facility_phase_id ?? null) === phaseKey)
+        .sort((a, b) => a.display_order - b.display_order)
+
+      const oldIndex = phaseItems.findIndex(i => i.id === action.activeId)
+      const newIndex = phaseItems.findIndex(i => i.id === action.overId)
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return state
+
+      const reordered = arrayMove(phaseItems, oldIndex, newIndex)
+      const orders = phaseItems.map(i => i.display_order)
+      const updated = reordered.map((item, idx) => ({ ...item, display_order: orders[idx] }))
+
+      const idSet = new Set(phaseItems.map(i => i.id))
+      const otherItems = state.items.filter(i => !idSet.has(i.id))
+      return { items: [...otherItems, ...updated].sort((a, b) => a.display_order - b.display_order) }
+    }
     default:
       return state
   }
@@ -63,6 +83,7 @@ export function useTemplateBuilder() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [builderState, dispatch] = useReducer(builderReducer, { items: [] })
+  const [emptyPhaseIds, setEmptyPhaseIds] = useState<Set<string>>(new Set())
 
   // ── Fetch templates ─────────────────────────────────────
 
@@ -202,11 +223,11 @@ export function useTemplateBuilder() {
     [builderState.items],
   )
 
-  // Phases already in the selected template
-  const assignedPhaseIds = useMemo(
-    () => new Set(builderState.items.map(i => i.facility_phase_id).filter(Boolean) as string[]),
-    [builderState.items],
-  )
+  // Phases already in the selected template (from items + explicitly added empty phases)
+  const assignedPhaseIds = useMemo(() => {
+    const fromItems = builderState.items.map(i => i.facility_phase_id).filter(Boolean) as string[]
+    return new Set([...fromItems, ...emptyPhaseIds])
+  }, [builderState.items, emptyPhaseIds])
 
   // Available milestones for library (not already in template)
   const availableMilestones = useMemo(
@@ -408,6 +429,14 @@ export function useTemplateBuilder() {
   const addMilestoneToPhase = useCallback(async (phaseId: string, milestoneId: string) => {
     if (!selectedTemplateId) return
 
+    // Clear from empty phases if present
+    setEmptyPhaseIds(prev => {
+      if (!prev.has(phaseId)) return prev
+      const next = new Set(prev)
+      next.delete(phaseId)
+      return next
+    })
+
     // Compute next display_order for this phase
     const phaseItems = builderState.items.filter(i => i.facility_phase_id === phaseId)
     const maxOrder = phaseItems.length > 0
@@ -499,6 +528,52 @@ export function useTemplateBuilder() {
     }
   }, [selectedTemplateId, builderState.items, supabase, showToast])
 
+  // ── Reorder within phase ───────────────────────────────
+
+  const reorderItemsInPhase = useCallback(async (phaseId: string, activeId: string, overId: string) => {
+    const phaseKey = phaseId === 'unassigned' ? null : phaseId
+    const phaseItems = builderState.items
+      .filter(i => (i.facility_phase_id ?? null) === phaseKey)
+      .sort((a, b) => a.display_order - b.display_order)
+
+    const oldIndex = phaseItems.findIndex(i => i.id === activeId)
+    const newIndex = phaseItems.findIndex(i => i.id === overId)
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+
+    // Optimistic update
+    dispatch({ type: 'MOVE_ITEM_WITHIN_PHASE', phaseId, activeId, overId })
+
+    const reordered = arrayMove(phaseItems, oldIndex, newIndex)
+    const orders = phaseItems.map(i => i.display_order)
+
+    try {
+      const updates = reordered
+        .map((item, idx) => ({ id: item.id, display_order: orders[idx] }))
+        .filter((u, idx) => u.display_order !== phaseItems[idx].display_order)
+
+      await Promise.all(
+        updates.map(u =>
+          supabase
+            .from('milestone_template_items')
+            .update({ display_order: u.display_order })
+            .eq('id', u.id)
+            .then(({ error }) => { if (error) throw error })
+        ),
+      )
+    } catch (err) {
+      dispatch({ type: 'SET_ITEMS', items: builderState.items })
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to reorder' })
+    }
+  }, [builderState.items, supabase, showToast])
+
+  // ── Add empty phase to template ───────────────────────
+
+  const addPhaseToTemplate = useCallback((phaseId: string) => {
+    setEmptyPhaseIds(prev => new Set([...prev, phaseId]))
+  }, [])
+
+  // Clear empty phase when a milestone is added to it (handled by addMilestoneToPhase internally)
+
   // ── Loading / Error ─────────────────────────────────────
 
   const loading = templatesLoading || milestonesLoading || phasesLoading
@@ -537,6 +612,9 @@ export function useTemplateBuilder() {
     addMilestoneToPhase,
     removeMilestone,
     removePhaseFromTemplate,
+    reorderItemsInPhase,
+    addPhaseToTemplate,
+    emptyPhaseIds,
     dispatch,
   }
 }

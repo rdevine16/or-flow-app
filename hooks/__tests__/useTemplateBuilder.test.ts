@@ -16,6 +16,7 @@ type BuilderAction =
   | { type: 'REMOVE_ITEM'; itemId: string }
   | { type: 'BULK_REMOVE_BY_PHASE'; phaseId: string }
   | { type: 'REORDER_ITEMS'; items: TemplateItemData[] }
+  | { type: 'MOVE_ITEM_WITHIN_PHASE'; phaseId: string; activeId: string; overId: string }
 
 function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
   switch (action.type) {
@@ -29,6 +30,32 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
       return { items: state.items.filter(i => i.facility_phase_id !== action.phaseId) }
     case 'REORDER_ITEMS':
       return { items: action.items }
+    case 'MOVE_ITEM_WITHIN_PHASE': {
+      // arrayMove helper from @dnd-kit/sortable
+      function arrayMove<T>(array: T[], from: number, to: number): T[] {
+        const arr = [...array]
+        const item = arr.splice(from, 1)[0]
+        arr.splice(to, 0, item)
+        return arr
+      }
+
+      const phaseKey = action.phaseId === 'unassigned' ? null : action.phaseId
+      const phaseItems = state.items
+        .filter(i => (i.facility_phase_id ?? null) === phaseKey)
+        .sort((a, b) => a.display_order - b.display_order)
+
+      const oldIndex = phaseItems.findIndex(i => i.id === action.activeId)
+      const newIndex = phaseItems.findIndex(i => i.id === action.overId)
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return state
+
+      const reordered = arrayMove(phaseItems, oldIndex, newIndex)
+      const orders = phaseItems.map(i => i.display_order)
+      const updated = reordered.map((item, idx) => ({ ...item, display_order: orders[idx] }))
+
+      const idSet = new Set(phaseItems.map(i => i.id))
+      const otherItems = state.items.filter(i => !idSet.has(i.id))
+      return { items: [...otherItems, ...updated].sort((a, b) => a.display_order - b.display_order) }
+    }
     default:
       return state
   }
@@ -94,6 +121,94 @@ describe('builderReducer', () => {
   it('handles empty state', () => {
     const result = builderReducer({ items: [] }, { type: 'ADD_ITEM', item: baseItems[0] })
     expect(result.items).toHaveLength(1)
+  })
+
+  describe('MOVE_ITEM_WITHIN_PHASE', () => {
+    it('moves item down within phase (reorder from top to bottom)', () => {
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm1', facility_phase_id: 'p1', display_order: 1 },
+        { id: 'i2', template_id: 't1', facility_milestone_id: 'm2', facility_phase_id: 'p1', display_order: 2 },
+        { id: 'i3', template_id: 't1', facility_milestone_id: 'm3', facility_phase_id: 'p1', display_order: 3 },
+      ]
+      const result = builderReducer({ items }, { type: 'MOVE_ITEM_WITHIN_PHASE', phaseId: 'p1', activeId: 'i1', overId: 'i3' })
+
+      // After move: i2, i3, i1 — but display_order preserved from original positions
+      expect(result.items).toHaveLength(3)
+      const sorted = result.items.sort((a, b) => a.display_order - b.display_order)
+      expect(sorted[0].id).toBe('i2') // now at display_order 1
+      expect(sorted[1].id).toBe('i3') // now at display_order 2
+      expect(sorted[2].id).toBe('i1') // now at display_order 3
+    })
+
+    it('moves item up within phase (reorder from bottom to top)', () => {
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm1', facility_phase_id: 'p1', display_order: 1 },
+        { id: 'i2', template_id: 't1', facility_milestone_id: 'm2', facility_phase_id: 'p1', display_order: 2 },
+        { id: 'i3', template_id: 't1', facility_milestone_id: 'm3', facility_phase_id: 'p1', display_order: 3 },
+      ]
+      const result = builderReducer({ items }, { type: 'MOVE_ITEM_WITHIN_PHASE', phaseId: 'p1', activeId: 'i3', overId: 'i1' })
+
+      // After move: i3, i1, i2
+      const sorted = result.items.sort((a, b) => a.display_order - b.display_order)
+      expect(sorted[0].id).toBe('i3') // now at display_order 1
+      expect(sorted[1].id).toBe('i1') // now at display_order 2
+      expect(sorted[2].id).toBe('i2') // now at display_order 3
+    })
+
+    it('handles reorder in unassigned section (phaseId="unassigned")', () => {
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm1', facility_phase_id: null, display_order: 1 },
+        { id: 'i2', template_id: 't1', facility_milestone_id: 'm2', facility_phase_id: null, display_order: 2 },
+      ]
+      const result = builderReducer({ items }, { type: 'MOVE_ITEM_WITHIN_PHASE', phaseId: 'unassigned', activeId: 'i2', overId: 'i1' })
+
+      const sorted = result.items.sort((a, b) => a.display_order - b.display_order)
+      expect(sorted[0].id).toBe('i2')
+      expect(sorted[1].id).toBe('i1')
+    })
+
+    it('does not affect items in other phases', () => {
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm1', facility_phase_id: 'p1', display_order: 1 },
+        { id: 'i2', template_id: 't1', facility_milestone_id: 'm2', facility_phase_id: 'p1', display_order: 2 },
+        { id: 'i3', template_id: 't1', facility_milestone_id: 'm3', facility_phase_id: 'p2', display_order: 3 },
+      ]
+      const result = builderReducer({ items }, { type: 'MOVE_ITEM_WITHIN_PHASE', phaseId: 'p1', activeId: 'i1', overId: 'i2' })
+
+      // i3 (in p2) should be unchanged
+      const i3 = result.items.find(i => i.id === 'i3')
+      expect(i3).toEqual(items[2])
+    })
+
+    it('returns state unchanged if activeId not found', () => {
+      const result = builderReducer({ items: baseItems }, { type: 'MOVE_ITEM_WITHIN_PHASE', phaseId: 'p1', activeId: 'i999', overId: 'i2' })
+      expect(result.items).toEqual(baseItems)
+    })
+
+    it('returns state unchanged if overId not found', () => {
+      const result = builderReducer({ items: baseItems }, { type: 'MOVE_ITEM_WITHIN_PHASE', phaseId: 'p1', activeId: 'i1', overId: 'i999' })
+      expect(result.items).toEqual(baseItems)
+    })
+
+    it('returns state unchanged if activeId === overId (no-op)', () => {
+      const result = builderReducer({ items: baseItems }, { type: 'MOVE_ITEM_WITHIN_PHASE', phaseId: 'p1', activeId: 'i1', overId: 'i1' })
+      expect(result.items).toEqual(baseItems)
+    })
+
+    it('preserves display_order values from original phase (swaps them, not reassigns)', () => {
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm1', facility_phase_id: 'p1', display_order: 10 },
+        { id: 'i2', template_id: 't1', facility_milestone_id: 'm2', facility_phase_id: 'p1', display_order: 20 },
+        { id: 'i3', template_id: 't1', facility_milestone_id: 'm3', facility_phase_id: 'p1', display_order: 30 },
+      ]
+      const result = builderReducer({ items }, { type: 'MOVE_ITEM_WITHIN_PHASE', phaseId: 'p1', activeId: 'i1', overId: 'i3' })
+
+      // After move: i2 at 10, i3 at 20, i1 at 30 (order values preserved from original array)
+      const sorted = result.items.sort((a, b) => a.display_order - b.display_order)
+      expect(sorted[0]).toMatchObject({ id: 'i2', display_order: 10 })
+      expect(sorted[1]).toMatchObject({ id: 'i3', display_order: 20 })
+      expect(sorted[2]).toMatchObject({ id: 'i1', display_order: 30 })
+    })
   })
 })
 
