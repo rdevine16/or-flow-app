@@ -294,6 +294,79 @@ Replace the toggle-based milestone configuration system with a template-based mo
 
 ---
 
+## Phase 8: Template Builder + Preview Polish
+**Complexity:** Medium
+**Commit:** `feat(milestones): phase 8 - builder polish (filled dots, interactive boundaries, legend)`
+
+### What it does
+Visual and interactivity polish for the template builder and timeline preview. Three focus areas:
+
+#### 8.1 — Replace checkmarks with filled dots
+- **FlowNode.tsx**: Replace the `M20 6L9 17l-5-5` checkmark SVG path in EdgeMilestone, InteriorMilestone, and UnassignedMilestone with a simple filled circle in the phase color (or slate for unassigned). No SVG path needed — just a `border-radius: 50%` filled div.
+- **TemplateTimelinePreview.tsx**: Same change — replace checkmark circles with filled dots for consistency across all milestone types (edge, interior, unassigned, sub-phase milestones).
+- **SubPhaseIndicator.tsx**: Replace checkmark icons in sub-phase milestone rows with filled dots.
+
+#### 8.2 — Interactive shared boundaries
+- **SharedBoundary.tsx**: Add hover state with remove (X) button, matching FlowNode pattern. Add drag handle (GripVertical) on hover.
+- **SharedBoundary removal confirmation**: Radix `AlertDialog` — "Removing this milestone will break the shared boundary between {Phase A} and {Phase B}. Continue?" with Cancel/Remove actions.
+- **SharedBoundary DnD**: Make SharedBoundary a sortable item that belongs to both the ending and starting phase `SortableContext`s. When dragged within either phase, it reorders normally. Phase edges recompute automatically from new positions via `buildRenderList`.
+- **TemplateBuilder.tsx**: Update `groupByPhase` to include shared boundary items in both adjacent phase `SortableContext`s. Update `handleDragEnd` to handle shared boundary reordering (determine which phase the item landed in, call `reorderItemsInPhase`). Add `AlertDialog` for shared boundary removal confirmation.
+
+#### 8.3 — Legend update
+- **TemplateBuilder.tsx**: Update builder legend items:
+  - Filled dot icon → "Milestone"
+  - Gradient diamond icon → "Shared boundary (removable)"
+  - Drag handle icon → "Drag to reorder"
+
+### Files touched
+- `components/settings/milestones/FlowNode.tsx` (modify — replace checkmark with filled dot)
+- `components/settings/milestones/TemplateTimelinePreview.tsx` (modify — replace checkmark with filled dot)
+- `components/settings/milestones/SubPhaseIndicator.tsx` (modify — replace checkmark with filled dot)
+- `components/settings/milestones/SharedBoundary.tsx` (modify — add hover X, drag handle, DnD sortable)
+- `components/settings/milestones/TemplateBuilder.tsx` (modify — update groupByPhase for shared boundary DnD, add AlertDialog, update legend)
+
+### Test gate
+1. **Unit:** FlowNode renders filled dots (no checkmark SVG path); SharedBoundary renders X button on hover; SharedBoundary AlertDialog appears on X click; buildRenderList output unchanged; legend shows updated items
+2. **Integration:** Remove shared boundary via X → AlertDialog confirms → milestone removed from template → both adjacent phases lose their shared edge → DB row deleted; drag shared boundary within phase → reorder works → phase edges recompute correctly
+3. **Workflow:** Build template with shared boundary → hover shows X + drag handle → remove via confirmation → boundary breaks cleanly → add milestone back to create new boundary → drag to reorder → verify positions persist after page reload
+
+---
+
+## Phase 9: Procedure + Surgeon Tab Redesign
+**Complexity:** Medium
+**Commit:** `feat(milestones): phase 9 - procedure and surgeon tab 2/3-column redesign`
+
+### What it does
+Redesign Tab 4 (Procedures), Tab 5 (Surgeons), and Admin Tab 4 (Procedure Types) from flat tables to multi-column layouts with template timeline previews.
+
+#### 9.1 — Procedure tab (Tab 4) → 2-column layout
+- **Left column (~300px):** Searchable procedure list. Each item shows procedure name + small template name badge. Click to select (blue highlight). No category column.
+- **Right column (flex-1):** Selected procedure's template dropdown at top, then `TemplateTimelinePreview` below showing the full visual timeline. Inherited templates show "Using facility default" label.
+- **Empty state:** Right column shows "Select a procedure to view its template" with icon when nothing selected.
+- **Height:** `calc(100vh - 220px)` with internal scrolling per column, matching Templates tab.
+
+#### 9.2 — Surgeon tab (Tab 5) → 3-column layout
+- **Column 1 (~240px):** Searchable surgeon list with override count badges. Click to select.
+- **Column 2 (~260px):** Procedure list for selected surgeon. Each item shows procedure name + small "Override" amber badge if surgeon has an override. Click to select.
+- **Column 3 (flex-1):** Surgeon+procedure header, template dropdown (change override), status badge (Override amber / Inherited slate), then `TemplateTimelinePreview` below.
+- **Empty states:** Column 2: "Select a surgeon" prompt. Column 3: "Select a procedure" prompt.
+- **Height:** Fill viewport with internal scrolling per column.
+
+#### 9.3 — Admin Procedure Types tab → 2-column layout
+- **Same pattern as facility Tab 4** but queries global tables (`procedure_type_templates`, `milestone_template_types`). "Use global default" instead of "Use facility default."
+
+### Files touched
+- `components/settings/milestones/ProcedureTemplateAssignment.tsx` (rewrite — 2-column layout)
+- `components/settings/milestones/SurgeonOverridePanel.tsx` (rewrite — 3-column layout)
+- `components/settings/milestones/AdminProcedureTypeAssignment.tsx` (rewrite — 2-column layout)
+
+### Test gate
+1. **Unit:** Procedure tab renders 2-column layout; surgeon tab renders 3-column layout; empty states appear when no selection; template badges show on list items; override badges appear correctly
+2. **Integration:** Select procedure → right column shows correct template + timeline; change template via dropdown → DB updates → timeline refreshes; select surgeon → procedures load → select procedure → override/inherited status correct; create override → badge appears in procedure list; remove override → badge disappears
+3. **Workflow:** Full assignment flow: select procedure → view timeline → change template → navigate to Surgeons → select surgeon → select same procedure → create override → verify different timeline shown → remove override → verify reverts to procedure's template
+
+---
+
 ## Dependency Graph
 ```
 Phase 1 (DB) ──► Phase 2 (Tab Shell + Tabs 1-2) ──► Phase 3 (Tab 3: Builder)
@@ -301,41 +374,21 @@ Phase 1 (DB) ──► Phase 2 (Tab Shell + Tabs 1-2) ──► Phase 3 (Tab 3: 
               Phase 3,4 ──────────────────────────► Phase 5 (Admin)
               Phase 5 ────────────────────────────► Phase 6 (Demo Generator)
               Phase 6 ────────────────────────────► Phase 7 (Analytics + Cleanup)
+              Phase 7 ────────────────────────────► Phase 8 (Builder + Preview Polish)
+              Phase 8 ────────────────────────────► Phase 9 (Tab 4/5 Redesign)
 ```
-
-Phases 3 and 4 can theoretically run in parallel after Phase 2, but per workflow rules, one phase per session.
 
 ---
 
-## Session Log
+## Interview Notes (Post-Phase 7 Polish)
 
-### Phase 5b — In Progress (session split at ~60% context)
-**Commit:** `c478450` (WIP)
-**Branch:** `feature/milestone-template-system`
-
-#### What was done
-1. **Exported `UseTemplateBuilderReturn` type** from `hooks/useTemplateBuilder.ts` (line 622)
-2. **Refactored `TemplateBuilder` component** to accept `builder: UseTemplateBuilderReturn` as a required prop instead of calling `useTemplateBuilder()` internally. Per Q24/A24: "One component, data via props."
-3. **Updated facility page** (`app/settings/milestones/page.tsx`): Added `FacilityTemplateBuilderTab` wrapper component that calls `useTemplateBuilder()` and passes it to `<TemplateBuilder builder={builder} />`
-4. **Created `hooks/useAdminTemplateBuilder.ts`** (~480 lines): Maps admin tables to the same `UseTemplateBuilderReturn` interface:
-   - `milestone_template_types` → `MilestoneTemplate` (adds dummy `facility_id: ''`, `deleted_at: null`)
-   - `milestone_template_type_items` → `TemplateItemData` (maps `template_type_id→template_id`, `milestone_type_id→facility_milestone_id`, `phase_template_id→facility_phase_id`)
-   - `milestone_types` → `MilestoneLookup`
-   - `phase_templates` → `PhaseLookup` (maps `parent_phase_template_id→parent_phase_id`)
-   - `procedure_type_templates.milestone_template_type_id` → procedure counts
-   - Full CRUD: create, duplicate, setDefault, archive, rename, addMilestoneToPhase, removeMilestone, removePhaseFromTemplate, reorderItemsInPhase, addPhaseToTemplate
-
-#### What remains
-1. **Create `AdminProcedureTypeAssignment.tsx`** — Admin Tab 4 component
-   - Model after facility `ProcedureTemplateAssignment.tsx` (458 lines)
-   - Data: `procedure_type_templates` (read + update `milestone_template_type_id`)
-   - Shows: searchable procedure type list, template picker dropdown per row, milestone chip preview
-   - Tables: `procedure_type_templates`, `milestone_template_types`, `milestone_template_type_items`, `milestone_types`, `phase_templates`
-   - No `facility_id` scoping (global admin tables)
-   - Default fallback: procedure types with no explicit assignment show "Using global default"
-2. **Wire Admin Tab 3 + Tab 4 into admin page** (`app/admin/settings/milestones/page.tsx`)
-   - Replace `TemplatesPlaceholder` (line 167) with: `useAdminTemplateBuilder()` → `<TemplateBuilder builder={adminBuilder} />`
-   - Replace `ProcedureTypesPlaceholder` (line 179) with: `<AdminProcedureTypeAssignment />`
-   - Add imports for new components
-3. **Run 3-stage test gate** (typecheck, test suite, coverage)
-4. **Final commit**: `feat(milestones): phase 5b - admin template builder and procedure type assignment`
+| Decision | Answer |
+|----------|--------|
+| Uncommitted TemplateTimelinePreview work | Commit standalone before starting Phase 8 |
+| Phase DnD scope | Boundary milestones only — phase headers stay fixed |
+| Multi-phase boundaries | A milestone is only ever shared between 2 adjacent phases |
+| Shared boundary removal UX | Radix AlertDialog with confirmation message |
+| Multi-phase boundary visual | N/A — always exactly 2 phases, existing SharedBoundary visual is sufficient |
+| Procedure tab empty state | "Select a procedure to view its template" prompt only — no default template preview |
+| Filled dots everywhere | FlowNode + TemplateTimelinePreview + SubPhaseIndicator — all get filled dots |
+| SharedBoundary DnD | Belongs to both adjacent phase SortableContexts, phase edges recompute on drag |
