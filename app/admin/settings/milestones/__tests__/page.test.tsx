@@ -110,9 +110,54 @@ vi.mock('@/lib/audit-logger', () => ({
   },
 }))
 
-// Mock AdminPhaseLibrary to avoid nested supabase queries
+// Mock child components to avoid nested supabase queries
 vi.mock('@/components/settings/milestones/AdminPhaseLibrary', () => ({
   AdminPhaseLibrary: () => <div data-testid="admin-phase-library">Admin Phase Library Content</div>,
+}))
+
+vi.mock('@/components/settings/milestones/TemplateBuilder', () => ({
+  TemplateBuilder: ({ builder }: { builder: unknown }) => (
+    <div data-testid="template-builder">Admin Template Builder Content</div>
+  ),
+}))
+
+vi.mock('@/hooks/useAdminTemplateBuilder', () => ({
+  useAdminTemplateBuilder: () => ({
+    templates: [],
+    selectedTemplate: null,
+    selectedTemplateId: null,
+    items: [],
+    milestones: [],
+    phases: [],
+    availableMilestones: [],
+    availablePhases: [],
+    assignedMilestoneIds: new Set(),
+    assignedPhaseIds: new Set(),
+    procedureCounts: {},
+    loading: false,
+    itemsLoading: false,
+    error: null,
+    saving: false,
+    setSelectedTemplateId: vi.fn(),
+    createTemplate: vi.fn(),
+    duplicateTemplate: vi.fn(),
+    setDefaultTemplate: vi.fn(),
+    archiveTemplate: vi.fn(),
+    renameTemplate: vi.fn(),
+    addMilestoneToPhase: vi.fn(),
+    removeMilestone: vi.fn(),
+    removePhaseFromTemplate: vi.fn(),
+    reorderItemsInPhase: vi.fn(),
+    addPhaseToTemplate: vi.fn(),
+    emptyPhaseIds: new Set(),
+    dispatch: vi.fn(),
+  }),
+}))
+
+vi.mock('@/components/settings/milestones/AdminProcedureTypeAssignment', () => ({
+  AdminProcedureTypeAssignment: () => (
+    <div data-testid="admin-procedure-type-assignment">Admin Procedure Type Assignment Content</div>
+  ),
 }))
 
 import AdminMilestonesSettingsPage from '../page'
@@ -178,20 +223,18 @@ describe('AdminMilestonesSettingsPage', () => {
       expect(screen.getByTestId('admin-phase-library')).toBeInTheDocument()
     })
 
-    it('shows Templates placeholder when ?tab=templates', () => {
+    it('shows Template Builder when ?tab=templates', () => {
       mockTabParam = 'templates'
       render(<AdminMilestonesSettingsPage />)
 
-      expect(screen.getByText('Template Builder')).toBeInTheDocument()
-      expect(screen.getByText(/Coming in Phase 5b/)).toBeInTheDocument()
+      expect(screen.getByTestId('template-builder')).toBeInTheDocument()
     })
 
-    it('shows Procedure Types placeholder when ?tab=procedures', () => {
+    it('shows Procedure Type Assignment when ?tab=procedures', () => {
       mockTabParam = 'procedures'
       render(<AdminMilestonesSettingsPage />)
 
-      expect(screen.getByText('Procedure Type Templates')).toBeInTheDocument()
-      expect(screen.getByText(/Coming in Phase 5b/)).toBeInTheDocument()
+      expect(screen.getByTestId('admin-procedure-type-assignment')).toBeInTheDocument()
     })
 
     it('updates URL when tab clicked', async () => {

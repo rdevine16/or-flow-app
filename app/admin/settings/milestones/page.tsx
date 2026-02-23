@@ -18,6 +18,9 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { AdminPhaseLibrary } from '@/components/settings/milestones/AdminPhaseLibrary'
+import { TemplateBuilder } from '@/components/settings/milestones/TemplateBuilder'
+import { AdminProcedureTypeAssignment } from '@/components/settings/milestones/AdminProcedureTypeAssignment'
+import { useAdminTemplateBuilder } from '@/hooks/useAdminTemplateBuilder'
 import { inferPhaseGroup } from '@/lib/utils/inferPhaseGroup'
 import {
   Archive,
@@ -154,38 +157,19 @@ function AdminMilestonesContent() {
           {/* Tab content */}
           {activeTab === 'milestones' && <AdminMilestonesTab />}
           {activeTab === 'phases' && <AdminPhaseLibrary />}
-          {activeTab === 'templates' && <TemplatesPlaceholder />}
-          {activeTab === 'procedures' && <ProcedureTypesPlaceholder />}
+          {activeTab === 'templates' && <AdminTemplateBuilderTab />}
+          {activeTab === 'procedures' && <AdminProcedureTypeAssignment />}
         </div>
       </Container>
     </DashboardLayout>
   )
 }
 
-// ─── Tab 3 & 4 Placeholders ─────────────────────────────
+// ─── Tab 3: Admin Template Builder ───────────────────────
 
-function TemplatesPlaceholder() {
-  return (
-    <div className="text-center py-16 border border-dashed border-slate-300 rounded-lg bg-slate-50/50">
-      <LayoutTemplate className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-      <h3 className="text-sm font-medium text-slate-600 mb-1">Template Builder</h3>
-      <p className="text-sm text-slate-400">
-        Global milestone template CRUD. Coming in Phase 5b.
-      </p>
-    </div>
-  )
-}
-
-function ProcedureTypesPlaceholder() {
-  return (
-    <div className="text-center py-16 border border-dashed border-slate-300 rounded-lg bg-slate-50/50">
-      <Puzzle className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-      <h3 className="text-sm font-medium text-slate-600 mb-1">Procedure Type Templates</h3>
-      <p className="text-sm text-slate-400">
-        Assign templates to global procedure types. Coming in Phase 5b.
-      </p>
-    </div>
-  )
+function AdminTemplateBuilderTab() {
+  const builder = useAdminTemplateBuilder()
+  return <TemplateBuilder builder={builder} />
 }
 
 // ─── Tab 1: Admin Milestones ─────────────────────────────
