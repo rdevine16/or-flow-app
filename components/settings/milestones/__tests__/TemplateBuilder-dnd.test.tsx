@@ -7,7 +7,7 @@ import type {
   EdgeMilestoneItem,
   InteriorMilestoneItem,
   DropZoneItem,
-  SharedBoundaryItem,
+  BoundaryConnectorItem,
   UnassignedHeaderItem,
   UnassignedMilestoneItem,
   SubPhaseItem,
@@ -19,7 +19,7 @@ import { resolveColorKey } from '@/lib/milestone-phase-config'
 
 // ─── groupByPhase helper (extracted from TemplateBuilder.tsx) ─────
 
-type PhaseSegment = PhaseGroupSegmentData | SharedBoundarySegment | UnassignedSegmentData
+type PhaseSegment = PhaseGroupSegmentData | BoundaryConnectorSegment | UnassignedSegmentData
 
 interface PhaseGroupSegmentData {
   type: 'phase-group'
@@ -31,9 +31,9 @@ interface PhaseGroupSegmentData {
   subPhases: SubPhaseItem[]
 }
 
-interface SharedBoundarySegment {
-  type: 'shared-boundary'
-  item: RenderItem & { type: 'shared-boundary' }
+interface BoundaryConnectorSegment {
+  type: 'boundary-connector'
+  item: BoundaryConnectorItem
 }
 
 interface UnassignedSegmentData {
@@ -86,13 +86,13 @@ function groupByPhase(renderList: RenderItem[]): PhaseSegment[] {
         }
         break
       }
-      case 'shared-boundary': {
-        // Flush current group before shared boundary
+      case 'boundary-connector': {
+        // Flush current group before boundary connector
         if (currentPhaseGroup) {
           segments.push(currentPhaseGroup)
           currentPhaseGroup = null
         }
-        segments.push({ type: 'shared-boundary', item })
+        segments.push({ type: 'boundary-connector', item })
         break
       }
       case 'unassigned-header': {
@@ -211,7 +211,7 @@ describe('groupByPhase helper', () => {
     expect((segments[0] as PhaseGroupSegmentData).dropZone).toBeTruthy()
   })
 
-  it('separates phases with a shared boundary between them', () => {
+  it('separates phases with a boundary connector between them', () => {
     const phase1 = makePhase('p1', 'pre_op', 1)
     const phase2 = makePhase('p2', 'surgical', 2)
     const milestone1 = makeMilestone('m1', 'patient_in')
@@ -219,31 +219,33 @@ describe('groupByPhase helper', () => {
     const milestone3 = makeMilestone('m3', 'patient_out')
     const item1 = makeItem('i1', 't1', 'm1', 'p1', 1)
     const item2 = makeItem('i2', 't1', 'm2', 'p1', 2)
-    const item3 = makeItem('i3', 't1', 'm3', 'p2', 3)
+    const item3 = makeItem('i3', 't1', 'm2', 'p2', 3)
+    const item4 = makeItem('i4', 't1', 'm3', 'p2', 4)
 
     const renderList: RenderItem[] = [
       { type: 'phase-header', phase: phase1, color: resolveColorKey('blue'), itemCount: 2 },
       { type: 'edge-milestone', milestone: milestone1, templateItem: item1, phase: phase1, color: resolveColorKey('blue'), edge: 'start' },
+      { type: 'edge-milestone', milestone: milestone2, templateItem: item2, phase: phase1, color: resolveColorKey('blue'), edge: 'end' },
       { type: 'drop-zone', phaseId: 'p1', phaseName: 'Pre Op', color: resolveColorKey('blue') },
       {
-        type: 'shared-boundary',
-        milestone: milestone2,
-        templateItemId: 'i2',
+        type: 'boundary-connector',
+        milestoneName: 'Incision',
         endsPhase: phase1,
         startsPhase: phase2,
         endsColor: resolveColorKey('blue'),
         startsColor: resolveColorKey('green'),
       },
-      { type: 'phase-header', phase: phase2, color: resolveColorKey('green'), itemCount: 1 },
-      { type: 'edge-milestone', milestone: milestone3, templateItem: item3, phase: phase2, color: resolveColorKey('green'), edge: 'end' },
+      { type: 'phase-header', phase: phase2, color: resolveColorKey('green'), itemCount: 2 },
+      { type: 'edge-milestone', milestone: milestone2, templateItem: item3, phase: phase2, color: resolveColorKey('green'), edge: 'start' },
+      { type: 'edge-milestone', milestone: milestone3, templateItem: item4, phase: phase2, color: resolveColorKey('green'), edge: 'end' },
       { type: 'drop-zone', phaseId: 'p2', phaseName: 'Surgical', color: resolveColorKey('green') },
     ]
 
     const segments = groupByPhase(renderList)
 
-    expect(segments).toHaveLength(3) // phase-group (p1), shared-boundary, phase-group (p2)
+    expect(segments).toHaveLength(3) // phase-group (p1), boundary-connector, phase-group (p2)
     expect(segments[0]).toMatchObject({ type: 'phase-group', phaseId: 'p1' })
-    expect(segments[1]).toMatchObject({ type: 'shared-boundary' })
+    expect(segments[1]).toMatchObject({ type: 'boundary-connector' })
     expect(segments[2]).toMatchObject({ type: 'phase-group', phaseId: 'p2' })
   })
 
@@ -335,7 +337,7 @@ describe('groupByPhase helper', () => {
     })
   })
 
-  it('handles multiple phases with shared boundaries and unassigned', () => {
+  it('handles multiple phases with boundary connectors and unassigned', () => {
     const phase1 = makePhase('p1', 'pre_op', 1)
     const phase2 = makePhase('p2', 'surgical', 2)
     const milestone1 = makeMilestone('m1', 'patient_in')
@@ -344,33 +346,35 @@ describe('groupByPhase helper', () => {
     const milestone4 = makeMilestone('m4', 'orphan')
     const item1 = makeItem('i1', 't1', 'm1', 'p1', 1)
     const item2 = makeItem('i2', 't1', 'm2', 'p1', 2)
-    const item3 = makeItem('i3', 't1', 'm3', 'p2', 3)
-    const item4 = makeItem('i4', 't1', 'm4', null, 4)
+    const item3 = makeItem('i3', 't1', 'm2', 'p2', 3)
+    const item4 = makeItem('i4', 't1', 'm3', 'p2', 4)
+    const item5 = makeItem('i5', 't1', 'm4', null, 5)
 
     const renderList: RenderItem[] = [
       { type: 'phase-header', phase: phase1, color: resolveColorKey('blue'), itemCount: 2 },
       { type: 'edge-milestone', milestone: milestone1, templateItem: item1, phase: phase1, color: resolveColorKey('blue'), edge: 'start' },
+      { type: 'edge-milestone', milestone: milestone2, templateItem: item2, phase: phase1, color: resolveColorKey('blue'), edge: 'end' },
       { type: 'drop-zone', phaseId: 'p1', phaseName: 'Pre Op', color: resolveColorKey('blue') },
       {
-        type: 'shared-boundary',
-        milestone: milestone2,
-        templateItemId: 'i2',
+        type: 'boundary-connector',
+        milestoneName: 'Incision',
         endsPhase: phase1,
         startsPhase: phase2,
         endsColor: resolveColorKey('blue'),
         startsColor: resolveColorKey('green'),
       },
-      { type: 'phase-header', phase: phase2, color: resolveColorKey('green'), itemCount: 1 },
-      { type: 'edge-milestone', milestone: milestone3, templateItem: item3, phase: phase2, color: resolveColorKey('green'), edge: 'end' },
+      { type: 'phase-header', phase: phase2, color: resolveColorKey('green'), itemCount: 2 },
+      { type: 'edge-milestone', milestone: milestone2, templateItem: item3, phase: phase2, color: resolveColorKey('green'), edge: 'start' },
+      { type: 'edge-milestone', milestone: milestone3, templateItem: item4, phase: phase2, color: resolveColorKey('green'), edge: 'end' },
       { type: 'drop-zone', phaseId: 'p2', phaseName: 'Surgical', color: resolveColorKey('green') },
       { type: 'unassigned-header', count: 1 },
-      { type: 'unassigned-milestone', milestone: milestone4, templateItem: item4 },
+      { type: 'unassigned-milestone', milestone: milestone4, templateItem: item5 },
     ]
 
     const segments = groupByPhase(renderList)
 
-    expect(segments).toHaveLength(4) // phase-group (p1), shared-boundary, phase-group (p2), unassigned-group
-    expect(segments.map(s => s.type)).toEqual(['phase-group', 'shared-boundary', 'phase-group', 'unassigned-group'])
+    expect(segments).toHaveLength(4) // phase-group (p1), boundary-connector, phase-group (p2), unassigned-group
+    expect(segments.map(s => s.type)).toEqual(['phase-group', 'boundary-connector', 'phase-group', 'unassigned-group'])
   })
 })
 

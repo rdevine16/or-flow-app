@@ -121,7 +121,7 @@ describe('buildTemplateRenderList', () => {
     expect(result[2]).toMatchObject({ type: 'drop-zone' })
   })
 
-  it('renders shared boundary between two adjacent phases', () => {
+  it('renders boundary connector between two adjacent phases sharing a milestone', () => {
     const phases = [
       makePhase('p1', 'pre_op', 1),
       makePhase('p2', 'surgical', 2),
@@ -140,22 +140,23 @@ describe('buildTemplateRenderList', () => {
 
     const result = buildTemplateRenderList(items, phases, milestones)
 
-    // p1: phase-header, edge-start (patient_in), drop-zone, shared-boundary (incision)
-    // p2: phase-header, edge-end (closing), drop-zone
-    const sharedBoundaries = result.filter(r => r.type === 'shared-boundary')
-    expect(sharedBoundaries).toHaveLength(1)
-    expect(sharedBoundaries[0]).toMatchObject({
-      type: 'shared-boundary',
-      milestone: milestones[1], // incision
+    // Boundary connector should exist between the two phases
+    const boundaryConnectors = result.filter(r => r.type === 'boundary-connector')
+    expect(boundaryConnectors).toHaveLength(1)
+    expect(boundaryConnectors[0]).toMatchObject({
+      type: 'boundary-connector',
+      milestoneName: 'Incision',
       endsPhase: phases[0],
       startsPhase: phases[1],
     })
 
-    // The shared milestone should NOT appear as edge-milestone in either phase
+    // The shared milestone renders as edge-milestone in BOTH phases
     const edgeMilestones = result.filter(r => r.type === 'edge-milestone')
-    expect(edgeMilestones).toHaveLength(2) // patient_in (start of p1), closing (end of p2)
-    expect(edgeMilestones[0]).toMatchObject({ milestone: milestones[0] }) // patient_in
-    expect(edgeMilestones[1]).toMatchObject({ milestone: milestones[2] }) // closing
+    expect(edgeMilestones).toHaveLength(4) // patient_in (start p1), incision (end p1), incision (start p2), closing (end p2)
+    expect(edgeMilestones[0]).toMatchObject({ milestone: milestones[0], edge: 'start' }) // patient_in
+    expect(edgeMilestones[1]).toMatchObject({ milestone: milestones[1], edge: 'end' })   // incision (end of p1)
+    expect(edgeMilestones[2]).toMatchObject({ milestone: milestones[1], edge: 'start' }) // incision (start of p2)
+    expect(edgeMilestones[3]).toMatchObject({ milestone: milestones[2], edge: 'end' })   // closing
   })
 
   it('renders sub-phase within parent phase', () => {
@@ -374,16 +375,16 @@ describe('buildTemplateRenderList', () => {
     expect(phaseHeaders).toHaveLength(3) // p1, p2, p3 (p2_sub is rendered as sub-phase, not header)
     expect(phaseHeaders.map(h => h.phase.id)).toEqual(['p1', 'p2', 'p3'])
 
-    // Verify shared boundaries
-    const sharedBoundaries = result.filter(r => r.type === 'shared-boundary')
-    expect(sharedBoundaries).toHaveLength(2)
-    expect(sharedBoundaries[0]).toMatchObject({
-      milestone: milestones[1], // m2 (incision)
+    // Verify boundary connectors
+    const boundaryConnectors = result.filter(r => r.type === 'boundary-connector')
+    expect(boundaryConnectors).toHaveLength(2)
+    expect(boundaryConnectors[0]).toMatchObject({
+      milestoneName: 'Incision', // m2
       endsPhase: phases[0], // p1
       startsPhase: phases[1], // p2
     })
-    expect(sharedBoundaries[1]).toMatchObject({
-      milestone: milestones[4], // m5 (patient_out)
+    expect(boundaryConnectors[1]).toMatchObject({
+      milestoneName: 'Patient Out', // m5
       endsPhase: phases[1], // p2
       startsPhase: phases[3], // p3
     })

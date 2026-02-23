@@ -137,9 +137,9 @@ describe('TemplateBuilder - Integration', () => {
       expect(legendSection).toBeTruthy()
     })
 
-    it('renders legend with "Shared boundary (removable)" item', () => {
+    it('renders legend with "Phase boundary" item', () => {
       render(<TemplateBuilder builder={defaultHookReturn} />)
-      expect(screen.getByText('Shared boundary (removable)')).toBeInTheDocument()
+      expect(screen.getByText('Phase boundary')).toBeInTheDocument()
     })
 
     it('renders legend with "Drag to reorder" item', () => {
@@ -152,7 +152,7 @@ describe('TemplateBuilder - Integration', () => {
       // All three legend items should be present
       const legendItems = [
         screen.getByText('Milestone'),
-        screen.getByText('Shared boundary (removable)'),
+        screen.getByText('Phase boundary'),
         screen.getByText('Drag to reorder'),
       ]
       legendItems.forEach(item => expect(item).toBeInTheDocument())

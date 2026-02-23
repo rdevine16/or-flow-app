@@ -1,7 +1,7 @@
 // lib/utils/buildTemplateRenderList.ts
 // Core rendering logic for the milestone template builder.
 // Transforms DB data (template items, phases, milestones) into a flat
-// array of render items that handles shared boundaries, edge milestones,
+// array of render items that handles boundary connectors, edge milestones,
 // sub-phase indicators, drop zones, and unassigned milestones.
 
 import { resolveColorKey, type ColorKeyConfig } from '@/lib/milestone-phase-config'
@@ -42,10 +42,9 @@ export interface PhaseHeaderItem {
   itemCount: number
 }
 
-export interface SharedBoundaryItem {
-  type: 'shared-boundary'
-  milestone: MilestoneLookup
-  templateItemId: string
+export interface BoundaryConnectorItem {
+  type: 'boundary-connector'
+  milestoneName: string
   endsPhase: PhaseLookup
   startsPhase: PhaseLookup
   endsColor: ColorKeyConfig
@@ -97,7 +96,7 @@ export interface UnassignedMilestoneItem {
 
 export type RenderItem =
   | PhaseHeaderItem
-  | SharedBoundaryItem
+  | BoundaryConnectorItem
   | EdgeMilestoneItem
   | InteriorMilestoneItem
   | SubPhaseItem
@@ -175,18 +174,12 @@ export function buildTemplateRenderList(
     const color = resolveColorKey(phase.color_key)
 
     const nextGroup = i < topLevel.length - 1 ? topLevel[i + 1] : null
-    const prevGroup = i > 0 ? topLevel[i - 1] : null
 
-    const firstMsId = items.length > 0 ? items[0].milestone.id : null
     const lastMsId = items.length > 0 ? items[items.length - 1].milestone.id : null
-    const prevLastMsId = prevGroup?.items.length
-      ? prevGroup.items[prevGroup.items.length - 1].milestone.id
-      : null
     const nextFirstMsId = nextGroup?.items.length
       ? nextGroup.items[0].milestone.id
       : null
 
-    const sharedWithPrev = !!(firstMsId && firstMsId === prevLastMsId)
     const sharedWithNext = !!(lastMsId && lastMsId === nextFirstMsId)
 
     // Phase header
@@ -196,33 +189,20 @@ export function buildTemplateRenderList(
     const subPhases = (subPhaseMap.get(phase.id) || [])
       .sort((a, b) => a.phase.display_order - b.phase.display_order)
 
-    // Render milestones
+    // Render milestones — every milestone renders, including boundary edges
     for (let j = 0; j < items.length; j++) {
       const { item, milestone } = items[j]
       const isFirst = j === 0
       const isLast = j === items.length - 1
 
-      // Skip if rendered as shared boundary
-      if (isFirst && sharedWithPrev) continue
-      if (isLast && sharedWithNext) continue
-
-      if (isFirst && !sharedWithPrev) {
+      if (isFirst || isLast) {
         result.push({
           type: 'edge-milestone',
           milestone,
           templateItem: item,
           phase,
           color,
-          edge: 'start',
-        })
-      } else if (isLast && !sharedWithNext) {
-        result.push({
-          type: 'edge-milestone',
-          milestone,
-          templateItem: item,
-          phase,
-          color,
-          edge: 'end',
+          edge: isFirst ? 'start' : 'end',
         })
       } else {
         result.push({
@@ -251,14 +231,13 @@ export function buildTemplateRenderList(
     // Drop zone for this phase
     result.push({ type: 'drop-zone', phaseId: phase.id, phaseName: phase.display_name, color })
 
-    // Shared boundary after this phase
+    // Boundary connector after this phase (when same milestone bridges two phases)
     if (sharedWithNext && lastMsId && nextGroup) {
       const ms = milestoneMap.get(lastMsId)
       if (ms) {
         result.push({
-          type: 'shared-boundary',
-          milestone: ms,
-          templateItemId: items[items.length - 1].item.id,
+          type: 'boundary-connector',
+          milestoneName: ms.display_name,
           endsPhase: phase,
           startsPhase: nextGroup.phase,
           endsColor: color,

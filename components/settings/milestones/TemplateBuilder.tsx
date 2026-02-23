@@ -23,10 +23,9 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import type { UseTemplateBuilderReturn } from '@/hooks/useTemplateBuilder'
-import { buildTemplateRenderList, type RenderItem } from '@/lib/utils/buildTemplateRenderList'
+import { buildTemplateRenderList, type RenderItem, type BoundaryConnectorItem } from '@/lib/utils/buildTemplateRenderList'
 import { resolveColorKey } from '@/lib/milestone-phase-config'
 import { TemplateList } from './TemplateList'
-import { SharedBoundary } from './SharedBoundary'
 import { EdgeMilestone, InteriorMilestone, UnassignedMilestone } from './FlowNode'
 import { SubPhaseIndicator } from './SubPhaseIndicator'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -382,8 +381,8 @@ function BuilderCanvas({
           <span className="text-[10px] text-slate-500">Milestone</span>
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-2.5 h-2.5 rounded-[2px] rotate-45" style={{ background: 'linear-gradient(135deg, #F59E0B, #22C55E)' }} />
-          <span className="text-[10px] text-slate-500">Shared boundary (removable)</span>
+          <div className="w-0.5 h-3 rounded-full" style={{ background: 'linear-gradient(to bottom, #F59E0B, #22C55E)' }} />
+          <span className="text-[10px] text-slate-500">Phase boundary</span>
         </div>
         <div className="flex items-center gap-1">
           <GripVertical className="w-3 h-3 text-slate-400" />
@@ -418,6 +417,14 @@ function BuilderCanvas({
                     onRemoveMilestone={onRemoveMilestone}
                     onRemovePhase={onRemovePhase}
                     activeDrag={activeDrag}
+                  />
+                )
+              }
+              if (segment.type === 'boundary-connector') {
+                return (
+                  <BoundaryConnector
+                    key={`bc-${segment.item.endsPhase.id}-${segment.item.startsPhase.id}`}
+                    item={segment.item}
                   />
                 )
               }
@@ -498,15 +505,6 @@ function PhaseGroupSegment({
                   sortableId={renderItem.templateItem.id}
                 />
               )
-            case 'shared-boundary':
-              return (
-                <SharedBoundary
-                  key={`sb-${renderItem.templateItemId}`}
-                  item={renderItem}
-                  onRemove={onRemoveMilestone}
-                  sortableId={renderItem.templateItemId}
-                />
-              )
             case 'sub-phase':
               return (
                 <SubPhaseIndicator
@@ -528,6 +526,47 @@ function PhaseGroupSegment({
           activeDrag={activeDrag}
         />
       )}
+    </div>
+  )
+}
+
+// ─── Unassigned Segment ─────────────────────────────────────
+
+// ─── Boundary Connector ──────────────────────────────────────
+
+function BoundaryConnector({ item }: { item: BoundaryConnectorItem }) {
+  const topHex = item.endsColor.hex
+  const bottomHex = item.startsColor.hex
+
+  return (
+    <div className="flex items-center justify-center py-0.5">
+      <div className="flex flex-col items-center gap-0">
+        {/* Gradient connector line */}
+        <div
+          className="w-0.5 h-4 rounded-full"
+          style={{ background: `linear-gradient(to bottom, ${topHex}, ${bottomHex})` }}
+        />
+        {/* Label */}
+        <div className="flex items-center gap-1 px-2 py-[2px]">
+          <span
+            className="text-[8px] font-bold uppercase tracking-wide"
+            style={{ color: topHex }}
+          >
+            {item.endsPhase.display_name}
+          </span>
+          <span className="text-[8px] text-slate-300">&rarr;</span>
+          <span
+            className="text-[8px] font-bold uppercase tracking-wide"
+            style={{ color: bottomHex }}
+          >
+            {item.startsPhase.display_name}
+          </span>
+        </div>
+        <div
+          className="w-0.5 h-4 rounded-full"
+          style={{ background: `linear-gradient(to bottom, ${topHex}40, ${bottomHex}40)` }}
+        />
+      </div>
     </div>
   )
 }
@@ -999,7 +1038,12 @@ function DraggableLibraryPhase({ phase }: { phase: { id: string; name: string; d
 
 // ─── groupByPhase helper ────────────────────────────────────
 
-type PhaseSegment = PhaseGroupSegmentData | UnassignedSegmentData
+type PhaseSegment = PhaseGroupSegmentData | BoundaryConnectorSegment | UnassignedSegmentData
+
+interface BoundaryConnectorSegment {
+  type: 'boundary-connector'
+  item: BoundaryConnectorItem
+}
 
 function groupByPhase(renderList: RenderItem[]): PhaseSegment[] {
   const segments: PhaseSegment[] = []
@@ -1044,14 +1088,13 @@ function groupByPhase(renderList: RenderItem[]): PhaseSegment[] {
         }
         break
       }
-      case 'shared-boundary': {
-        // Include shared boundary as the last sortable item in the ending phase group
+      case 'boundary-connector': {
+        // Flush current phase group, then emit connector between phase groups
         if (currentPhaseGroup) {
-          currentPhaseGroup.sortableItems.push(item)
-          currentPhaseGroup.sortableIds.push(item.templateItemId)
           segments.push(currentPhaseGroup)
           currentPhaseGroup = null
         }
+        segments.push({ type: 'boundary-connector', item })
         break
       }
       case 'unassigned-header': {
