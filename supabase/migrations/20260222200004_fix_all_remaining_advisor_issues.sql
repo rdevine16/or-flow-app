@@ -324,72 +324,72 @@ ALTER TABLE public.users
 -- Lookup / template tables: SELECT policies with USING (true)
 -- Change to require authenticated role
 
-DROP POLICY "All users can view cancellation reason templates" ON public.cancellation_reason_templates;
+DROP POLICY IF EXISTS "All users can view cancellation reason templates" ON public.cancellation_reason_templates;
 CREATE POLICY "All users can view cancellation reason templates"
   ON public.cancellation_reason_templates FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "All users can view complexity templates" ON public.complexity_templates;
+DROP POLICY IF EXISTS "All users can view complexity templates" ON public.complexity_templates;
 CREATE POLICY "All users can view complexity templates"
   ON public.complexity_templates FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "All users can view cost category templates" ON public.cost_category_templates;
+DROP POLICY IF EXISTS "All users can view cost category templates" ON public.cost_category_templates;
 CREATE POLICY "All users can view cost category templates"
   ON public.cost_category_templates FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "All users can view features" ON public.features;
+DROP POLICY IF EXISTS "All users can view features" ON public.features;
 CREATE POLICY "All users can view features"
   ON public.features FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "All users can view global milestone settings" ON public.global_milestone_settings;
+DROP POLICY IF EXISTS "All users can view global milestone settings" ON public.global_milestone_settings;
 CREATE POLICY "All users can view global milestone settings"
   ON public.global_milestone_settings FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "All users can view issue types" ON public.issue_types;
+DROP POLICY IF EXISTS "All users can view issue types" ON public.issue_types;
 CREATE POLICY "All users can view issue types"
   ON public.issue_types FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "All users can view patient statuses" ON public.patient_statuses;
+DROP POLICY IF EXISTS "All users can view patient statuses" ON public.patient_statuses;
 CREATE POLICY "All users can view patient statuses"
   ON public.patient_statuses FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "All users can view checklist templates" ON public.preop_checklist_field_templates;
+DROP POLICY IF EXISTS "All users can view checklist templates" ON public.preop_checklist_field_templates;
 CREATE POLICY "All users can view checklist templates"
   ON public.preop_checklist_field_templates FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "All authenticated users can view procedure categories" ON public.procedure_categories;
+DROP POLICY IF EXISTS "All authenticated users can view procedure categories" ON public.procedure_categories;
 CREATE POLICY "All authenticated users can view procedure categories"
   ON public.procedure_categories FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "All users can view procedure milestone templates" ON public.procedure_milestone_templates;
+DROP POLICY IF EXISTS "All users can view procedure milestone templates" ON public.procedure_milestone_templates;
 CREATE POLICY "All users can view procedure milestone templates"
   ON public.procedure_milestone_templates FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "All users can view procedure type templates" ON public.procedure_type_templates;
+DROP POLICY IF EXISTS "All users can view procedure type templates" ON public.procedure_type_templates;
 CREATE POLICY "All users can view procedure type templates"
   ON public.procedure_type_templates FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "All users can view resolution types" ON public.resolution_types;
+DROP POLICY IF EXISTS "All users can view resolution types" ON public.resolution_types;
 CREATE POLICY "All users can view resolution types"
   ON public.resolution_types FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "Authenticated users can view milestone averages" ON public.surgeon_milestone_averages;
+DROP POLICY IF EXISTS "Authenticated users can view milestone averages" ON public.surgeon_milestone_averages;
 CREATE POLICY "Authenticated users can view milestone averages"
   ON public.surgeon_milestone_averages FOR SELECT
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "Authenticated users can view procedure averages" ON public.surgeon_procedure_averages;
+DROP POLICY IF EXISTS "Authenticated users can view procedure averages" ON public.surgeon_procedure_averages;
 CREATE POLICY "Authenticated users can view procedure averages"
   ON public.surgeon_procedure_averages FOR SELECT
   USING ((select auth.role()) = 'authenticated');
@@ -398,48 +398,48 @@ CREATE POLICY "Authenticated users can view procedure averages"
 -- These are used by SECURITY DEFINER functions (which bypass RLS as superuser).
 -- Change from `true` to authenticated check so the linter is satisfied.
 
-DROP POLICY "System can delete case completion stats" ON public.case_completion_stats;
+DROP POLICY IF EXISTS "System can delete case completion stats" ON public.case_completion_stats;
 CREATE POLICY "System can delete case completion stats"
   ON public.case_completion_stats FOR DELETE
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "System can insert case completion stats" ON public.case_completion_stats;
+DROP POLICY IF EXISTS "System can insert case completion stats" ON public.case_completion_stats;
 CREATE POLICY "System can insert case completion stats"
   ON public.case_completion_stats FOR INSERT
   WITH CHECK ((select auth.role()) = 'authenticated');
 
-DROP POLICY "System can update case completion stats" ON public.case_completion_stats;
+DROP POLICY IF EXISTS "System can update case completion stats" ON public.case_completion_stats;
 CREATE POLICY "System can update case completion stats"
   ON public.case_completion_stats FOR UPDATE
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "System can delete case milestone stats" ON public.case_milestone_stats;
+DROP POLICY IF EXISTS "System can delete case milestone stats" ON public.case_milestone_stats;
 CREATE POLICY "System can delete case milestone stats"
   ON public.case_milestone_stats FOR DELETE
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "System can insert case milestone stats" ON public.case_milestone_stats;
+DROP POLICY IF EXISTS "System can insert case milestone stats" ON public.case_milestone_stats;
 CREATE POLICY "System can insert case milestone stats"
   ON public.case_milestone_stats FOR INSERT
   WITH CHECK ((select auth.role()) = 'authenticated');
 
-DROP POLICY "System can update case milestone stats" ON public.case_milestone_stats;
+DROP POLICY IF EXISTS "System can update case milestone stats" ON public.case_milestone_stats;
 CREATE POLICY "System can update case milestone stats"
   ON public.case_milestone_stats FOR UPDATE
   USING ((select auth.role()) = 'authenticated');
 
-DROP POLICY "System can create notifications" ON public.data_quality_notifications;
+DROP POLICY IF EXISTS "System can create notifications" ON public.data_quality_notifications;
 CREATE POLICY "System can create notifications"
   ON public.data_quality_notifications FOR INSERT
   WITH CHECK ((select auth.role()) = 'authenticated');
 
-DROP POLICY "Allow service role to insert errors" ON public.error_logs;
+DROP POLICY IF EXISTS "Allow service role to insert errors" ON public.error_logs;
 CREATE POLICY "Allow service role to insert errors"
   ON public.error_logs FOR INSERT
   WITH CHECK ((select auth.role()) = 'authenticated');
 
 -- login_attempts: ALL policy
-DROP POLICY "Service role can manage login attempts" ON public.login_attempts;
+DROP POLICY IF EXISTS "Service role can manage login attempts" ON public.login_attempts;
 CREATE POLICY "Service role can manage login attempts"
   ON public.login_attempts FOR ALL
   USING ((select auth.role()) = 'authenticated')
@@ -454,6 +454,7 @@ CREATE POLICY "Service role can manage login attempts"
 -- escort_status_links: combine anon token-access + authenticated facility-scoped
 DROP POLICY IF EXISTS "Anyone can view active escort links by token" ON public.escort_status_links;
 DROP POLICY IF EXISTS "escort_status_links_select_public_policy" ON public.escort_status_links;
+DROP POLICY IF EXISTS "escort_status_links_select_policy" ON public.escort_status_links;
 CREATE POLICY "escort_status_links_select_policy"
   ON public.escort_status_links FOR SELECT
   USING (
@@ -474,6 +475,7 @@ CREATE POLICY "escort_status_links_select_policy"
 -- NOTE: The always-true policy for implant_companies is NOT in PART 4 because we handle it here.
 DROP POLICY IF EXISTS "Authenticated users can view implant companies" ON public.implant_companies;
 DROP POLICY IF EXISTS "Users can view global and own facility implant companies" ON public.implant_companies;
+DROP POLICY IF EXISTS "implant_companies_select_policy" ON public.implant_companies;
 CREATE POLICY "implant_companies_select_policy"
   ON public.implant_companies FOR SELECT
   USING (
@@ -488,6 +490,7 @@ CREATE POLICY "implant_companies_select_policy"
 -- users: combine the two SELECT policies
 DROP POLICY IF EXISTS "users_select_authenticated_policy" ON public.users;
 DROP POLICY IF EXISTS "users_select_public_policy" ON public.users;
+DROP POLICY IF EXISTS "users_select_policy" ON public.users;
 CREATE POLICY "users_select_policy"
   ON public.users FOR SELECT
   USING (

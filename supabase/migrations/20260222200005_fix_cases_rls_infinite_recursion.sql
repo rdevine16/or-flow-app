@@ -47,6 +47,7 @@ END $$;
 -- Policy 1: Device reps can view their company's case_implant_companies records
 -- Original semantics: user is device_rep, has accepted facility access for the
 -- case's facility, and user has an implant_company_id set.
+DROP POLICY IF EXISTS "Device reps can view their company cases" ON public.case_implant_companies;
 CREATE POLICY "Device reps can view their company cases"
 ON public.case_implant_companies
 FOR SELECT
@@ -69,6 +70,7 @@ USING (
 
 -- Policy 2: Users can view case_implant_companies for cases at their facility
 -- Original semantics: case belongs to user's facility, or user is global_admin.
+DROP POLICY IF EXISTS "Users can view case implant companies for own facility" ON public.case_implant_companies;
 CREATE POLICY "Users can view case implant companies for own facility"
 ON public.case_implant_companies
 FOR SELECT
