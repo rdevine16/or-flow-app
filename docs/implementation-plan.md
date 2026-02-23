@@ -304,3 +304,38 @@ Phase 1 (DB) ──► Phase 2 (Tab Shell + Tabs 1-2) ──► Phase 3 (Tab 3: 
 ```
 
 Phases 3 and 4 can theoretically run in parallel after Phase 2, but per workflow rules, one phase per session.
+
+---
+
+## Session Log
+
+### Phase 5b — In Progress (session split at ~60% context)
+**Commit:** `c478450` (WIP)
+**Branch:** `feature/milestone-template-system`
+
+#### What was done
+1. **Exported `UseTemplateBuilderReturn` type** from `hooks/useTemplateBuilder.ts` (line 622)
+2. **Refactored `TemplateBuilder` component** to accept `builder: UseTemplateBuilderReturn` as a required prop instead of calling `useTemplateBuilder()` internally. Per Q24/A24: "One component, data via props."
+3. **Updated facility page** (`app/settings/milestones/page.tsx`): Added `FacilityTemplateBuilderTab` wrapper component that calls `useTemplateBuilder()` and passes it to `<TemplateBuilder builder={builder} />`
+4. **Created `hooks/useAdminTemplateBuilder.ts`** (~480 lines): Maps admin tables to the same `UseTemplateBuilderReturn` interface:
+   - `milestone_template_types` → `MilestoneTemplate` (adds dummy `facility_id: ''`, `deleted_at: null`)
+   - `milestone_template_type_items` → `TemplateItemData` (maps `template_type_id→template_id`, `milestone_type_id→facility_milestone_id`, `phase_template_id→facility_phase_id`)
+   - `milestone_types` → `MilestoneLookup`
+   - `phase_templates` → `PhaseLookup` (maps `parent_phase_template_id→parent_phase_id`)
+   - `procedure_type_templates.milestone_template_type_id` → procedure counts
+   - Full CRUD: create, duplicate, setDefault, archive, rename, addMilestoneToPhase, removeMilestone, removePhaseFromTemplate, reorderItemsInPhase, addPhaseToTemplate
+
+#### What remains
+1. **Create `AdminProcedureTypeAssignment.tsx`** — Admin Tab 4 component
+   - Model after facility `ProcedureTemplateAssignment.tsx` (458 lines)
+   - Data: `procedure_type_templates` (read + update `milestone_template_type_id`)
+   - Shows: searchable procedure type list, template picker dropdown per row, milestone chip preview
+   - Tables: `procedure_type_templates`, `milestone_template_types`, `milestone_template_type_items`, `milestone_types`, `phase_templates`
+   - No `facility_id` scoping (global admin tables)
+   - Default fallback: procedure types with no explicit assignment show "Using global default"
+2. **Wire Admin Tab 3 + Tab 4 into admin page** (`app/admin/settings/milestones/page.tsx`)
+   - Replace `TemplatesPlaceholder` (line 167) with: `useAdminTemplateBuilder()` → `<TemplateBuilder builder={adminBuilder} />`
+   - Replace `ProcedureTypesPlaceholder` (line 179) with: `<AdminProcedureTypeAssignment />`
+   - Add imports for new components
+3. **Run 3-stage test gate** (typecheck, test suite, coverage)
+4. **Final commit**: `feat(milestones): phase 5b - admin template builder and procedure type assignment`
