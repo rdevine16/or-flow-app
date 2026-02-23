@@ -39,12 +39,14 @@ CREATE TABLE IF NOT EXISTS permissions (
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX idx_permissions_category ON permissions(category, sort_order);
-CREATE INDEX idx_permissions_key ON permissions(key);
+CREATE INDEX IF NOT EXISTS idx_permissions_category ON permissions(category, sort_order);
+CREATE INDEX IF NOT EXISTS idx_permissions_key ON permissions(key);
 ALTER TABLE permissions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Authenticated users can view permissions" ON permissions;
 CREATE POLICY "Authenticated users can view permissions"
   ON permissions FOR SELECT
   USING (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "Global admins can manage permissions" ON permissions;
 CREATE POLICY "Global admins can manage permissions"
   ON permissions FOR ALL
   USING (get_my_access_level() = 'global_admin')
@@ -62,12 +64,14 @@ CREATE TABLE IF NOT EXISTS permission_templates (
   updated_by UUID REFERENCES users(id),
   UNIQUE(access_level, permission_key)
 );
-CREATE INDEX idx_permission_templates_access ON permission_templates(access_level);
+CREATE INDEX IF NOT EXISTS idx_permission_templates_access ON permission_templates(access_level);
 ALTER TABLE permission_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Global admins can manage permission templates" ON permission_templates;
 CREATE POLICY "Global admins can manage permission templates"
   ON permission_templates FOR ALL
   USING (get_my_access_level() = 'global_admin')
   WITH CHECK (get_my_access_level() = 'global_admin');
+DROP POLICY IF EXISTS "Facility admins can view permission templates" ON permission_templates;
 CREATE POLICY "Facility admins can view permission templates"
   ON permission_templates FOR SELECT
   USING (get_my_access_level() = 'facility_admin');
@@ -85,13 +89,15 @@ CREATE TABLE IF NOT EXISTS facility_permissions (
   updated_by UUID REFERENCES users(id),
   UNIQUE(facility_id, access_level, permission_key)
 );
-CREATE INDEX idx_facility_permissions_lookup
+CREATE INDEX IF NOT EXISTS idx_facility_permissions_lookup
   ON facility_permissions(facility_id, access_level);
 ALTER TABLE facility_permissions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Global admins can manage all facility permissions" ON facility_permissions;
 CREATE POLICY "Global admins can manage all facility permissions"
   ON facility_permissions FOR ALL
   USING (get_my_access_level() = 'global_admin')
   WITH CHECK (get_my_access_level() = 'global_admin');
+DROP POLICY IF EXISTS "Facility admins can manage own facility permissions" ON facility_permissions;
 CREATE POLICY "Facility admins can manage own facility permissions"
   ON facility_permissions FOR ALL
   USING (
@@ -102,6 +108,7 @@ CREATE POLICY "Facility admins can manage own facility permissions"
     get_my_access_level() = 'facility_admin'
     AND facility_id = get_my_facility_id()
   );
+DROP POLICY IF EXISTS "Users can view own facility permissions" ON facility_permissions;
 CREATE POLICY "Users can view own facility permissions"
   ON facility_permissions FOR SELECT
   USING (facility_id = get_my_facility_id());

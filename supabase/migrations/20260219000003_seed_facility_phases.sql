@@ -114,6 +114,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS on_facility_created_seed_phases ON public.facilities;
 CREATE TRIGGER on_facility_created_seed_phases
     AFTER INSERT ON public.facilities
     FOR EACH ROW
