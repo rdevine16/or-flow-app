@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
-import { resolveColorKey } from '@/lib/milestone-phase-config'
+import { TemplateTimelinePreview } from './TemplateTimelinePreview'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -22,7 +22,7 @@ import type { TemplateItemData, PhaseLookup, MilestoneLookup } from '@/lib/utils
 interface ProcedureTypeTemplate {
   id: string
   name: string
-  category: string | null
+  category_name: string | null
   milestone_template_type_id: string | null
 }
 
@@ -48,13 +48,13 @@ export function AdminProcedureTypeAssignment() {
     async (sb) => {
       const { data, error } = await sb
         .from('procedure_type_templates')
-        .select('id, name, category, milestone_template_type_id')
+        .select('id, name, procedure_categories(display_name), milestone_template_type_id')
         .order('name')
       if (error) throw error
       return (data || []).map(d => ({
         id: d.id as string,
         name: d.name as string,
-        category: (d.category as string | null) ?? null,
+        category_name: ((d.procedure_categories as unknown) as { display_name: string } | null)?.display_name ?? null,
         milestone_template_type_id: (d.milestone_template_type_id as string | null) ?? null,
       }))
     },
@@ -167,16 +167,6 @@ export function AdminProcedureTypeAssignment() {
     [templates],
   )
 
-  const milestoneMap = useMemo(
-    () => new Map((milestones || []).map(m => [m.id, m])),
-    [milestones],
-  )
-
-  const phaseMap = useMemo(
-    () => new Map((phases || []).map(p => [p.id, p])),
-    [phases],
-  )
-
   const templateItemsMap = useMemo(() => {
     const map = new Map<string, TemplateItemData[]>()
     for (const item of allTemplateItems || []) {
@@ -192,7 +182,7 @@ export function AdminProcedureTypeAssignment() {
     const q = search.toLowerCase()
     return (procedures || []).filter(p =>
       p.name.toLowerCase().includes(q) ||
-      (p.category && p.category.toLowerCase().includes(q))
+      (p.category_name && p.category_name.toLowerCase().includes(q))
     )
   }, [procedures, search])
 
@@ -314,7 +304,7 @@ export function AdminProcedureTypeAssignment() {
 
                   {/* Category */}
                   <div className="text-xs text-slate-500 truncate">
-                    {proc.category || <span className="text-slate-300">&mdash;</span>}
+                    {proc.category_name || <span className="text-slate-300">&mdash;</span>}
                   </div>
 
                   {/* Template picker */}
@@ -327,14 +317,15 @@ export function AdminProcedureTypeAssignment() {
                   />
                 </div>
 
-                {/* Milestone chips preview */}
+                {/* Timeline preview */}
                 {effectiveTemplate && templateItems.length > 0 && (
-                  <AdminMilestoneChips
-                    items={templateItems}
-                    milestoneMap={milestoneMap}
-                    phaseMap={phaseMap}
-                    isInherited={!isExplicit}
-                  />
+                  <div className={`mt-2 ${!isExplicit ? 'opacity-60' : ''}`}>
+                    <TemplateTimelinePreview
+                      items={templateItems}
+                      phases={phases || []}
+                      milestones={milestones || []}
+                    />
+                  </div>
                 )}
               </div>
             )
@@ -448,46 +439,3 @@ function AdminTemplatePicker({ templates, value, defaultTemplate, saving, onChan
   )
 }
 
-// ─── Milestone Chips ────────────────────────────────────────
-
-interface AdminMilestoneChipsProps {
-  items: TemplateItemData[]
-  milestoneMap: Map<string, MilestoneLookup>
-  phaseMap: Map<string, PhaseLookup>
-  isInherited: boolean
-}
-
-function AdminMilestoneChips({ items, milestoneMap, phaseMap, isInherited }: AdminMilestoneChipsProps) {
-  const sorted = useMemo(
-    () => [...items].sort((a, b) => a.display_order - b.display_order),
-    [items],
-  )
-
-  return (
-    <div className={`mt-2 flex flex-wrap gap-1 ${isInherited ? 'opacity-60' : ''}`}>
-      {sorted.map(item => {
-        const milestone = milestoneMap.get(item.facility_milestone_id)
-        const phase = item.facility_phase_id ? phaseMap.get(item.facility_phase_id) : null
-        const color = phase ? resolveColorKey(phase.color_key) : null
-
-        return (
-          <span
-            key={item.id}
-            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium leading-tight"
-            style={color ? {
-              backgroundColor: `${color.hex}15`,
-              color: color.hex,
-              border: `1px solid ${color.hex}30`,
-            } : {
-              backgroundColor: '#f1f5f9',
-              color: '#64748b',
-              border: '1px solid #e2e8f0',
-            }}
-          >
-            {milestone?.display_name ?? 'Unknown'}
-          </span>
-        )
-      })}
-    </div>
-  )
-}

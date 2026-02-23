@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
-import { resolveColorKey } from '@/lib/milestone-phase-config'
+import { TemplateTimelinePreview } from './TemplateTimelinePreview'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -28,7 +28,7 @@ interface Surgeon {
 interface ProcedureWithTemplate {
   id: string
   name: string
-  category: string | null
+  category_name: string | null
   milestone_template_id: string | null
 }
 
@@ -91,12 +91,17 @@ export function SurgeonOverridePanel() {
     async (sb) => {
       const { data, error } = await sb
         .from('procedure_types')
-        .select('id, name, category, milestone_template_id')
+        .select('id, name, procedure_categories(display_name), milestone_template_id')
         .eq('facility_id', effectiveFacilityId!)
         .eq('is_active', true)
         .order('name')
       if (error) throw error
-      return data || []
+      return (data || []).map(d => ({
+        id: d.id,
+        name: d.name,
+        category_name: ((d.procedure_categories as unknown) as { display_name: string } | null)?.display_name ?? null,
+        milestone_template_id: d.milestone_template_id,
+      }))
     },
     { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId },
   )
@@ -203,16 +208,6 @@ export function SurgeonOverridePanel() {
     [templates],
   )
 
-  const milestoneMap = useMemo(
-    () => new Map((milestones || []).map(m => [m.id, m])),
-    [milestones],
-  )
-
-  const phaseMap = useMemo(
-    () => new Map((phases || []).map(p => [p.id, p])),
-    [phases],
-  )
-
   const templateItemsMap = useMemo(() => {
     const map = new Map<string, TemplateItemData[]>()
     for (const item of allTemplateItems || []) {
@@ -263,7 +258,7 @@ export function SurgeonOverridePanel() {
     const q = procedureSearch.toLowerCase()
     return (procedures || []).filter(p =>
       p.name.toLowerCase().includes(q) ||
-      (p.category && p.category.toLowerCase().includes(q))
+      (p.category_name && p.category_name.toLowerCase().includes(q))
     )
   }, [procedures, procedureSearch])
 
@@ -536,14 +531,15 @@ export function SurgeonOverridePanel() {
                         />
                       </div>
 
-                      {/* Milestone chips */}
+                      {/* Timeline preview */}
                       {effectiveTemplate && templateItems.length > 0 && (
-                        <MilestoneChips
-                          items={templateItems}
-                          milestoneMap={milestoneMap}
-                          phaseMap={phaseMap}
-                          isInherited={!hasOverride}
-                        />
+                        <div className={`mt-2 ${!hasOverride ? 'opacity-60' : ''}`}>
+                          <TemplateTimelinePreview
+                            items={templateItems}
+                            phases={phases || []}
+                            milestones={milestones || []}
+                          />
+                        </div>
                       )}
                     </div>
                   )
@@ -660,46 +656,3 @@ function SurgeonTemplatePicker({ templates, value, procedureTemplate, saving, on
   )
 }
 
-// ─── Milestone Chips ────────────────────────────────────────
-
-interface MilestoneChipsProps {
-  items: TemplateItemData[]
-  milestoneMap: Map<string, MilestoneLookup>
-  phaseMap: Map<string, PhaseLookup>
-  isInherited: boolean
-}
-
-function MilestoneChips({ items, milestoneMap, phaseMap, isInherited }: MilestoneChipsProps) {
-  const sorted = useMemo(
-    () => [...items].sort((a, b) => a.display_order - b.display_order),
-    [items],
-  )
-
-  return (
-    <div className={`mt-2 flex flex-wrap gap-1 ${isInherited ? 'opacity-60' : ''}`}>
-      {sorted.map(item => {
-        const milestone = milestoneMap.get(item.facility_milestone_id)
-        const phase = item.facility_phase_id ? phaseMap.get(item.facility_phase_id) : null
-        const color = phase ? resolveColorKey(phase.color_key) : null
-
-        return (
-          <span
-            key={item.id}
-            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium leading-tight"
-            style={color ? {
-              backgroundColor: `${color.hex}15`,
-              color: color.hex,
-              border: `1px solid ${color.hex}30`,
-            } : {
-              backgroundColor: '#f1f5f9',
-              color: '#64748b',
-              border: '1px solid #e2e8f0',
-            }}
-          >
-            {milestone?.display_name ?? 'Unknown'}
-          </span>
-        )
-      })}
-    </div>
-  )
-}
