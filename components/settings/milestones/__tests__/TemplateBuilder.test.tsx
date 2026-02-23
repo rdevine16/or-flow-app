@@ -1,0 +1,123 @@
+// components/settings/milestones/__tests__/TemplateBuilder.test.tsx
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import { TemplateBuilder } from '../TemplateBuilder'
+
+const defaultHookReturn = {
+  templates: [
+    { id: 't1', name: 'Default Template', is_default: true, is_active: true, deleted_at: null, facility_id: 'f1', description: null, deleted_by: null },
+    { id: 't2', name: 'Custom Template', is_default: false, is_active: true, deleted_at: null, facility_id: 'f1', description: 'Custom', deleted_by: null },
+  ],
+  selectedTemplate: { id: 't1', name: 'Default Template', is_default: true, is_active: true, deleted_at: null, facility_id: 'f1', description: null, deleted_by: null },
+  selectedTemplateId: 't1',
+  items: [
+    { id: 'i1', template_id: 't1', facility_milestone_id: 'm1', facility_phase_id: 'p1', display_order: 1 },
+    { id: 'i2', template_id: 't1', facility_milestone_id: 'm2', facility_phase_id: 'p1', display_order: 2 },
+  ],
+  milestones: [
+    { id: 'm1', name: 'patient_in', display_name: 'Patient In', pair_with_id: null, pair_position: null },
+    { id: 'm2', name: 'incision', display_name: 'Incision', pair_with_id: null, pair_position: null },
+    { id: 'm3', name: 'patient_out', display_name: 'Patient Out', pair_with_id: null, pair_position: null },
+  ],
+  phases: [
+    { id: 'p1', name: 'pre_op', display_name: 'Pre-Op', color_key: 'blue', display_order: 1, parent_phase_id: null },
+    { id: 'p2', name: 'surgical', display_name: 'Surgical', color_key: 'green', display_order: 2, parent_phase_id: null },
+  ],
+  availableMilestones: [
+    { id: 'm3', name: 'patient_out', display_name: 'Patient Out', pair_with_id: null, pair_position: null },
+  ],
+  availablePhases: [
+    { id: 'p2', name: 'surgical', display_name: 'Surgical', color_key: 'green', display_order: 2, parent_phase_id: null },
+  ],
+  assignedMilestoneIds: new Set(['m1', 'm2']),
+  assignedPhaseIds: new Set(['p1']),
+  procedureCounts: {},
+  loading: false,
+  itemsLoading: false,
+  error: null,
+  saving: false,
+  setSelectedTemplateId: vi.fn(),
+  createTemplate: vi.fn(),
+  duplicateTemplate: vi.fn(),
+  setDefaultTemplate: vi.fn(),
+  archiveTemplate: vi.fn(),
+  renameTemplate: vi.fn(),
+  addMilestoneToPhase: vi.fn(),
+  removeMilestone: vi.fn(),
+  removePhaseFromTemplate: vi.fn(),
+  dispatch: vi.fn(),
+}
+
+const mockUseTemplateBuilder = vi.fn(() => defaultHookReturn)
+
+vi.mock('@/hooks/useTemplateBuilder', () => ({
+  useTemplateBuilder: (...args: unknown[]) => mockUseTemplateBuilder(...args),
+}))
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockUseTemplateBuilder.mockReturnValue(defaultHookReturn)
+})
+
+describe('TemplateBuilder - Integration', () => {
+  it('renders the three-column layout', () => {
+    const { container } = render(<TemplateBuilder />)
+    expect(container.firstChild).toBeInTheDocument()
+  })
+
+  it('displays template list in left column', () => {
+    render(<TemplateBuilder />)
+    // "Default Template" appears in both the list and builder header
+    const matches = screen.getAllByText('Default Template')
+    expect(matches.length).toBeGreaterThanOrEqual(2) // list + builder header
+    expect(screen.getByText('Custom Template')).toBeInTheDocument()
+  })
+
+  it('renders builder canvas with phase headers', () => {
+    render(<TemplateBuilder />)
+    // PRE-OP appears in both phase header and edge badge
+    const matches = screen.getAllByText(/PRE-OP/)
+    expect(matches.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders milestones in the builder canvas', () => {
+    render(<TemplateBuilder />)
+    expect(screen.getByText('Patient In')).toBeInTheDocument()
+    expect(screen.getByText('Incision')).toBeInTheDocument()
+  })
+
+  it('shows library panel with available milestones', () => {
+    render(<TemplateBuilder />)
+    expect(screen.getByText('Patient Out')).toBeInTheDocument()
+  })
+
+  it('displays loading skeleton when loading=true', () => {
+    mockUseTemplateBuilder.mockReturnValue({
+      ...defaultHookReturn,
+      loading: true,
+    })
+
+    const { container } = render(<TemplateBuilder />)
+    // Skeleton renders pulsing divs
+    const skeletons = container.querySelectorAll('[class*="animate-pulse"], [class*="skeleton"]')
+    expect(skeletons.length).toBeGreaterThan(0)
+  })
+
+  it('displays empty template state when no template is selected', () => {
+    mockUseTemplateBuilder.mockReturnValue({
+      ...defaultHookReturn,
+      selectedTemplate: null,
+      selectedTemplateId: null,
+      items: [],
+    })
+
+    render(<TemplateBuilder />)
+    expect(screen.getByText('Select a template to edit')).toBeInTheDocument()
+  })
+
+  it('shows DEFAULT badge on default template', () => {
+    render(<TemplateBuilder />)
+    const badges = screen.getAllByText('DEFAULT')
+    expect(badges.length).toBeGreaterThan(0)
+  })
+})

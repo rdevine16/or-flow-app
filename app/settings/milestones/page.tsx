@@ -17,6 +17,7 @@ import { MilestoneFormModal } from '@/components/settings/milestones/MilestoneFo
 import { ArchivedMilestonesSection } from '@/components/settings/milestones/ArchivedMilestonesSection'
 import { PhaseLibrary } from '@/components/settings/milestones/PhaseLibrary'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { TemplateBuilder } from '@/components/settings/milestones/TemplateBuilder'
 import {
   Plus,
   Link2,
@@ -150,7 +151,7 @@ function MilestonesSettingsContent() {
       {/* Tab content */}
       {activeTab === 'milestones' && <MilestonesTab />}
       {activeTab === 'phases' && <PhaseLibrary />}
-      {activeTab === 'templates' && <PlaceholderTab label="Templates" description="Template builder will be available in the next phase." />}
+      {activeTab === 'templates' && <TemplateBuilder />}
       {activeTab === 'procedures' && <PlaceholderTab label="Procedures" description="Procedure template assignment will be available in a future phase." />}
       {activeTab === 'surgeons' && <PlaceholderTab label="Surgeons" description="Surgeon template overrides will be available in a future phase." />}
     </>
