@@ -114,30 +114,17 @@ export function useMilestoneComparison({
         return (data ?? []) as MilestoneMedianRow[]
       },
 
-      // Expected milestone names for this procedure (resolved from template cascade)
+      // Expected milestone names for this procedure (resolved from full 4-tier template cascade)
       expectedNames: async (supabase) => {
         if (!procedureTypeId || !facilityId) return []
 
-        // Resolve template: procedure assignment → facility default
-        let templateId: string | null = null
-
-        const { data: procData } = await supabase
-          .from('procedure_types')
-          .select('milestone_template_id')
-          .eq('id', procedureTypeId)
-          .single()
-        templateId = procData?.milestone_template_id ?? null
-
-        if (!templateId) {
-          const { data: defaultTemplate } = await supabase
-            .from('milestone_templates')
-            .select('id')
-            .eq('facility_id', facilityId)
-            .eq('is_default', true)
-            .eq('is_active', true)
-            .single()
-          templateId = defaultTemplate?.id ?? null
-        }
+        // Resolve template via full cascade: case snapshot → surgeon override → procedure → facility default
+        const templateId = await resolveTemplateForCase(supabase, {
+          milestone_template_id: milestoneTemplateId,
+          surgeon_id: surgeonId,
+          procedure_type_id: procedureTypeId,
+          facility_id: facilityId,
+        })
 
         if (!templateId) return []
 

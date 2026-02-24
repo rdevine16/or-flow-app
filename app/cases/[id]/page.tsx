@@ -40,6 +40,7 @@ import { TimerChip, ProgressChip, type PaceInfo } from '@/components/cases/Timer
 import { checkMilestoneOrder } from '@/lib/milestone-order'
 import { useFlipRoom } from '@/lib/hooks/useFlipRoom'
 import FlipRoomCard from '@/components/cases/FlipRoomCard'
+import { resolveTemplateForCase } from '@/lib/dal/phase-resolver'
 
 // ============================================================================
 // TYPES
@@ -210,25 +211,15 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       let milestoneTypesResult: FacilityMilestone[] = []
       let templateId: string | null = caseResult?.milestone_template_id ?? null
 
-      // Legacy cases without stamped template: resolve via cascade
+      // Legacy cases without stamped template: resolve via full 4-tier cascade
+      // (surgeon override → procedure template → facility default)
       if (!templateId && caseResult?.procedure_type_id) {
-        const { data: procData } = await supabase
-          .from('procedure_types')
-          .select('milestone_template_id')
-          .eq('id', caseResult.procedure_type_id)
-          .single()
-        templateId = procData?.milestone_template_id ?? null
-
-        if (!templateId) {
-          const { data: defaultTemplate } = await supabase
-            .from('milestone_templates')
-            .select('id')
-            .eq('facility_id', effectiveFacilityId)
-            .eq('is_default', true)
-            .eq('is_active', true)
-            .single()
-          templateId = defaultTemplate?.id ?? null
-        }
+        templateId = await resolveTemplateForCase(supabase, {
+          milestone_template_id: null,
+          surgeon_id: caseResult.surgeon_id,
+          procedure_type_id: caseResult.procedure_type_id,
+          facility_id: effectiveFacilityId,
+        })
       }
 
       if (templateId) {
