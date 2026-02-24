@@ -14,6 +14,12 @@ import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import type { TemplateItemData, PhaseLookup, MilestoneLookup } from '@/lib/utils/buildTemplateRenderList'
 import type { MilestoneTemplate } from '@/hooks/useTemplateBuilder'
 import type { UseTemplateBuilderReturn } from '@/hooks/useTemplateBuilder'
+import {
+  REQUIRED_PHASE_NAMES,
+  REQUIRED_PHASE_MILESTONES,
+  isRequiredMilestone,
+  isRequiredPhase,
+} from '@/lib/template-defaults'
 
 // ─── Reducer (identical to facility version) ─────────────
 
@@ -268,6 +274,64 @@ export function useAdminTemplateBuilder(): UseTemplateBuilderReturn {
     [phases, assignedPhaseIds],
   )
 
+  // ── Required milestone/phase enforcement ──────────────
+  // Build lookup maps: milestone ID → name, phase ID → name
+  const milestoneNameById = useMemo(
+    () => new Map((milestones || []).map(m => [m.id, m.name])),
+    [milestones],
+  )
+  const phaseNameById = useMemo(
+    () => new Map((phases || []).map(p => [p.id, p.name])),
+    [phases],
+  )
+
+  // Determine if the current template has the full required structure.
+  // If it does → enforce. If it doesn't → grandfathered (no enforcement).
+  const templateHasRequiredStructure = useMemo(() => {
+    if (builderState.items.length === 0) return false
+    for (const [phaseName, msNames] of Object.entries(REQUIRED_PHASE_MILESTONES)) {
+      const phaseEntry = (phases || []).find(p => p.name === phaseName)
+      if (!phaseEntry) return false
+      for (const msName of msNames) {
+        const msEntry = (milestones || []).find(m => m.name === msName)
+        if (!msEntry) return false
+        const exists = builderState.items.some(
+          i => i.facility_milestone_id === msEntry.id && i.facility_phase_id === phaseEntry.id,
+        )
+        if (!exists) return false
+      }
+    }
+    return true
+  }, [builderState.items, phases, milestones])
+
+  // Sets of item IDs and phase IDs that are required (for UI to disable delete buttons)
+  const requiredMilestoneItemIds = useMemo(() => {
+    if (!templateHasRequiredStructure) return new Set<string>()
+    const ids = new Set<string>()
+    for (const item of builderState.items) {
+      const msName = milestoneNameById.get(item.facility_milestone_id)
+      const phaseName = item.facility_phase_id ? phaseNameById.get(item.facility_phase_id) : null
+      if (msName && phaseName && isRequiredMilestone(msName) && isRequiredPhase(phaseName)) {
+        const requiredMs = REQUIRED_PHASE_MILESTONES[phaseName]
+        if (requiredMs?.includes(msName)) {
+          ids.add(item.id)
+        }
+      }
+    }
+    return ids
+  }, [templateHasRequiredStructure, builderState.items, milestoneNameById, phaseNameById])
+
+  const requiredPhaseIds = useMemo(() => {
+    if (!templateHasRequiredStructure) return new Set<string>()
+    const ids = new Set<string>()
+    for (const phase of (phases || [])) {
+      if (isRequiredPhase(phase.name)) {
+        ids.add(phase.id)
+      }
+    }
+    return ids
+  }, [templateHasRequiredStructure, phases])
+
   // ── Template CRUD ────────────────────────────────────────
 
   const createTemplate = useCallback(async (name: string, description: string) => {
@@ -286,6 +350,60 @@ export function useAdminTemplateBuilder(): UseTemplateBuilderReturn {
 
       if (error) throw error
 
+      // Auto-populate required phases + milestones
+      const phaseLookup = phases || []
+      const milestoneLookup = milestones || []
+      const phaseByName = new Map(phaseLookup.map(p => [p.name, p]))
+      const milestoneByName = new Map(milestoneLookup.map(m => [m.name, m]))
+
+      const requiredItems: Array<{
+        template_type_id: string
+        milestone_type_id: string
+        phase_template_id: string
+        display_order: number
+      }> = []
+      const requiredEmptyPhaseIds = new Set<string>()
+      let displayOrder = 0
+
+      for (const phaseName of REQUIRED_PHASE_NAMES) {
+        const phase = phaseByName.get(phaseName)
+        if (!phase) continue
+
+        requiredEmptyPhaseIds.add(phase.id)
+        const milestonesForPhase = REQUIRED_PHASE_MILESTONES[phaseName] || []
+
+        for (const msName of milestonesForPhase) {
+          const ms = milestoneByName.get(msName)
+          if (!ms) continue
+
+          displayOrder += 1
+          requiredItems.push({
+            template_type_id: inserted.id,
+            milestone_type_id: ms.id,
+            phase_template_id: phase.id,
+            display_order: displayOrder,
+          })
+        }
+      }
+
+      let insertedItems: TemplateItemData[] = []
+      if (requiredItems.length > 0) {
+        const { data: itemsData, error: itemsError } = await supabase
+          .from('milestone_template_type_items')
+          .insert(requiredItems)
+          .select('id, template_type_id, milestone_type_id, phase_template_id, display_order')
+
+        if (itemsError) throw itemsError
+        // Map admin column names → canonical TemplateItemData
+        insertedItems = (itemsData || []).map(i => ({
+          id: i.id as string,
+          template_id: i.template_type_id as string,
+          facility_milestone_id: i.milestone_type_id as string,
+          facility_phase_id: (i.phase_template_id as string | null) ?? null,
+          display_order: i.display_order as number,
+        }))
+      }
+
       const newTemplate: MilestoneTemplate = {
         id: inserted.id,
         facility_id: '',
@@ -300,13 +418,20 @@ export function useAdminTemplateBuilder(): UseTemplateBuilderReturn {
       }
       setRawTemplates([...(templates || []), newTemplate])
       setSelectedTemplateId(newTemplate.id)
+
+      // Update optimistic state with the inserted items + empty phases
+      if (insertedItems.length > 0) {
+        dispatch({ type: 'SET_ITEMS', items: insertedItems })
+      }
+      setEmptyPhaseIds(requiredEmptyPhaseIds)
+
       showToast({ type: 'success', title: `"${name}" created` })
     } catch (err) {
       showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to create template' })
     } finally {
       setSaving(false)
     }
-  }, [supabase, templates, setRawTemplates, showToast])
+  }, [supabase, templates, setRawTemplates, showToast, phases, milestones])
 
   const duplicateTemplate = useCallback(async (sourceId: string) => {
     const source = (templates || []).find(t => t.id === sourceId)
@@ -528,6 +653,12 @@ export function useAdminTemplateBuilder(): UseTemplateBuilderReturn {
     const item = builderState.items.find(i => i.id === itemId)
     if (!item) return
 
+    // Block removal of required milestones on templates with required structure
+    if (requiredMilestoneItemIds.has(itemId)) {
+      showToast({ type: 'error', title: 'This milestone is required and cannot be removed' })
+      return
+    }
+
     dispatch({ type: 'REMOVE_ITEM', itemId })
 
     try {
@@ -541,10 +672,17 @@ export function useAdminTemplateBuilder(): UseTemplateBuilderReturn {
       dispatch({ type: 'ADD_ITEM', item })
       showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to remove milestone' })
     }
-  }, [builderState.items, supabase, showToast])
+  }, [builderState.items, supabase, showToast, requiredMilestoneItemIds])
 
   const removePhaseFromTemplate = useCallback(async (phaseId: string) => {
     if (!selectedTemplateId) return
+
+    // Block removal of required phases on templates with required structure
+    if (requiredPhaseIds.has(phaseId)) {
+      showToast({ type: 'error', title: 'This phase is required and cannot be removed' })
+      return
+    }
+
     const phaseItems = builderState.items.filter(i => i.facility_phase_id === phaseId)
 
     dispatch({ type: 'BULK_REMOVE_BY_PHASE', phaseId })
@@ -563,7 +701,7 @@ export function useAdminTemplateBuilder(): UseTemplateBuilderReturn {
       dispatch({ type: 'SET_ITEMS', items: [...builderState.items, ...phaseItems] })
       showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to remove phase' })
     }
-  }, [selectedTemplateId, builderState.items, supabase, showToast])
+  }, [selectedTemplateId, builderState.items, supabase, showToast, requiredPhaseIds])
 
   const reorderItemsInPhase = useCallback(async (phaseId: string, activeId: string, overId: string) => {
     const phaseKey = phaseId === 'unassigned' ? null : phaseId
@@ -729,8 +867,8 @@ export function useAdminTemplateBuilder(): UseTemplateBuilderReturn {
 
     subPhaseMap,
 
-    // Required milestone/phase enforcement (admin logic added in Phase 2)
-    requiredMilestoneItemIds: new Set<string>(),
-    requiredPhaseIds: new Set<string>(),
+    // Required milestone/phase enforcement
+    requiredMilestoneItemIds,
+    requiredPhaseIds,
   }
 }
