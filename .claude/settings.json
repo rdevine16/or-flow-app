@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rg:*)",
+      "Bash(jq:*)",
+      "Read(//opt/homebrew/opt/**)",
+      "Bash(/opt/homebrew/opt/postgresql@16/bin/psql:*)",
+      "Read(//opt/homebrew/**)",
+      "Bash(/opt/homebrew/Cellar/libpq/18.2/bin/psql:*)"
+    ]
+  }
+}
