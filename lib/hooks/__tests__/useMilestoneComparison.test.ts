@@ -376,3 +376,182 @@ describe('useMilestoneComparison — phaseDefinitions uses full cascade', () => 
     expect(mockResolvePhaseDefsFromTemplate).toHaveBeenCalledWith(mock, 'template-from-cascade')
   })
 })
+
+// ============================================
+// TESTS — medians RPC passes surgeon_id for template resolution
+// ============================================
+
+describe('useMilestoneComparison — medians RPC calls', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    capturedQueries = {}
+  })
+
+  function initHookForMedians(opts?: {
+    surgeonId?: string | null
+    procedureTypeId?: string | null
+    facilityId?: string | null
+  }) {
+    renderHook(() =>
+      useMilestoneComparison({
+        caseId: 'case-1',
+        surgeonId: opts?.surgeonId !== undefined ? opts.surgeonId : 'surgeon-1',
+        procedureTypeId: opts?.procedureTypeId !== undefined ? opts.procedureTypeId : 'proc-1',
+        facilityId: opts?.facilityId !== undefined ? opts.facilityId : 'fac-1',
+        milestoneTemplateId: null,
+        enabled: true,
+      }),
+    )
+    return capturedQueries.medians
+  }
+
+  it('calls get_milestone_interval_medians with p_surgeon_id for template resolution', async () => {
+    const fetcher = initHookForMedians({ surgeonId: 'surgeon-override-1' })
+    expect(fetcher).toBeDefined()
+
+    const mock = buildMockSupabase()
+    mock.rpc.mockResolvedValue({
+      data: [
+        {
+          milestone_name: 'patient_in',
+          facility_milestone_id: 'fm-1',
+          display_order: 1,
+          phase_group: 'preoperative',
+          surgeon_median_minutes: 5.0,
+          surgeon_case_count: 10,
+          facility_median_minutes: 6.0,
+          facility_case_count: 50,
+        },
+      ],
+      error: null,
+    })
+
+    await fetcher(mock)
+
+    expect(mock.rpc).toHaveBeenCalledWith('get_milestone_interval_medians', {
+      p_surgeon_id: 'surgeon-override-1',
+      p_procedure_type_id: 'proc-1',
+      p_facility_id: 'fac-1',
+    })
+  })
+
+  it('returns empty array when surgeonId is null', async () => {
+    const fetcher = initHookForMedians({ surgeonId: null })
+    expect(fetcher).toBeDefined()
+
+    const mock = buildMockSupabase()
+    const result = await fetcher(mock)
+    expect(result).toEqual([])
+    expect(mock.rpc).not.toHaveBeenCalled()
+  })
+
+  it('returns RPC data as MilestoneMedianRow array', async () => {
+    const fetcher = initHookForMedians()
+    const mock = buildMockSupabase()
+
+    const expectedRows = [
+      {
+        milestone_name: 'patient_in',
+        facility_milestone_id: 'fm-1',
+        display_order: 1,
+        phase_group: 'preoperative',
+        surgeon_median_minutes: 5.0,
+        surgeon_case_count: 10,
+        facility_median_minutes: 6.0,
+        facility_case_count: 50,
+      },
+      {
+        milestone_name: 'incision',
+        facility_milestone_id: 'fm-2',
+        display_order: 2,
+        phase_group: 'operative',
+        surgeon_median_minutes: 12.0,
+        surgeon_case_count: 10,
+        facility_median_minutes: 15.0,
+        facility_case_count: 50,
+      },
+    ]
+    mock.rpc.mockResolvedValue({ data: expectedRows, error: null })
+
+    const result = await fetcher(mock)
+    expect(result).toEqual(expectedRows)
+  })
+
+  it('throws error when RPC fails', async () => {
+    const fetcher = initHookForMedians()
+    const mock = buildMockSupabase()
+    mock.rpc.mockResolvedValue({ data: null, error: { message: 'RPC timeout' } })
+
+    await expect(fetcher(mock)).rejects.toThrow('RPC timeout')
+  })
+})
+
+// ============================================
+// TESTS — phaseMedians uses full cascade for template resolution
+// ============================================
+
+describe('useMilestoneComparison — phaseMedians uses full cascade', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    capturedQueries = {}
+  })
+
+  it('resolves template via cascade and passes it to get_phase_medians RPC', async () => {
+    renderHook(() =>
+      useMilestoneComparison({
+        caseId: 'case-1',
+        surgeonId: 'surgeon-1',
+        procedureTypeId: 'proc-1',
+        facilityId: 'fac-1',
+        milestoneTemplateId: null,
+        enabled: true,
+      }),
+    )
+
+    const fetcher = capturedQueries.phaseMedians
+    expect(fetcher).toBeDefined()
+
+    const mock = buildMockSupabase()
+    mockResolveTemplateForCase.mockResolvedValue('resolved-template-456')
+    mock.rpc.mockResolvedValue({ data: [], error: null })
+
+    await fetcher(mock)
+
+    // Verify cascade resolution was called with surgeon_id
+    expect(mockResolveTemplateForCase).toHaveBeenCalledWith(mock, {
+      milestone_template_id: null,
+      surgeon_id: 'surgeon-1',
+      procedure_type_id: 'proc-1',
+      facility_id: 'fac-1',
+    })
+
+    // Verify RPC receives the pre-resolved template ID
+    expect(mock.rpc).toHaveBeenCalledWith('get_phase_medians', {
+      p_facility_id: 'fac-1',
+      p_procedure_type_id: 'proc-1',
+      p_surgeon_id: 'surgeon-1',
+      p_milestone_template_id: 'resolved-template-456',
+    })
+  })
+
+  it('returns empty array when template cascade resolves to null', async () => {
+    renderHook(() =>
+      useMilestoneComparison({
+        caseId: 'case-1',
+        surgeonId: 'surgeon-1',
+        procedureTypeId: 'proc-1',
+        facilityId: 'fac-1',
+        milestoneTemplateId: null,
+        enabled: true,
+      }),
+    )
+
+    const fetcher = capturedQueries.phaseMedians
+    const mock = buildMockSupabase()
+    mockResolveTemplateForCase.mockResolvedValue(null)
+
+    const result = await fetcher(mock)
+    expect(result).toEqual([])
+    expect(mock.rpc).not.toHaveBeenCalled()
+  })
+})
