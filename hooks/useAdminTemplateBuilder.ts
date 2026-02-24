@@ -728,5 +728,9 @@ export function useAdminTemplateBuilder(): UseTemplateBuilderReturn {
     updateBlockOrder,
 
     subPhaseMap,
+
+    // Required milestone/phase enforcement (admin logic added in Phase 2)
+    requiredMilestoneItemIds: new Set<string>(),
+    requiredPhaseIds: new Set<string>(),
   }
 }

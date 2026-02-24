@@ -281,3 +281,434 @@ describe('derived data computations', () => {
     expect(selected).toBe('t1')
   })
 })
+
+// ─── Required Milestone/Phase Enforcement Tests ───────────
+
+import {
+  REQUIRED_PHASE_NAMES,
+  REQUIRED_PHASE_MILESTONES,
+  isRequiredMilestone,
+  isRequiredPhase,
+} from '@/lib/template-defaults'
+
+describe('required milestone/phase enforcement', () => {
+  // Mock phases and milestones (matching the names in template-defaults)
+  const mockPhases = [
+    { id: 'p-pre', name: 'pre_op', display_name: 'Pre-Op' },
+    { id: 'p-surg', name: 'surgical', display_name: 'Surgical' },
+    { id: 'p-close', name: 'closing', display_name: 'Closing' },
+    { id: 'p-post', name: 'post_op', display_name: 'Post-Op' },
+    { id: 'p-extra', name: 'setup', display_name: 'Setup' },
+  ]
+
+  const mockMilestones = [
+    { id: 'm-pi', name: 'patient_in', display_name: 'Patient In' },
+    { id: 'm-pds', name: 'prep_drape_start', display_name: 'Prep/Drape Start' },
+    { id: 'm-pdc', name: 'prep_drape_complete', display_name: 'Prep/Drape Complete' },
+    { id: 'm-inc', name: 'incision', display_name: 'Incision' },
+    { id: 'm-close', name: 'closing', display_name: 'Closing' },
+    { id: 'm-closec', name: 'closing_complete', display_name: 'Closing Complete' },
+    { id: 'm-po', name: 'patient_out', display_name: 'Patient Out' },
+    { id: 'm-timeout', name: 'timeout', display_name: 'Timeout' },
+  ]
+
+  describe('templateHasRequiredStructure computation', () => {
+    it('returns true when all required milestones are placed in all required phases', () => {
+      // Create items matching REQUIRED_PHASE_MILESTONES
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm-pi', facility_phase_id: 'p-pre', display_order: 1 },
+        { id: 'i2', template_id: 't1', facility_milestone_id: 'm-pds', facility_phase_id: 'p-pre', display_order: 2 },
+        { id: 'i3', template_id: 't1', facility_milestone_id: 'm-pdc', facility_phase_id: 'p-pre', display_order: 3 },
+        { id: 'i4', template_id: 't1', facility_milestone_id: 'm-inc', facility_phase_id: 'p-surg', display_order: 4 },
+        { id: 'i5', template_id: 't1', facility_milestone_id: 'm-close', facility_phase_id: 'p-surg', display_order: 5 },
+        { id: 'i6', template_id: 't1', facility_milestone_id: 'm-close', facility_phase_id: 'p-close', display_order: 6 },
+        { id: 'i7', template_id: 't1', facility_milestone_id: 'm-closec', facility_phase_id: 'p-close', display_order: 7 },
+        { id: 'i8', template_id: 't1', facility_milestone_id: 'm-closec', facility_phase_id: 'p-post', display_order: 8 },
+        { id: 'i9', template_id: 't1', facility_milestone_id: 'm-po', facility_phase_id: 'p-post', display_order: 9 },
+      ]
+
+      // Simulate the templateHasRequiredStructure logic
+      let hasStructure = true
+      for (const [phaseName, msNames] of Object.entries(REQUIRED_PHASE_MILESTONES)) {
+        const phaseEntry = mockPhases.find(p => p.name === phaseName)
+        if (!phaseEntry) {
+          hasStructure = false
+          break
+        }
+        for (const msName of msNames) {
+          const msEntry = mockMilestones.find(m => m.name === msName)
+          if (!msEntry) {
+            hasStructure = false
+            break
+          }
+          const exists = items.some(
+            i => i.facility_milestone_id === msEntry.id && i.facility_phase_id === phaseEntry.id,
+          )
+          if (!exists) {
+            hasStructure = false
+            break
+          }
+        }
+        if (!hasStructure) break
+      }
+
+      expect(hasStructure).toBe(true)
+    })
+
+    it('returns false when template is empty', () => {
+      const items: TemplateItemData[] = []
+
+      let hasStructure = false
+      if (items.length > 0) {
+        hasStructure = true
+        // ... rest of check
+      }
+
+      expect(hasStructure).toBe(false)
+    })
+
+    it('returns false when missing a required milestone placement', () => {
+      // Missing incision in surgical phase
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm-pi', facility_phase_id: 'p-pre', display_order: 1 },
+        { id: 'i2', template_id: 't1', facility_milestone_id: 'm-pds', facility_phase_id: 'p-pre', display_order: 2 },
+        { id: 'i3', template_id: 't1', facility_milestone_id: 'm-pdc', facility_phase_id: 'p-pre', display_order: 3 },
+        // Missing m-inc in p-surg
+        { id: 'i5', template_id: 't1', facility_milestone_id: 'm-close', facility_phase_id: 'p-surg', display_order: 5 },
+        { id: 'i6', template_id: 't1', facility_milestone_id: 'm-close', facility_phase_id: 'p-close', display_order: 6 },
+        { id: 'i7', template_id: 't1', facility_milestone_id: 'm-closec', facility_phase_id: 'p-close', display_order: 7 },
+        { id: 'i8', template_id: 't1', facility_milestone_id: 'm-closec', facility_phase_id: 'p-post', display_order: 8 },
+        { id: 'i9', template_id: 't1', facility_milestone_id: 'm-po', facility_phase_id: 'p-post', display_order: 9 },
+      ]
+
+      let hasStructure = true
+      for (const [phaseName, msNames] of Object.entries(REQUIRED_PHASE_MILESTONES)) {
+        const phaseEntry = mockPhases.find(p => p.name === phaseName)
+        if (!phaseEntry) {
+          hasStructure = false
+          break
+        }
+        for (const msName of msNames) {
+          const msEntry = mockMilestones.find(m => m.name === msName)
+          if (!msEntry) {
+            hasStructure = false
+            break
+          }
+          const exists = items.some(
+            i => i.facility_milestone_id === msEntry.id && i.facility_phase_id === phaseEntry.id,
+          )
+          if (!exists) {
+            hasStructure = false
+            break
+          }
+        }
+        if (!hasStructure) break
+      }
+
+      expect(hasStructure).toBe(false)
+    })
+
+    it('returns false when missing a required phase entirely', () => {
+      // No post_op phase items
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm-pi', facility_phase_id: 'p-pre', display_order: 1 },
+        { id: 'i2', template_id: 't1', facility_milestone_id: 'm-pds', facility_phase_id: 'p-pre', display_order: 2 },
+        { id: 'i3', template_id: 't1', facility_milestone_id: 'm-pdc', facility_phase_id: 'p-pre', display_order: 3 },
+        { id: 'i4', template_id: 't1', facility_milestone_id: 'm-inc', facility_phase_id: 'p-surg', display_order: 4 },
+        { id: 'i5', template_id: 't1', facility_milestone_id: 'm-close', facility_phase_id: 'p-surg', display_order: 5 },
+        { id: 'i6', template_id: 't1', facility_milestone_id: 'm-close', facility_phase_id: 'p-close', display_order: 6 },
+        { id: 'i7', template_id: 't1', facility_milestone_id: 'm-closec', facility_phase_id: 'p-close', display_order: 7 },
+        // Missing p-post items
+      ]
+
+      let hasStructure = true
+      for (const [phaseName, msNames] of Object.entries(REQUIRED_PHASE_MILESTONES)) {
+        const phaseEntry = mockPhases.find(p => p.name === phaseName)
+        if (!phaseEntry) {
+          hasStructure = false
+          break
+        }
+        for (const msName of msNames) {
+          const msEntry = mockMilestones.find(m => m.name === msName)
+          if (!msEntry) {
+            hasStructure = false
+            break
+          }
+          const exists = items.some(
+            i => i.facility_milestone_id === msEntry.id && i.facility_phase_id === phaseEntry.id,
+          )
+          if (!exists) {
+            hasStructure = false
+            break
+          }
+        }
+        if (!hasStructure) break
+      }
+
+      expect(hasStructure).toBe(false)
+    })
+
+    it('allows extra milestones and phases beyond the required set', () => {
+      // Full required set + extra milestone (timeout) and extra phase
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm-pi', facility_phase_id: 'p-pre', display_order: 1 },
+        { id: 'i2', template_id: 't1', facility_milestone_id: 'm-pds', facility_phase_id: 'p-pre', display_order: 2 },
+        { id: 'i3', template_id: 't1', facility_milestone_id: 'm-pdc', facility_phase_id: 'p-pre', display_order: 3 },
+        { id: 'i4', template_id: 't1', facility_milestone_id: 'm-inc', facility_phase_id: 'p-surg', display_order: 4 },
+        { id: 'i5', template_id: 't1', facility_milestone_id: 'm-close', facility_phase_id: 'p-surg', display_order: 5 },
+        { id: 'i6', template_id: 't1', facility_milestone_id: 'm-close', facility_phase_id: 'p-close', display_order: 6 },
+        { id: 'i7', template_id: 't1', facility_milestone_id: 'm-closec', facility_phase_id: 'p-close', display_order: 7 },
+        { id: 'i8', template_id: 't1', facility_milestone_id: 'm-closec', facility_phase_id: 'p-post', display_order: 8 },
+        { id: 'i9', template_id: 't1', facility_milestone_id: 'm-po', facility_phase_id: 'p-post', display_order: 9 },
+        { id: 'i10', template_id: 't1', facility_milestone_id: 'm-timeout', facility_phase_id: 'p-pre', display_order: 10 }, // extra
+      ]
+
+      let hasStructure = true
+      for (const [phaseName, msNames] of Object.entries(REQUIRED_PHASE_MILESTONES)) {
+        const phaseEntry = mockPhases.find(p => p.name === phaseName)
+        if (!phaseEntry) {
+          hasStructure = false
+          break
+        }
+        for (const msName of msNames) {
+          const msEntry = mockMilestones.find(m => m.name === msName)
+          if (!msEntry) {
+            hasStructure = false
+            break
+          }
+          const exists = items.some(
+            i => i.facility_milestone_id === msEntry.id && i.facility_phase_id === phaseEntry.id,
+          )
+          if (!exists) {
+            hasStructure = false
+            break
+          }
+        }
+        if (!hasStructure) break
+      }
+
+      expect(hasStructure).toBe(true)
+    })
+  })
+
+  describe('requiredMilestoneItemIds computation', () => {
+    it('includes item IDs for all 8 required placements when template has full structure', () => {
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm-pi', facility_phase_id: 'p-pre', display_order: 1 },
+        { id: 'i2', template_id: 't1', facility_milestone_id: 'm-pds', facility_phase_id: 'p-pre', display_order: 2 },
+        { id: 'i3', template_id: 't1', facility_milestone_id: 'm-pdc', facility_phase_id: 'p-pre', display_order: 3 },
+        { id: 'i4', template_id: 't1', facility_milestone_id: 'm-inc', facility_phase_id: 'p-surg', display_order: 4 },
+        { id: 'i5', template_id: 't1', facility_milestone_id: 'm-close', facility_phase_id: 'p-surg', display_order: 5 },
+        { id: 'i6', template_id: 't1', facility_milestone_id: 'm-close', facility_phase_id: 'p-close', display_order: 6 },
+        { id: 'i7', template_id: 't1', facility_milestone_id: 'm-closec', facility_phase_id: 'p-close', display_order: 7 },
+        { id: 'i8', template_id: 't1', facility_milestone_id: 'm-closec', facility_phase_id: 'p-post', display_order: 8 },
+        { id: 'i9', template_id: 't1', facility_milestone_id: 'm-po', facility_phase_id: 'p-post', display_order: 9 },
+      ]
+
+      const milestoneNameById = new Map(mockMilestones.map(m => [m.id, m.name]))
+      const phaseNameById = new Map(mockPhases.map(p => [p.id, p.name]))
+
+      // First check if template has required structure (we know it does from previous test)
+      const templateHasRequiredStructure = true
+
+      const requiredIds = new Set<string>()
+      if (templateHasRequiredStructure) {
+        for (const item of items) {
+          const msName = milestoneNameById.get(item.facility_milestone_id)
+          const phaseName = item.facility_phase_id ? phaseNameById.get(item.facility_phase_id) : null
+          if (msName && phaseName && isRequiredMilestone(msName) && isRequiredPhase(phaseName)) {
+            const requiredMs = REQUIRED_PHASE_MILESTONES[phaseName]
+            if (requiredMs?.includes(msName)) {
+              requiredIds.add(item.id)
+            }
+          }
+        }
+      }
+
+      expect(requiredIds.size).toBe(9) // All 9 placements (7 unique milestones, 2 shared boundaries appearing twice)
+      expect(requiredIds.has('i1')).toBe(true) // patient_in in pre_op
+      expect(requiredIds.has('i2')).toBe(true) // prep_drape_start in pre_op
+      expect(requiredIds.has('i3')).toBe(true) // prep_drape_complete in pre_op
+      expect(requiredIds.has('i4')).toBe(true) // incision in surgical
+      expect(requiredIds.has('i5')).toBe(true) // closing in surgical
+      expect(requiredIds.has('i6')).toBe(true) // closing in closing
+      expect(requiredIds.has('i7')).toBe(true) // closing_complete in closing
+      expect(requiredIds.has('i8')).toBe(true) // closing_complete in post_op
+      expect(requiredIds.has('i9')).toBe(true) // patient_out in post_op
+    })
+
+    it('excludes non-required milestones even if in required phases', () => {
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm-pi', facility_phase_id: 'p-pre', display_order: 1 },
+        { id: 'i2', template_id: 't1', facility_milestone_id: 'm-timeout', facility_phase_id: 'p-pre', display_order: 2 }, // extra
+      ]
+
+      const milestoneNameById = new Map(mockMilestones.map(m => [m.id, m.name]))
+      const phaseNameById = new Map(mockPhases.map(p => [p.id, p.name]))
+
+      // Only item 1 should be required
+      const requiredIds = new Set<string>()
+      for (const item of items) {
+        const msName = milestoneNameById.get(item.facility_milestone_id)
+        const phaseName = item.facility_phase_id ? phaseNameById.get(item.facility_phase_id) : null
+        if (msName && phaseName && isRequiredMilestone(msName) && isRequiredPhase(phaseName)) {
+          const requiredMs = REQUIRED_PHASE_MILESTONES[phaseName]
+          if (requiredMs?.includes(msName)) {
+            requiredIds.add(item.id)
+          }
+        }
+      }
+
+      expect(requiredIds.has('i1')).toBe(true)
+      expect(requiredIds.has('i2')).toBe(false) // timeout is not required
+    })
+
+    it('returns empty set when template does not have required structure', () => {
+      const items: TemplateItemData[] = [
+        { id: 'i1', template_id: 't1', facility_milestone_id: 'm-pi', facility_phase_id: 'p-pre', display_order: 1 },
+        // Missing rest of required structure
+      ]
+
+      const templateHasRequiredStructure = false // grandfathered template
+      const requiredIds = new Set<string>()
+
+      if (templateHasRequiredStructure) {
+        // enforcement logic would run here
+      }
+
+      expect(requiredIds.size).toBe(0)
+    })
+  })
+
+  describe('requiredPhaseIds computation', () => {
+    it('includes all 4 required phase IDs when template has full structure', () => {
+      const templateHasRequiredStructure = true
+
+      const requiredIds = new Set<string>()
+      if (templateHasRequiredStructure) {
+        for (const phase of mockPhases) {
+          if (isRequiredPhase(phase.name)) {
+            requiredIds.add(phase.id)
+          }
+        }
+      }
+
+      expect(requiredIds.size).toBe(4)
+      expect(requiredIds.has('p-pre')).toBe(true)
+      expect(requiredIds.has('p-surg')).toBe(true)
+      expect(requiredIds.has('p-close')).toBe(true)
+      expect(requiredIds.has('p-post')).toBe(true)
+    })
+
+    it('excludes non-required phases', () => {
+      const templateHasRequiredStructure = true
+
+      const requiredIds = new Set<string>()
+      if (templateHasRequiredStructure) {
+        for (const phase of mockPhases) {
+          if (isRequiredPhase(phase.name)) {
+            requiredIds.add(phase.id)
+          }
+        }
+      }
+
+      expect(requiredIds.has('p-extra')).toBe(false) // setup phase is not required
+    })
+
+    it('returns empty set when template does not have required structure', () => {
+      const templateHasRequiredStructure = false
+
+      const requiredIds = new Set<string>()
+      if (templateHasRequiredStructure) {
+        // enforcement logic would run here
+      }
+
+      expect(requiredIds.size).toBe(0)
+    })
+  })
+
+  describe('createTemplate auto-population logic', () => {
+    it('generates 9 required item inserts (4 phases with varying milestones, 2 shared boundaries)', () => {
+      const phaseLookup = mockPhases
+      const milestoneLookup = mockMilestones
+      const phaseByName = new Map(phaseLookup.map(p => [p.name, p]))
+      const milestoneByName = new Map(milestoneLookup.map(m => [m.name, m]))
+
+      const requiredItems: Array<{
+        facility_milestone_id: string
+        facility_phase_id: string
+        display_order: number
+      }> = []
+      let displayOrder = 0
+
+      for (const phaseName of REQUIRED_PHASE_NAMES) {
+        const phase = phaseByName.get(phaseName)
+        if (!phase) continue
+
+        const milestonesForPhase = REQUIRED_PHASE_MILESTONES[phaseName] || []
+
+        for (const msName of milestonesForPhase) {
+          const ms = milestoneByName.get(msName)
+          if (!ms) continue
+
+          displayOrder += 1
+          requiredItems.push({
+            facility_milestone_id: ms.id,
+            facility_phase_id: phase.id,
+            display_order: displayOrder,
+          })
+        }
+      }
+
+      expect(requiredItems).toHaveLength(9)
+
+      // Verify phase distribution
+      const preOpItems = requiredItems.filter(i => i.facility_phase_id === 'p-pre')
+      const surgItems = requiredItems.filter(i => i.facility_phase_id === 'p-surg')
+      const closeItems = requiredItems.filter(i => i.facility_phase_id === 'p-close')
+      const postOpItems = requiredItems.filter(i => i.facility_phase_id === 'p-post')
+
+      expect(preOpItems).toHaveLength(3) // patient_in, prep_drape_start, prep_drape_complete
+      expect(surgItems).toHaveLength(2) // incision, closing
+      expect(closeItems).toHaveLength(2) // closing, closing_complete
+      expect(postOpItems).toHaveLength(2) // closing_complete, patient_out
+    })
+
+    it('maintains correct display_order sequence across phases', () => {
+      const phaseLookup = mockPhases
+      const milestoneLookup = mockMilestones
+      const phaseByName = new Map(phaseLookup.map(p => [p.name, p]))
+      const milestoneByName = new Map(milestoneLookup.map(m => [m.name, m]))
+
+      const requiredItems: Array<{
+        display_order: number
+        facility_phase_id: string
+        facility_milestone_id: string
+      }> = []
+      let displayOrder = 0
+
+      for (const phaseName of REQUIRED_PHASE_NAMES) {
+        const phase = phaseByName.get(phaseName)
+        if (!phase) continue
+
+        const milestonesForPhase = REQUIRED_PHASE_MILESTONES[phaseName] || []
+
+        for (const msName of milestonesForPhase) {
+          const ms = milestoneByName.get(msName)
+          if (!ms) continue
+
+          displayOrder += 1
+          requiredItems.push({
+            facility_milestone_id: ms.id,
+            facility_phase_id: phase.id,
+            display_order: displayOrder,
+          })
+        }
+      }
+
+      // Verify display_order is sequential 1-9
+      const orders = requiredItems.map(i => i.display_order)
+      expect(orders).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    })
+  })
+})

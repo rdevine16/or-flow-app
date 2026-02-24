@@ -14,7 +14,7 @@ import type {
   InteriorMilestoneItem,
   UnassignedMilestoneItem,
 } from '@/lib/utils/buildTemplateRenderList'
-import { GripVertical, X, AlertTriangle } from 'lucide-react'
+import { GripVertical, X, AlertTriangle, Lock } from 'lucide-react'
 
 // ─── Edge Milestone ────────────────────────────────────────
 
@@ -23,9 +23,10 @@ interface EdgeMilestoneProps {
   onRemove: (itemId: string) => void
   sortableId?: string
   pairIssues?: Set<string>
+  isRequired?: boolean
 }
 
-export function EdgeMilestone({ item, onRemove, sortableId, pairIssues }: EdgeMilestoneProps) {
+export function EdgeMilestone({ item, onRemove, sortableId, pairIssues, isRequired }: EdgeMilestoneProps) {
   const [hover, setHover] = useState(false)
   const { milestone, templateItem, color, edge } = item
   const hex = color.hex
@@ -117,13 +118,17 @@ export function EdgeMilestone({ item, onRemove, sortableId, pairIssues }: EdgeMi
 
       {/* Actions column */}
       <div className="w-[24px] min-w-[24px] flex justify-center flex-shrink-0">
-        {hover && !isDragging && (
-          <button
-            onClick={() => onRemove(templateItem.id)}
-            className="p-0.5 text-red-500 hover:text-red-700 transition-colors"
-          >
-            <X className="w-2.5 h-2.5" />
-          </button>
+        {isRequired ? (
+          hover && <span title="Required milestone"><Lock className="w-2.5 h-2.5 text-slate-300" /></span>
+        ) : (
+          hover && !isDragging && (
+            <button
+              onClick={() => onRemove(templateItem.id)}
+              className="p-0.5 text-red-500 hover:text-red-700 transition-colors"
+            >
+              <X className="w-2.5 h-2.5" />
+            </button>
+          )
         )}
       </div>
     </div>
@@ -137,9 +142,10 @@ interface InteriorMilestoneProps {
   onRemove: (itemId: string) => void
   sortableId?: string
   pairIssues?: Set<string>
+  isRequired?: boolean
 }
 
-export function InteriorMilestone({ item, onRemove, sortableId, pairIssues }: InteriorMilestoneProps) {
+export function InteriorMilestone({ item, onRemove, sortableId, pairIssues, isRequired }: InteriorMilestoneProps) {
   const [hover, setHover] = useState(false)
   const { milestone, templateItem, color } = item
   const hex = color.hex
@@ -208,13 +214,17 @@ export function InteriorMilestone({ item, onRemove, sortableId, pairIssues }: In
 
       {/* Actions column */}
       <div className="w-[24px] min-w-[24px] flex justify-center flex-shrink-0">
-        {hover && !isDragging && (
-          <button
-            onClick={() => onRemove(templateItem.id)}
-            className="p-0.5 text-red-500 hover:text-red-700 transition-colors"
-          >
-            <X className="w-2.5 h-2.5" />
-          </button>
+        {isRequired ? (
+          hover && <span title="Required milestone"><Lock className="w-2.5 h-2.5 text-slate-300" /></span>
+        ) : (
+          hover && !isDragging && (
+            <button
+              onClick={() => onRemove(templateItem.id)}
+              className="p-0.5 text-red-500 hover:text-red-700 transition-colors"
+            >
+              <X className="w-2.5 h-2.5" />
+            </button>
+          )
         )}
       </div>
     </div>
@@ -228,9 +238,10 @@ interface UnassignedMilestoneProps {
   onRemove: (itemId: string) => void
   sortableId?: string
   pairIssues?: Set<string>
+  isRequired?: boolean
 }
 
-export function UnassignedMilestone({ item, onRemove, sortableId, pairIssues }: UnassignedMilestoneProps) {
+export function UnassignedMilestone({ item, onRemove, sortableId, pairIssues, isRequired }: UnassignedMilestoneProps) {
   const [hover, setHover] = useState(false)
   const { milestone, templateItem } = item
 
@@ -289,13 +300,17 @@ export function UnassignedMilestone({ item, onRemove, sortableId, pairIssues }: 
 
       {/* Actions column */}
       <div className="w-[24px] min-w-[24px] flex justify-center flex-shrink-0">
-        {hover && !isDragging && (
-          <button
-            onClick={() => onRemove(templateItem.id)}
-            className="p-0.5 text-red-500 hover:text-red-700 transition-colors"
-          >
-            <X className="w-2.5 h-2.5" />
-          </button>
+        {isRequired ? (
+          hover && <span title="Required milestone"><Lock className="w-2.5 h-2.5 text-slate-300" /></span>
+        ) : (
+          hover && !isDragging && (
+            <button
+              onClick={() => onRemove(templateItem.id)}
+              className="p-0.5 text-red-500 hover:text-red-700 transition-colors"
+            >
+              <X className="w-2.5 h-2.5" />
+            </button>
+          )
         )}
       </div>
     </div>

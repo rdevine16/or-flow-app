@@ -23,7 +23,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { SubPhaseItem, MilestoneLookup, TemplateItemData } from '@/lib/utils/buildTemplateRenderList'
-import { GripVertical, X } from 'lucide-react'
+import { GripVertical, X, Lock } from 'lucide-react'
 import { PairBadge } from './FlowNode'
 
 // Must match the prefix in TemplateBuilder.tsx so handleDragEnd resolves correctly
@@ -37,6 +37,7 @@ interface SubPhaseIndicatorProps {
   sortableId?: string
   onReorderMilestones?: (phaseId: string, activeId: string, overId: string) => void
   pairIssues?: Set<string>
+  requiredMilestoneItemIds?: Set<string>
 }
 
 export function SubPhaseIndicator({
@@ -47,6 +48,7 @@ export function SubPhaseIndicator({
   sortableId,
   onReorderMilestones,
   pairIssues,
+  requiredMilestoneItemIds,
 }: SubPhaseIndicatorProps) {
   const { phase, color, milestones } = item
   const hex = color.hex
@@ -194,6 +196,7 @@ export function SubPhaseIndicator({
                 phaseName={phase.display_name}
                 onRemove={onRemoveMilestone}
                 pairIssues={pairIssues}
+                isRequired={requiredMilestoneItemIds?.has(templateItem.id)}
               />
             ))}
           </SortableContext>
@@ -217,6 +220,7 @@ function SortableSubPhaseMilestone({
   phaseName,
   onRemove,
   pairIssues,
+  isRequired,
 }: {
   milestone: MilestoneLookup
   templateItem: TemplateItemData
@@ -226,6 +230,7 @@ function SortableSubPhaseMilestone({
   phaseName: string
   onRemove?: (itemId: string) => void
   pairIssues?: Set<string>
+  isRequired?: boolean
 }) {
   const [hover, setHover] = useState(false)
   const isFirst = idx === 0
@@ -323,13 +328,17 @@ function SortableSubPhaseMilestone({
 
       {/* Actions column */}
       <div className="w-[24px] min-w-[24px] flex justify-center flex-shrink-0">
-        {hover && !isDragging && onRemove && (
-          <button
-            onClick={() => onRemove(templateItem.id)}
-            className="p-0.5 text-red-500 hover:text-red-700 transition-colors"
-          >
-            <X className="w-2.5 h-2.5" />
-          </button>
+        {isRequired ? (
+          hover && <span title="Required milestone"><Lock className="w-2.5 h-2.5 text-slate-300" /></span>
+        ) : (
+          hover && !isDragging && onRemove && (
+            <button
+              onClick={() => onRemove(templateItem.id)}
+              className="p-0.5 text-red-500 hover:text-red-700 transition-colors"
+            >
+              <X className="w-2.5 h-2.5" />
+            </button>
+          )
         )}
       </div>
     </div>

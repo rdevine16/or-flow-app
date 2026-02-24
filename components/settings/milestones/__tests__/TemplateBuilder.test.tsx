@@ -54,6 +54,8 @@ const defaultHookReturn = {
   dispatch: vi.fn(),
   blockOrder: {},
   updateBlockOrder: vi.fn(),
+  requiredMilestoneItemIds: new Set<string>(),
+  requiredPhaseIds: new Set<string>(),
 }
 
 const mockUseTemplateBuilder = vi.fn(() => defaultHookReturn)

@@ -40,6 +40,7 @@ import {
   Check,
   Plus,
   Layers,
+  Lock,
 } from 'lucide-react'
 
 // ─── DnD ID helpers ─────────────────────────────────────────
@@ -258,6 +259,8 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
           activeDrag={activeDrag}
           blockOrder={builder.blockOrder}
           subPhaseMap={builder.subPhaseMap}
+          requiredMilestoneItemIds={builder.requiredMilestoneItemIds}
+          requiredPhaseIds={builder.requiredPhaseIds}
         />
 
         {/* Column 3: Library Panel */}
@@ -329,6 +332,8 @@ interface BuilderCanvasProps {
   activeDrag: ActiveDrag | null
   blockOrder: Record<string, string[]>
   subPhaseMap: Record<string, string>
+  requiredMilestoneItemIds: Set<string>
+  requiredPhaseIds: Set<string>
 }
 
 function BuilderCanvas({
@@ -349,6 +354,8 @@ function BuilderCanvas({
   activeDrag,
   blockOrder,
   subPhaseMap,
+  requiredMilestoneItemIds,
+  requiredPhaseIds,
 }: BuilderCanvasProps) {
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState('')
@@ -506,6 +513,8 @@ function BuilderCanvas({
                     onReorderMilestones={onReorderMilestones}
                     activeDrag={activeDrag}
                     pairIssues={pairIssues}
+                    requiredMilestoneItemIds={requiredMilestoneItemIds}
+                    requiredPhaseIds={requiredPhaseIds}
                   />
                 )
               }
@@ -524,6 +533,7 @@ function BuilderCanvas({
                     segment={segment}
                     onRemoveMilestone={onRemoveMilestone}
                     pairIssues={pairIssues}
+                    requiredMilestoneItemIds={requiredMilestoneItemIds}
                   />
                 )
               }
@@ -559,6 +569,8 @@ function PhaseGroupSegment({
   onReorderMilestones,
   activeDrag,
   pairIssues,
+  requiredMilestoneItemIds,
+  requiredPhaseIds,
 }: {
   segment: PhaseGroupSegmentData
   onRemoveMilestone: (itemId: string) => void
@@ -567,6 +579,8 @@ function PhaseGroupSegment({
   onReorderMilestones: (phaseId: string, activeId: string, overId: string) => void
   activeDrag: ActiveDrag | null
   pairIssues?: Set<string>
+  requiredMilestoneItemIds?: Set<string>
+  requiredPhaseIds?: Set<string>
 }) {
   const hex = segment.header.color.hex
   const isFirst = true // Let CSS handle top border
@@ -582,6 +596,7 @@ function PhaseGroupSegment({
         isFirst={isFirst}
         onRemove={() => onRemovePhase(segment.phaseId)}
         activeDrag={activeDrag}
+        isRequired={requiredPhaseIds?.has(segment.phaseId)}
       />
 
       <SortableContext
@@ -598,6 +613,7 @@ function PhaseGroupSegment({
                   onRemove={onRemoveMilestone}
                   sortableId={renderItem.templateItem.id}
                   pairIssues={pairIssues}
+                  isRequired={requiredMilestoneItemIds?.has(renderItem.templateItem.id)}
                 />
               )
             case 'interior-milestone':
@@ -608,6 +624,7 @@ function PhaseGroupSegment({
                   onRemove={onRemoveMilestone}
                   sortableId={renderItem.templateItem.id}
                   pairIssues={pairIssues}
+                  isRequired={requiredMilestoneItemIds?.has(renderItem.templateItem.id)}
                 />
               )
             case 'sub-phase':
@@ -621,6 +638,7 @@ function PhaseGroupSegment({
                   sortableId={`${SP_BLOCK_PREFIX}${renderItem.phase.id}`}
                   onReorderMilestones={onReorderMilestones}
                   pairIssues={pairIssues}
+                  requiredMilestoneItemIds={requiredMilestoneItemIds}
                 />
               )
             default:
@@ -695,10 +713,12 @@ function UnassignedSegment({
   segment,
   onRemoveMilestone,
   pairIssues,
+  requiredMilestoneItemIds,
 }: {
   segment: UnassignedSegmentData
   onRemoveMilestone: (itemId: string) => void
   pairIssues?: Set<string>
+  requiredMilestoneItemIds?: Set<string>
 }) {
   return (
     <div>
@@ -722,6 +742,7 @@ function UnassignedSegment({
                 onRemove={onRemoveMilestone}
                 sortableId={renderItem.templateItem.id}
                 pairIssues={pairIssues}
+                isRequired={requiredMilestoneItemIds?.has(renderItem.templateItem.id)}
               />
             )
           }
@@ -802,11 +823,13 @@ function PhaseHeader({
   isFirst,
   onRemove,
   activeDrag,
+  isRequired,
 }: {
   item: { phase: { id: string; display_name: string; color_key: string | null }; color: ReturnType<typeof resolveColorKey>; itemCount: number }
   isFirst: boolean
   onRemove: () => void
   activeDrag: ActiveDrag | null
+  isRequired?: boolean
 }) {
   const hex = item.color.hex
   const droppableId = `${DROP_PHASE_HEADER_PREFIX}${item.phase.id}`
@@ -840,12 +863,16 @@ function PhaseHeader({
       <span className="text-[10px] ml-auto" style={{ color: `${hex}70` }}>
         {item.itemCount}
       </span>
-      <button
-        onClick={onRemove}
-        className="p-[1px] text-slate-400 hover:text-red-500 transition-colors"
-      >
-        <X className="w-2.5 h-2.5" />
-      </button>
+      {isRequired ? (
+        <span title="Required phase"><Lock className="w-2.5 h-2.5 text-slate-300" /></span>
+      ) : (
+        <button
+          onClick={onRemove}
+          className="p-[1px] text-slate-400 hover:text-red-500 transition-colors"
+        >
+          <X className="w-2.5 h-2.5" />
+        </button>
+      )}
     </div>
   )
 }
