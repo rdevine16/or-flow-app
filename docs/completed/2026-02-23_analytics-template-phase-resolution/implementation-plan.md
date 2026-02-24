@@ -139,4 +139,12 @@ Phase 1 (DB: resolver, cases column, RPCs) ──► Phase 2 (TS adapter, fronte
 ---
 
 ## Session Log
-<!-- Entries added by /wrap-up -->
+
+### Session — 2026-02-23, 23:00 EST
+- **Phase:** All 3 phases + post-phase polish — completed
+- **What was done:** Phases 1-3 migrated analytics from phase_definitions to template-based phase resolution. Post-phase polish added phase-grouped milestone rendering with collapsible parent/subphase hierarchy, refined analytics utilities.
+- **Files changed:** 14+ files across migrations, DAL, hooks, pages, components
+- **Commits:** f06f0ac (P1), 63a4eb2 (P2), 9c53743 (P3), 055919a (polish)
+- **Test results:** 3 pre-existing failures (unrelated to this project); new functions lack dedicated unit tests (flagged in PROJECT_SUMMARY.md)
+- **Known issues discovered:** Missing unit tests for calculatePhaseTimeAllocation, assignMilestonesToPhases, buildPhaseGroups; missing integration tests for phase-grouped rendering
+- **Context usage:** medium
