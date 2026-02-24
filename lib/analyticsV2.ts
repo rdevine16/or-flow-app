@@ -22,6 +22,7 @@ export interface CaseWithMilestones {
   surgeon_id: string | null
   or_room_id: string | null
   procedure_type_id?: string | null
+  milestone_template_id?: string | null
   status_id: string
   // Columns fetched directly from cases table
   surgeon_left_at?: string | null       // FIX: Source of truth for surgeon departure

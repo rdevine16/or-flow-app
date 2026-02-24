@@ -61,6 +61,7 @@ export interface CaseDetail extends CaseListItem {
   called_back_at: string | null
   called_back_by: string | null
   complexity_id: string | null
+  milestone_template_id: string | null
   case_milestones: CaseMilestone[]
   case_flags: CaseFlag[]
   case_staff: CaseStaffMember[]

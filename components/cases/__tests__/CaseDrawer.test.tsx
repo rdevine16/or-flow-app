@@ -106,6 +106,8 @@ const MOCK_CASE_DETAIL: CaseDetail = {
   start_time: '08:30:00',
   status_id: 'status-completed',
   data_validated: true,
+  is_excluded_from_metrics: false,
+  milestone_template_id: 'template-1',
   or_room_id: 'room-1',
   surgeon_id: 'surgeon-1',
   facility_id: 'fac-1',

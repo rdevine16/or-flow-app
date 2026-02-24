@@ -89,7 +89,6 @@ export interface TemplateConfig {
   payers: boolean
   analyticsSettings: boolean
   flagRules: boolean
-  phaseDefinitions: boolean
   notificationSettings: boolean
 }
 
@@ -106,7 +105,6 @@ export const DEFAULT_TEMPLATE_CONFIG: TemplateConfig = {
   payers: true,
   analyticsSettings: true,
   flagRules: true,
-  phaseDefinitions: true,
   notificationSettings: true,
 }
 
@@ -133,7 +131,6 @@ export const DEFAULT_TEMPLATE_COUNTS: TemplateCounts = {
   payers: 0,
   analyticsSettings: 0,
   flagRules: 0,
-  phaseDefinitions: 0,
   notificationSettings: 0,
 }
 
@@ -306,7 +303,6 @@ export const TEMPLATE_EMOJIS: Record<keyof TemplateConfig, string> = {
   payers: '\u{1F3E5}',
   analyticsSettings: '\u{1F4C8}',
   flagRules: '\u{1F6A9}',
-  phaseDefinitions: '\u231B',
   notificationSettings: '\u{1F514}',
 }
 
@@ -321,7 +317,7 @@ export const CLINICAL_CONFIG_KEYS: (keyof TemplateConfig)[] = [
 
 export const OPERATIONAL_CONFIG_KEYS: (keyof TemplateConfig)[] = [
   'costCategories', 'implantCompanies', 'payers',
-  'analyticsSettings', 'flagRules', 'phaseDefinitions', 'notificationSettings',
+  'analyticsSettings', 'flagRules', 'notificationSettings',
 ]
 
 // ============================================================================

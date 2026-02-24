@@ -24,6 +24,7 @@ interface CaseDrawerMilestonesProps {
   surgeonId: string | null
   procedureTypeId: string | null
   facilityId: string | null
+  milestoneTemplateId?: string | null
   caseStatus: string
 }
 
@@ -36,6 +37,7 @@ export default function CaseDrawerMilestones({
   surgeonId,
   procedureTypeId,
   facilityId,
+  milestoneTemplateId,
   caseStatus,
 }: CaseDrawerMilestonesProps) {
   const {
@@ -51,6 +53,7 @@ export default function CaseDrawerMilestones({
     surgeonId,
     procedureTypeId,
     facilityId,
+    milestoneTemplateId,
   })
 
   // Determine which milestones are "missing" (unrecorded with later milestones recorded)

@@ -10,6 +10,10 @@ import { useMemo, useState } from 'react'
 import { useSupabaseQueries } from '@/hooks/useSupabaseQuery'
 import type { CaseMilestone } from '@/lib/dal/cases'
 import {
+  resolvePhaseDefsFromTemplate,
+  resolveTemplateForCase,
+} from '@/lib/dal/phase-resolver'
+import {
   calculateIntervals,
   calculatePhaseTimeAllocation,
   calculateTimeAllocation,
@@ -31,6 +35,7 @@ export interface UseMilestoneComparisonOptions {
   surgeonId: string | null
   procedureTypeId: string | null
   facilityId: string | null
+  milestoneTemplateId?: string | null
   enabled?: boolean
 }
 
@@ -56,6 +61,7 @@ export function useMilestoneComparison({
   surgeonId,
   procedureTypeId,
   facilityId,
+  milestoneTemplateId,
   enabled = true,
 }: UseMilestoneComparisonOptions): UseMilestoneComparisonReturn {
   const [comparisonSource, setComparisonSource] = useState<'surgeon' | 'facility'>('surgeon')
@@ -154,62 +160,36 @@ export function useMilestoneComparison({
         return [...new Set(names)]
       },
 
-      // Phase definitions with boundary milestone details
+      // Phase definitions resolved from template (per-case)
       phaseDefinitions: async (supabase) => {
         if (!facilityId) return []
-        const { data, error } = await supabase
-          .from('phase_definitions')
-          .select(`
-            id,
-            name,
-            display_name,
-            display_order,
-            color_key,
-            start_milestone_id,
-            end_milestone_id,
-            start_milestone:facility_milestones!phase_definitions_start_milestone_id_fkey (
-              id,
-              name,
-              display_name,
-              display_order
-            ),
-            end_milestone:facility_milestones!phase_definitions_end_milestone_id_fkey (
-              id,
-              name,
-              display_name,
-              display_order
-            )
-          `)
-          .eq('facility_id', facilityId)
-          .eq('is_active', true)
-          .order('display_order')
-        if (error) throw new Error(error.message)
-        // Supabase returns joined rows as objects or arrays; normalize
-        return ((data ?? []) as Record<string, unknown>[]).map((row) => {
-          const startMs = row.start_milestone
-          const endMs = row.end_milestone
-          return {
-            id: row.id as string,
-            name: row.name as string,
-            display_name: row.display_name as string,
-            display_order: row.display_order as number,
-            color_key: row.color_key as string | null,
-            start_milestone_id: row.start_milestone_id as string,
-            end_milestone_id: row.end_milestone_id as string,
-            start_milestone: Array.isArray(startMs) ? startMs[0] : startMs,
-            end_milestone: Array.isArray(endMs) ? endMs[0] : endMs,
-          } as PhaseDefinitionWithMilestones
+        // Resolve template via cascade: case snapshot → surgeon override → procedure → facility default
+        const templateId = await resolveTemplateForCase(supabase, {
+          milestone_template_id: milestoneTemplateId,
+          surgeon_id: surgeonId,
+          procedure_type_id: procedureTypeId,
+          facility_id: facilityId,
         })
+        return resolvePhaseDefsFromTemplate(supabase, templateId)
       },
 
-      // Phase-level medians from DB function
+      // Phase-level medians from DB function (template-aware)
       phaseMedians: async (supabase) => {
         if (!surgeonId || !procedureTypeId || !facilityId) return []
+        // Resolve template for this case's medians
+        const templateId = await resolveTemplateForCase(supabase, {
+          milestone_template_id: milestoneTemplateId,
+          surgeon_id: surgeonId,
+          procedure_type_id: procedureTypeId,
+          facility_id: facilityId,
+        })
+        if (!templateId) return []
         const { data, error } = await supabase
           .rpc('get_phase_medians', {
             p_facility_id: facilityId,
             p_procedure_type_id: procedureTypeId,
             p_surgeon_id: surgeonId,
+            p_milestone_template_id: templateId,
           })
         if (error) throw new Error(error.message)
         return (data ?? []) as PhaseMedianRow[]
@@ -217,7 +197,7 @@ export function useMilestoneComparison({
     },
     {
       enabled: canFetch,
-      deps: [caseId, surgeonId, procedureTypeId, facilityId, enabled],
+      deps: [caseId, surgeonId, procedureTypeId, facilityId, milestoneTemplateId, enabled],
     },
   )
 

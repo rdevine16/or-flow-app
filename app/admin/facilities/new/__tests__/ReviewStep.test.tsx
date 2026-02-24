@@ -45,7 +45,6 @@ describe('ReviewStep', () => {
     payers: 20,
     analyticsSettings: 1,
     flagRules: 32,
-    phaseDefinitions: 5,
     notificationSettings: 1,
   }
 
@@ -260,7 +259,6 @@ describe('ReviewStep', () => {
           payers: false,
           analyticsSettings: false,
           flagRules: false,
-          phaseDefinitions: false,
           notificationSettings: false,
         },
       })
@@ -275,7 +273,6 @@ describe('ReviewStep', () => {
       expect(screen.getByTestId('review-template-payers')).toBeTruthy()
       expect(screen.getByTestId('review-template-analyticsSettings')).toBeTruthy()
       expect(screen.getByTestId('review-template-flagRules')).toBeTruthy()
-      expect(screen.getByTestId('review-template-phaseDefinitions')).toBeTruthy()
       expect(screen.getByTestId('review-template-notificationSettings')).toBeTruthy()
     })
   })
@@ -329,7 +326,6 @@ describe('ReviewStep', () => {
         payers: false,
         analyticsSettings: false,
         flagRules: false,
-        phaseDefinitions: false,
         notificationSettings: false,
       }
       setup({ templateConfig: allDisabled })

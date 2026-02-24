@@ -23,6 +23,7 @@ import { ChevronRight, ArrowRight } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { resolveDefaultPhaseDefsForFacility } from '@/lib/dal/phase-resolver'
 
 import {
   SurgeonStats,
@@ -455,14 +456,9 @@ export default function SurgeonDetail({
       try {
         const supabase = createClient()
 
-        const [phaseDefsRes, milestonesRes] = await Promise.all([
-          // Fetch phase definitions for this facility
-          supabase
-            .from('phase_definitions')
-            .select('id, name, display_name, display_order, color_key, start_milestone_id, end_milestone_id')
-            .eq('facility_id', facilityId)
-            .eq('is_active', true)
-            .order('display_order', { ascending: true }),
+        const [phaseDefs, milestonesRes] = await Promise.all([
+          // Resolve phase defs from facility default template
+          resolveDefaultPhaseDefsForFacility(supabase, facilityId),
 
           // Fetch case milestones for the given cases
           supabase
@@ -471,15 +467,6 @@ export default function SurgeonDetail({
             .in('case_id', caseIds)
             .order('recorded_at', { ascending: true }),
         ])
-
-        if (phaseDefsRes.error) {
-          showToast({
-            type: 'error',
-            title: 'Failed to fetch phase definitions',
-            message: phaseDefsRes.error.message,
-          })
-          return
-        }
 
         if (milestonesRes.error) {
           showToast({
@@ -490,7 +477,7 @@ export default function SurgeonDetail({
           return
         }
 
-        setPhaseDefinitions(phaseDefsRes.data as PhaseDefRow[])
+        setPhaseDefinitions(phaseDefs as PhaseDefRow[])
 
         // Group milestones by case_id
         const byCase: Record<string, Array<{ facility_milestone_id: string; recorded_at: string | null }>> = {}

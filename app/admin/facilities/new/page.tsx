@@ -139,7 +139,6 @@ export default function CreateFacilityPage() {
         { count: payerCount },
         { count: analyticsSettingsCount },
         { count: flagRuleCount },
-        { count: phaseDefinitionCount },
         { count: notificationSettingsCount },
       ] = await Promise.all([
         supabase.from('milestone_types').select('id', { count: 'exact', head: true }).eq('is_active', true).is('deleted_at', null),
@@ -154,7 +153,6 @@ export default function CreateFacilityPage() {
         supabase.from('payer_templates').select('id', { count: 'exact', head: true }).eq('is_active', true).is('deleted_at', null),
         supabase.from('analytics_settings_template').select('id', { count: 'exact', head: true }),
         supabase.from('flag_rule_templates').select('id', { count: 'exact', head: true }).eq('is_active', true).is('deleted_at', null),
-        supabase.from('facility_phase_definitions').select('id', { count: 'exact', head: true }).is('facility_id', null),
         supabase.from('notification_settings_template').select('id', { count: 'exact', head: true }),
       ])
 
@@ -171,7 +169,6 @@ export default function CreateFacilityPage() {
         payers: payerCount ?? 0,
         analyticsSettings: analyticsSettingsCount ?? 0,
         flagRules: flagRuleCount ?? 0,
-        phaseDefinitions: phaseDefinitionCount ?? 0,
         notificationSettings: notificationSettingsCount ?? 0,
       })
 

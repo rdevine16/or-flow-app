@@ -257,7 +257,6 @@ describe('createFacilityWithTemplates', () => {
         template_config: {
           milestones: true,
           procedures: true,
-          procedure_milestone_config: true,
           delay_types: true,
           cancellation_reasons: true,
           complexities: true,
@@ -267,7 +266,6 @@ describe('createFacilityWithTemplates', () => {
           payers: true,
           analytics_settings: true,
           flag_rules: true,
-          phase_definitions: true,
           notification_settings: true,
         },
       })

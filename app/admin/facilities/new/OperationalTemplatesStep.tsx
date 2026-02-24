@@ -49,11 +49,6 @@ const ANALYTICS_CATEGORIES: TemplateCategory[] = [
     description: 'Automated alert rule templates',
   },
   {
-    key: 'phaseDefinitions',
-    label: 'Phase Definitions',
-    description: 'Surgical phase time boundaries',
-  },
-  {
     key: 'notificationSettings',
     label: 'Notification Settings',
     description: 'Default notification preferences',

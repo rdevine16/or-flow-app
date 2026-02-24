@@ -74,6 +74,7 @@ export interface PhaseDefinitionWithMilestones {
   display_name: string
   display_order: number
   color_key: string | null
+  parent_phase_id: string | null
   start_milestone_id: string
   end_milestone_id: string
   start_milestone?: {

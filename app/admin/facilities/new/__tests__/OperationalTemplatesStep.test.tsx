@@ -17,7 +17,6 @@ describe('OperationalTemplatesStep', () => {
     payers: 20,
     analyticsSettings: 1,
     flagRules: 32,
-    phaseDefinitions: 5,
     notificationSettings: 1,
   }
 
@@ -62,14 +61,13 @@ describe('OperationalTemplatesStep', () => {
       expect(screen.getByText('Analytics & Alerts')).toBeTruthy()
     })
 
-    it('renders all 7 operational template cards', () => {
+    it('renders all 6 operational template cards', () => {
       setup()
       expect(screen.getByTestId('template-card-costCategories')).toBeTruthy()
       expect(screen.getByTestId('template-card-implantCompanies')).toBeTruthy()
       expect(screen.getByTestId('template-card-payers')).toBeTruthy()
       expect(screen.getByTestId('template-card-analyticsSettings')).toBeTruthy()
       expect(screen.getByTestId('template-card-flagRules')).toBeTruthy()
-      expect(screen.getByTestId('template-card-phaseDefinitions')).toBeTruthy()
       expect(screen.getByTestId('template-card-notificationSettings')).toBeTruthy()
     })
 
@@ -175,7 +173,6 @@ describe('OperationalTemplatesStep', () => {
           payers: false,
           analyticsSettings: false,
           flagRules: false,
-          phaseDefinitions: false,
           notificationSettings: false,
         }),
       )
@@ -191,7 +188,6 @@ describe('OperationalTemplatesStep', () => {
           payers: true,
           analyticsSettings: true,
           flagRules: true,
-          phaseDefinitions: true,
           notificationSettings: true,
         }),
       )

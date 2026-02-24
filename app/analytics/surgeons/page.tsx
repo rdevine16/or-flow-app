@@ -51,6 +51,12 @@ import {
 } from '@/lib/analyticsV2'
 
 import {
+  resolvePhaseDefsFromTemplate,
+  resolveDefaultPhaseDefsForFacility,
+  batchResolveTemplatesForCases,
+} from '@/lib/dal/phase-resolver'
+
+import {
   detectCaseFlags,
   computeProcedureMedians,
   aggregateDayFlags,
@@ -232,6 +238,10 @@ export default function SurgeonPerformancePage() {
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'day'>('overview')
   const [phaseDefinitions, setPhaseDefinitions] = useState<PhaseDefInput[]>([])
+  // Per-template phase defs for day analysis (keyed by template ID)
+  const [templatePhaseMap, setTemplatePhaseMap] = useState<Map<string, PhaseDefInput[]>>(new Map())
+  // Case ID → template ID mapping for per-case phase lookup
+  const [caseTemplateIdMap, setCaseTemplateIdMap] = useState<Map<string, string | null>>(new Map())
   
   // Overview tab state
   const [dateRange, setDateRange] = useState('mtd')
@@ -295,27 +305,23 @@ export default function SurgeonPerformancePage() {
         .eq('name', 'surgeon')
         .single()
 
-      const [surgeonsRes, techniquesRes, phaseDefsRes] = await Promise.all([
+      const [surgeonsRes, techniquesRes, facilityPhaseDefs] = await Promise.all([
         supabase
           .from('users')
           .select('id, first_name, last_name, role_id')
-          .eq('facility_id', effectiveFacilityId)
+          .eq('facility_id', effectiveFacilityId!)
           .order('last_name'),
         supabase
           .from('procedure_techniques')
           .select('id, name, display_name')
           .order('display_order'),
-        supabase
-          .from('phase_definitions')
-          .select('id, name, display_name, display_order, color_key, parent_phase_id, start_milestone_id, end_milestone_id')
-          .eq('facility_id', effectiveFacilityId)
-          .eq('is_active', true)
-          .order('display_order'),
+        // Resolve phase defs from facility default template (for flag detection)
+        resolveDefaultPhaseDefsForFacility(supabase, effectiveFacilityId!),
       ])
 
       setSurgeons((surgeonsRes.data?.filter(u => u.role_id === surgeonRole?.id) as Surgeon[]) || [])
       setProcedureTechniques(techniquesRes.data || [])
-      setPhaseDefinitions((phaseDefsRes.data as PhaseDefInput[]) || [])
+      setPhaseDefinitions(facilityPhaseDefs)
       setInitialLoading(false)
     }
     fetchData()
@@ -485,6 +491,8 @@ const handleDateRangeChange = (range: string, startDate: string, endDate: string
 
       const caseSelect = `
         id, case_number, scheduled_date, start_time, surgeon_id,
+        milestone_template_id,
+        procedure_type_id,
         surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
         procedure_types (id, name, technique_id),
         or_rooms (id, name),
@@ -504,8 +512,42 @@ case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
           .lte('scheduled_date', getLocalDateString(today)),
       ])
 
-      setDayCases((dayRes.data as unknown as CaseWithMilestones[]) || [])
+      const fetchedDayCases = (dayRes.data as unknown as CaseWithMilestones[]) || []
+      setDayCases(fetchedDayCases)
       setLast30DaysCases((last30Res.data as unknown as CaseWithMilestones[]) || [])
+
+      // Resolve per-case template phase defs for day analysis
+      if (fetchedDayCases.length > 0 && effectiveFacilityId) {
+        const caseInfos = fetchedDayCases.map((c) => ({
+          id: c.id,
+          milestone_template_id: c.milestone_template_id,
+          surgeon_id: c.surgeon_id,
+          procedure_type_id: c.procedure_type_id
+            ?? (Array.isArray(c.procedure_types) ? c.procedure_types[0]?.id : c.procedure_types?.id) ?? null,
+        }))
+
+        const templateIdMap = await batchResolveTemplatesForCases(supabase, caseInfos, effectiveFacilityId)
+
+        // Collect unique template IDs and resolve phase defs for each
+        const uniqueTemplateIds = [...new Set(
+          [...templateIdMap.values()].filter((id): id is string => id !== null)
+        )]
+
+        const phaseMap = new Map<string, PhaseDefInput[]>()
+        await Promise.all(
+          uniqueTemplateIds.map(async (tid) => {
+            const phaseDefs = await resolvePhaseDefsFromTemplate(supabase, tid)
+            phaseMap.set(tid, phaseDefs)
+          })
+        )
+
+        setTemplatePhaseMap(phaseMap)
+        setCaseTemplateIdMap(templateIdMap)
+      } else {
+        setTemplatePhaseMap(new Map())
+        setCaseTemplateIdMap(new Map())
+      }
+
       setLoading(false)
     }
 
@@ -694,8 +736,22 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
 
   // Day metrics
   const dayMetrics = useMemo(() => calculateDayMetrics(dayCases), [dayCases, calculateDayMetrics])
-  // Case breakdown for day analysis — dynamic phases from phase_definitions
-  const phaseTree = useMemo(() => buildPhaseTree(phaseDefinitions), [phaseDefinitions])
+
+  // Union of all phases from the day's case templates (for legend + fallback)
+  const allDayPhaseDefs = useMemo((): PhaseDefInput[] => {
+    if (templatePhaseMap.size === 0) return phaseDefinitions
+    const phaseById = new Map<string, PhaseDefInput>()
+    for (const phaseDefs of templatePhaseMap.values()) {
+      for (const pd of phaseDefs) {
+        if (!phaseById.has(pd.id)) phaseById.set(pd.id, pd)
+      }
+    }
+    const result = [...phaseById.values()].sort((a, b) => a.display_order - b.display_order)
+    return result.length > 0 ? result : phaseDefinitions
+  }, [templatePhaseMap, phaseDefinitions])
+
+  // Phase tree for legend (union of all templates from the day's cases)
+  const phaseTree = useMemo(() => buildPhaseTree(allDayPhaseDefs), [allDayPhaseDefs])
 
   // Procedure medians from last 30 days (for flag detection)
   const procedureMedians = useMemo(
@@ -789,15 +845,21 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       const m = getMilestoneMap(c)
       const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
       const timestampMap = buildMilestoneTimestampMap(c.case_milestones || [])
-      const durations = computePhaseDurations(phaseDefinitions, timestampMap)
-      const subphaseOffsets = computeSubphaseOffsets(phaseDefinitions, durations, timestampMap, resolveSubphaseHex)
+
+      // Per-case template phase defs (fall back to facility default)
+      const caseTemplateId = caseTemplateIdMap.get(c.id)
+      const casePhaseDefs = (caseTemplateId ? templatePhaseMap.get(caseTemplateId) : null) ?? phaseDefinitions
+      const casePhaseTree = buildPhaseTree(casePhaseDefs)
+
+      const durations = computePhaseDurations(casePhaseDefs, timestampMap)
+      const subphaseOffsets = computeSubphaseOffsets(casePhaseDefs, durations, timestampMap, resolveSubphaseHex)
 
       // Build a lookup of subphase offsets by parent phase ID
       const subphaseByParent = new Map(subphaseOffsets.map(p => [p.phaseId, p.subphases]))
 
       // Compute actual start/end timestamps for each phase (for timing-overlap detection)
       const phaseTimings = new Map<string, { startMs: number; endMs: number }>()
-      for (const phaseDef of phaseDefinitions) {
+      for (const phaseDef of casePhaseDefs) {
         const startTs = timestampMap.get(phaseDef.start_milestone_id)
         const endTs = timestampMap.get(phaseDef.end_milestone_id)
         if (startTs && endTs) {
@@ -809,8 +871,8 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
         }
       }
 
-      // Build initial phases from phaseTree (includes all top-level nodes)
-      const allPhases: TimelineCasePhase[] = phaseTree.map(node => {
+      // Build initial phases from case-specific phaseTree (includes all top-level nodes)
+      const allPhases: TimelineCasePhase[] = casePhaseTree.map(node => {
         const dur = durations.find(d => d.phaseId === node.phase.id)
         const subs = (subphaseByParent.get(node.phase.id) || []).map(sub => ({
           phaseId: sub.phaseId,
@@ -885,7 +947,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
         phases,
       }
     })
-  }, [dayCases, getCompletedCases, phaseDefinitions, phaseTree])
+  }, [dayCases, getCompletedCases, phaseDefinitions, phaseTree, caseTemplateIdMap, templatePhaseMap])
 
   // Max total seconds for the case breakdown bar scaling
   const maxTimelineCaseSeconds = useMemo(() => {

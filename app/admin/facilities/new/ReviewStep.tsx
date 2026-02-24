@@ -44,7 +44,6 @@ const OPERATIONAL_CATEGORIES: ReviewCategory[] = [
   { key: 'payers', label: 'Payer Templates' },
   { key: 'analyticsSettings', label: 'Analytics Settings' },
   { key: 'flagRules', label: 'Flag Rules' },
-  { key: 'phaseDefinitions', label: 'Phase Definitions' },
   { key: 'notificationSettings', label: 'Notification Settings' },
 ]
 

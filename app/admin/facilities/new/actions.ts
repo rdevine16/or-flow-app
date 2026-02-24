@@ -88,7 +88,6 @@ export async function createFacilityWithTemplates(
         payers: templateConfig.payers,
         analytics_settings: templateConfig.analyticsSettings,
         flag_rules: templateConfig.flagRules,
-        phase_definitions: templateConfig.phaseDefinitions,
         notification_settings: templateConfig.notificationSettings,
       },
     })

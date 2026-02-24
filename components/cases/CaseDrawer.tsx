@@ -348,6 +348,7 @@ export default function CaseDrawer({
                       surgeonId={caseDetail.surgeon_id}
                       procedureTypeId={caseDetail.procedure_type?.id ?? null}
                       facilityId={caseDetail.facility_id}
+                      milestoneTemplateId={caseDetail.milestone_template_id}
                       caseStatus={displayStatus}
                     />
                   </div>
