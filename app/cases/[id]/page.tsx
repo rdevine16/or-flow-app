@@ -74,6 +74,7 @@ interface CaseData {
   is_draft: boolean
   notes: string | null
   surgeon_left_at: string | null
+  milestone_template_id: string | null
   or_rooms: { name: string }[] | { name: string } | null
   procedure_types: { name: string }[] | { name: string } | null
   case_statuses: { id: string; name: string }[] | { id: string; name: string } | null
@@ -194,7 +195,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       const { data: caseResult, error: caseError } = await supabase
         .from('cases')
         .select(`
-          id, case_number, scheduled_date, start_time, operative_side, procedure_type_id, surgeon_id, or_room_id, is_draft, notes, call_time, surgeon_left_at,
+          id, case_number, scheduled_date, start_time, operative_side, procedure_type_id, surgeon_id, or_room_id, is_draft, notes, call_time, surgeon_left_at, milestone_template_id,
           or_rooms (name),
           procedure_types (name),
           case_statuses (id, name),
@@ -205,12 +206,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
       if (caseError) throw caseError
 
-      // Fetch milestones from template cascade: procedure template → facility default
+      // Fetch milestones: use case's stamped template first, fall back to cascade for legacy cases
       let milestoneTypesResult: FacilityMilestone[] = []
-      if (caseResult?.procedure_type_id) {
-        // Resolve template: procedure assignment → facility default
-        let templateId: string | null = null
+      let templateId: string | null = caseResult?.milestone_template_id ?? null
 
+      // Legacy cases without stamped template: resolve via cascade
+      if (!templateId && caseResult?.procedure_type_id) {
         const { data: procData } = await supabase
           .from('procedure_types')
           .select('milestone_template_id')
@@ -228,30 +229,30 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             .single()
           templateId = defaultTemplate?.id ?? null
         }
+      }
 
-        if (templateId) {
-          const { data: templateItems } = await supabase
-            .from('milestone_template_items')
-            .select(`
-              display_order,
-              facility_milestones (id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id)
-            `)
-            .eq('template_id', templateId)
-            .order('display_order')
+      if (templateId) {
+        const { data: templateItems } = await supabase
+          .from('milestone_template_items')
+          .select(`
+            display_order,
+            facility_milestones (id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id)
+          `)
+          .eq('template_id', templateId)
+          .order('display_order')
 
-          if (templateItems && templateItems.length > 0) {
-            // Deduplicate: shared boundary milestones appear in multiple phases
-            const seen = new Set<string>()
-            milestoneTypesResult = templateItems
-              .map(item => item.facility_milestones as unknown as FacilityMilestone)
-              .filter(Boolean)
-              .sort((a, b) => a.display_order - b.display_order)
-              .filter(m => {
-                if (seen.has(m.id)) return false
-                seen.add(m.id)
-                return true
-              })
-          }
+        if (templateItems && templateItems.length > 0) {
+          // Deduplicate: shared boundary milestones appear in multiple phases
+          const seen = new Set<string>()
+          milestoneTypesResult = templateItems
+            .map(item => item.facility_milestones as unknown as FacilityMilestone)
+            .filter(Boolean)
+            .sort((a, b) => a.display_order - b.display_order)
+            .filter(m => {
+              if (seen.has(m.id)) return false
+              seen.add(m.id)
+              return true
+            })
         }
       }
 
