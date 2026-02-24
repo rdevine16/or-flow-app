@@ -110,6 +110,7 @@ export interface PhaseGroupData {
   phaseDisplayName: string
   colorKey: string | null
   displayOrder: number
+  parentPhaseId: string | null
   /** Phase duration from this case's boundary milestone timestamps */
   durationMinutes: number | null
   /** Active comparison median (surgeon or facility) */
@@ -218,6 +219,11 @@ export function calculateIntervals(
  * Calculate time allocation from template-resolved phase boundary milestones.
  * Each phase duration = end_milestone.recorded_at - start_milestone.recorded_at.
  * Replaces the old phase_group bucketing approach.
+ *
+ * Only includes parent phases (excludes subphases) since the TimeAllocationBar
+ * renders flat segments. When a boundary milestone is missing from the case
+ * (e.g. case was created before the milestone was added to the template),
+ * falls back to the adjacent phase's boundary as a proxy.
  */
 export function calculatePhaseTimeAllocation(
   phaseDefinitions: PhaseDefinitionWithMilestones[],
@@ -231,11 +237,27 @@ export function calculatePhaseTimeAllocation(
     }
   }
 
+  // Only include parent phases (no subphases) — TimeAllocationBar is flat
+  const parentPhases = phaseDefinitions
+    .filter((p) => !p.parent_phase_id)
+    .sort((a, b) => a.display_order - b.display_order)
+
   const phaseDurations: { phase: PhaseDefinitionWithMilestones; minutes: number }[] = []
 
-  for (const phase of phaseDefinitions) {
-    const startTime = milestoneTimeMap.get(phase.start_milestone_id)
-    const endTime = milestoneTimeMap.get(phase.end_milestone_id)
+  for (let i = 0; i < parentPhases.length; i++) {
+    const phase = parentPhases[i]
+    let startTime = milestoneTimeMap.get(phase.start_milestone_id)
+    let endTime = milestoneTimeMap.get(phase.end_milestone_id)
+
+    // Fallback: if end milestone is missing, use next phase's start milestone
+    if (endTime == null && i < parentPhases.length - 1) {
+      endTime = milestoneTimeMap.get(parentPhases[i + 1].start_milestone_id)
+    }
+    // Fallback: if start milestone is missing, use previous phase's end milestone
+    if (startTime == null && i > 0) {
+      startTime = milestoneTimeMap.get(parentPhases[i - 1].end_milestone_id)
+    }
+
     if (startTime != null && endTime != null && endTime > startTime) {
       phaseDurations.push({
         phase,
@@ -246,9 +268,6 @@ export function calculatePhaseTimeAllocation(
 
   const grandTotal = phaseDurations.reduce((s, pd) => s + pd.minutes, 0)
   if (grandTotal <= 0) return []
-
-  // Sort by display_order
-  phaseDurations.sort((a, b) => a.phase.display_order - b.phase.display_order)
 
   return phaseDurations.map((pd) => ({
     label: pd.phase.display_name,
@@ -313,8 +332,15 @@ export function calculateTimeAllocation(
 
 /**
  * Assign milestone intervals to phases based on template-resolved boundary display_orders.
- * A milestone belongs to a phase if its display_order >= start_milestone.display_order
- * and < the next phase's start_milestone.display_order (or <= end for the last phase).
+ *
+ * Shared boundary milestones (e.g. "Closing" is end of Surgical AND start of Closing)
+ * are assigned to the phase where they serve as the START milestone (appears once).
+ *
+ * Non-shared end milestones (e.g. "Prep/Drape Complete" is end of Pre-Op but NOT start
+ * of Surgical) are included in their phase — end is inclusive when not shared.
+ *
+ * Subphase assignment: milestones within a subphase range are assigned to the MOST
+ * SPECIFIC phase (subphase preferred over parent). Subphases are checked first.
  */
 export function assignMilestonesToPhases(
   intervals: MilestoneInterval[],
@@ -322,20 +348,31 @@ export function assignMilestonesToPhases(
 ): { grouped: Map<string, MilestoneInterval[]>; ungrouped: MilestoneInterval[] } {
   const sortedPhases = [...phaseDefinitions].sort((a, b) => a.display_order - b.display_order)
 
+  // Separate into subphases (checked first) and parents
+  const subphases = sortedPhases.filter((p) => p.parent_phase_id)
+  const parents = sortedPhases.filter((p) => !p.parent_phase_id)
+
+  // Build set of display_orders that are start milestones of the NEXT parent phase.
+  // These are "shared boundaries" — the end milestone of one phase is the start of the next.
+  // For shared boundaries, we use exclusive end so the milestone appears at the start position only.
+  const nextPhaseStartOrders = new Set<number>()
+  for (let i = 1; i < parents.length; i++) {
+    const startOrder = parents[i].start_milestone?.display_order
+    if (startOrder != null) nextPhaseStartOrders.add(startOrder)
+  }
+
   const grouped = new Map<string, MilestoneInterval[]>()
   const ungrouped: MilestoneInterval[] = []
 
   for (const iv of intervals) {
     let assigned = false
-    for (let i = 0; i < sortedPhases.length; i++) {
-      const phase = sortedPhases[i]
+
+    // 1. Try subphases first (most specific match)
+    for (const phase of subphases) {
       const startOrder = phase.start_milestone?.display_order ?? 0
       const endOrder = phase.end_milestone?.display_order ?? Infinity
-      const isLast = i === sortedPhases.length - 1
 
-      // Milestone belongs to this phase if display_order >= start AND < end
-      // (or <= end for the last phase)
-      if (iv.display_order >= startOrder && (isLast ? iv.display_order <= endOrder : iv.display_order < endOrder)) {
+      if (iv.display_order >= startOrder && iv.display_order <= endOrder) {
         const existing = grouped.get(phase.id) ?? []
         existing.push(iv)
         grouped.set(phase.id, existing)
@@ -343,6 +380,30 @@ export function assignMilestonesToPhases(
         break
       }
     }
+
+    // 2. Try parent phases
+    //    - Shared boundary (end order = next phase's start order): use [start, end)
+    //    - Non-shared end (end order is NOT start of next phase): use [start, end]
+    //    - Last phase: always [start, end]
+    if (!assigned) {
+      for (let i = 0; i < parents.length; i++) {
+        const phase = parents[i]
+        const startOrder = phase.start_milestone?.display_order ?? 0
+        const endOrder = phase.end_milestone?.display_order ?? Infinity
+        const isLast = i === parents.length - 1
+        // Include end milestone unless it's a shared boundary with the next phase
+        const endInclusive = isLast || !nextPhaseStartOrders.has(endOrder)
+
+        if (iv.display_order >= startOrder && (endInclusive ? iv.display_order <= endOrder : iv.display_order < endOrder)) {
+          const existing = grouped.get(phase.id) ?? []
+          existing.push(iv)
+          grouped.set(phase.id, existing)
+          assigned = true
+          break
+        }
+      }
+    }
+
     if (!assigned) {
       ungrouped.push(iv)
     }
@@ -354,6 +415,14 @@ export function assignMilestonesToPhases(
 /**
  * Build PhaseGroupData[] by combining phase boundary definitions, case milestones,
  * milestone intervals, and phase medians.
+ *
+ * Phase medians come from the get_phase_medians RPC — the true statistical median
+ * of each phase's total duration across cases. Note: these may not equal the sum
+ * of individual interval medians (median of sums ≠ sum of medians).
+ *
+ * When a parent phase's boundary milestone is missing from the case (created before
+ * the milestone was added to the template), falls back to the adjacent parent phase's
+ * boundary as a proxy — phases are contiguous by design.
  */
 export function buildPhaseGroups(
   phaseDefinitions: PhaseDefinitionWithMilestones[],
@@ -376,14 +445,27 @@ export function buildPhaseGroups(
   const medianMap = new Map(phaseMedians.map((pm) => [pm.phase_name, pm]))
 
   const sortedPhases = [...phaseDefinitions].sort((a, b) => a.display_order - b.display_order)
+  const parentPhases = sortedPhases.filter((p) => !p.parent_phase_id)
 
   return sortedPhases.map((phase) => {
     const phaseIntervals = grouped.get(phase.id) ?? []
     const median = medianMap.get(phase.name)
 
     // Calculate phase duration from boundary milestone timestamps
-    const startTime = milestoneTimeMap.get(phase.start_milestone_id)
-    const endTime = milestoneTimeMap.get(phase.end_milestone_id)
+    let startTime = milestoneTimeMap.get(phase.start_milestone_id)
+    let endTime = milestoneTimeMap.get(phase.end_milestone_id)
+
+    // Fallback for parent phases with missing boundary milestones
+    if (!phase.parent_phase_id) {
+      const parentIdx = parentPhases.indexOf(phase)
+      if (endTime == null && parentIdx >= 0 && parentIdx < parentPhases.length - 1) {
+        endTime = milestoneTimeMap.get(parentPhases[parentIdx + 1].start_milestone_id)
+      }
+      if (startTime == null && parentIdx > 0) {
+        startTime = milestoneTimeMap.get(parentPhases[parentIdx - 1].end_milestone_id)
+      }
+    }
+
     const durationMinutes = startTime != null && endTime != null && endTime > startTime
       ? (endTime - startTime) / 60000
       : null
@@ -398,6 +480,7 @@ export function buildPhaseGroups(
       phaseDisplayName: phase.display_name,
       colorKey: phase.color_key,
       displayOrder: phase.display_order,
+      parentPhaseId: phase.parent_phase_id,
       durationMinutes,
       medianMinutes: activeMedian,
       surgeonMedianMinutes: surgeonMedian,

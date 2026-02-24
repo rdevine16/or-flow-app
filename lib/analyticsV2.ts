@@ -691,6 +691,10 @@ export function buildMilestoneTimestampMap(
  * returns a PhaseDurationResult per phase. Phases where either boundary milestone is
  * missing get durationSeconds = null (rendered as hatched/missing indicator in Phase 2).
  *
+ * When a parent phase's boundary milestone is missing from the case (e.g. case was
+ * created before the milestone was added to the template), falls back to the adjacent
+ * parent phase's boundary as a proxy — phases are contiguous by design.
+ *
  * Results are sorted by display_order. Works for both parent phases and subphases —
  * subphases have a non-null parentPhaseId.
  */
@@ -698,32 +702,45 @@ export function computePhaseDurations(
   phaseDefinitions: PhaseDefInput[],
   milestoneTimestamps: MilestoneTimestampMap,
 ): PhaseDurationResult[] {
-  return phaseDefinitions
-    .slice()
-    .sort((a, b) => a.display_order - b.display_order)
-    .map((phase) => {
-      const startTs = milestoneTimestamps.get(phase.start_milestone_id)
-      const endTs = milestoneTimestamps.get(phase.end_milestone_id)
+  const sorted = phaseDefinitions.slice().sort((a, b) => a.display_order - b.display_order)
 
-      let durationSeconds: number | null = null
-      if (startTs && endTs) {
-        const startMs = new Date(startTs).getTime()
-        const endMs = new Date(endTs).getTime()
-        if (!isNaN(startMs) && !isNaN(endMs) && endMs > startMs) {
-          durationSeconds = (endMs - startMs) / 1000
-        }
-      }
+  // Build parent-phase index for boundary fallback
+  const parentPhases = sorted.filter((p) => !p.parent_phase_id)
 
-      return {
-        phaseId: phase.id,
-        name: phase.name,
-        displayName: phase.display_name,
-        displayOrder: phase.display_order,
-        colorKey: phase.color_key,
-        parentPhaseId: phase.parent_phase_id,
-        durationSeconds,
+  return sorted.map((phase) => {
+    let startTs = milestoneTimestamps.get(phase.start_milestone_id)
+    let endTs = milestoneTimestamps.get(phase.end_milestone_id)
+
+    // Fallback for parent phases with missing boundary milestones
+    if (!phase.parent_phase_id) {
+      const parentIdx = parentPhases.indexOf(phase)
+      if (!endTs && parentIdx >= 0 && parentIdx < parentPhases.length - 1) {
+        endTs = milestoneTimestamps.get(parentPhases[parentIdx + 1].start_milestone_id)
       }
-    })
+      if (!startTs && parentIdx > 0) {
+        startTs = milestoneTimestamps.get(parentPhases[parentIdx - 1].end_milestone_id)
+      }
+    }
+
+    let durationSeconds: number | null = null
+    if (startTs && endTs) {
+      const startMs = new Date(startTs).getTime()
+      const endMs = new Date(endTs).getTime()
+      if (!isNaN(startMs) && !isNaN(endMs) && endMs > startMs) {
+        durationSeconds = (endMs - startMs) / 1000
+      }
+    }
+
+    return {
+      phaseId: phase.id,
+      name: phase.name,
+      displayName: phase.display_name,
+      displayOrder: phase.display_order,
+      colorKey: phase.color_key,
+      parentPhaseId: phase.parent_phase_id,
+      durationSeconds,
+    }
+  })
 }
 
 // ─── Sub-phase Offset Computation ──────────────────────────────

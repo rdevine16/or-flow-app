@@ -145,12 +145,12 @@ export async function resolveTemplateForCase(
   if (caseInfo.surgeon_id && caseInfo.procedure_type_id) {
     const { data: override } = await supabase
       .from('surgeon_template_overrides')
-      .select('template_id')
+      .select('milestone_template_id')
       .eq('surgeon_id', caseInfo.surgeon_id)
       .eq('procedure_type_id', caseInfo.procedure_type_id)
       .single()
 
-    if (override?.template_id) return override.template_id
+    if (override?.milestone_template_id) return override.milestone_template_id
   }
 
   // 3. Procedure type template
@@ -228,10 +228,10 @@ export async function batchResolveTemplatesForCases(
     surgeonIds.length > 0 && procedureTypeIds.length > 0
       ? supabase
           .from('surgeon_template_overrides')
-          .select('surgeon_id, procedure_type_id, template_id')
+          .select('surgeon_id, procedure_type_id, milestone_template_id')
           .in('surgeon_id', surgeonIds)
           .in('procedure_type_id', procedureTypeIds)
-      : Promise.resolve({ data: [] as Array<{ surgeon_id: string; procedure_type_id: string; template_id: string }> }),
+      : Promise.resolve({ data: [] as Array<{ surgeon_id: string; procedure_type_id: string; milestone_template_id: string }> }),
 
     // Procedure type templates
     procedureTypeIds.length > 0
@@ -257,8 +257,8 @@ export async function batchResolveTemplatesForCases(
     facilityDefaultTemplateId: defaultRes.data?.id ?? null,
   }
 
-  for (const row of (overridesRes.data ?? []) as Array<{ surgeon_id: string; procedure_type_id: string; template_id: string }>) {
-    cascade.surgeonOverrides.set(`${row.surgeon_id}:${row.procedure_type_id}`, row.template_id)
+  for (const row of (overridesRes.data ?? []) as Array<{ surgeon_id: string; procedure_type_id: string; milestone_template_id: string }>) {
+    cascade.surgeonOverrides.set(`${row.surgeon_id}:${row.procedure_type_id}`, row.milestone_template_id)
   }
 
   for (const row of (procTypesRes.data ?? []) as Array<{ id: string; milestone_template_id: string | null }>) {

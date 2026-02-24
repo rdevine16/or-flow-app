@@ -252,7 +252,7 @@ describe('phase-resolver', () => {
 
     it('queries surgeon override when case has no template', async () => {
       const mockSingle = vi.fn().mockResolvedValue({
-        data: { template_id: 'template-surgeon' },
+        data: { milestone_template_id: 'template-surgeon' },
         error: null,
       })
       const mockEq = vi.fn().mockReturnThis()

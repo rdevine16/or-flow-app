@@ -1,6 +1,7 @@
 // components/cases/MilestoneDetailRow.tsx
 // Structured 6-column milestone data table with collapsible phase headers.
-// Phase headers show colored left border, phase name, duration, median, delta.
+// Parent phases are collapsible; subphases render as indented sub-headers within
+// their parent when expanded. Shared boundary milestones appear in both phases.
 // Columns: [Status Icon] [Milestone Name] [Time] [Duration] [Median] [Delta]
 
 'use client'
@@ -60,6 +61,7 @@ function MilestoneRow({
   medianKey,
   deltaKey,
   isLowN,
+  indent,
 }: {
   iv: MilestoneInterval
   isLast: boolean
@@ -67,6 +69,7 @@ function MilestoneRow({
   medianKey: 'surgeon_median_minutes' | 'facility_median_minutes'
   deltaKey: 'delta_from_surgeon' | 'delta_from_facility'
   isLowN: boolean
+  indent?: boolean
 }) {
   const isRecorded = !!iv.recorded_at
   const activeMedian = iv[medianKey]
@@ -76,7 +79,7 @@ function MilestoneRow({
     <div
       className={`grid grid-cols-[28px_1fr_72px_68px_72px_80px] items-center px-3 py-2 border-b border-slate-100 last:border-b-0 ${
         isMissing ? 'bg-amber-50/60' : ''
-      }`}
+      } ${indent ? 'pl-7' : ''}`}
     >
       {/* Status icon */}
       <div className="flex items-center justify-center">
@@ -153,11 +156,13 @@ function PhaseHeaderRow({
   isExpanded,
   onToggle,
   comparisonSource,
+  isSubphase,
 }: {
   phase: PhaseGroupData
   isExpanded: boolean
   onToggle: () => void
   comparisonSource: 'surgeon' | 'facility'
+  isSubphase?: boolean
 }) {
   const colorConfig = resolveColorKey(phase.colorKey)
   const activeMedian = phase.medianMinutes
@@ -167,6 +172,44 @@ function PhaseHeaderRow({
   const severity = calculateDeltaSeverity(phase.durationMinutes, activeMedian)
   const activeN = comparisonSource === 'surgeon' ? phase.surgeonN : phase.facilityN
   const isLowN = comparisonSource === 'facility' && activeN < N_COUNT_THRESHOLD
+
+  if (isSubphase) {
+    // Subphase: indented with colored left accent, lighter background
+    return (
+      <div
+        className={`grid grid-cols-[28px_1fr_72px_68px_72px_80px] items-center pl-6 pr-3 py-2 border-b border-slate-100 ${colorConfig.headerBg}`}
+      >
+        {/* Colored accent dot */}
+        <div className="flex items-center justify-center">
+          <span className={`w-2 h-2 rounded-full ${colorConfig.accentBg} ring-2 ring-white`} />
+        </div>
+        <div className="min-w-0 flex items-center gap-1">
+          <span className={`text-[11px] font-semibold ${colorConfig.accentText}`}>
+            {phase.phaseDisplayName}
+          </span>
+          {activeN > 0 && (
+            <span className={`text-[9px] ${isLowN ? 'text-slate-300' : 'text-slate-400'}`}>
+              (n={activeN})
+            </span>
+          )}
+        </div>
+        <span />
+        <span className="text-[11px] font-semibold text-center text-slate-600">
+          {phase.durationMinutes != null ? formatMinutes(phase.durationMinutes) : '—'}
+        </span>
+        <span className={`text-[11px] font-medium text-center ${isLowN ? 'text-slate-300' : 'text-slate-400'}`}>
+          {activeMedian != null ? formatMinutes(activeMedian) : '—'}
+        </span>
+        <div className="flex justify-end">
+          {delta != null && severity && !isLowN ? (
+            <DeltaBadge delta={delta} format="time" invert severity={severity} />
+          ) : (
+            <span className="text-xs text-slate-400">—</span>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <button
@@ -231,6 +274,117 @@ function PhaseHeaderRow({
 }
 
 // ============================================
+// EXPANDED PHASE CONTENT — interleaves subphase sections with parent milestones
+// ============================================
+
+function PhaseContent({
+  phase,
+  children,
+  missingFlagMap,
+  lastMilestoneIds,
+  medianKey,
+  deltaKey,
+  comparisonSource,
+}: {
+  phase: PhaseGroupData
+  children: PhaseGroupData[]
+  missingFlagMap: Map<string, boolean>
+  lastMilestoneIds: Set<string>
+  medianKey: 'surgeon_median_minutes' | 'facility_median_minutes'
+  deltaKey: 'delta_from_surgeon' | 'delta_from_facility'
+  comparisonSource: 'surgeon' | 'facility'
+}) {
+  const phaseIsLowN = comparisonSource === 'facility' && phase.facilityN < N_COUNT_THRESHOLD
+
+  // No subphases: render milestones flat
+  if (children.length === 0) {
+    return (
+      <>
+        {phase.intervals.map((iv) => (
+          <MilestoneRow
+            key={iv.facility_milestone_id}
+            iv={iv}
+            isLast={lastMilestoneIds.has(iv.facility_milestone_id)}
+            isMissing={missingFlagMap.get(iv.facility_milestone_id) ?? false}
+            medianKey={medianKey}
+            deltaKey={deltaKey}
+            isLowN={phaseIsLowN}
+          />
+        ))}
+      </>
+    )
+  }
+
+  // Merge parent milestones + subphase groups into display_order sequence.
+  // Subphase milestones are assigned to the subphase (not parent), so parent.intervals
+  // only contains milestones NOT in any subphase. We interleave by display_order.
+  type Segment =
+    | { type: 'milestone'; iv: MilestoneInterval; order: number }
+    | { type: 'subphase'; child: PhaseGroupData; order: number }
+
+  const segments: Segment[] = []
+
+  // Add parent milestones
+  for (const iv of phase.intervals) {
+    segments.push({ type: 'milestone', iv, order: iv.display_order })
+  }
+
+  // Add subphase groups at their start_milestone display_order position
+  const sortedChildren = [...children].sort((a, b) => a.displayOrder - b.displayOrder)
+  for (const child of sortedChildren) {
+    const firstOrder = child.intervals[0]?.display_order ?? child.displayOrder
+    segments.push({ type: 'subphase', child, order: firstOrder })
+  }
+
+  // Sort by display_order so everything renders in temporal sequence
+  segments.sort((a, b) => a.order - b.order)
+
+  return (
+    <>
+      {segments.map((seg) => {
+        if (seg.type === 'subphase') {
+          const childIsLowN = comparisonSource === 'facility' && seg.child.facilityN < N_COUNT_THRESHOLD
+          return (
+            <div key={`sub-${seg.child.phaseId}`}>
+              <PhaseHeaderRow
+                phase={seg.child}
+                isExpanded={false}
+                onToggle={() => {}}
+                comparisonSource={comparisonSource}
+                isSubphase
+              />
+              {seg.child.intervals.map((iv) => (
+                <MilestoneRow
+                  key={iv.facility_milestone_id}
+                  iv={iv}
+                  isLast={lastMilestoneIds.has(iv.facility_milestone_id)}
+                  isMissing={missingFlagMap.get(iv.facility_milestone_id) ?? false}
+                  medianKey={medianKey}
+                  deltaKey={deltaKey}
+                  isLowN={childIsLowN}
+                  indent
+                />
+              ))}
+            </div>
+          )
+        }
+        return (
+          <MilestoneRow
+            key={seg.iv.facility_milestone_id}
+            iv={seg.iv}
+            isLast={lastMilestoneIds.has(seg.iv.facility_milestone_id)}
+            isMissing={missingFlagMap.get(seg.iv.facility_milestone_id) ?? false}
+            medianKey={medianKey}
+            deltaKey={deltaKey}
+            isLowN={phaseIsLowN}
+          />
+        )
+      })}
+    </>
+  )
+}
+
+// ============================================
 // MAIN TABLE COMPONENT
 // ============================================
 
@@ -249,10 +403,25 @@ export function MilestoneTable({
   // Low n-count detection for milestone-level medians
   const isLowN = comparisonSource === 'facility' && facilityCaseCount < N_COUNT_THRESHOLD
 
-  // Track expanded/collapsed phase groups (default: all expanded)
-  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(() =>
-    new Set(phaseGroups?.map((pg) => pg.phaseId) ?? []),
-  )
+  // Build parent → children map
+  const { parentPhases, childrenMap } = useMemo(() => {
+    if (!phaseGroups || phaseGroups.length === 0) {
+      return { parentPhases: [] as PhaseGroupData[], childrenMap: new Map<string, PhaseGroupData[]>() }
+    }
+    const parents = phaseGroups.filter((pg) => !pg.parentPhaseId)
+    const cMap = new Map<string, PhaseGroupData[]>()
+    for (const pg of phaseGroups) {
+      if (pg.parentPhaseId) {
+        const existing = cMap.get(pg.parentPhaseId) ?? []
+        existing.push(pg)
+        cMap.set(pg.parentPhaseId, existing)
+      }
+    }
+    return { parentPhases: parents, childrenMap: cMap }
+  }, [phaseGroups])
+
+  // Track expanded/collapsed phases (default: all collapsed)
+  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(() => new Set())
 
   const togglePhase = useCallback((phaseId: string) => {
     setExpandedPhases((prev) => {
@@ -284,23 +453,11 @@ export function MilestoneTable({
     return set
   }, [intervals])
 
-  // Compute footer totals
-  const footerTotals = useMemo(() => {
-    const totalInterval = intervals.reduce(
-      (sum, iv) => sum + (iv.interval_minutes ?? 0),
-      0,
-    )
-    const totalMedian = intervals
-      .filter((iv) => iv[medianKey] != null)
-      .reduce((sum, iv) => sum + (iv[medianKey] ?? 0), 0)
-    const totalDelta = totalCaseMinutes != null && totalMedian > 0
-      ? totalCaseMinutes - totalMedian
-      : null
+  // Footer shows total case duration only — no summed median or delta.
+  // Phase-level and interval-level medians are statistically independent
+  // (median of sums ≠ sum of medians), so summing them would be misleading.
 
-    return { totalInterval, totalMedian: totalMedian > 0 ? totalMedian : null, totalDelta }
-  }, [intervals, medianKey, totalCaseMinutes])
-
-  const hasPhaseGroups = phaseGroups && phaseGroups.length > 0
+  const hasPhaseGroups = parentPhases.length > 0
 
   return (
     <div className="border border-slate-200 rounded-lg overflow-hidden">
@@ -324,12 +481,12 @@ export function MilestoneTable({
         </span>
       </div>
 
-      {/* Phase-grouped data rows */}
+      {/* Phase-grouped data rows — parent phases only at top level */}
       {hasPhaseGroups ? (
         <>
-          {phaseGroups.map((phase) => {
+          {parentPhases.map((phase) => {
             const isExpanded = expandedPhases.has(phase.phaseId)
-            const phaseIsLowN = comparisonSource === 'facility' && phase.facilityN < N_COUNT_THRESHOLD
+            const children = childrenMap.get(phase.phaseId) ?? []
 
             return (
               <div key={phase.phaseId}>
@@ -339,17 +496,17 @@ export function MilestoneTable({
                   onToggle={() => togglePhase(phase.phaseId)}
                   comparisonSource={comparisonSource}
                 />
-                {isExpanded && phase.intervals.map((iv) => (
-                  <MilestoneRow
-                    key={iv.facility_milestone_id}
-                    iv={iv}
-                    isLast={lastMilestoneIds.has(iv.facility_milestone_id)}
-                    isMissing={missingFlagMap.get(iv.facility_milestone_id) ?? false}
+                {isExpanded && (
+                  <PhaseContent
+                    phase={phase}
+                    children={children}
+                    missingFlagMap={missingFlagMap}
+                    lastMilestoneIds={lastMilestoneIds}
                     medianKey={medianKey}
                     deltaKey={deltaKey}
-                    isLowN={phaseIsLowN}
+                    comparisonSource={comparisonSource}
                   />
-                ))}
+                )}
               </div>
             )
           })}
@@ -369,7 +526,7 @@ export function MilestoneTable({
         ))
       )}
 
-      {/* Summary footer row */}
+      {/* Summary footer row — duration only, no summed median/delta */}
       {totalCaseMinutes != null && (
         <div className="grid grid-cols-[28px_1fr_72px_68px_72px_80px] items-center px-3 py-2.5 bg-slate-50 border-t-2 border-slate-200">
           <span />
@@ -380,22 +537,8 @@ export function MilestoneTable({
           <span className="text-xs font-semibold text-center text-slate-900">
             {formatMinutes(totalCaseMinutes)}
           </span>
-          <span className="text-xs font-semibold text-center text-slate-600">
-            {footerTotals.totalMedian != null
-              ? formatMinutes(footerTotals.totalMedian)
-              : '—'}
-          </span>
-          <div className="flex justify-end">
-            {footerTotals.totalDelta != null ? (
-              <DeltaBadge
-                delta={footerTotals.totalDelta}
-                format="time"
-                invert
-              />
-            ) : (
-              <span className="text-xs text-slate-400">—</span>
-            )}
-          </div>
+          <span />
+          <span />
         </div>
       )}
     </div>

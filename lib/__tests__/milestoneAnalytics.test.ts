@@ -584,18 +584,20 @@ describe('assignMilestonesToPhases', () => {
 
     const { grouped, ungrouped } = assignMilestonesToPhases(intervals, phases)
 
-    // Pre-Op: display_order 1 and 2 (patient_in, anes_start) — range [1, 3)
+    // Pre-Op: display_order 1, 2 (patient_in, anes_start) — range [1, 3)
+    // incision (order 3) is the shared boundary: start of Surgical, so it goes there
     const preOp = grouped.get('phase-1') ?? []
     expect(preOp).toHaveLength(2)
     expect(preOp[0].milestone_name).toBe('patient_in')
     expect(preOp[1].milestone_name).toBe('anes_start')
 
     // Surgical: display_order 3 (incision) — range [3, 4)
+    // closing (order 4) is shared boundary: start of Post-Op, so it goes there
     const surgical = grouped.get('phase-2') ?? []
     expect(surgical).toHaveLength(1)
     expect(surgical[0].milestone_name).toBe('incision')
 
-    // Post-Op: display_order 4 and 5 (closing, patient_out) — range [4, 5] (last phase)
+    // Post-Op: display_order 4, 5 (closing, patient_out) — range [4, 5] (last phase, inclusive)
     const postOp = grouped.get('phase-3') ?? []
     expect(postOp).toHaveLength(2)
     expect(postOp[0].milestone_name).toBe('closing')
@@ -640,7 +642,7 @@ describe('buildPhaseGroups', () => {
     expect(groups[0].medianMinutes).toBe(14) // surgeon median
     expect(groups[0].surgeonN).toBe(20)
     expect(groups[0].facilityN).toBe(100)
-    expect(groups[0].intervals).toHaveLength(2) // patient_in, anes_start
+    expect(groups[0].intervals).toHaveLength(2) // patient_in, anes_start (incision is start of Surgical)
 
     // Surgical phase
     expect(groups[1].phaseDisplayName).toBe('Surgical')
