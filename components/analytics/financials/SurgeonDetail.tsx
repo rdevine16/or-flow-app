@@ -508,7 +508,7 @@ export default function SurgeonDetail({
     fetchPhaseData(caseIds)
   }, [cases, fetchPhaseData])
 
-  // Compute phase durations per case from phase_definitions + case milestones
+  // Compute phase durations per case from template-resolved phases + case milestones
   const casePhaseDurations = useMemo(() => {
     if (phaseDefinitions.length === 0) return new Map<string, CasePhaseDuration[]>()
 

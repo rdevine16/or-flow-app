@@ -2,8 +2,8 @@
  * Tests for the dynamic phase wiring on the Surgeon Day Overview page.
  *
  * Phase 3 replaced hardcoded 4-phase Case Breakdown with dynamic phases
- * from phase_definitions. These tests verify:
- * 1. The data flow: phase_definitions + case_milestones → CasePhaseBarPhase[]
+ * from template-resolved phase boundaries. These tests verify:
+ * 1. The data flow: phase boundaries + case_milestones → CasePhaseBarPhase[]
  * 2. Legend generation from phase tree
  * 3. Edge cases: missing milestones, subphases, empty definitions
  */

@@ -186,7 +186,7 @@ export function buildPhaseTree<T extends PhaseDefLike>(phases: T[]): PhaseTreeNo
 }
 
 /**
- * Convert a color_key from phase_definitions to a PhaseConfig-compatible object.
+ * Convert a color_key to a PhaseConfig-compatible object.
  * Used by analytics components that need PhaseConfig-style styling from DB-stored color keys.
  */
 export function phaseConfigFromColorKey(

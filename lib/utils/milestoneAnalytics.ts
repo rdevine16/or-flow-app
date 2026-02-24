@@ -211,11 +211,11 @@ export function calculateIntervals(
 }
 
 // ============================================
-// TIME ALLOCATION (phase_definitions-based)
+// TIME ALLOCATION (template phase boundary-based)
 // ============================================
 
 /**
- * Calculate time allocation from phase_definitions boundary milestones.
+ * Calculate time allocation from template-resolved phase boundary milestones.
  * Each phase duration = end_milestone.recorded_at - start_milestone.recorded_at.
  * Replaces the old phase_group bucketing approach.
  */
@@ -261,7 +261,7 @@ export function calculatePhaseTimeAllocation(
 
 /**
  * Legacy: Bucket milestone intervals into phase groups.
- * @deprecated Use calculatePhaseTimeAllocation with phase_definitions instead.
+ * @deprecated Use calculatePhaseTimeAllocation with template-based phase resolution instead.
  */
 export function calculateTimeAllocation(
   intervals: MilestoneInterval[],
@@ -312,7 +312,7 @@ export function calculateTimeAllocation(
 // ============================================
 
 /**
- * Assign milestone intervals to phases based on phase_definitions boundary display_orders.
+ * Assign milestone intervals to phases based on template-resolved boundary display_orders.
  * A milestone belongs to a phase if its display_order >= start_milestone.display_order
  * and < the next phase's start_milestone.display_order (or <= end for the last phase).
  */
@@ -352,7 +352,7 @@ export function assignMilestonesToPhases(
 }
 
 /**
- * Build PhaseGroupData[] by combining phase_definitions, case milestones,
+ * Build PhaseGroupData[] by combining phase boundary definitions, case milestones,
  * milestone intervals, and phase medians.
  */
 export function buildPhaseGroups(

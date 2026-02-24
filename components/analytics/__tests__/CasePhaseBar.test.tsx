@@ -13,7 +13,7 @@
  * 7. Multiple subphases within a single parent
  * 8. PhaseLegend — basic rendering with parent items
  * 9. PhaseLegend — subphase items render with nesting indicators
- * 10. Integration — realistic phase_definitions data through CasePhaseBar
+ * 10. Integration — realistic phase data through CasePhaseBar
  * 11. Workflow — CasePhaseBar click handler fires with correct caseId
  */
 
@@ -358,7 +358,7 @@ describe('PhaseLegend', () => {
     expect(subLabel.className).toContain('text-slate-400')
   })
 
-  // Integration: realistic dynamic legend from phase_definitions
+  // Integration: realistic dynamic legend from template-resolved phases
   it('renders a full legend with parents and nested subphases', () => {
     const items: PhaseLegendItem[] = [
       { label: 'Pre-Op', color: '#3B82F6' },

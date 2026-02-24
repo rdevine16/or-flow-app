@@ -213,7 +213,7 @@ export function useMilestoneComparison({
 
     const intervals = calculateIntervals(caseMilestones, medians, comparisonSource)
 
-    // Use phase_definitions-based time allocation when available, fall back to legacy
+    // Use template-based phase time allocation when available, fall back to legacy
     const timeAllocation = phaseDefinitions.length > 0
       ? calculatePhaseTimeAllocation(phaseDefinitions, caseMilestones)
       : calculateTimeAllocation(intervals)
