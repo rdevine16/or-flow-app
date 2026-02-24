@@ -19,7 +19,6 @@ import {
   Flag,
   FlaskConical,
   KeyRound,
-  Layers,
   LayoutGrid,
   Puzzle,
   Tag,
@@ -155,15 +154,6 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/milestones',
         icon: Clock,
         description: 'Tracking points during cases',
-      },
-      {
-        id: 'phases',
-        label: 'Phases',
-        href: '/settings/phases',
-        icon: Layers,
-        description: 'Surgical phase boundaries for analytics',
-        badge: 'new',
-        permission: 'settings.manage',
       },
       {
         id: 'surgeon-preferences',

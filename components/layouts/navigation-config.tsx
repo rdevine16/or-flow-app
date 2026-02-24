@@ -2,7 +2,7 @@
 // Centralized navigation configuration for DashboardLayout
 
 import { ReactNode } from 'react'
-import { AlertTriangle, Ban, BarChart3, Bell, BookOpen, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, CreditCard, Database, FileText, Flag, FlaskConical, Home, KeyRound, Layers, LayoutGrid, Package, Settings, ShieldCheck, User, Wrench } from 'lucide-react'
+import { AlertTriangle, Ban, BarChart3, Bell, BookOpen, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, CreditCard, Database, FileText, Flag, FlaskConical, Home, KeyRound, LayoutGrid, Package, Settings, ShieldCheck, User, Wrench } from 'lucide-react'
 
 // ============================================
 // Types
@@ -70,7 +70,6 @@ export const navIcons = {
   security: <ShieldCheck className={iconClass} />,
   permissionTemplates: <KeyRound className={iconClass} />,
   flags: <Flag className={iconClass} />,
-  phases: <Layers className={iconClass} />,
   payers: <CreditCard className={iconClass} />,
   notifications: <Bell className={iconClass} />,
   demoGenerator: <Database className={iconClass} />,
@@ -137,12 +136,6 @@ export const adminNavGroups: NavGroup[] = [
         name: 'Milestones',
         href: '/admin/settings/milestones',
         icon: navIcons.milestones,
-        allowedRoles: ['global_admin'],
-      },
-      {
-        name: 'Phases',
-        href: '/admin/settings/phases',
-        icon: navIcons.phases,
         allowedRoles: ['global_admin'],
       },
       {

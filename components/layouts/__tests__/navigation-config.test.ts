@@ -16,11 +16,10 @@ describe('adminNavGroups', () => {
     expect(configGroup!.label).toBe('Configuration')
   })
 
-  it('configuration group contains all 5 new admin settings pages', () => {
+  it('configuration group contains admin settings pages', () => {
     const configGroup = adminNavGroups.find(g => g.id === 'configuration')!
     const hrefs = configGroup.items.map(i => i.href)
 
-    expect(hrefs).toContain('/admin/settings/phases')
     expect(hrefs).toContain('/admin/settings/flag-rules')
     expect(hrefs).toContain('/admin/settings/analytics')
     expect(hrefs).toContain('/admin/settings/payers')
@@ -66,8 +65,6 @@ describe('adminNavGroups', () => {
     const notifications = configGroup.items.find(i => i.href === '/admin/settings/notifications')
     expect(notifications!.name).toBe('Notifications')
 
-    const phases = configGroup.items.find(i => i.href === '/admin/settings/phases')
-    expect(phases!.name).toBe('Phases')
   })
 })
 
