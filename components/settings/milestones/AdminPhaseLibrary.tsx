@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/Button'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { COLOR_KEY_PALETTE, resolveColorKey } from '@/lib/milestone-phase-config'
-import { Plus, Pencil, Archive, CornerDownRight, Info } from 'lucide-react'
+import { Plus, Pencil, Archive, Info } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -92,18 +92,6 @@ export function AdminPhaseLibrary() {
     )
   }, [activePhases, search])
 
-  // Parent phase lookup (for sub-phase indicator)
-  const phaseById = useMemo(() => {
-    const map = new Map<string, PhaseTemplate>()
-    for (const p of activePhases) map.set(p.id, p)
-    return map
-  }, [activePhases])
-
-  // Top-level phases (for parent dropdown in form)
-  const topLevelPhases = useMemo(
-    () => activePhases.filter(p => !p.parent_phase_template_id),
-    [activePhases]
-  )
 
   const closeConfirmModal = () => {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -242,10 +230,9 @@ export function AdminPhaseLibrary() {
         <>
           <div className="border border-slate-200 rounded-lg overflow-hidden">
             {/* Table header */}
-            <div className="grid grid-cols-[1fr_100px_120px_80px] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-medium text-slate-500 uppercase tracking-wider">
+            <div className="grid grid-cols-[1fr_100px_80px] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-medium text-slate-500 uppercase tracking-wider">
               <span>Phase</span>
               <span>Color</span>
-              <span>Parent</span>
               <span className="text-right">Actions</span>
             </div>
 
@@ -257,12 +244,11 @@ export function AdminPhaseLibrary() {
             ) : (
               filteredPhases.map(phase => {
                 const colorConfig = resolveColorKey(phase.color_key)
-                const parentPhase = phase.parent_phase_template_id ? phaseById.get(phase.parent_phase_template_id) : null
 
                 return (
                   <div
                     key={phase.id}
-                    className="grid grid-cols-[1fr_100px_120px_80px] gap-2 px-4 py-2.5 border-b border-slate-100 last:border-b-0 items-center"
+                    className="grid grid-cols-[1fr_100px_80px] gap-2 px-4 py-2.5 border-b border-slate-100 last:border-b-0 items-center"
                   >
                     {/* Name with color swatch */}
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -276,18 +262,6 @@ export function AdminPhaseLibrary() {
                       <span className={`text-xs font-medium ${colorConfig.accentText}`}>
                         {colorConfig.label}
                       </span>
-                    </div>
-
-                    {/* Parent indicator */}
-                    <div>
-                      {parentPhase ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                          <CornerDownRight className="w-3 h-3" />
-                          <span className="truncate max-w-[80px]">{parentPhase.display_name}</span>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-300">&mdash;</span>
-                      )}
                     </div>
 
                     {/* Actions */}
@@ -364,7 +338,6 @@ export function AdminPhaseLibrary() {
         onClose={() => { setShowFormModal(false); setEditingPhase(null) }}
         mode={formMode}
         phase={editingPhase}
-        parentOptions={topLevelPhases}
         saving={saving}
         onSave={async (data) => {
           setSaving(true)
@@ -381,7 +354,6 @@ export function AdminPhaseLibrary() {
                   display_name: data.displayName,
                   color_key: data.colorKey,
                   display_order: maxOrder + 1,
-                  parent_phase_template_id: data.parentPhaseTemplateId || null,
                   is_active: true,
                 })
                 .select()
@@ -397,7 +369,6 @@ export function AdminPhaseLibrary() {
                 .update({
                   display_name: data.displayName,
                   color_key: data.colorKey,
-                  parent_phase_template_id: data.parentPhaseTemplateId || null,
                 })
                 .eq('id', editingPhase.id)
 
@@ -405,7 +376,7 @@ export function AdminPhaseLibrary() {
 
               setPhases((phases || []).map(p =>
                 p.id === editingPhase.id
-                  ? { ...p, display_name: data.displayName, color_key: data.colorKey, parent_phase_template_id: data.parentPhaseTemplateId || null }
+                  ? { ...p, display_name: data.displayName, color_key: data.colorKey }
                   : p
               ))
               showToast({ type: 'success', title: `"${data.displayName}" updated` })
@@ -441,7 +412,6 @@ interface AdminPhaseFormData {
   name: string
   displayName: string
   colorKey: string
-  parentPhaseTemplateId: string | null
 }
 
 interface AdminPhaseFormModalProps {
@@ -449,7 +419,6 @@ interface AdminPhaseFormModalProps {
   onClose: () => void
   mode: 'add' | 'edit'
   phase: PhaseTemplate | null
-  parentOptions: PhaseTemplate[]
   saving: boolean
   onSave: (data: AdminPhaseFormData) => void
 }
@@ -462,7 +431,7 @@ function generatePhaseName(displayName: string): string {
     .substring(0, 50)
 }
 
-function AdminPhaseFormModal({ open, onClose, mode, phase, parentOptions, saving, onSave }: AdminPhaseFormModalProps) {
+function AdminPhaseFormModal({ open, onClose, mode, phase, saving, onSave }: AdminPhaseFormModalProps) {
   const formKey = `${mode}-${phase?.id ?? 'new'}-${open}`
 
   return (
@@ -476,7 +445,6 @@ function AdminPhaseFormModal({ open, onClose, mode, phase, parentOptions, saving
           key={formKey}
           mode={mode}
           phase={phase}
-          parentOptions={parentOptions}
           saving={saving}
           onSave={onSave}
           onClose={onClose}
@@ -489,14 +457,12 @@ function AdminPhaseFormModal({ open, onClose, mode, phase, parentOptions, saving
 function AdminPhaseFormContent({
   mode,
   phase,
-  parentOptions,
   saving,
   onSave,
   onClose,
 }: Omit<AdminPhaseFormModalProps, 'open'>) {
   const [displayName, setDisplayName] = useState(phase?.display_name ?? '')
   const [colorKey, setColorKey] = useState(phase?.color_key ?? 'blue')
-  const [parentPhaseTemplateId, setParentPhaseTemplateId] = useState(phase?.parent_phase_template_id ?? '')
 
   const handleSubmit = () => {
     if (!displayName.trim()) return
@@ -504,12 +470,8 @@ function AdminPhaseFormContent({
       name: mode === 'add' ? generatePhaseName(displayName) : (phase?.name ?? generatePhaseName(displayName)),
       displayName: displayName.trim(),
       colorKey,
-      parentPhaseTemplateId: parentPhaseTemplateId || null,
     })
   }
-
-  // Filter out self and own children from parent options
-  const availableParents = parentOptions.filter(p => p.id !== phase?.id)
 
   return (
     <>
@@ -556,23 +518,6 @@ function AdminPhaseFormContent({
         <p className="text-xs text-slate-400 mt-1.5">
           Selected: {COLOR_KEY_PALETTE.find(c => c.key === colorKey)?.label ?? 'None'}
         </p>
-      </div>
-
-      {/* Parent Phase (for sub-phases) */}
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Parent Phase <span className="text-slate-400 font-normal">(optional — makes this a sub-phase)</span>
-        </label>
-        <select
-          value={parentPhaseTemplateId}
-          onChange={(e) => setParentPhaseTemplateId(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-          <option value="">None (top-level phase)</option>
-          {availableParents.map(p => (
-            <option key={p.id} value={p.id}>{p.display_name}</option>
-          ))}
-        </select>
       </div>
 
       {/* Footer */}

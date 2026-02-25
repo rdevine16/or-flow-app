@@ -1,23 +1,15 @@
 // components/settings/milestones/SubPhaseIndicator.tsx
 // Renders a sub-phase section inline within the parent phase block.
-// Supports block-level sorting (movable within parent) via sortableId prop,
-// and internal milestone reordering via nested SortableContext.
+// Supports block-level sorting (movable within parent) via sortableId prop.
+// Sub-phase milestones participate in the outer DndContext for cross-phase drag.
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
 import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
   useDroppable,
-  type DragEndEvent,
 } from '@dnd-kit/core'
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable'
@@ -35,7 +27,6 @@ interface SubPhaseIndicatorProps {
   onRemoveMilestone?: (itemId: string) => void
   isDraggingMilestone?: boolean
   sortableId?: string
-  onReorderMilestones?: (phaseId: string, activeId: string, overId: string) => void
   pairIssues?: Set<string>
   requiredMilestoneItemIds?: Set<string>
 }
@@ -46,7 +37,6 @@ export function SubPhaseIndicator({
   onRemoveMilestone,
   isDraggingMilestone,
   sortableId,
-  onReorderMilestones,
   pairIssues,
   requiredMilestoneItemIds,
 }: SubPhaseIndicatorProps) {
@@ -82,22 +72,10 @@ export function SubPhaseIndicator({
     zIndex: isBlockDragging ? 50 : undefined,
   }
 
-  // Inner DndContext for sub-phase milestone reordering
-  const innerSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  )
-
   const milestoneIds = useMemo(
     () => milestones.map(m => m.templateItem.id),
     [milestones],
   )
-
-  const handleInnerDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id || !onReorderMilestones) return
-    onReorderMilestones(phase.id, String(active.id), String(over.id))
-  }, [phase.id, onReorderMilestones])
 
   return (
     <div
@@ -174,33 +152,27 @@ export function SubPhaseIndicator({
         </div>
       )}
 
-      {/* Milestone rows with inner DndContext for reordering */}
+      {/* Milestone rows — sortable within outer DndContext */}
       {milestones.length > 0 && (
-        <DndContext
-          sensors={innerSensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleInnerDragEnd}
+        <SortableContext
+          items={milestoneIds}
+          strategy={verticalListSortingStrategy}
         >
-          <SortableContext
-            items={milestoneIds}
-            strategy={verticalListSortingStrategy}
-          >
-            {milestones.map(({ milestone, templateItem }, idx) => (
-              <SortableSubPhaseMilestone
-                key={templateItem.id}
-                milestone={milestone}
-                templateItem={templateItem}
-                idx={idx}
-                total={milestones.length}
-                hex={hex}
-                phaseName={phase.display_name}
-                onRemove={onRemoveMilestone}
-                pairIssues={pairIssues}
-                isRequired={requiredMilestoneItemIds?.has(templateItem.id)}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
+          {milestones.map(({ milestone, templateItem }, idx) => (
+            <SortableSubPhaseMilestone
+              key={templateItem.id}
+              milestone={milestone}
+              templateItem={templateItem}
+              idx={idx}
+              total={milestones.length}
+              hex={hex}
+              phaseName={phase.display_name}
+              onRemove={onRemoveMilestone}
+              pairIssues={pairIssues}
+              isRequired={requiredMilestoneItemIds?.has(templateItem.id)}
+            />
+          ))}
+        </SortableContext>
       )}
 
       {/* Bottom edge */}

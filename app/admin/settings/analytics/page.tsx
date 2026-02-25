@@ -29,10 +29,26 @@ interface AnalyticsSettingsTemplate {
   // Surgical Turnovers
   turnover_target_same_surgeon: number
   turnover_target_flip_room: number
+  turnover_threshold_minutes: number
+  turnover_compliance_target_percent: number
   // OR Utilization
   utilization_target_percent: number
   // Cancellations
   cancellation_target_percent: number
+  // Surgeon Idle Time
+  idle_combined_target_minutes: number
+  idle_flip_target_minutes: number
+  idle_same_room_target_minutes: number
+  // Tardiness & Non-Operative Time
+  tardiness_target_minutes: number
+  non_op_warn_minutes: number
+  non_op_bad_minutes: number
+  // Dashboard Alerts
+  behind_schedule_grace_minutes: number
+  // Operational
+  operating_days_per_year: number
+  // Case Financials
+  financial_benchmark_case_count: number
   // ORbit Score v2
   start_time_milestone: 'patient_in' | 'incision'
   start_time_grace_minutes: number
@@ -50,8 +66,19 @@ const SEED_DEFAULTS: Omit<AnalyticsSettingsTemplate, 'id'> = {
   fcots_target_percent: 85,
   turnover_target_same_surgeon: 30,
   turnover_target_flip_room: 45,
+  turnover_threshold_minutes: 30,
+  turnover_compliance_target_percent: 80,
   utilization_target_percent: 80,
   cancellation_target_percent: 5,
+  idle_combined_target_minutes: 10,
+  idle_flip_target_minutes: 5,
+  idle_same_room_target_minutes: 10,
+  tardiness_target_minutes: 45,
+  non_op_warn_minutes: 20,
+  non_op_bad_minutes: 30,
+  behind_schedule_grace_minutes: 15,
+  operating_days_per_year: 250,
+  financial_benchmark_case_count: 10,
   start_time_milestone: 'patient_in',
   start_time_grace_minutes: 3,
   start_time_floor_minutes: 20,
@@ -146,13 +173,34 @@ export default function AdminAnalyticsSettingsPage() {
 
   // Form state (strings for controlled inputs)
   const [form, setForm] = useState({
+    // FCOTS
     fcots_milestone: 'patient_in' as 'patient_in' | 'incision',
     fcots_grace_minutes: '2',
     fcots_target_percent: '85',
+    // Surgical Turnovers
     turnover_target_same_surgeon: '30',
     turnover_target_flip_room: '45',
+    turnover_threshold_minutes: '30',
+    turnover_compliance_target_percent: '80',
+    // OR Utilization
     utilization_target_percent: '80',
+    // Cancellations
     cancellation_target_percent: '5',
+    // Surgeon Idle Time
+    idle_combined_target_minutes: '10',
+    idle_flip_target_minutes: '5',
+    idle_same_room_target_minutes: '10',
+    // Tardiness & Non-Operative Time
+    tardiness_target_minutes: '45',
+    non_op_warn_minutes: '20',
+    non_op_bad_minutes: '30',
+    // Dashboard Alerts
+    behind_schedule_grace_minutes: '15',
+    // Operational
+    operating_days_per_year: '250',
+    // Case Financials
+    financial_benchmark_case_count: '10',
+    // ORbit Score v2
     start_time_milestone: 'patient_in' as 'patient_in' | 'incision',
     start_time_grace_minutes: '3',
     start_time_floor_minutes: '20',
@@ -166,13 +214,34 @@ export default function AdminAnalyticsSettingsPage() {
   const syncFormFromTemplate = useCallback(() => {
     if (!template) return
     setForm({
+      // FCOTS
       fcots_milestone: template.fcots_milestone || 'patient_in',
       fcots_grace_minutes: String(template.fcots_grace_minutes ?? 2),
       fcots_target_percent: String(template.fcots_target_percent ?? 85),
+      // Surgical Turnovers
       turnover_target_same_surgeon: String(template.turnover_target_same_surgeon ?? 30),
       turnover_target_flip_room: String(template.turnover_target_flip_room ?? 45),
+      turnover_threshold_minutes: String(template.turnover_threshold_minutes ?? 30),
+      turnover_compliance_target_percent: String(template.turnover_compliance_target_percent ?? 80),
+      // OR Utilization
       utilization_target_percent: String(template.utilization_target_percent ?? 80),
+      // Cancellations
       cancellation_target_percent: String(template.cancellation_target_percent ?? 5),
+      // Surgeon Idle Time
+      idle_combined_target_minutes: String(template.idle_combined_target_minutes ?? 10),
+      idle_flip_target_minutes: String(template.idle_flip_target_minutes ?? 5),
+      idle_same_room_target_minutes: String(template.idle_same_room_target_minutes ?? 10),
+      // Tardiness & Non-Operative Time
+      tardiness_target_minutes: String(template.tardiness_target_minutes ?? 45),
+      non_op_warn_minutes: String(template.non_op_warn_minutes ?? 20),
+      non_op_bad_minutes: String(template.non_op_bad_minutes ?? 30),
+      // Dashboard Alerts
+      behind_schedule_grace_minutes: String(template.behind_schedule_grace_minutes ?? 15),
+      // Operational
+      operating_days_per_year: String(template.operating_days_per_year ?? 250),
+      // Case Financials
+      financial_benchmark_case_count: String(template.financial_benchmark_case_count ?? 10),
+      // ORbit Score v2
       start_time_milestone: template.start_time_milestone || 'patient_in',
       start_time_grace_minutes: String(template.start_time_grace_minutes ?? 3),
       start_time_floor_minutes: String(template.start_time_floor_minutes ?? 20),
@@ -191,28 +260,28 @@ export default function AdminAnalyticsSettingsPage() {
   // Client-side validation matching DB CHECK constraints
   const validate = (): string | null => {
     const grace = parseFloat(form.fcots_grace_minutes)
-    if (grace < 0 || grace > 30) return 'FCOTS Grace Period must be 0–30 minutes'
+    if (grace < 0 || grace > 30) return 'FCOTS Grace Period must be 0-30 minutes'
 
     const target = parseFloat(form.fcots_target_percent)
-    if (target < 0 || target > 100) return 'FCOTS Target must be 0–100%'
+    if (target < 0 || target > 100) return 'FCOTS Target must be 0-100%'
 
     const stGrace = parseInt(form.start_time_grace_minutes)
-    if (stGrace < 0 || stGrace > 15) return 'Schedule Adherence Grace Period must be 0–15 minutes'
+    if (stGrace < 0 || stGrace > 15) return 'Schedule Adherence Grace Period must be 0-15 minutes'
 
     const stFloor = parseInt(form.start_time_floor_minutes)
-    if (stFloor < 5 || stFloor > 60) return 'Schedule Adherence Decay Floor must be 5–60 minutes'
+    if (stFloor < 5 || stFloor > 60) return 'Schedule Adherence Decay Floor must be 5-60 minutes'
 
     const wos = parseInt(form.waiting_on_surgeon_minutes)
-    if (wos < 0 || wos > 15) return 'Surgeon Expected Gap must be 0–15 minutes'
+    if (wos < 0 || wos > 15) return 'Surgeon Expected Gap must be 0-15 minutes'
 
     const wosFloor = parseInt(form.waiting_on_surgeon_floor_minutes)
-    if (wosFloor < 3 || wosFloor > 30) return 'Surgeon Decay Floor must be 3–30 minutes'
+    if (wosFloor < 3 || wosFloor > 30) return 'Surgeon Decay Floor must be 3-30 minutes'
 
     const minCases = parseInt(form.min_procedure_cases)
-    if (minCases < 1 || minCases > 10) return 'Min Cases per Procedure must be 1–10'
+    if (minCases < 1 || minCases > 10) return 'Min Cases per Procedure must be 1-10'
 
     const minThreshold = parseInt(form.min_case_threshold)
-    if (minThreshold < 1 || minThreshold > 100) return 'Min Cases for Scorecard must be 1–100'
+    if (minThreshold < 1 || minThreshold > 100) return 'Min Cases for Scorecard must be 1-100'
 
     return null
   }
@@ -227,13 +296,34 @@ export default function AdminAnalyticsSettingsPage() {
     setSaving(true)
 
     const payload = {
+      // FCOTS
       fcots_milestone: form.fcots_milestone,
       fcots_grace_minutes: parseFloat(form.fcots_grace_minutes) || 2,
       fcots_target_percent: parseFloat(form.fcots_target_percent) || 85,
+      // Surgical Turnovers
       turnover_target_same_surgeon: parseFloat(form.turnover_target_same_surgeon) || 30,
       turnover_target_flip_room: parseFloat(form.turnover_target_flip_room) || 45,
+      turnover_threshold_minutes: parseFloat(form.turnover_threshold_minutes) || 30,
+      turnover_compliance_target_percent: parseFloat(form.turnover_compliance_target_percent) || 80,
+      // OR Utilization
       utilization_target_percent: parseFloat(form.utilization_target_percent) || 80,
+      // Cancellations
       cancellation_target_percent: parseFloat(form.cancellation_target_percent) || 5,
+      // Surgeon Idle Time
+      idle_combined_target_minutes: parseFloat(form.idle_combined_target_minutes) || 10,
+      idle_flip_target_minutes: parseFloat(form.idle_flip_target_minutes) || 5,
+      idle_same_room_target_minutes: parseFloat(form.idle_same_room_target_minutes) || 10,
+      // Tardiness & Non-Operative Time
+      tardiness_target_minutes: parseFloat(form.tardiness_target_minutes) || 45,
+      non_op_warn_minutes: parseFloat(form.non_op_warn_minutes) || 20,
+      non_op_bad_minutes: parseFloat(form.non_op_bad_minutes) || 30,
+      // Dashboard Alerts
+      behind_schedule_grace_minutes: parseInt(form.behind_schedule_grace_minutes) || 15,
+      // Operational
+      operating_days_per_year: parseInt(form.operating_days_per_year) || 250,
+      // Case Financials
+      financial_benchmark_case_count: parseInt(form.financial_benchmark_case_count) || 10,
+      // ORbit Score v2
       start_time_milestone: form.start_time_milestone,
       start_time_grace_minutes: parseInt(form.start_time_grace_minutes) || 3,
       start_time_floor_minutes: parseInt(form.start_time_floor_minutes) || 20,
@@ -268,13 +358,34 @@ export default function AdminAnalyticsSettingsPage() {
 
   const handleReset = () => {
     setForm({
+      // FCOTS
       fcots_milestone: SEED_DEFAULTS.fcots_milestone,
       fcots_grace_minutes: String(SEED_DEFAULTS.fcots_grace_minutes),
       fcots_target_percent: String(SEED_DEFAULTS.fcots_target_percent),
+      // Surgical Turnovers
       turnover_target_same_surgeon: String(SEED_DEFAULTS.turnover_target_same_surgeon),
       turnover_target_flip_room: String(SEED_DEFAULTS.turnover_target_flip_room),
+      turnover_threshold_minutes: String(SEED_DEFAULTS.turnover_threshold_minutes),
+      turnover_compliance_target_percent: String(SEED_DEFAULTS.turnover_compliance_target_percent),
+      // OR Utilization
       utilization_target_percent: String(SEED_DEFAULTS.utilization_target_percent),
+      // Cancellations
       cancellation_target_percent: String(SEED_DEFAULTS.cancellation_target_percent),
+      // Surgeon Idle Time
+      idle_combined_target_minutes: String(SEED_DEFAULTS.idle_combined_target_minutes),
+      idle_flip_target_minutes: String(SEED_DEFAULTS.idle_flip_target_minutes),
+      idle_same_room_target_minutes: String(SEED_DEFAULTS.idle_same_room_target_minutes),
+      // Tardiness & Non-Operative Time
+      tardiness_target_minutes: String(SEED_DEFAULTS.tardiness_target_minutes),
+      non_op_warn_minutes: String(SEED_DEFAULTS.non_op_warn_minutes),
+      non_op_bad_minutes: String(SEED_DEFAULTS.non_op_bad_minutes),
+      // Dashboard Alerts
+      behind_schedule_grace_minutes: String(SEED_DEFAULTS.behind_schedule_grace_minutes),
+      // Operational
+      operating_days_per_year: String(SEED_DEFAULTS.operating_days_per_year),
+      // Case Financials
+      financial_benchmark_case_count: String(SEED_DEFAULTS.financial_benchmark_case_count),
+      // ORbit Score v2
       start_time_milestone: SEED_DEFAULTS.start_time_milestone,
       start_time_grace_minutes: String(SEED_DEFAULTS.start_time_grace_minutes),
       start_time_floor_minutes: String(SEED_DEFAULTS.start_time_floor_minutes),
@@ -403,9 +514,9 @@ export default function AdminAnalyticsSettingsPage() {
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <SectionHeader
                 title="Surgical Turnovers"
-                description="Target times for room turnovers"
+                description="Target times and compliance thresholds for room turnovers"
               />
-              <div className="p-6">
+              <div className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <SettingsNumberField
                     label="Same-Room Target (min)"
@@ -424,6 +535,25 @@ export default function AdminAnalyticsSettingsPage() {
                     max="120"
                     step="5"
                     helpText="Surgeon moves to different OR. Benchmark: 45 min"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <SettingsNumberField
+                    label="Room Turnover Threshold (min)"
+                    value={form.turnover_threshold_minutes}
+                    onChange={(v) => setForm({ ...form, turnover_threshold_minutes: v })}
+                    min="5"
+                    max="120"
+                    step="5"
+                    helpText='A turnover is "compliant" if under this'
+                  />
+                  <SettingsNumberField
+                    label="Compliance Target (%)"
+                    value={form.turnover_compliance_target_percent}
+                    onChange={(v) => setForm({ ...form, turnover_compliance_target_percent: v })}
+                    min="0"
+                    max="100"
+                    helpText="Target % of turnovers under threshold"
                   />
                 </div>
               </div>
@@ -470,7 +600,139 @@ export default function AdminAnalyticsSettingsPage() {
               </div>
             </div>
 
-            {/* Section 5: ORbit Score Configuration */}
+            {/* Section 5: Surgeon Idle Time */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <SectionHeader
+                title="Surgeon Idle Time"
+                description="Acceptable idle time between cases for surgeons"
+              />
+              <div className="p-6">
+                <div className="grid grid-cols-3 gap-4">
+                  <SettingsNumberField
+                    label="Combined Idle Target (min)"
+                    value={form.idle_combined_target_minutes}
+                    onChange={(v) => setForm({ ...form, idle_combined_target_minutes: v })}
+                    min="1"
+                    max="60"
+                    helpText="Total acceptable idle time between cases"
+                  />
+                  <SettingsNumberField
+                    label="Flip-Room Idle Target (min)"
+                    value={form.idle_flip_target_minutes}
+                    onChange={(v) => setForm({ ...form, idle_flip_target_minutes: v })}
+                    min="1"
+                    max="60"
+                    helpText="Idle time when surgeon moves to another OR"
+                  />
+                  <SettingsNumberField
+                    label="Same-Room Idle Target (min)"
+                    value={form.idle_same_room_target_minutes}
+                    onChange={(v) => setForm({ ...form, idle_same_room_target_minutes: v })}
+                    min="1"
+                    max="60"
+                    helpText="Idle time when surgeon stays in same OR"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 6: Tardiness & Non-Operative Time */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <SectionHeader
+                title="Tardiness & Non-Operative Time"
+                description="Thresholds for cumulative tardiness and non-operative time warnings"
+              />
+              <div className="p-6">
+                <div className="grid grid-cols-3 gap-4">
+                  <SettingsNumberField
+                    label="Cumulative Tardiness Target (min)"
+                    value={form.tardiness_target_minutes}
+                    onChange={(v) => setForm({ ...form, tardiness_target_minutes: v })}
+                    min="5"
+                    max="120"
+                    helpText="Max cumulative tardiness per day"
+                  />
+                  <SettingsNumberField
+                    label="Non-Op Time Warning (min)"
+                    value={form.non_op_warn_minutes}
+                    onChange={(v) => setForm({ ...form, non_op_warn_minutes: v })}
+                    min="5"
+                    max="120"
+                    helpText="Avg non-operative time that triggers warning"
+                  />
+                  <SettingsNumberField
+                    label="Non-Op Time Alert (min)"
+                    value={form.non_op_bad_minutes}
+                    onChange={(v) => setForm({ ...form, non_op_bad_minutes: v })}
+                    min="5"
+                    max="120"
+                    helpText="Avg non-operative time that triggers alert"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 7: Dashboard Alerts */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <SectionHeader
+                title="Dashboard Alerts"
+                description="Configure thresholds for the Needs Attention alerts on the dashboard"
+              />
+              <div className="p-6">
+                <div className="max-w-xs">
+                  <SettingsNumberField
+                    label="Behind Schedule Grace (minutes)"
+                    value={form.behind_schedule_grace_minutes}
+                    onChange={(v) => setForm({ ...form, behind_schedule_grace_minutes: v })}
+                    min="0"
+                    max="60"
+                    helpText="Extra minutes after estimated duration before a room is flagged as behind schedule"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 8: Operational */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <SectionHeader
+                title="Operational"
+                description="General operational parameters for projections and reporting"
+              />
+              <div className="p-6">
+                <div className="max-w-xs">
+                  <SettingsNumberField
+                    label="Operating Days per Year"
+                    value={form.operating_days_per_year}
+                    onChange={(v) => setForm({ ...form, operating_days_per_year: v })}
+                    min="1"
+                    max="365"
+                    helpText="Used for annualized projections in AI Insights"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 9: Case Financials */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <SectionHeader
+                title="Case Financials"
+                description="Configure how profit margins and benchmarks are calculated in the case drawer"
+              />
+              <div className="p-6">
+                <div className="max-w-xs">
+                  <SettingsNumberField
+                    label="Benchmark Case Count"
+                    value={form.financial_benchmark_case_count}
+                    onChange={(v) => setForm({ ...form, financial_benchmark_case_count: v })}
+                    min="5"
+                    max="100"
+                    helpText="Number of recent validated cases used to calculate surgeon and facility median margins"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 10: ORbit Score Configuration */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
                 <div className="flex items-center gap-2">

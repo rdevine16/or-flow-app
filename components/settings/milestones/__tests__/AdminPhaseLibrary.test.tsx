@@ -123,15 +123,13 @@ describe('AdminPhaseLibrary', () => {
 
       expect(screen.getByText('Phase')).toBeInTheDocument()
       expect(screen.getByText('Color')).toBeInTheDocument()
-      expect(screen.getByText('Parent')).toBeInTheDocument()
       expect(screen.getByText('Actions')).toBeInTheDocument()
     })
 
     it('renders active phase rows', () => {
       render(<AdminPhaseLibrary />)
 
-      // Pre-Op appears twice: as row and as parent indicator
-      expect(screen.getAllByText('Pre-Op').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('Pre-Op')).toBeInTheDocument()
       expect(screen.getByText('Surgical')).toBeInTheDocument()
       expect(screen.getByText('Anesthesia Prep')).toBeInTheDocument()
     })
@@ -150,22 +148,6 @@ describe('AdminPhaseLibrary', () => {
       // Color labels (from resolveColorKey)
       expect(screen.getByText('Blue')).toBeInTheDocument()
       expect(screen.getByText('Green')).toBeInTheDocument()
-    })
-
-    it('shows parent phase indicator for sub-phases', () => {
-      render(<AdminPhaseLibrary />)
-
-      // Anesthesia Prep is a child of Pre-Op
-      // Pre-Op appears twice: as row and as parent indicator
-      const preOpElements = screen.getAllByText('Pre-Op')
-      expect(preOpElements.length).toBe(2)
-    })
-
-    it('shows em-dash for phases with no parent', () => {
-      const { container } = render(<AdminPhaseLibrary />)
-
-      const mdash = container.querySelector('[class*="text-slate-300"]')
-      expect(mdash).toBeInTheDocument()
     })
 
     it('shows loading skeletons when loading', () => {
@@ -265,17 +247,6 @@ describe('AdminPhaseLibrary', () => {
       expect(screen.getByText(/Selected: Blue/)).toBeInTheDocument()
     })
 
-    it('add modal has parent phase dropdown', async () => {
-      const user = userEvent.setup()
-      render(<AdminPhaseLibrary />)
-
-      const addButtons = screen.getAllByText('Add Phase Template')
-      await user.click(addButtons[0])
-
-      // Check for option text instead of label
-      expect(screen.getByText('None (top-level phase)')).toBeInTheDocument()
-    })
-
     it('add modal shows auto-generated internal name preview', async () => {
       const user = userEvent.setup()
       render(<AdminPhaseLibrary />)
@@ -289,12 +260,6 @@ describe('AdminPhaseLibrary', () => {
       expect(screen.getByText(/recovery_room/)).toBeInTheDocument()
     })
 
-    it('parent phase dropdown excludes self and children (edit mode)', async () => {
-      // This is tested implicitly in the component logic
-      // The filter is: parentOptions.filter(p => p.id !== phase?.id)
-      // In add mode, there's no self to exclude
-      expect(true).toBe(true)
-    })
   })
 
   describe('edit phase template', () => {
@@ -325,11 +290,6 @@ describe('AdminPhaseLibrary', () => {
 
       // Display name should be pre-filled
       expect(screen.getByDisplayValue('Anesthesia Prep')).toBeInTheDocument()
-      // Parent dropdown should have Pre-Op selected
-      // Find the select element and check its value
-      const selects = screen.getAllByRole('combobox')
-      const parentSelect = selects.find(s => (s as HTMLSelectElement).value === 'phase-1')
-      expect(parentSelect).toBeInTheDocument()
     })
 
     it('edit modal has Save Changes button', async () => {

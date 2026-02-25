@@ -715,6 +715,130 @@ export function useTemplateBuilder() {
     }
   }, [builderState.items, supabase, showToast])
 
+  // ── Move item to a different phase ────────────────────
+
+  const moveItemToPhase = useCallback(async (
+    itemId: string,
+    targetPhaseId: string,
+    insertBeforeItemId?: string,
+  ) => {
+    const item = builderState.items.find(i => i.id === itemId)
+    if (!item) return
+
+    // Block moving required milestones out of their required phase
+    if (requiredMilestoneItemIds.has(itemId)) {
+      showToast({ type: 'error', title: 'This milestone is required and cannot be moved' })
+      return
+    }
+
+    const targetPhaseKey = targetPhaseId === 'unassigned' ? null : targetPhaseId
+
+    // Calculate new display_order in target phase
+    const targetPhaseItems = builderState.items
+      .filter(i => (i.facility_phase_id ?? null) === targetPhaseKey && i.id !== itemId)
+      .sort((a, b) => a.display_order - b.display_order)
+
+    let newOrder: number
+    if (insertBeforeItemId) {
+      const beforeIdx = targetPhaseItems.findIndex(i => i.id === insertBeforeItemId)
+      if (beforeIdx >= 0) {
+        const beforeOrder = targetPhaseItems[beforeIdx].display_order
+        const prevOrder = beforeIdx > 0 ? targetPhaseItems[beforeIdx - 1].display_order : beforeOrder - 2
+        newOrder = (prevOrder + beforeOrder) / 2
+      } else {
+        newOrder = targetPhaseItems.length > 0
+          ? Math.max(...targetPhaseItems.map(i => i.display_order)) + 1
+          : 1
+      }
+    } else {
+      newOrder = targetPhaseItems.length > 0
+        ? Math.max(...targetPhaseItems.map(i => i.display_order)) + 1
+        : 1
+    }
+
+    const prevItems = builderState.items
+
+    // Optimistic update
+    dispatch({
+      type: 'REORDER_ITEMS',
+      items: builderState.items.map(i =>
+        i.id === itemId
+          ? { ...i, facility_phase_id: targetPhaseKey, display_order: newOrder }
+          : i
+      ),
+    })
+
+    try {
+      const { error } = await supabase
+        .from('milestone_template_items')
+        .update({ facility_phase_id: targetPhaseId, display_order: newOrder })
+        .eq('id', itemId)
+
+      if (error) throw error
+    } catch (err) {
+      dispatch({ type: 'SET_ITEMS', items: prevItems })
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to move milestone' })
+    }
+  }, [builderState.items, supabase, showToast, requiredMilestoneItemIds])
+
+  // Local-only version for onDragOver (no DB call, cheap for frequent invocations)
+  const moveItemToPhaseLocal = useCallback((
+    itemId: string,
+    targetPhaseId: string,
+    insertBeforeItemId?: string,
+  ) => {
+    const item = builderState.items.find(i => i.id === itemId)
+    if (!item) return
+    if (requiredMilestoneItemIds.has(itemId)) return
+
+    const targetPhaseKey = targetPhaseId === 'unassigned' ? null : targetPhaseId
+    const targetPhaseItems = builderState.items
+      .filter(i => (i.facility_phase_id ?? null) === targetPhaseKey && i.id !== itemId)
+      .sort((a, b) => a.display_order - b.display_order)
+
+    let newOrder: number
+    if (insertBeforeItemId) {
+      const beforeIdx = targetPhaseItems.findIndex(i => i.id === insertBeforeItemId)
+      if (beforeIdx >= 0) {
+        const beforeOrder = targetPhaseItems[beforeIdx].display_order
+        const prevOrder = beforeIdx > 0 ? targetPhaseItems[beforeIdx - 1].display_order : beforeOrder - 2
+        newOrder = (prevOrder + beforeOrder) / 2
+      } else {
+        newOrder = targetPhaseItems.length > 0
+          ? Math.max(...targetPhaseItems.map(i => i.display_order)) + 1
+          : 1
+      }
+    } else {
+      newOrder = targetPhaseItems.length > 0
+        ? Math.max(...targetPhaseItems.map(i => i.display_order)) + 1
+        : 1
+    }
+
+    dispatch({
+      type: 'REORDER_ITEMS',
+      items: builderState.items.map(i =>
+        i.id === itemId
+          ? { ...i, facility_phase_id: targetPhaseKey, display_order: newOrder }
+          : i
+      ),
+    })
+  }, [builderState.items, requiredMilestoneItemIds])
+
+  // Persist current item position to DB (no dispatch, used after onDragOver already moved it)
+  const persistItemPosition = useCallback(async (itemId: string) => {
+    const item = builderState.items.find(i => i.id === itemId)
+    if (!item) return
+    try {
+      const { error } = await supabase
+        .from('milestone_template_items')
+        .update({ facility_phase_id: item.facility_phase_id, display_order: item.display_order })
+        .eq('id', itemId)
+      if (error) throw error
+    } catch (err) {
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to move milestone' })
+    }
+  }, [builderState.items, supabase, showToast])
+
   // ── Add empty phase to template ───────────────────────
 
   const addPhaseToTemplate = useCallback((phaseId: string) => {
@@ -876,6 +1000,9 @@ export function useTemplateBuilder() {
     removeMilestone,
     removePhaseFromTemplate,
     reorderItemsInPhase,
+    moveItemToPhase,
+    moveItemToPhaseLocal,
+    persistItemPosition,
     addPhaseToTemplate,
     nestPhaseAsSubPhase,
     removeSubPhase,

@@ -15,6 +15,7 @@ import {
   useDraggable,
   useDroppable,
   type DragStartEvent,
+  type DragOverEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
 import {
@@ -81,6 +82,7 @@ interface ActiveDrag {
 
 export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn }) {
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null)
+  const [preDragItems, setPreDragItems] = useState<UseTemplateBuilderReturn['items'] | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -123,12 +125,58 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
       const ms = builder.milestones.find(m => m.id === item.facility_milestone_id)
       setActiveDrag({ type: 'builder-item', id, label: ms?.display_name ?? 'Item' })
     }
+
+    // Snapshot items before drag for revert on cancel
+    setPreDragItems([...builder.items])
   }, [builder.milestones, builder.phases, builder.items])
+
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const { active, over } = event
+    if (!over) return
+
+    const activeId = String(active.id)
+    const overId = String(over.id)
+
+    // Only handle builder items (not library drags or sub-phase blocks)
+    if (activeId.startsWith(LIB_MILESTONE_PREFIX) || activeId.startsWith(LIB_PHASE_PREFIX)) return
+    if (parseSpBlockId(activeId)) return
+
+    const activeItem = builder.items.find(i => i.id === activeId)
+    if (!activeItem) return
+
+    // Over a drop-phase zone → move to end of that phase
+    const dropPhaseId = parseDropPhaseId(overId)
+    if (dropPhaseId) {
+      const activePhase = activeItem.facility_phase_id ?? 'unassigned'
+      if (activePhase !== dropPhaseId) {
+        builder.moveItemToPhaseLocal(activeId, dropPhaseId)
+      }
+      return
+    }
+
+    // Over another builder item → move to that item's phase at that position
+    const overItem = builder.items.find(i => i.id === overId)
+    if (overItem && activeId !== overId) {
+      const activePhase = activeItem.facility_phase_id ?? 'unassigned'
+      const overPhase = overItem.facility_phase_id ?? 'unassigned'
+      if (activePhase !== overPhase) {
+        builder.moveItemToPhaseLocal(activeId, overPhase, overId)
+      }
+    }
+  }, [builder])
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActiveDrag(null)
     const { active, over } = event
-    if (!over) return
+
+    // If dropped outside or no target, revert to pre-drag state
+    if (!over) {
+      if (preDragItems) {
+        builder.dispatch({ type: 'SET_ITEMS', items: preDragItems })
+      }
+      setPreDragItems(null)
+      return
+    }
 
     const activeId = String(active.id)
     const overId = String(over.id)
@@ -139,10 +187,12 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
     const overSpBlockId = parseSpBlockId(overId)
     if (libMsId && dropPhaseId) {
       builder.addMilestoneToPhase(dropPhaseId, libMsId)
+      setPreDragItems(null)
       return
     }
     if (libMsId && overSpBlockId) {
       builder.addMilestoneToPhase(overSpBlockId, libMsId)
+      setPreDragItems(null)
       return
     }
 
@@ -151,17 +201,20 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
     const dropHeaderPhaseId = parseDropPhaseHeaderId(overId)
     if (libPhId && dropHeaderPhaseId) {
       builder.nestPhaseAsSubPhase(libPhId, dropHeaderPhaseId)
+      setPreDragItems(null)
       return
     }
 
     // Library phase → builder bottom
     if (libPhId && overId === DROP_BUILDER_BOTTOM) {
       builder.addPhaseToTemplate(libPhId)
+      setPreDragItems(null)
       return
     }
     // Also allow library phase → any phase drop zone area (adds the phase)
     if (libPhId && dropPhaseId) {
       builder.addPhaseToTemplate(libPhId)
+      setPreDragItems(null)
       return
     }
 
@@ -169,7 +222,10 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
     const activeSpId = parseSpBlockId(activeId)
     if (activeSpId) {
       const parentPhaseId = builder.subPhaseMap[activeSpId]
-      if (!parentPhaseId) return
+      if (!parentPhaseId) {
+        setPreDragItems(null)
+        return
+      }
 
       // Build the current sortable IDs for this parent phase
       const renderList = buildTemplateRenderList(
@@ -179,36 +235,63 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
       const parentSeg = segments.find(
         (s): s is PhaseGroupSegmentData => s.type === 'phase-group' && s.phaseId === parentPhaseId,
       )
-      if (!parentSeg) return
+      if (!parentSeg) {
+        setPreDragItems(null)
+        return
+      }
 
       // Use existing override if present (handles cascading moves)
       const currentIds = builder.blockOrder[parentPhaseId] ?? parentSeg.sortableIds
       const oldIdx = currentIds.indexOf(activeId)
       const overIdx = currentIds.indexOf(overId)
-      if (oldIdx === -1 || overIdx === -1 || oldIdx === overIdx) return
+      if (oldIdx === -1 || overIdx === -1 || oldIdx === overIdx) {
+        setPreDragItems(null)
+        return
+      }
 
       const newIds = arrayMove(currentIds, oldIdx, overIdx)
       builder.updateBlockOrder(parentPhaseId, newIds)
+      setPreDragItems(null)
       return
     }
 
-    // Builder item reorder (both active and over are template item IDs)
-    if (!activeId.startsWith(LIB_MILESTONE_PREFIX) && !activeId.startsWith(LIB_PHASE_PREFIX)) {
+    // Builder item moves — onDragOver already updated local state during drag
+    if (!activeId.startsWith(LIB_MILESTONE_PREFIX) && !activeId.startsWith(LIB_PHASE_PREFIX) && !parseSpBlockId(activeId)) {
       const activeItem = builder.items.find(i => i.id === activeId)
-      const overItem = builder.items.find(i => i.id === overId)
-      if (activeItem && overItem && activeId !== overId) {
-        const activePhase = activeItem.facility_phase_id ?? 'unassigned'
-        const overPhase = overItem.facility_phase_id ?? 'unassigned'
-        if (activePhase === overPhase) {
-          builder.reorderItemsInPhase(activePhase, activeId, overId)
+      const preDragItem = preDragItems?.find(i => i.id === activeId)
+
+      if (activeItem && preDragItem) {
+        const preDragPhase = preDragItem.facility_phase_id ?? 'unassigned'
+        const currentPhase = activeItem.facility_phase_id ?? 'unassigned'
+
+        if (preDragPhase !== currentPhase) {
+          // Cross-phase move — local state already updated by onDragOver, just persist to DB
+          builder.persistItemPosition(activeId).catch(() => {
+            // On failure, revert to pre-drag state
+            if (preDragItems) {
+              builder.dispatch({ type: 'SET_ITEMS', items: preDragItems })
+            }
+          })
+        } else {
+          // Same-phase — check if it's a reorder (over a different item in the same phase)
+          const overItem = builder.items.find(i => i.id === overId)
+          if (overItem && activeId !== overId) {
+            builder.reorderItemsInPhase(currentPhase, activeId, overId)
+          }
         }
       }
     }
-  }, [builder])
+
+    setPreDragItems(null)
+  }, [builder, preDragItems])
 
   const handleDragCancel = useCallback(() => {
     setActiveDrag(null)
-  }, [])
+    if (preDragItems) {
+      builder.dispatch({ type: 'SET_ITEMS', items: preDragItems })
+      setPreDragItems(null)
+    }
+  }, [preDragItems, builder])
 
   if (builder.loading) {
     return <BuilderSkeleton />
@@ -223,6 +306,7 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
@@ -252,7 +336,6 @@ export function TemplateBuilder({ builder }: { builder: UseTemplateBuilderReturn
           onRemoveMilestone={builder.removeMilestone}
           onRemovePhase={builder.removePhaseFromTemplate}
           onRemoveSubPhase={builder.removeSubPhase}
-          onReorderMilestones={builder.reorderItemsInPhase}
           onDuplicate={() => builder.selectedTemplateId && builder.duplicateTemplate(builder.selectedTemplateId)}
           onRename={builder.renameTemplate}
           procedureCount={builder.selectedTemplateId ? (builder.procedureCounts[builder.selectedTemplateId] || 0) : 0}
@@ -325,7 +408,6 @@ interface BuilderCanvasProps {
   onRemoveMilestone: (itemId: string) => void
   onRemovePhase: (phaseId: string) => void
   onRemoveSubPhase: (phaseId: string) => void
-  onReorderMilestones: (phaseId: string, activeId: string, overId: string) => void
   onDuplicate: () => void
   onRename: (templateId: string, name: string) => void
   procedureCount: number
@@ -347,7 +429,6 @@ function BuilderCanvas({
   onRemoveMilestone,
   onRemovePhase,
   onRemoveSubPhase,
-  onReorderMilestones,
   onDuplicate,
   onRename,
   procedureCount,
@@ -510,7 +591,6 @@ function BuilderCanvas({
                     onRemoveMilestone={onRemoveMilestone}
                     onRemovePhase={onRemovePhase}
                     onRemoveSubPhase={onRemoveSubPhase}
-                    onReorderMilestones={onReorderMilestones}
                     activeDrag={activeDrag}
                     pairIssues={pairIssues}
                     requiredMilestoneItemIds={requiredMilestoneItemIds}
@@ -566,7 +646,6 @@ function PhaseGroupSegment({
   onRemoveMilestone,
   onRemovePhase,
   onRemoveSubPhase,
-  onReorderMilestones,
   activeDrag,
   pairIssues,
   requiredMilestoneItemIds,
@@ -576,7 +655,6 @@ function PhaseGroupSegment({
   onRemoveMilestone: (itemId: string) => void
   onRemovePhase: (phaseId: string) => void
   onRemoveSubPhase: (phaseId: string) => void
-  onReorderMilestones: (phaseId: string, activeId: string, overId: string) => void
   activeDrag: ActiveDrag | null
   pairIssues?: Set<string>
   requiredMilestoneItemIds?: Set<string>
@@ -634,9 +712,8 @@ function PhaseGroupSegment({
                   item={renderItem}
                   onRemove={() => onRemoveSubPhase(renderItem.phase.id)}
                   onRemoveMilestone={onRemoveMilestone}
-                  isDraggingMilestone={activeDrag?.type === 'library-milestone'}
+                  isDraggingMilestone={activeDrag?.type === 'library-milestone' || activeDrag?.type === 'builder-item'}
                   sortableId={`${SP_BLOCK_PREFIX}${renderItem.phase.id}`}
-                  onReorderMilestones={onReorderMilestones}
                   pairIssues={pairIssues}
                   requiredMilestoneItemIds={requiredMilestoneItemIds}
                 />
@@ -769,7 +846,7 @@ function DroppablePhaseZone({
   const droppableId = `${DROP_PHASE_PREFIX}${phaseId}`
   const { isOver, setNodeRef } = useDroppable({ id: droppableId })
 
-  const isDraggingMilestone = activeDrag?.type === 'library-milestone'
+  const isDraggingMilestone = activeDrag?.type === 'library-milestone' || activeDrag?.type === 'builder-item'
   const isHighlighted = isOver && isDraggingMilestone
 
   return (

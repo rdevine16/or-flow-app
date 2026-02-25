@@ -2263,8 +2263,8 @@ function TriggersTab({
             <div key={tableName} className="mb-4">
               <Label>{tableName}</Label>
               <div className="space-y-2">
-                {triggers.map(t => (
-                  <div key={t.trigger_name} className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
+                {triggers.map((t, i) => (
+                  <div key={`${t.trigger_name}_${t.event_manipulation}_${i}`} className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
                     <div className="flex items-center gap-2 mb-1">
                       <code className="font-mono font-medium text-slate-800">{t.trigger_name}</code>
                       <MiniTag color="blue">{t.action_timing}</MiniTag>
