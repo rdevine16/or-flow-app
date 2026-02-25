@@ -57,7 +57,7 @@ vi.mock('@/components/settings/milestones/PhaseLibrary', () => ({
 }))
 
 // Import after mocks
-import MilestonesSettingsPage from '../page'
+import MilestonesSettingsPage from '../PageClient'
 
 beforeEach(() => {
   vi.clearAllMocks()

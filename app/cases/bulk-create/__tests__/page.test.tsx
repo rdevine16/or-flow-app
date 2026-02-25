@@ -153,7 +153,7 @@ vi.mock('@/lib/supabase', () => ({
   }),
 }))
 
-import BulkCreatePage from '../page'
+import BulkCreatePage from '../PageClient'
 
 // ============================================
 // TESTS

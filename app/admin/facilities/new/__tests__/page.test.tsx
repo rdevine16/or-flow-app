@@ -114,7 +114,7 @@ vi.mock('@/lib/logger', () => ({
 }))
 
 // Import AFTER mocks
-import CreateFacilityPage from '../page'
+import CreateFacilityPage from '../PageClient'
 
 // ============================================================================
 // TESTS

@@ -1,12 +1,10 @@
-'use client'
+import { Metadata } from 'next'
+import PageClient from './PageClient'
 
-import { Suspense } from 'react'
-import DataQualityPage from '@/components/data-quality/DataQualityPage'
+export const metadata: Metadata = {
+  title: 'Data Quality',
+}
 
-export default function DataQualityRoute() {
-  return (
-    <Suspense>
-      <DataQualityPage />
-    </Suspense>
-  )
+export default function Page() {
+  return <PageClient />
 }

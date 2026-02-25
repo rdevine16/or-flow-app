@@ -1,7 +1,10 @@
-'use client'
+import { Metadata } from 'next'
+import PageClient from './PageClient'
 
-import SettingsLanding from '@/components/settings/SettingsLanding'
+export const metadata: Metadata = {
+  title: 'Settings',
+}
 
-export default function SettingsPage() {
-  return <SettingsLanding />
+export default function Page() {
+  return <PageClient />
 }

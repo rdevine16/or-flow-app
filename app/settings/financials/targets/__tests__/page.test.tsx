@@ -57,7 +57,7 @@ vi.mock('@/components/ui/ErrorBanner', () => ({
     message ? <div data-testid="error-banner">{message}</div> : null,
 }))
 
-import FinancialTargetsPage from '../page'
+import FinancialTargetsPage from '../PageClient'
 
 // ============================================
 // TESTS

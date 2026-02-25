@@ -1,0 +1,1314 @@
+// app/analytics/page.tsx
+'use client'
+ 
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import DateRangeSelector from '@/components/ui/DateRangeSelector'
+import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
+import { getLocalDateString } from '@/lib/date-utils'
+
+// Recharts
+import {
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
+
+// Analytics functions
+import {
+  calculateAnalyticsOverview,
+  calculateAvgCaseTime,
+  calculateSurgeonLeaderboard,
+  getMilestoneMap,
+  getTimeDiffMinutes,
+  formatMinutes,
+  type CaseWithMilestones,
+  type FlipRoomAnalysis,
+  type RoomHoursMap,
+} from '@/lib/analyticsV2'
+import { useAnalyticsConfig } from '@/lib/hooks/useAnalyticsConfig'
+
+import Sparkline, { dailyDataToSparkline } from '@/components/ui/Sparkline'
+import FlagsCompactBanner from '@/components/analytics/FlagsCompactBanner'
+import SurgeonLeaderboardTable from '@/components/analytics/SurgeonLeaderboardTable'
+import ProcedureMixCard from '@/components/analytics/ProcedureMixCard'
+import RoomUtilizationCard from '@/components/analytics/RoomUtilizationCard'
+import RecentCasesTable, { type RecentCaseRow } from '@/components/analytics/RecentCasesTable'
+import CaseDrawer from '@/components/cases/CaseDrawer'
+import { useProcedureCategories } from '@/hooks/useLookups'
+
+import { ArrowRight, BarChart3, CalendarDays, DollarSign, Flag, Presentation, Sparkles, Star, User, X } from 'lucide-react'
+
+// ============================================
+// TYPES
+// ============================================
+
+interface ProcedureCategory {
+  id: string
+  name: string
+  display_name: string
+}
+
+interface ProcedureTechnique {
+  id: string
+  name: string
+  display_name: string
+}
+
+// ============================================
+// REPORT NAVIGATION CARD
+// ============================================
+
+interface ReportCardProps {
+  title: string
+  description: string
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  accentColor: 'blue' | 'green' | 'violet' | 'amber' | 'rose' | 'cyan'
+  badge?: string
+  stats?: { label: string; value: string }[]
+}
+
+function ReportCard({ title, description, href, icon: Icon, accentColor, badge, stats }: ReportCardProps) {
+  const colorClasses = {
+    blue: {
+      iconBg: 'bg-blue-100',
+      iconColor: 'text-blue-600',
+      hoverBorder: 'hover:border-blue-300',
+      badgeBg: 'bg-blue-50',
+      badgeText: 'text-blue-700',
+    },
+    green: {
+      iconBg: 'bg-green-100',
+      iconColor: 'text-green-600',
+      hoverBorder: 'hover:border-green-300',
+      badgeBg: 'bg-green-50',
+      badgeText: 'text-green-600',
+    },
+    violet: {
+      iconBg: 'bg-violet-100',
+      iconColor: 'text-violet-600',
+      hoverBorder: 'hover:border-violet-300',
+      badgeBg: 'bg-violet-50',
+      badgeText: 'text-violet-700',
+    },
+    amber: {
+      iconBg: 'bg-amber-100',
+      iconColor: 'text-amber-600',
+      hoverBorder: 'hover:border-amber-300',
+      badgeBg: 'bg-amber-50',
+      badgeText: 'text-amber-700',
+    },
+    rose: {
+      iconBg: 'bg-rose-100',
+      iconColor: 'text-rose-600',
+      hoverBorder: 'hover:border-rose-300',
+      badgeBg: 'bg-rose-50',
+      badgeText: 'text-rose-700',
+    },
+    cyan: {
+      iconBg: 'bg-cyan-100',
+      iconColor: 'text-cyan-600',
+      hoverBorder: 'hover:border-cyan-300',
+      badgeBg: 'bg-cyan-50',
+      badgeText: 'text-cyan-700',
+    },
+  }
+
+  const colors = colorClasses[accentColor]
+
+  return (
+    <Link
+      href={href}
+      className={`
+        group block bg-white rounded-xl border border-slate-200/60 
+        shadow-sm hover:shadow-md transition-all duration-200
+        ${colors.hoverBorder}
+      `}
+    >
+      <div className="p-4">
+        <div className="flex items-start justify-between mb-3">
+          <div className={`p-2.5 rounded-xl ${colors.iconBg}`}>
+            <Icon className={`w-5 h-5 ${colors.iconColor}`} />
+          </div>
+          {badge && (
+            <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors.badgeBg} ${colors.badgeText}`}>
+              {badge}
+            </span>
+          )}
+        </div>
+        
+        <h3 className="text-base font-semibold text-slate-900 mb-1 group-hover:text-slate-700">
+          {title}
+        </h3>
+        <p className="text-sm text-slate-500 mb-4 line-clamp-2">
+          {description}
+        </p>
+
+        {stats && stats.length > 0 && (
+          <div className="flex items-center gap-4 pt-3 border-t border-slate-100">
+            {stats.map((stat, i) => (
+              <div key={i}>
+                <p className="text-xs text-slate-400">{stat.label}</p>
+                <p className="text-sm font-semibold text-slate-900">{stat.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center text-sm font-medium text-slate-600 group-hover:text-blue-600 mt-3">
+          View report
+          <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-0.5 transition-transform" />
+        </div>
+      </div>
+    </Link>
+  )
+}
+
+// ============================================
+// QUICK STAT CARD (for overview row)
+// ============================================
+
+function QuickStatCard({
+  title,
+  value,
+  subtitle,
+  target,
+  trend,
+  trendType,
+  sparklineData,
+  sparklineColor,
+}: {
+  title: string
+  value: string
+  subtitle?: string
+  target?: string
+  trend?: number
+  trendType?: 'up' | 'down'
+  sparklineData?: number[]
+  sparklineColor?: string
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-slate-500 font-medium">{title}</span>
+        {trend !== undefined && trendType && (
+          <span className={`
+            text-[11px] font-semibold px-[7px] py-[2px] rounded-full inline-flex items-center gap-0.5
+            ${trend === 0
+              ? 'text-slate-500 bg-slate-100'
+              : trendType === 'up'
+                ? 'text-green-600 bg-green-50'
+                : 'text-rose-700 bg-rose-50'
+            }
+          `}>
+            {trend === 0 ? '—' : trendType === 'up' ? '↑' : '↓'} {Math.abs(trend)}%
+          </span>
+        )}
+      </div>
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-2xl font-bold text-slate-900 font-mono tracking-tight">{value}</p>
+          {target && <p className="text-[11px] text-slate-400 mt-0.5">Target: {target}</p>}
+          {subtitle && <p className="text-[11px] text-slate-400 mt-0.5">{subtitle}</p>}
+        </div>
+        {sparklineData && sparklineData.length > 1 && (
+          <div className="opacity-70">
+            <Sparkline data={sparklineData} color={sparklineColor || '#94a3b8'} width={72} height={24} showArea={false} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CombinedTurnoverCard({
+  sameRoomValue,
+  flipRoomValue,
+  target,
+}: {
+  sameRoomValue: string
+  flipRoomValue: string
+  target: string
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-slate-500 font-medium">Room Turnover</span>
+      </div>
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <p className="text-xl font-bold text-slate-900 font-mono tracking-tight">{sameRoomValue}</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-0.5">Same Room</p>
+        </div>
+        <div className="w-px bg-slate-100" />
+        <div className="flex-1">
+          <p className="text-xl font-bold text-slate-900 font-mono tracking-tight">{flipRoomValue}</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-0.5">Flip Room</p>
+        </div>
+      </div>
+      <p className="text-[11px] text-slate-400 mt-1">Target: {target}</p>
+    </div>
+  )
+}
+
+
+// ============================================
+// SECTION HEADER
+// ============================================
+
+function SectionHeader({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string
+  subtitle?: string
+  action?: React.ReactNode
+}) {
+  return (
+    <div className="flex items-start justify-between mb-4">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+        {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+// ============================================
+// CHART TOOLTIPS
+// ============================================
+
+interface ChartTooltipPayload {
+  name: string
+  value: number
+  color?: string
+  fill?: string
+}
+
+function CaseVolumeTooltip({ active, payload, label }: { active?: boolean; payload?: ChartTooltipPayload[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 shadow-lg">
+      <p className="text-[11px] font-semibold text-slate-500 mb-1">{label}</p>
+      <p className="text-xs text-slate-700">
+        <span className="font-semibold">{payload[0].value}</span> completed cases
+      </p>
+    </div>
+  )
+}
+
+
+function ComparisonTooltip({ active, payload, label }: { active?: boolean; payload?: ChartTooltipPayload[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 shadow-lg">
+      <p className="text-[11px] font-semibold text-slate-500 mb-1.5">{label}</p>
+      {payload.map(entry => (
+        <div key={entry.name} className="flex items-center gap-1.5 mb-0.5 last:mb-0">
+          <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: entry.color || entry.fill }} />
+          <span className="text-xs text-slate-700">
+            {entry.name}: <span className="font-semibold">{entry.value} min</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ============================================
+// FLIP ROOM MODAL (kept for surgeon idle time)
+// ============================================
+
+function FlipRoomModal({ 
+  isOpen, 
+  onClose, 
+  data 
+}: { 
+  isOpen: boolean
+  onClose: () => void
+  data: FlipRoomAnalysis[]
+}) {
+  if (!isOpen) return null
+  
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
+        
+        <div className="relative bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-100">
+                <Sparkles className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Flip Room Analysis</h2>
+                <p className="text-sm text-slate-500">Surgeon idle time between room transitions</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
+            {data.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <CalendarDays className="w-8 h-8 text-slate-400" />
+                </div>
+                <h3 className="text-base font-semibold text-slate-900 mb-1">No flip room patterns detected</h3>
+                <p className="text-sm text-slate-500 max-w-sm mx-auto">
+                  Flip rooms occur when a surgeon operates in multiple rooms on the same day.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {data.map((analysis, idx) => (
+                  <div key={idx} className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-700">
+                          {analysis.surgeonName.replace('Dr. ', '').charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-900">{analysis.surgeonName}</p>
+                          <p className="text-sm text-slate-500">{analysis.date}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Idle</p>
+                        <p className="text-2xl font-semibold text-amber-700">{Math.round(analysis.totalIdleTime)} min</p>
+                      </div>
+                    </div>
+                    
+                    <div className="mb-4">
+                      <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Room Sequence</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {analysis.cases.map((c, i) => (
+                          <div key={c.caseId} className="flex items-center">
+                            <div className="px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm">
+                              <span className="font-semibold text-slate-900">{c.roomName}</span>
+                              <span className="text-slate-400 ml-2 text-sm">{c.scheduledStart}</span>
+                            </div>
+                            {i < analysis.cases.length - 1 && (
+                              <ArrowRight className="w-4 h-4 mx-2 text-slate-300" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {analysis.idleGaps.length > 0 && (
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Transition Gaps</p>
+                        <div className="space-y-2">
+                          {analysis.idleGaps.map((gap, i) => (
+                            <div key={i} className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-slate-700">{gap.fromCase}</span>
+                                <ArrowRight className="w-4 h-4 text-slate-300" />
+                                <span className="font-medium text-slate-700">{gap.toCase}</span>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                  <p className="text-xs text-slate-400">Idle</p>
+                                  <p className={`font-semibold ${gap.idleMinutes > 10 ? 'text-rose-600' : 'text-amber-700'}`}>
+                                    {Math.round(gap.idleMinutes)} min
+                                  </p>
+                                </div>
+                                {gap.optimalCallDelta > 0 && (
+                                  <div className="text-right pl-4 border-l border-slate-200">
+                                    <p className="text-xs text-blue-600">Call earlier</p>
+                                    <p className="font-semibold text-blue-600">
+                                      {Math.round(gap.optimalCallDelta)} min
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// MAIN PAGE COMPONENT
+// ============================================
+
+export default function AnalyticsHubPage() {
+  const supabase = createClient()
+  const { loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
+  
+  const [cases, setCases] = useState<CaseWithMilestones[]>([])
+  const [previousPeriodCases, setPreviousPeriodCases] = useState<CaseWithMilestones[]>([])
+  const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
+  const [procedureTechniques, setProcedureTechniques] = useState<ProcedureTechnique[]>([])
+  const [loading, setLoading] = useState(true)
+  const [dateFilter, setDateFilter] = useState('month')
+  const [currentStartDate, setCurrentStartDate] = useState<string | undefined>()
+  const [currentEndDate, setCurrentEndDate] = useState<string | undefined>()
+  
+  const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
+  const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
+  const { config } = useAnalyticsConfig()
+
+  // Fetch room available hours when facility changes
+  useEffect(() => {
+    if (!effectiveFacilityId) return
+
+    const fetchRoomHours = async () => {
+      const { data } = await supabase
+        .from('or_rooms')
+        .select('id, available_hours')
+        .eq('facility_id', effectiveFacilityId)
+        .is('deleted_at', null)
+      if (data) {
+        const map: RoomHoursMap = {}
+        data.forEach((r: { id: string; available_hours?: number }) => {
+          if (r.available_hours) map[r.id] = r.available_hours
+        })
+        setRoomHoursMap(map)
+      }
+    }
+
+    fetchRoomHours()
+  }, [effectiveFacilityId, supabase])
+
+  // Case drawer state
+  const [drawerCaseId, setDrawerCaseId] = useState<string | null>(null)
+  const { data: procCatsForDrawer } = useProcedureCategories()
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    if (procCatsForDrawer) {
+      for (const cat of procCatsForDrawer) {
+        map.set(cat.id, cat.name)
+      }
+    }
+    return map
+  }, [procCatsForDrawer])
+
+  const handleCaseClick = useCallback((caseId: string) => {
+    setDrawerCaseId(caseId)
+  }, [])
+
+  const handleDrawerClose = useCallback(() => {
+    setDrawerCaseId(null)
+  }, [])
+
+  // Fetch procedure categories and techniques
+  useEffect(() => {
+    async function fetchLookups() {
+      const [categoriesRes, techniquesRes] = await Promise.all([
+        supabase.from('procedure_categories').select('id, name, display_name').order('display_order'),
+        supabase.from('procedure_techniques').select('id, name, display_name').order('display_order'),
+      ])
+
+      if (categoriesRes.data) setProcedureCategories(categoriesRes.data)
+      if (techniquesRes.data) setProcedureTechniques(techniquesRes.data)
+    }
+    fetchLookups()
+
+  }, [supabase])
+
+  // Fetch data
+  const fetchData = useCallback(async (startDate?: string, endDate?: string) => {
+    if (!effectiveFacilityId) return
+
+    setLoading(true)
+
+    let query = supabase
+      .from('cases')
+      .select(`
+        id,
+        case_number,
+        facility_id,
+        scheduled_date,
+        start_time,
+        surgeon_id,
+        or_room_id,
+        status_id,
+        surgeon_left_at,
+        cancelled_at,
+        is_excluded_from_metrics,
+        surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
+        procedure_types (
+          id,
+          name,
+          procedure_category_id,
+          technique_id,
+          procedure_categories (id, name, display_name),
+          procedure_techniques (id, name, display_name)
+        ),
+        or_rooms (id, name),
+        case_statuses (name),
+        case_milestones (
+          facility_milestone_id,
+          recorded_at,
+          facility_milestones (name)
+        )
+      `)
+      .eq('facility_id', effectiveFacilityId)
+      .order('scheduled_date', { ascending: false })
+
+    if (startDate && endDate) {
+      query = query.gte('scheduled_date', startDate).lte('scheduled_date', endDate)
+    }
+
+    const { data: casesData } = await query
+    setCases((casesData as unknown as CaseWithMilestones[]) || [])
+    
+  // Fetch previous period for comparison
+    if (startDate && endDate) {
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      const periodLength = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+      
+      const prevEnd = new Date(start)
+      prevEnd.setDate(prevEnd.getDate() - 1)
+      const prevStart = new Date(prevEnd)
+      prevStart.setDate(prevStart.getDate() - periodLength)
+      
+      const { data: prevData } = await supabase
+        .from('cases')
+        .select(`
+          id,
+          case_number,
+          facility_id,
+          scheduled_date,
+          start_time,
+          surgeon_id,
+          or_room_id,
+          status_id,
+          surgeon_left_at,
+          cancelled_at,
+          is_excluded_from_metrics,
+          surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
+          procedure_types (
+            id,
+            name,
+            procedure_category_id,
+            technique_id,
+            procedure_categories (id, name, display_name),
+            procedure_techniques (id, name, display_name)
+          ),
+          or_rooms (id, name),
+          case_statuses (name),
+          case_milestones (
+            facility_milestone_id,
+            recorded_at,
+            facility_milestones (name)
+          )
+        `)
+        .eq('facility_id', effectiveFacilityId)
+        .gte('scheduled_date', getLocalDateString(prevStart))
+        .lte('scheduled_date', getLocalDateString(prevEnd))
+      
+      setPreviousPeriodCases((prevData as unknown as CaseWithMilestones[]) || [])
+    }
+
+    setLoading(false)
+  }, [effectiveFacilityId, supabase])
+
+  useEffect(() => {
+    if (!effectiveFacilityId) return
+    const today = new Date()
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+    const start = getLocalDateString(monthStart)
+    const end = getLocalDateString(today)
+    // eslint-disable-next-line
+    setCurrentStartDate(start)
+    setCurrentEndDate(end)
+    fetchData(start, end)
+  }, [effectiveFacilityId, fetchData])
+
+  const handleFilterChange = (filter: string, startDate: string, endDate: string) => {
+    setDateFilter(filter)
+    setCurrentStartDate(startDate)
+    setCurrentEndDate(endDate)
+    fetchData(startDate, endDate)
+  }
+
+  // Calculate all analytics
+  const analytics = useMemo(() => {
+    return calculateAnalyticsOverview(cases, previousPeriodCases, config, roomHoursMap)
+  }, [cases, previousPeriodCases, config, roomHoursMap])
+
+  // Calculate avg case time with delta
+  const avgCaseTimeKPIData = useMemo(() => {
+    return calculateAvgCaseTime(cases, previousPeriodCases)
+  }, [cases, previousPeriodCases])
+
+  // Surgeon leaderboard (top 5)
+  const surgeonLeaderboard = useMemo(() => {
+    return calculateSurgeonLeaderboard(cases).slice(0, 5)
+  }, [cases])
+
+  // Recent completed cases (top 6)
+  const recentCases = useMemo<RecentCaseRow[]>(() => {
+    return cases
+      .filter(c => {
+        const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
+        return status?.name === 'completed'
+      })
+      .sort((a, b) => b.scheduled_date.localeCompare(a.scheduled_date))
+      .slice(0, 6)
+      .map(c => {
+        const surgeon = Array.isArray(c.surgeon) ? c.surgeon[0] : c.surgeon
+        const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+        const room = Array.isArray(c.or_rooms) ? c.or_rooms[0] : c.or_rooms
+        const ms = getMilestoneMap(c)
+        const totalMin = getTimeDiffMinutes(ms.patient_in, ms.patient_out)
+        return {
+          id: c.id,
+          caseNumber: c.case_number,
+          surgeonName: surgeon ? `Dr. ${surgeon.last_name}` : '--',
+          procedureName: procType?.name || '--',
+          roomName: room?.name || '--',
+          time: totalMin !== null ? formatMinutes(totalMin) : '--',
+          status: 'completed',
+          flagCount: 0, // Flags loaded separately by FlagsCompactBanner
+        }
+      })
+  }, [cases])
+
+  // ============================================
+  // CHART DATA CALCULATIONS
+  // ============================================
+
+  // Daily Case Volume Trend Data
+  const dailyCaseTrendData = useMemo(() => {
+    const byDate: { [key: string]: number } = {}
+    
+    cases.forEach(c => {
+      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
+      if (status?.name === 'completed') {
+        const date = c.scheduled_date
+        byDate[date] = (byDate[date] || 0) + 1
+      }
+    })
+
+    return Object.entries(byDate)
+      .map(([date, count]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        rawDate: date,
+        'Completed Cases': count,
+      }))
+      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+  }, [cases])
+
+  // Procedure Type Volume Data — individual procedures, not categories
+  const procedureCategoryData = useMemo(() => {
+    const byProcType: { [key: string]: { count: number; name: string } } = {}
+
+    cases.forEach(c => {
+      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
+      if (status?.name !== 'completed') return
+
+      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      if (!procType) return
+
+      const procId = procType.id
+      const procName = procType.name || 'Unknown'
+      if (!byProcType[procId]) {
+        byProcType[procId] = { count: 0, name: procName }
+      }
+      byProcType[procId].count++
+    })
+
+    return Object.values(byProcType)
+      .map(p => ({ name: p.name, cases: p.count }))
+      .sort((a, b) => b.cases - a.cases)
+      .slice(0, 10) // Top 10 procedure types
+  }, [cases])
+
+  const categoryChartColors = ['#3b82f6', '#06b6d4', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#64748b']
+
+  // Helper to get surgical time from milestones
+  const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
+    const milestones = caseData.case_milestones || []
+    let incisionTimestamp: number | null = null
+    let closingTimestamp: number | null = null
+
+    milestones.forEach(m => {
+const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
+      if (mType?.name === 'incision') {
+        incisionTimestamp = new Date(m.recorded_at).getTime()
+      } else if (mType?.name === 'closing' || mType?.name === 'closing_complete') {
+        closingTimestamp = new Date(m.recorded_at).getTime()
+      }
+    })
+
+    if (incisionTimestamp !== null && closingTimestamp !== null) {
+      return Math.round((closingTimestamp - incisionTimestamp) / (1000 * 60))
+    }
+    return null
+  }
+
+  // Robotic vs Traditional Comparison Data for Total Knee
+  const kneeComparisonData = useMemo(() => {
+    const totalKneeCategoryId = procedureCategories.find(c => c.name === 'total_knee')?.id
+    const roboticTechniqueId = procedureTechniques.find(t => t.name === 'robotic')?.id
+    const manualTechniqueId = procedureTechniques.find(t => t.name === 'manual')?.id
+
+    if (!totalKneeCategoryId) return []
+
+    const byDate: { [key: string]: { robotic: number[]; traditional: number[] } } = {}
+
+    cases.forEach(c => {
+      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
+      if (status?.name !== 'completed') return
+
+      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      if (!procType) return
+
+      const category = procType.procedure_categories
+      const catData = Array.isArray(category) ? category[0] : category
+      if (catData?.id !== totalKneeCategoryId) return
+
+      const surgicalTime = getSurgicalTimeMinutes(c)
+      if (!surgicalTime || surgicalTime <= 0 || surgicalTime > 600) return // Filter outliers
+
+      const date = c.scheduled_date
+      if (!byDate[date]) {
+        byDate[date] = { robotic: [], traditional: [] }
+      }
+
+      if (procType.technique_id === roboticTechniqueId) {
+        byDate[date].robotic.push(surgicalTime)
+      } else if (procType.technique_id === manualTechniqueId) {
+        byDate[date].traditional.push(surgicalTime)
+      }
+    })
+
+    return Object.entries(byDate)
+      .map(([date, times]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        rawDate: date,
+        'Robotic (Mako)': times.robotic.length > 0 
+          ? Math.round(times.robotic.reduce((a, b) => a + b, 0) / times.robotic.length) 
+          : null,
+        'Traditional': times.traditional.length > 0 
+          ? Math.round(times.traditional.reduce((a, b) => a + b, 0) / times.traditional.length) 
+          : null,
+      }))
+      .filter(d => d['Robotic (Mako)'] !== null || d['Traditional'] !== null)
+      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+  }, [cases, procedureCategories, procedureTechniques])
+
+  // Robotic vs Traditional Comparison Data for Total Hip
+  const hipComparisonData = useMemo(() => {
+    const totalHipCategoryId = procedureCategories.find(c => c.name === 'total_hip')?.id
+    const roboticTechniqueId = procedureTechniques.find(t => t.name === 'robotic')?.id
+    const manualTechniqueId = procedureTechniques.find(t => t.name === 'manual')?.id
+
+    if (!totalHipCategoryId) return []
+
+    const byDate: { [key: string]: { robotic: number[]; traditional: number[] } } = {}
+
+    cases.forEach(c => {
+      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
+      if (status?.name !== 'completed') return
+
+      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      if (!procType) return
+
+      const category = procType.procedure_categories
+      const catData = Array.isArray(category) ? category[0] : category
+      if (catData?.id !== totalHipCategoryId) return
+
+      const surgicalTime = getSurgicalTimeMinutes(c)
+      if (!surgicalTime || surgicalTime <= 0 || surgicalTime > 600) return
+
+      const date = c.scheduled_date
+      if (!byDate[date]) {
+        byDate[date] = { robotic: [], traditional: [] }
+      }
+
+      if (procType.technique_id === roboticTechniqueId) {
+        byDate[date].robotic.push(surgicalTime)
+      } else if (procType.technique_id === manualTechniqueId) {
+        byDate[date].traditional.push(surgicalTime)
+      }
+    })
+
+    return Object.entries(byDate)
+      .map(([date, times]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        rawDate: date,
+        'Robotic (Mako)': times.robotic.length > 0 
+          ? Math.round(times.robotic.reduce((a, b) => a + b, 0) / times.robotic.length) 
+          : null,
+        'Traditional': times.traditional.length > 0 
+          ? Math.round(times.traditional.reduce((a, b) => a + b, 0) / times.traditional.length) 
+          : null,
+      }))
+      .filter(d => d['Robotic (Mako)'] !== null || d['Traditional'] !== null)
+      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+  }, [cases, procedureCategories, procedureTechniques])
+
+  // Report cards configuration
+  const reportCards: ReportCardProps[] = [
+    {
+      title: 'ORbit Score',
+      description: 'Composite surgeon performance scores based on controllable operational metrics',
+      href: '/analytics/orbit-score',
+      icon: Star,
+      accentColor: 'violet',
+      badge: 'New',
+    },
+    {
+      title: 'KPI Overview',
+      description: 'Complete dashboard with all key performance indicators, targets, and daily trends',
+      href: '/analytics/kpi',
+      icon: Presentation,
+      accentColor: 'blue',
+      badge: 'Full Report',
+    },
+    {
+      title: 'Financial Analytics',
+      description: 'Profitability metrics, cost analysis, and revenue insights',
+      href: '/analytics/financials',
+      icon: DollarSign,
+      accentColor: 'green',
+    },
+    {
+      title: 'Surgeon Performance',
+      description: 'Compare surgeon metrics, case times, and efficiency across procedures',
+      href: '/analytics/surgeons',
+      icon: User,
+      accentColor: 'green',
+    },
+    {
+      title: 'Block Utilization',
+      description: 'Block time usage by surgeon, capacity gaps, and case-fitting opportunities',
+      href: '/analytics/block-utilization',
+      icon: CalendarDays,
+      accentColor: 'blue',
+    },
+    {
+      title: 'Case Flags',
+      description: 'Review flagged cases, timing anomalies, and reported delays across your facility',
+      href: '/analytics/flags',
+      icon: Flag,
+      accentColor: 'rose',
+      badge: 'New',
+    },
+  ]
+
+  // Loading state
+  if (userLoading) {
+    return (
+      <DashboardLayout>
+        <PageLoader message="Loading analytics..." />
+      </DashboardLayout>
+    )
+  }
+
+  if (!can('analytics.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
+
+  // No facility selected (global admin)
+  if (!effectiveFacilityId && isGlobalAdmin) {
+    return (
+      <DashboardLayout>
+        <Container className="py-12">
+          <div className="max-w-md mx-auto text-center">
+            <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-4">
+              <BarChart3 className="w-8 h-8 text-blue-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-slate-900 mb-2">No Facility Selected</h2>
+            <p className="text-slate-500 mb-6">Select a facility to view analytics and performance metrics.</p>
+            <Link
+              href="/admin/facilities"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              View Facilities
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </Container>
+      </DashboardLayout>
+    )
+  }
+
+  return (
+    <DashboardLayout>
+          {/* Page Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900">Analytics</h1>
+              <p className="text-slate-500 text-sm mt-1">
+                Performance insights and operational metrics
+              </p>
+            </div>
+            <DateRangeSelector value={dateFilter} onChange={handleFilterChange} />
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-24">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-slate-500">Calculating metrics...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {/* KPI STRIP — 6 across */}
+              <section>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <QuickStatCard
+                    title="Completed Cases"
+                    value={analytics.completedCases.toString()}
+                    trend={analytics.caseVolume.delta}
+                    trendType={analytics.caseVolume.deltaType === 'increase' ? 'up' : analytics.caseVolume.deltaType === 'decrease' ? 'down' : undefined}
+                    sparklineData={dailyDataToSparkline(analytics.caseVolume.dailyData)}
+                    sparklineColor="#3b82f6"
+                  />
+                  <QuickStatCard
+                    title="FCOTS Rate"
+                    value={analytics.fcots.displayValue}
+                    target={`${config.fcotsTargetPercent}%`}
+                    trend={analytics.fcots.delta}
+                    trendType={analytics.fcots.deltaType === 'increase' ? 'up' : analytics.fcots.deltaType === 'decrease' ? 'down' : undefined}
+                    sparklineData={dailyDataToSparkline(analytics.fcots.dailyData)}
+                    sparklineColor="#f59e0b"
+                  />
+                  <CombinedTurnoverCard
+                    sameRoomValue={analytics.sameRoomTurnover.displayValue}
+                    flipRoomValue={analytics.flipRoomTurnover.displayValue}
+                    target={`\u2264${config.turnoverThresholdMinutes} min / \u2264${config.flipRoomTurnoverTarget} min`}
+                  />
+                  <QuickStatCard
+                    title="OR Utilization"
+                    value={analytics.orUtilization.displayValue}
+                    target={`\u2265${config.utilizationTargetPercent}%`}
+                    trend={analytics.orUtilization.delta}
+                    trendType={analytics.orUtilization.deltaType === 'increase' ? 'up' : analytics.orUtilization.deltaType === 'decrease' ? 'down' : undefined}
+                  />
+                  <QuickStatCard
+                    title="Avg Case Time"
+                    value={avgCaseTimeKPIData.displayValue}
+                    trend={avgCaseTimeKPIData.delta}
+                    trendType={avgCaseTimeKPIData.deltaType === 'increase' ? 'up' : avgCaseTimeKPIData.deltaType === 'decrease' ? 'down' : undefined}
+                  />
+                  <QuickStatCard
+                    title="Cancellation"
+                    value={analytics.cancellationRate.displayValue}
+                    target={`<${config.cancellationTargetPercent}%`}
+                    trend={analytics.cancellationRate.delta}
+                    trendType={analytics.cancellationRate.deltaType === 'increase' ? 'up' : analytics.cancellationRate.deltaType === 'decrease' ? 'down' : undefined}
+                  />
+                </div>
+              </section>
+
+              {/* FLAGS COMPACT BANNER */}
+              {effectiveFacilityId && (
+                <section>
+                  <FlagsCompactBanner
+                    facilityId={effectiveFacilityId}
+                    startDate={currentStartDate}
+                    endDate={currentEndDate}
+                  />
+                </section>
+              )}
+
+              {/* ROW 1: Case Volume Trend + Surgeon Leaderboard */}
+              <section>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Case Volume Trend */}
+                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Case Volume Trend</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Completed cases over time</p>
+                      </div>
+                    </div>
+                    <div className="p-5">
+                      {dailyCaseTrendData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={dailyCaseTrendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                            <Tooltip content={<CaseVolumeTooltip />} />
+                            <Bar dataKey="Completed Cases" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-56 text-slate-400">
+                          <div className="text-center">
+                            <BarChart3 className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                            <p>No data available</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Surgeon Leaderboard */}
+                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Surgeon Leaderboard</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Top performers this period</p>
+                      </div>
+                    </div>
+                    <SurgeonLeaderboardTable data={surgeonLeaderboard} />
+                  </div>
+                </div>
+              </section>
+
+              {/* ROW 2: Procedure Mix + Room Utilization */}
+              <section>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Procedure Mix */}
+                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-slate-100">
+                      <h3 className="text-sm font-semibold text-slate-900">Procedure Mix</h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Case distribution by procedure type</p>
+                    </div>
+                    <div className="p-5">
+                      <ProcedureMixCard data={procedureCategoryData} colors={categoryChartColors} />
+                    </div>
+                  </div>
+
+                  {/* Room Utilization */}
+                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Room Utilization</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Utilization & same-room turnover</p>
+                      </div>
+                    </div>
+                    <RoomUtilizationCard rooms={analytics.orUtilization.roomBreakdown} />
+                  </div>
+                </div>
+              </section>
+
+              {/* ROBOTIC VS TRADITIONAL COMPARISON */}
+              {(kneeComparisonData.length > 0 || hipComparisonData.length > 0) && (
+                <section>
+                  <SectionHeader
+                    title="Robotic vs Traditional Surgical Time"
+                    subtitle="Average surgical time comparison by technique"
+                  />
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Total Knee Comparison */}
+                    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                      <div className="px-6 py-4 border-b border-slate-100">
+                        <h3 className="text-base font-semibold text-slate-900">Total Knee Arthroplasty</h3>
+                        <p className="text-sm text-slate-500 mt-0.5">Surgical time by technique (minutes)</p>
+                      </div>
+                      <div className="p-6">
+                        {kneeComparisonData.length > 0 ? (
+                          <div>
+                            <ResponsiveContainer width="100%" height={224}>
+                              <AreaChart data={kneeComparisonData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
+                                <defs>
+                                  <linearGradient id="gradCyanKnee" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.15} />
+                                    <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.02} />
+                                  </linearGradient>
+                                  <linearGradient id="gradSlateKnee" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#64748b" stopOpacity={0.15} />
+                                    <stop offset="100%" stopColor="#64748b" stopOpacity={0.02} />
+                                  </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                <Tooltip content={<ComparisonTooltip />} />
+                                <Area type="monotone" dataKey="Robotic (Mako)" stroke="#06b6d4" fill="url(#gradCyanKnee)" strokeWidth={2} connectNulls />
+                                <Area type="monotone" dataKey="Traditional" stroke="#64748b" fill="url(#gradSlateKnee)" strokeWidth={2} connectNulls />
+                              </AreaChart>
+                            </ResponsiveContainer>
+                            <div className="flex gap-4 mt-2 justify-center">
+                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#06b6d4' }} />
+                                Robotic (Mako)
+                              </span>
+                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#64748b' }} />
+                                Traditional
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center h-56 text-slate-400">
+                            <div className="text-center">
+                              <BarChart3 className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                              <p className="text-sm">No TKA data available</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Total Hip Comparison */}
+                    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                      <div className="px-6 py-4 border-b border-slate-100">
+                        <h3 className="text-base font-semibold text-slate-900">Total Hip Arthroplasty</h3>
+                        <p className="text-sm text-slate-500 mt-0.5">Surgical time by technique (minutes)</p>
+                      </div>
+                      <div className="p-6">
+                        {hipComparisonData.length > 0 ? (
+                          <div>
+                            <ResponsiveContainer width="100%" height={224}>
+                              <AreaChart data={hipComparisonData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
+                                <defs>
+                                  <linearGradient id="gradCyanHip" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.15} />
+                                    <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.02} />
+                                  </linearGradient>
+                                  <linearGradient id="gradSlateHip" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#64748b" stopOpacity={0.15} />
+                                    <stop offset="100%" stopColor="#64748b" stopOpacity={0.02} />
+                                  </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                <Tooltip content={<ComparisonTooltip />} />
+                                <Area type="monotone" dataKey="Robotic (Mako)" stroke="#06b6d4" fill="url(#gradCyanHip)" strokeWidth={2} connectNulls />
+                                <Area type="monotone" dataKey="Traditional" stroke="#64748b" fill="url(#gradSlateHip)" strokeWidth={2} connectNulls />
+                              </AreaChart>
+                            </ResponsiveContainer>
+                            <div className="flex gap-4 mt-2 justify-center">
+                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#06b6d4' }} />
+                                Robotic (Mako)
+                              </span>
+                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#64748b' }} />
+                                Traditional
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center h-56 text-slate-400">
+                            <div className="text-center">
+                              <BarChart3 className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                              <p className="text-sm">No THA data available</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* AI INSIGHT CARD */}
+              {analytics.surgeonIdleTime.value > 0 && (
+                <section>
+                  <button
+                    onClick={() => setShowFlipRoomModal(true)}
+                    className="w-full text-left bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
+                  >
+                    <div className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-blue-100">
+                            <Sparkles className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-slate-900">Optimization Opportunity</h3>
+                              <span className="px-2 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full">
+                                AI Insight
+                              </span>
+                            </div>
+                            <p className="text-sm text-slate-600 mt-1">
+                              Surgeons are waiting an average of <span className="font-semibold text-blue-700">{analytics.surgeonIdleTime.displayValue}</span> between rooms.
+                              {analytics.surgeonIdleTime.subtitle !== 'No optimization needed' && (
+                                <span className="text-blue-700"> {analytics.surgeonIdleTime.subtitle}</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <ArrowRight className="w-5 h-5 text-blue-600" />
+                      </div>
+                    </div>
+                  </button>
+                </section>
+              )}
+
+              {/* RECENT CASES TABLE */}
+              {recentCases.length > 0 && (
+                <section>
+                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Recent Cases</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Latest completed cases</p>
+                      </div>
+                    </div>
+                    <RecentCasesTable cases={recentCases} onCaseClick={handleCaseClick} />
+                  </div>
+                </section>
+              )}
+
+              {/* REPORTS GRID */}
+              <section>
+                <SectionHeader
+                  title="Detailed Reports"
+                  subtitle="Dive deeper into specific areas of OR performance"
+                />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {reportCards.map((card) => (
+                    <ReportCard key={card.href} {...card} />
+                  ))}
+                </div>
+              </section>
+
+              {/* FLIP ROOM MODAL */}
+              <FlipRoomModal
+                isOpen={showFlipRoomModal}
+                onClose={() => setShowFlipRoomModal(false)}
+                data={analytics.flipRoomAnalysis}
+              />
+
+              {/* CASE DRAWER */}
+              <CaseDrawer
+                caseId={drawerCaseId}
+                onClose={handleDrawerClose}
+                categoryNameById={categoryNameById}
+              />
+            </div>
+          )}
+    </DashboardLayout>
+  )
+}

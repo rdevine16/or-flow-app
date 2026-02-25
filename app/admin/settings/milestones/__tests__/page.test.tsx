@@ -160,7 +160,7 @@ vi.mock('@/components/settings/milestones/AdminProcedureTypeAssignment', () => (
   ),
 }))
 
-import AdminMilestonesSettingsPage from '../page'
+import AdminMilestonesSettingsPage from '../PageClient'
 
 // ─── Fixtures ────────────────────────────────────────────
 

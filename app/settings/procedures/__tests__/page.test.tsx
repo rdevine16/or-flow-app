@@ -165,7 +165,7 @@ vi.mock('@/lib/UserContext', () => ({
   }),
 }))
 
-import ProceduresSettingsPage from '../page'
+import ProceduresSettingsPage from '../PageClient'
 
 // ============================================
 // TESTS

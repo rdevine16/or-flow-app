@@ -103,7 +103,7 @@ vi.mock('@/hooks/useTemplateBuilder', () => ({
   useTemplateBuilder: () => ({}),
 }))
 
-import MilestonesSettingsPage from '../page'
+import MilestonesSettingsPage from '../PageClient'
 
 // ─── Fixtures ────────────────────────────────────────────
 
