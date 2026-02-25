@@ -3,6 +3,9 @@
 // Usage: import { caseAudit, deviceRepAudit } from '@/lib/audit-logger'
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
+
+const log = logger('audit-logger')
 
 // =====================================================
 // TYPES
@@ -484,7 +487,7 @@ async function log(
 ) {
   const context = await getAuditContext(supabase)
   if (!context) {
-    console.warn('[AUDIT] No user context available')
+    log.warn('No user context available')
     return
   }
 
@@ -506,7 +509,7 @@ async function log(
   const { error } = await supabase.from('audit_log').insert(entry)
 
   if (error) {
-    console.error('[AUDIT] Failed to log:', error)
+    log.error('Failed to log audit entry', error)
   }
 }
 // =====================================================

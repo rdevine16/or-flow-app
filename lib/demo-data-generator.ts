@@ -8,7 +8,10 @@
 // Users are NEVER deleted — purge only touches case-level records.
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
 import { getLocalDateString } from '@/lib/date-utils'
+
+const log = logger('demo-data-generator')
 import { getHolidayDateSet } from '@/lib/us-holidays'
 import type { OutlierProfile } from '@/lib/demo-outlier-engine'
 import {
@@ -546,10 +549,10 @@ export async function generateDemoData(
     const resolved: ResolvedSurgeon[] = []
     for (const p of surgeonProfiles) {
       const { data: u } = await supabase.from('users').select('id, first_name, last_name, facility_id, closing_workflow, closing_handoff_minutes').eq('id', p.surgeonId).single()
-      if (!u) { console.warn(`Surgeon ${p.surgeonId} not found`); continue }
+      if (!u) { log.warn('Surgeon not found', { surgeonId: p.surgeonId }); continue }
       // Use wizard-selected procedure types (not name-matched)
       const validProcIds = p.procedureTypeIds.filter(pid => procedureTypes.some(pt => pt.id === pid))
-      if (!validProcIds.length) { console.warn(`No valid procedures for Dr. ${u.last_name}`); continue }
+      if (!validProcIds.length) { log.warn('No valid procedures for surgeon', { surgeon: u.last_name }); continue }
       resolved.push({
         ...p,
         procedureTypeIds: validProcIds,
@@ -585,8 +588,8 @@ export async function generateDemoData(
         // Clear existing overrides first (purge may not have run)
         await supabase.from('surgeon_template_overrides').delete().eq('facility_id', facilityId).then(() => {}, () => {})
         const { error: ovErr } = await supabase.from('surgeon_template_overrides').insert(overrideRecords)
-        if (ovErr) console.warn('Surgeon override insert:', ovErr.message)
-        else console.log(`[DEMO-GEN] Created ${overrideRecords.length} surgeon template overrides`)
+        if (ovErr) log.warn('Surgeon override insert failed', { error: ovErr.message })
+        else log.info('Created surgeon template overrides', { count: overrideRecords.length })
       }
     }
 
@@ -758,16 +761,16 @@ export async function generateDemoData(
     }
 
     onProgress?.({ phase: 'inserting', current: 70, total: 100, message: `Inserting ${allMilestones.length} milestones...` })
-    console.log(`[DEMO-GEN] Total milestones to insert: ${allMilestones.length}`)
+    log.info('Total milestones to insert', { count: allMilestones.length })
     if (allMilestones.length > 0) {
-      console.log('[DEMO-GEN] Sample milestone:', JSON.stringify(allMilestones[0]))
-      console.log('[DEMO-GEN] fmToMtMap size:', fmToMtMap.size, 'entries:', [...fmToMtMap.entries()].map(([k,v]) => `${k}->${v}`).join(', '))
+      log.debug('Sample milestone', { sample: allMilestones[0] })
+      log.debug('fmToMtMap', { size: fmToMtMap.size })
     }
     for (let i = 0; i < allMilestones.length; i += BATCH_SIZE) {
       const batch = allMilestones.slice(i, i + BATCH_SIZE)
       const { error, data } = await supabase.from('case_milestones').insert(batch).select('id')
-      if (error) { console.error(`Milestone batch ${i} err:`, error.message, 'Code:', error.code, 'Details:', error.details, 'Sample:', JSON.stringify(batch[0])); }
-      else { console.log(`[DEMO-GEN] Milestone batch ${i}: inserted ${data?.length ?? 'unknown'} rows`) }
+      if (error) { log.error('Milestone batch insert failed', error, { batch: i, code: error.code }); }
+      else { log.debug('Milestone batch inserted', { batch: i, rows: data?.length ?? 0 }) }
     }
 
     // ── Build case_milestone_stats (bypasses triggers we disabled) ──
@@ -831,19 +834,19 @@ export async function generateDemoData(
     onProgress?.({ phase: 'inserting', current: 78, total: 100, message: `Inserting ${allMilestoneStats.length} milestone stats...` })
     for (let i = 0; i < allMilestoneStats.length; i += BATCH_SIZE) {
       const { error } = await supabase.from('case_milestone_stats').insert(allMilestoneStats.slice(i, i + BATCH_SIZE))
-      if (error) console.error(`MilestoneStats batch ${i} err:`, error.message, 'Sample:', JSON.stringify(allMilestoneStats[i]))
+      if (error) log.error('MilestoneStats batch insert failed', error, { batch: i })
     }
 
     onProgress?.({ phase: 'inserting', current: 80, total: 100, message: `Inserting ${allStaffAssignments.length} staff...` })
     for (let i = 0; i < allStaffAssignments.length; i += BATCH_SIZE) {
       const { error } = await supabase.from('case_staff').insert(allStaffAssignments.slice(i, i + BATCH_SIZE))
-      if (error) console.error('Staff err:', error.message)
+      if (error) log.error('Staff insert failed', error)
     }
 
     onProgress?.({ phase: 'inserting', current: 88, total: 100, message: `Inserting ${allImplants.length} implants...` })
     for (let i = 0; i < allImplants.length; i += BATCH_SIZE) {
       const { error } = await supabase.from('case_implants').insert(allImplants.slice(i, i + BATCH_SIZE))
-      if (error) console.error('Implant err:', error.message)
+      if (error) log.error('Implant insert failed', error)
     }
 
     await supabase.rpc('enable_demo_triggers').then(() => {}, () => { supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {}) })
@@ -865,7 +868,7 @@ export async function generateDemoData(
       onProgress?.({ phase: 'inserting', current: 82, total: 100, message: `Inserting ${delayRecords.length} case delays...` })
       for (let i = 0; i < delayRecords.length; i += BATCH_SIZE) {
         const { error } = await supabase.from('case_delays').insert(delayRecords.slice(i, i + BATCH_SIZE))
-        if (error) console.error('Delay insert err:', error.message)
+        if (error) log.error('Delay insert failed', error)
       }
       delayedCount = delayRecords.length
     }
@@ -900,7 +903,7 @@ export async function generateDemoData(
         onProgress?.({ phase: 'inserting', current: 84, total: 100, message: `Inserting ${complexityRecords.length} case complexities...` })
         for (let i = 0; i < complexityRecords.length; i += BATCH_SIZE) {
           const { error } = await supabase.from('case_complexities').insert(complexityRecords.slice(i, i + BATCH_SIZE))
-          if (error) console.error('Complexity insert err:', error.message)
+          if (error) log.error('Complexity insert failed', error)
         }
       }
     }
@@ -923,7 +926,7 @@ export async function generateDemoData(
         onProgress?.({ phase: 'inserting', current: 86, total: 100, message: `Inserting ${deviceRecords.length} device records...` })
         for (let i = 0; i < deviceRecords.length; i += BATCH_SIZE) {
           const { error } = await supabase.from('case_implant_companies').insert(deviceRecords.slice(i, i + BATCH_SIZE))
-          if (error) console.error('Device insert err:', error.message)
+          if (error) log.error('Device insert failed', error)
         }
       }
     }
@@ -935,11 +938,11 @@ export async function generateDemoData(
     const unvalidatedIds = new Set(shuffle(nonCancelledCompleted).slice(0, unvalidatedCount).map(c => c.id))
     const toValidateIds = nonCancelledCompleted.filter(c => !unvalidatedIds.has(c.id)).map(c => c.id)
 
-    console.log(`[DEMO-GEN] Validating ${toValidateIds.length} completed cases (${unvalidatedIds.size} left unvalidated for Data Quality)...`)
+    log.info('Validating completed cases', { validated: toValidateIds.length, unvalidated: unvalidatedIds.size })
     for (let i = 0; i < toValidateIds.length; i += BATCH_SIZE) {
       const batch = toValidateIds.slice(i, i + BATCH_SIZE)
       const { error } = await supabase.from('cases').update({ data_validated: true }).in('id', batch)
-      if (error) console.error(`Validation batch ${i} err:`, error.message)
+      if (error) log.error('Validation batch failed', error, { batch: i })
     }
 
     // ── Flag detection ──
@@ -985,28 +988,28 @@ export async function generateDemoData(
           message: `Inserting ${flags.length} case flags...` })
         for (let i = 0; i < flags.length; i += BATCH_SIZE) {
           const { error } = await supabase.from('case_flags').insert(flags.slice(i, i + BATCH_SIZE))
-          if (error) console.error('Flag insert err:', error.message)
+          if (error) log.error('Flag insert failed', error)
         }
       }
     }
 
     onProgress?.({ phase: 'finalizing', current: 95, total: 100, message: 'Recalculating averages...' })
-    await supabase.rpc('recalculate_surgeon_averages', { p_facility_id: facilityId }).then(() => {}, (e: Error) => console.warn('Avg recalc:', e.message))
+    await supabase.rpc('recalculate_surgeon_averages', { p_facility_id: facilityId }).then(() => {}, (e: Error) => log.warn('Avg recalc failed', e))
 
     // Refresh materialized views so analytics reflect new data
     onProgress?.({ phase: 'finalizing', current: 97, total: 100, message: 'Refreshing analytics views...' })
     await supabase.rpc('refresh_all_stats').then(
-      () => console.log('Refreshed all materialized views'),
-      (e: Error) => console.warn('MatView refresh failed:', e.message)
+      () => log.info('Refreshed all materialized views'),
+      (e: Error) => log.warn('MatView refresh failed', e)
     )
 
     // Verification counts
     const { count: dbCaseCount } = await supabase.from('cases').select('*', { count: 'exact', head: true }).eq('facility_id', facilityId)
     const { count: dbMsCount } = await supabase.from('case_milestones').select('*', { count: 'exact', head: true }).in('case_id', allCases.slice(0, 5).map(c => c.id))
     const { count: dbStatsCount } = await supabase.from('case_completion_stats').select('*', { count: 'exact', head: true }).eq('facility_id', facilityId)
-    console.log(`[DEMO-GEN] Verification — DB cases: ${dbCaseCount}, milestones sample (5 cases): ${dbMsCount}, completion_stats: ${dbStatsCount}`)
-    console.log(`[DEMO-GEN] Expected — cases: ${allCases.length}, milestones: ${allMilestones.length}, validated: ${toValidateIds.length}`)
-    console.log(`[DEMO-GEN] Cancelled: ${cancelledCaseIds.size}, Delays: ${delayedCount}, Flags: ${flaggedCount}, Unvalidated: ${unvalidatedIds.size}`)
+    log.info('Verification', { dbCases: dbCaseCount, dbMilestonesSample: dbMsCount, dbCompletionStats: dbStatsCount })
+    log.info('Expected', { cases: allCases.length, milestones: allMilestones.length, validated: toValidateIds.length })
+    log.info('Summary', { cancelled: cancelledCaseIds.size, delays: delayedCount, flags: flaggedCount, unvalidated: unvalidatedIds.size })
 
     onProgress?.({ phase: 'complete', current: 100, total: 100, message: 'Done!' })
     return {

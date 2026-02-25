@@ -3,6 +3,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
+import { logger } from './logger'
 import { createClient } from './supabase'
 import { getImpersonationState } from './impersonation'
 import { usePermissions } from '@/lib/hooks/usePermissions'
@@ -140,7 +141,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           })
         }
       } catch (error) {
-        console.error('UserContext: Error', error)
+        logger('UserContext').error('Failed to fetch user', error)
       } finally {
         if (isMounted) {
           setLoading(false)

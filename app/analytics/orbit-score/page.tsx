@@ -10,6 +10,7 @@ import { ArrowRight, ChevronDown } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
 import { createClient } from '@/lib/supabase'
+import { logger } from '@/lib/logger'
 import { useUser } from '@/lib/UserContext'
 import {
   calculateORbitScores,
@@ -588,7 +589,7 @@ export default function ORbitScorePage() {
         }))
         // Fire-and-forget — don't block the UI
         supabase.from('surgeon_scorecards').insert(rows).then(({ error: cacheErr }) => {
-          if (cacheErr) console.warn('Failed to cache surgeon scorecards:', cacheErr.message)
+          if (cacheErr) logger('orbit-score').warn('Failed to cache surgeon scorecards', { error: cacheErr.message })
         })
       }
 

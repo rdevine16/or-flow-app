@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
 import {
   findNextCase,
   getCurrentMilestoneStatus,
@@ -156,7 +157,7 @@ const fetchRef = useRef<() => Promise<void>>(null)
         lastMilestoneRecordedAt,
       })
     } catch (err) {
-      console.error('Failed to fetch flip room data:', err)
+      logger('useFlipRoom').error('Failed to fetch flip room data', err)
     } finally {
       setLoading(false)
     }
