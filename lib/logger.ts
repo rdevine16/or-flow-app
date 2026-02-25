@@ -6,8 +6,6 @@
  * - Production: suppresses debug/info, formats error/warn as structured JSON
  * - Zero dependencies, no async, no DB writes
  *
- * For persistent error tracking (DB + Sentry), use `errorLogger` from '@/lib/error-logger'.
- *
  * Usage:
  *   import { logger } from '@/lib/logger'
  *

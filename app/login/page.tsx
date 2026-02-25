@@ -8,8 +8,10 @@ import { authAudit } from '@/lib/audit-logger'
 import Image from 'next/image'
 import { checkRateLimit, recordFailedAttempt, clearRateLimit } from '@/lib/rate-limiter'
 import { signInWithSession } from '@/lib/session-manager'
-import { errorLogger } from '@/lib/error-logger'
+import { logger } from '@/lib/logger'
 import { AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, Mail, ShieldCheck } from 'lucide-react'
+
+const log = logger('login')
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -83,7 +85,7 @@ export default function LoginPage() {
         
         setError(`Too many failed attempts. Please try again in ${minutesLeft} minute${minutesLeft > 1 ? 's' : ''}.`)
         
-        errorLogger.authError('Rate limit triggered', email)
+        log.warn('Rate limit triggered', { email })
         setLoading(false)
         return
       }
@@ -103,7 +105,7 @@ export default function LoginPage() {
         await authAudit.login(supabase, email, false, signInError.message)
         
         // Log error
-        errorLogger.authError('Login failed', email, signInError)
+        log.error('Login failed', signInError, { email })
         
         // Provide friendlier error messages
         if (signInError.message.includes('Invalid login credentials')) {
@@ -131,7 +133,7 @@ export default function LoginPage() {
         if (!isActive) {
           // Log deactivated user login attempt
           await authAudit.login(supabase, email, false, 'Account deactivated')
-          errorLogger.authError('Deactivated account login attempt', email)
+          log.warn('Deactivated account login attempt', { email })
           
           // Sign them out immediately if deactivated
           await supabase.auth.signOut()
@@ -148,7 +150,7 @@ export default function LoginPage() {
 
         // Log successful login
         await authAudit.login(supabase, email, true)
-        errorLogger.info('User logged in successfully', { userId, email })
+        log.info('User logged in successfully', { userId, email })
 
         // Check access level to determine redirect
         const { data: userRecord } = await supabase
@@ -166,7 +168,7 @@ export default function LoginPage() {
         router.refresh()
       }
     } catch (err) {
-      errorLogger.critical('Unexpected login error', err as Error, { email })
+      log.error('Unexpected login error', err, { email })
       setError('An unexpected error occurred. Please try again.')
       setLoading(false)
     }
@@ -196,14 +198,14 @@ export default function LoginPage() {
       })
 
       if (resetError) {
-        errorLogger.authError('Password reset failed', email, resetError)
+        log.error('Password reset failed', resetError, { email })
         setError(resetError.message)
       } else {
-        errorLogger.info('Password reset email sent', { email })
+        log.info('Password reset email sent', { email })
         setResetEmailSent(true)
       }
     } catch (err) {
-      errorLogger.error('Password reset error', err as Error, { email })
+      log.error('Password reset error', err, { email })
       setError('Failed to send reset email. Please try again.')
     } finally {
       setResetLoading(false)

@@ -276,10 +276,6 @@ export const ROUTE_BREADCRUMBS: Record<string, RouteSegment[]> = {
     { label: 'Admin', href: '/admin' },
     { label: 'Demo', href: null },
   ],
-  '/admin/docs': [
-    { label: 'Admin', href: '/admin' },
-    { label: 'Docs', href: null },
-  ],
   '/admin/global-security': [
     { label: 'Admin', href: '/admin' },
     { label: 'Global Security', href: null },

@@ -2,7 +2,7 @@
 // Centralized navigation configuration for DashboardLayout
 
 import { ReactNode } from 'react'
-import { AlertTriangle, Ban, BarChart3, Bell, BookOpen, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, CreditCard, Database, FileText, Flag, FlaskConical, Home, KeyRound, LayoutGrid, Package, Settings, ShieldCheck, User, Wrench } from 'lucide-react'
+import { AlertTriangle, Ban, BarChart3, Bell, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, CreditCard, Database, FileText, Flag, FlaskConical, Home, KeyRound, LayoutGrid, Package, Settings, ShieldCheck, User } from 'lucide-react'
 
 // ============================================
 // Types
@@ -64,8 +64,6 @@ export const navIcons = {
   spd: <Box className={iconClass} />,
   analytics: <BarChart3 className={iconClass} />,
   dataQuality: <ShieldCheck className={iconClass} />,
-  docs: <BookOpen className={iconClass} />,
-  refactor: <Wrench className={iconClass} />,
   settings: <Settings className={iconClass} />,
   security: <ShieldCheck className={iconClass} />,
   permissionTemplates: <KeyRound className={iconClass} />,
@@ -220,24 +218,6 @@ export const adminNavGroups: NavGroup[] = [
         name: 'Global Security',        // ← ADD THIS
         href: '/admin/global-security',
         icon: navIcons.security,
-        allowedRoles: ['global_admin'],
-      },
-    ],
-  },
-  {
-    id: 'developer',
-    label: 'Developer',
-    items: [
-      {
-        name: 'Docs',
-        href: '/admin/docs',
-        icon: navIcons.docs,
-        allowedRoles: ['global_admin'],
-      },
-      {
-        name: 'Refactor',
-        href: '/refactor',
-        icon: navIcons.refactor,
         allowedRoles: ['global_admin'],
       },
     ],

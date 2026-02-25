@@ -287,7 +287,7 @@ describe('resolveBreadcrumbs', () => {
       const expectedRoutes = [
         '/admin', '/admin/facilities', '/admin/facilities/new', '/admin/facilities/[id]',
         '/admin/audit-log', '/admin/cancellation-reasons', '/admin/checklist-templates',
-        '/admin/complexities', '/admin/demo', '/admin/docs', '/admin/global-security',
+        '/admin/complexities', '/admin/demo', '/admin/global-security',
         '/admin/permission-templates',
         '/admin/settings/body-regions', '/admin/settings/cost-categories',
         '/admin/settings/delay-types', '/admin/settings/implant-companies',
