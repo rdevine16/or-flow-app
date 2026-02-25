@@ -6,7 +6,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { useSearchParams, usePathname } from 'next/navigation'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { casesDAL, type CasesPageTab, type CaseFlagSummary } from '@/lib/dal'
 import type { CaseListItem, CasesFilterParams } from '@/lib/dal/cases'
@@ -128,7 +128,6 @@ const DEFAULT_PAGE_SIZE = 25
 
 export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const pathname = usePathname()
 
   // --- Row Selection (declared first because other callbacks reference setSelectedRows) ---
@@ -162,25 +161,17 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     setSelectedRows(new Set())
   }, [])
 
-  // --- Tab State (URL-synced via ?tab= query param) ---
-  const activeTab: CasesPageTab = useMemo(() => {
+  // --- Tab State (local state, synced to URL via replaceState) ---
+  const [activeTab, setActiveTabState] = useState<CasesPageTab>(() => {
     const tabParam = searchParams.get('tab')
     return isValidTab(tabParam) ? tabParam : 'today'
-  }, [searchParams])
+  })
 
   const setActiveTab = useCallback((tab: CasesPageTab) => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (tab === 'today') {
-      params.delete('tab')
-    } else {
-      params.set('tab', tab)
-    }
-    // Reset to page 1 when switching tabs
-    params.delete('page')
-    const qs = params.toString()
-    router.push(qs ? `${pathname}?${qs}` : pathname)
+    setActiveTabState(tab)
+    setPageState(1)
     setSelectedRows(new Set())
-  }, [router, pathname, searchParams])
+  }, [])
 
   // --- Date Range State (default: Last 30 Days) ---
   const [dateRange, setDateRangeState] = useState<DateRangeState>(() => {
@@ -193,7 +184,11 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     setDateRangeState({ preset, start, end })
     setPage(1)
     setSelectedRows(new Set())
-  }, [setPage])
+    // "Today" and "Data Quality" tabs ignore date ranges, so switch to "all"
+    if (activeTab === 'today' || activeTab === 'data_quality') {
+      setActiveTabState('all')
+    }
+  }, [setPage, activeTab])
 
   // --- Filter State (search + entity filters, URL-synced) ---
   const [searchInput, setSearchInputState] = useState(() => searchParams.get('q') || '')
@@ -248,9 +243,17 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     setProcedureIdsState([])
     setPage(1)
     setSelectedRows(new Set())
+    setActiveTabState('today')
   }, [setPage])
 
   const hasActiveFilters = debouncedSearch !== '' || surgeonIds.length > 0 || roomIds.length > 0 || procedureIds.length > 0
+
+  // Auto-switch to "all" tab when any filter becomes active
+  useEffect(() => {
+    if (hasActiveFilters && activeTab !== 'all') {
+      setActiveTabState('all')
+    }
+  }, [hasActiveFilters, activeTab])
 
   // Build filter params for DAL queries
   const dalFilters: CasesFilterParams | undefined = useMemo(() => {
@@ -263,15 +266,23 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     }
   }, [debouncedSearch, surgeonIds, roomIds, procedureIds, hasActiveFilters])
 
-  // URL sync for filters (replaceState to avoid navigation)
+  // URL sync for tab + filters (single replaceState to avoid race conditions)
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString())
+    const params = new URLSearchParams(window.location.search)
+
+    // Sync tab
+    if (activeTab === 'today') {
+      params.delete('tab')
+    } else {
+      params.set('tab', activeTab)
+    }
 
     // Clear old filter params
     params.delete('q')
     params.delete('surgeon')
     params.delete('room')
     params.delete('procedure')
+    params.delete('page')
 
     // Set new filter params
     if (debouncedSearch) params.set('q', debouncedSearch)
@@ -282,7 +293,7 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     const qs = params.toString()
     const newUrl = qs ? `${pathname}?${qs}` : pathname
     window.history.replaceState(null, '', newUrl)
-  }, [debouncedSearch, surgeonIds, roomIds, procedureIds, pathname, searchParams])
+  }, [activeTab, debouncedSearch, surgeonIds, roomIds, procedureIds, pathname])
 
   // Aggregate filter state for the component
   const filters: CasesFilterState = useMemo(() => ({

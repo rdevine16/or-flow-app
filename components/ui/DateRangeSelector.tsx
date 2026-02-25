@@ -304,7 +304,6 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
                     value={customEnd}
                     onChange={(e) => setCustomEnd(e.target.value)}
                     min={customStart || undefined}
-                    max={toDateStr(new Date())}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>
