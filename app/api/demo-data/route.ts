@@ -1,6 +1,7 @@
 // app/api/demo-data/route.ts
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createAuthClient } from '@/lib/supabase-server'
 import { purgeCaseData, getDetailedStatus } from '@/lib/demo-data-generator'
 import { env, serverEnv } from '@/lib/env'
 import { logger } from '@/lib/logger'
@@ -14,6 +15,21 @@ const supabase = createClient(
 
 export async function POST(request: Request) {
   try {
+    // Authorization: require global_admin or facility_admin
+    const authClient = await createAuthClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    const { data: profile } = await supabase
+      .from('users')
+      .select('access_level')
+      .eq('id', user.id)
+      .single()
+    if (!profile || !['global_admin', 'facility_admin'].includes(profile.access_level)) {
+      return NextResponse.json({ error: 'Insufficient permissions — admin access required' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { action, facilityId } = body
 

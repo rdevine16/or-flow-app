@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
 
+const log = logger('useMilestoneRealtime')
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -170,13 +172,13 @@ export function useMilestoneRealtime({
       )
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
-          logger.info('Realtime subscription active for case milestones', { caseId })
+          log.info('Realtime subscription active for case milestones', { caseId })
         }
         if (status === 'CHANNEL_ERROR') {
-          logger.error('Realtime channel error for case milestones — verify case_milestones is in supabase_realtime publication', { caseId })
+          log.error('Realtime channel error for case milestones — verify case_milestones is in supabase_realtime publication', { caseId })
         }
         if (status === 'TIMED_OUT') {
-          logger.warn('Realtime subscription timed out for case milestones', { caseId })
+          log.warn('Realtime subscription timed out for case milestones', { caseId })
         }
       })
 

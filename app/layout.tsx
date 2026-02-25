@@ -4,7 +4,8 @@ import "./globals.css";
 import { UserProvider } from "../lib/UserContext";
 import { SubNavProvider } from "../lib/SubNavContext";
 import { ToastProvider } from "@/components/ui/Toast/ToastProvider";
-import { ErrorBoundary } from "@/components/ErrorBoundary";  // ← ADD THIS LINE
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { OfflineBanner } from "@/components/OfflineBanner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,8 +18,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ORbit",
-  description: "Operating room efficiency tracking",
+  title: {
+    default: "ORbit",
+    template: "%s | ORbit",
+  },
+  description: "Real-time operating room efficiency tracking and surgical analytics",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function RootLayout({
@@ -31,7 +39,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ErrorBoundary> 
+        <OfflineBanner />
+        <ErrorBoundary>
           <ToastProvider>
             <UserProvider>
               <SubNavProvider>

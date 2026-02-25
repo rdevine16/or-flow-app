@@ -40,7 +40,15 @@ export const env = {
     return requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY')
   },
   get NEXT_PUBLIC_APP_URL(): string {
-    return requireEnv('NEXT_PUBLIC_APP_URL')
+    // Accept both names for backward compatibility (env files may use either)
+    const value = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
+    if (!value) {
+      throw new Error(
+        'Missing required environment variable: NEXT_PUBLIC_APP_URL (or NEXT_PUBLIC_SITE_URL)\n' +
+          'See .env.example for required configuration.'
+      )
+    }
+    return value
   },
   get NODE_ENV(): string {
     return process.env.NODE_ENV || 'development'

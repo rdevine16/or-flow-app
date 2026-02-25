@@ -3,6 +3,7 @@
 // Accepts full wizard config via POST body, streams progress events via Server-Sent Events.
 
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createAuthClient } from '@/lib/supabase-server'
 import { generateDemoData, purgeCaseData, type GenerationConfig, type ProgressCallback, type SurgeonDurationMap, type SurgeonProfileInput } from '@/lib/demo-data-generator'
 import type { OutlierProfile } from '@/lib/demo-outlier-engine'
 import type { OutlierType, OutlierSetting } from '@/app/admin/demo/types'
@@ -90,6 +91,27 @@ export async function POST(request: Request) {
   const startTime = Date.now()
 
   try {
+    // Authorization: require global_admin or facility_admin
+    const authClient = await createAuthClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+    const { data: profile } = await supabase
+      .from('users')
+      .select('access_level')
+      .eq('id', user.id)
+      .single()
+    if (!profile || !['global_admin', 'facility_admin'].includes(profile.access_level)) {
+      return new Response(
+        JSON.stringify({ error: 'Insufficient permissions — admin access required' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
     const body = await request.json()
     const { facilityId, surgeonProfiles, monthsOfHistory, purgeFirst } = body
 
