@@ -40,15 +40,15 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <OfflineBanner />
-        <ErrorBoundary>
-          <ToastProvider>
+        <ToastProvider>
+          <ErrorBoundary>
             <UserProvider>
               <SubNavProvider>
                 {children}
               </SubNavProvider>
             </UserProvider>
-          </ToastProvider>
-        </ErrorBoundary> 
+          </ErrorBoundary>
+        </ToastProvider> 
       </body>
     </html>
   );
