@@ -5,7 +5,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
 
-const log = logger('audit-logger')
+const structuredLog = logger('audit-logger')
 
 // =====================================================
 // TYPES
@@ -487,7 +487,7 @@ async function log(
 ) {
   const context = await getAuditContext(supabase)
   if (!context) {
-    log.warn('No user context available')
+    structuredLog.warn('No user context available')
     return
   }
 
@@ -509,7 +509,7 @@ async function log(
   const { error } = await supabase.from('audit_log').insert(entry)
 
   if (error) {
-    log.error('Failed to log audit entry', error)
+    structuredLog.error('Failed to log audit entry', error)
   }
 }
 // =====================================================
