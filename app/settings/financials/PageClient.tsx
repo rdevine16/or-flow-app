@@ -102,7 +102,7 @@ export default function FinancialsOverviewPage() {
         costCategoriesRes, payersRes, proceduresRes,
         procedureCostsRes, surgeonVariancesRes, facilityRes, activityRes,
       ] = await Promise.all([
-        sb.from('facility_cost_categories').select('id, type').eq('facility_id', effectiveFacilityId!).eq('is_active', true),
+        sb.from('cost_categories').select('id, type').eq('facility_id', effectiveFacilityId!).eq('is_active', true),
         sb.from('payers').select('id').eq('facility_id', effectiveFacilityId!).is('deleted_at', null),
         sb.from('procedure_types').select('id').eq('facility_id', effectiveFacilityId!).is('deleted_at', null),
         sb.from('procedure_cost_items').select('procedure_type_id').eq('facility_id', effectiveFacilityId!).is('effective_to', null),

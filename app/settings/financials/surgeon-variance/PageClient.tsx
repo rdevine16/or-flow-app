@@ -8,6 +8,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import SearchableDropdown from '@/components/ui/SearchableDropdown'
@@ -19,6 +20,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { Calculator, ExternalLink, Info, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { getLocalDateString } from '@/lib/date-utils'
+import { zIndex as zTokens } from '@/lib/design-tokens'
 
 interface Surgeon {
   id: string
@@ -97,6 +99,16 @@ export default function SurgeonVariancePage() {
   const [selectedSurgeonId, setSelectedSurgeonId] = useState<string>('')
   const [selectedProcedureId, setSelectedProcedureId] = useState<string>('')
   const [editingItems, setEditingItems] = useState<Map<string, number>>(new Map())
+
+  // Lock body scroll when panel is open
+  useEffect(() => {
+    if (panelOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [panelOpen])
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<SurgeonProcedureOverride | null>(null)
@@ -537,10 +549,16 @@ export default function SurgeonVariancePage() {
         </div>
       )}
 
-      {/* Add/Edit Panel */}
-      {panelOpen && (
-        <div className="fixed inset-0 bg-black/50 flex justify-end z-50">
-          <div className="w-full max-w-lg bg-white shadow-xl flex flex-col">
+      {/* Add/Edit Panel — portaled to body to escape stacking context */}
+      {panelOpen && createPortal(
+        <div
+          className="fixed inset-0 bg-black/50 flex justify-end"
+          style={{ zIndex: zTokens.modalBackdrop }}
+        >
+          <div
+            className="w-full max-w-lg bg-white shadow-xl flex flex-col"
+            style={{ zIndex: zTokens.modal }}
+          >
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -699,7 +717,8 @@ export default function SurgeonVariancePage() {
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <DeleteConfirm

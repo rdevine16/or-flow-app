@@ -4,6 +4,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { genericAuditLog } from '@/lib/audit-logger'
@@ -13,6 +14,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { AlertTriangle, ClipboardList, ExternalLink, Info, Pencil, X } from 'lucide-react'
 import { getLocalDateString } from '@/lib/date-utils'
+import { zIndex as zTokens } from '@/lib/design-tokens'
 
 
 // Types
@@ -84,6 +86,16 @@ export default function ProcedurePricingPage() {
   // OR Rate editing
   const [editingOrRate, setEditingOrRate] = useState(false)
   const [orRateValue, setOrRateValue] = useState('')
+
+  // Lock body scroll when panel is open
+  useEffect(() => {
+    if (panelOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [panelOpen])
 
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
@@ -624,14 +636,20 @@ export default function ProcedurePricingPage() {
             </div>
           )}
 
-      {/* Edit Panel (Slideout) */}
-      {panelOpen && selectedProcedure && (
-        <div className="fixed inset-0 bg-black/50 flex justify-end z-50">
-          <div 
-            className="absolute inset-0" 
+      {/* Edit Panel (Slideout) — portaled to body to escape stacking context */}
+      {panelOpen && selectedProcedure && createPortal(
+        <div
+          className="fixed inset-0 bg-black/50 flex justify-end"
+          style={{ zIndex: zTokens.modalBackdrop }}
+        >
+          <div
+            className="absolute inset-0"
             onClick={closePanel}
           />
-          <div className="relative w-full max-w-xl bg-white shadow-xl flex flex-col animate-slide-in-right">
+          <div
+            className="relative w-full max-w-xl bg-white shadow-xl flex flex-col animate-slide-in-right"
+            style={{ zIndex: zTokens.modal }}
+          >
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -802,7 +820,8 @@ export default function ProcedurePricingPage() {
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Animation styles */}

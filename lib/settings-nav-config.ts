@@ -276,14 +276,6 @@ export const settingsCategories: SettingsCategory[] = [
         permission: 'financials.view',
       },
       {
-        id: 'facility-details',
-        label: 'Facility Details',
-        href: '/settings/facilities',
-        icon: Building2,
-        description: 'Facility financial information',
-        permission: 'financials.view',
-      },
-      {
         id: 'cost-categories',
         label: 'Cost Categories',
         href: '/settings/financials/cost-categories',
