@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
 
 const log = logger('useMilestoneRealtime')
+
+const POLL_INTERVAL_MS = 5_000
 
 // ============================================================================
 // TYPES
@@ -22,10 +24,8 @@ export interface CaseMilestoneState {
 }
 
 export interface UseMilestoneRealtimeOptions {
-  supabase: {
-    channel: (name: string) => RealtimeChannel
-    removeChannel: (channel: RealtimeChannel) => void
-  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase client type is deeply recursive; narrowing it triggers TS2589
+  supabase: any
   caseId: string
   enabled: boolean
   setCaseMilestones: React.Dispatch<React.SetStateAction<CaseMilestoneState[]>>
@@ -125,6 +125,35 @@ export function mergeDelete(
 }
 
 // ============================================================================
+// POLLING FALLBACK
+// ============================================================================
+
+/**
+ * Reconciles polled data with current state.
+ * Replaces the full list but preserves optimistic entries that haven't
+ * been confirmed by the server yet.
+ */
+export function reconcilePoll(
+  prev: CaseMilestoneState[],
+  polled: CaseMilestoneState[]
+): CaseMilestoneState[] {
+  const optimistic = prev.filter(m => m.id.startsWith('optimistic-'))
+  const optimisticFmIds = new Set(optimistic.map(m => m.facility_milestone_id))
+  // Keep server rows, but don't duplicate facility_milestone_ids that have optimistic entries
+  const serverRows = polled.filter(m => !optimisticFmIds.has(m.facility_milestone_id))
+  const merged = [...serverRows, ...optimistic]
+
+  // Quick equality check to avoid unnecessary re-renders
+  if (
+    prev.length === merged.length &&
+    prev.every((m, i) => m.id === merged[i].id && m.recorded_at === merged[i].recorded_at)
+  ) {
+    return prev
+  }
+  return merged
+}
+
+// ============================================================================
 // HOOK
 // ============================================================================
 
@@ -135,6 +164,38 @@ export function useMilestoneRealtime({
   setCaseMilestones,
 }: UseMilestoneRealtimeOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const usingPollingRef = useRef(false)
+
+  const pollMilestones = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('case_milestones')
+        .select('id, facility_milestone_id, recorded_at')
+        .eq('case_id', caseId)
+
+      if (data) {
+        setCaseMilestones(prev => reconcilePoll(prev, data))
+      }
+    } catch {
+      log.warn('Polling fetch failed for case milestones', { caseId })
+    }
+  }, [supabase, caseId, setCaseMilestones])
+
+  const startPolling = useCallback(() => {
+    if (pollRef.current) return
+    usingPollingRef.current = true
+    pollRef.current = setInterval(pollMilestones, POLL_INTERVAL_MS)
+    log.info('Polling fallback active for case milestones', { caseId, intervalMs: POLL_INTERVAL_MS })
+  }, [pollMilestones, caseId])
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+    usingPollingRef.current = false
+  }, [])
 
   useEffect(() => {
     if (!enabled || !caseId) return
@@ -173,12 +234,15 @@ export function useMilestoneRealtime({
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           log.info('Realtime subscription active for case milestones', { caseId })
+          stopPolling()
         }
         if (status === 'CHANNEL_ERROR') {
-          log.error('Realtime channel error for case milestones — verify case_milestones is in supabase_realtime publication', { caseId })
+          log.warn('Realtime unavailable for case milestones (known Supabase RLS limitation) — falling back to polling', { caseId })
+          startPolling()
         }
         if (status === 'TIMED_OUT') {
-          log.warn('Realtime subscription timed out for case milestones', { caseId })
+          log.warn('Realtime subscription timed out for case milestones — falling back to polling', { caseId })
+          startPolling()
         }
       })
 
@@ -187,8 +251,9 @@ export function useMilestoneRealtime({
     return () => {
       supabase.removeChannel(channel)
       channelRef.current = null
+      stopPolling()
     }
-  }, [supabase, caseId, enabled, setCaseMilestones])
+  }, [supabase, caseId, enabled, setCaseMilestones, startPolling, stopPolling])
 
   return channelRef
 }
