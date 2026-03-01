@@ -73,8 +73,20 @@ function extractBundleEntries<T>(bundle: FhirBundle<T> | null): T[] {
 // =====================================================
 
 /**
+ * Validate that a FHIR appointment has required fields.
+ * Invalid appointments are skipped and logged.
+ */
+function isValidAppointment(appt: FhirAppointment): boolean {
+  if (!appt.id || !appt.status || !appt.participant) {
+    return false
+  }
+  return true
+}
+
+/**
  * Search for surgical appointments within a date range.
  * Optionally filter by practitioner (surgeon).
+ * Invalid FHIR data is skipped and logged.
  */
 export async function searchSurgicalAppointments(
   supabase: SupabaseClient,
@@ -108,15 +120,26 @@ export async function searchSurgicalAppointments(
 
   const appointments = extractBundleEntries(bundle)
 
+  // Validate and filter — skip invalid FHIR data
+  const validAppointments = appointments.filter(a => {
+    if (!isValidAppointment(a)) {
+      log.warn('Skipping invalid FHIR appointment', { facilityId, appointmentId: a.id })
+      return false
+    }
+    return true
+  })
+
   // Filter to only booked/arrived/pending appointments (not cancelled/noshow)
-  const activeAppointments = appointments.filter(a =>
+  const activeAppointments = validAppointments.filter(a =>
     ['booked', 'arrived', 'pending', 'proposed'].includes(a.status)
   )
 
   log.info('Fetched surgical appointments', {
     facilityId,
     total: appointments.length,
+    valid: validAppointments.length,
     active: activeAppointments.length,
+    skippedInvalid: appointments.length - validAppointments.length,
     dateRange: `${params.dateFrom} to ${params.dateTo}`,
   })
 
@@ -215,6 +238,7 @@ export async function searchLocations(
 /**
  * Resolve all referenced resources for an appointment.
  * Fetches patient, practitioner, and location in parallel.
+ * Partial failures are handled gracefully — returns null for failed resources.
  */
 export async function resolveAppointmentDetails(
   supabase: SupabaseClient,
@@ -225,8 +249,8 @@ export async function resolveAppointmentDetails(
   const practitionerId = findParticipantRef(appointment, 'Practitioner')
   const locationId = findParticipantRef(appointment, 'Location')
 
-  // Fetch all referenced resources in parallel
-  const [patientResult, practitionerResult, locationResult] = await Promise.all([
+  // Fetch all referenced resources in parallel — use allSettled for partial failure resilience
+  const [patientResult, practitionerResult, locationResult] = await Promise.allSettled([
     patientId
       ? getPatient(supabase, facilityId, patientId)
       : Promise.resolve({ data: null, error: null }),
@@ -238,10 +262,20 @@ export async function resolveAppointmentDetails(
       : Promise.resolve({ data: null, error: null }),
   ])
 
-  return {
-    appointment,
-    patient: patientResult.data,
-    practitioner: practitionerResult.data,
-    location: locationResult.data,
+  const patient = patientResult.status === 'fulfilled' ? patientResult.value.data : null
+  const practitioner = practitionerResult.status === 'fulfilled' ? practitionerResult.value.data : null
+  const location = locationResult.status === 'fulfilled' ? locationResult.value.data : null
+
+  // Log any failed resolutions
+  if (patientResult.status === 'rejected') {
+    log.warn('Failed to resolve patient for appointment', { facilityId, appointmentId: appointment.id, patientId })
   }
+  if (practitionerResult.status === 'rejected') {
+    log.warn('Failed to resolve practitioner for appointment', { facilityId, appointmentId: appointment.id, practitionerId })
+  }
+  if (locationResult.status === 'rejected') {
+    log.warn('Failed to resolve location for appointment', { facilityId, appointmentId: appointment.id, locationId })
+  }
+
+  return { appointment, patient, practitioner, location }
 }

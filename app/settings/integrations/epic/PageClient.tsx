@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -160,6 +160,23 @@ export default function EpicOverviewPage() {
     fetchStatus()
   }, [fetchStatus])
 
+  // Live countdown timer — re-renders every 30s to keep token expiry display fresh
+  const [, setTick] = useState(0)
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    const hasToken = epicStatus?.connection?.token_expires_at
+    if (!hasToken) return
+
+    tickRef.current = setInterval(() => {
+      setTick(t => t + 1)
+    }, 30_000)
+
+    return () => {
+      if (tickRef.current) clearInterval(tickRef.current)
+    }
+  }, [epicStatus?.connection?.token_expires_at])
+
   const handleConnect = () => {
     if (!currentUser?.facilityId) return
     window.location.href = `/api/epic/auth/connect?facility_id=${currentUser.facilityId}`
@@ -314,6 +331,49 @@ export default function EpicOverviewPage() {
               </div>
             </div>
           </div>
+
+          {/* Token Expiry Warning Banner */}
+          {tokenInfo && tokenInfo.minutesRemaining !== null && tokenInfo.minutesRemaining <= 10 && !tokenInfo.isExpired && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Clock className="w-5 h-5 text-amber-600" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">Token expiring soon</p>
+                  <p className="text-xs text-amber-600">
+                    {tokenInfo.minutesRemaining < 1 ? 'Less than 1 minute' : `${tokenInfo.minutesRemaining} minutes`} remaining. Reconnect to refresh your session.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleConnect}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-amber-700 bg-amber-100 rounded-lg hover:bg-amber-200 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Reconnect
+              </button>
+            </div>
+          )}
+
+          {tokenInfo?.isExpired && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Clock className="w-5 h-5 text-red-500" />
+                <div>
+                  <p className="text-sm font-medium text-red-800">Token expired</p>
+                  <p className="text-xs text-red-600">
+                    Your Epic session has expired. Reconnect to continue using FHIR features.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleConnect}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Reconnect
+              </button>
+            </div>
+          )}
 
           {/* Quick Actions */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

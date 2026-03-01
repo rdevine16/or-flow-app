@@ -138,9 +138,22 @@ export function getTokenExpiryInfo(tokenExpiresAt: string | null): TokenExpiryIn
   }
 }
 
+// =====================================================
+// FHIR REQUEST WITH RETRY + TIMEOUT
+// =====================================================
+
+const FHIR_TIMEOUT_MS = 10_000
+const MAX_RETRIES = 3
+const BASE_BACKOFF_MS = 1000
+
+/** Sleep helper for backoff */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 /**
  * Make an authenticated FHIR request using the facility's Epic access token.
- * Handles token validation before making the request.
+ * Features: 10s timeout, exponential backoff for 429 rate limits, up to 3 retries.
  */
 export async function epicFhirRequest<T>(
   supabase: SupabaseClient,
@@ -148,6 +161,24 @@ export async function epicFhirRequest<T>(
   resourcePath: string,
   options: { method?: string; body?: unknown } = {}
 ): Promise<{ data: T | null; error: string | null }> {
+  // Proactive token expiry check
+  const { data: connCheck } = await supabase
+    .from('epic_connections')
+    .select('token_expires_at')
+    .eq('facility_id', facilityId)
+    .single()
+
+  if (connCheck?.token_expires_at) {
+    const expiryInfo = getTokenExpiryInfo(connCheck.token_expires_at)
+    if (expiryInfo.isExpired) {
+      await supabase
+        .from('epic_connections')
+        .update({ status: 'token_expired' })
+        .eq('facility_id', facilityId)
+      return { data: null, error: 'Epic token has expired. Please reconnect.' }
+    }
+  }
+
   // Get valid token
   const { token, error: tokenError } = await getEpicAccessToken(supabase, facilityId)
   if (!token) {
@@ -167,44 +198,77 @@ export async function epicFhirRequest<T>(
 
   const url = `${connection.fhir_base_url}/${resourcePath}`
 
-  try {
-    const response = await fetch(url, {
-      method: options.method || 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/fhir+json',
-        'Content-Type': 'application/fhir+json',
-      },
-      body: options.body ? JSON.stringify(options.body) : undefined,
-    })
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), FHIR_TIMEOUT_MS)
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      log.error('FHIR request failed', {
-        facilityId,
-        resourcePath,
-        status: response.status,
-        error: errorText,
+      const response = await fetch(url, {
+        method: options.method || 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/fhir+json',
+          'Content-Type': 'application/fhir+json',
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+        signal: controller.signal,
       })
 
-      // Token rejected by Epic — may be expired or revoked
-      if (response.status === 401) {
-        await supabase
-          .from('epic_connections')
-          .update({ status: 'token_expired' })
-          .eq('facility_id', facilityId)
+      clearTimeout(timeoutId)
 
-        return { data: null, error: 'Epic token is invalid or expired. Please reconnect.' }
+      // Rate limited — retry with exponential backoff
+      if (response.status === 429 && attempt < MAX_RETRIES) {
+        const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
+        log.warn('FHIR rate limited, retrying', { facilityId, resourcePath, attempt, backoffMs: backoff })
+        await sleep(backoff)
+        continue
       }
 
-      return { data: null, error: `FHIR request failed: ${response.status} ${response.statusText}` }
-    }
+      if (!response.ok) {
+        const errorText = await response.text()
+        log.error('FHIR request failed', {
+          facilityId,
+          resourcePath,
+          status: response.status,
+          error: errorText,
+        })
 
-    const data = await response.json() as T
-    return { data, error: null }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    log.error('FHIR request threw', { facilityId, resourcePath, error: message })
-    return { data: null, error: `FHIR request error: ${message}` }
+        // Token rejected by Epic — may be expired or revoked
+        if (response.status === 401) {
+          await supabase
+            .from('epic_connections')
+            .update({ status: 'token_expired' })
+            .eq('facility_id', facilityId)
+
+          return { data: null, error: 'Epic token is invalid or expired. Please reconnect.' }
+        }
+
+        return { data: null, error: `FHIR request failed: ${response.status} ${response.statusText}` }
+      }
+
+      const data = await response.json() as T
+      return { data, error: null }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      const isTimeout = err instanceof Error && err.name === 'AbortError'
+
+      if (isTimeout && attempt < MAX_RETRIES) {
+        const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt)
+        log.warn('FHIR request timed out, retrying', { facilityId, resourcePath, attempt, backoffMs: backoff })
+        await sleep(backoff)
+        continue
+      }
+
+      log.error('FHIR request threw', { facilityId, resourcePath, error: message, isTimeout })
+      return {
+        data: null,
+        error: isTimeout
+          ? 'FHIR request timed out after 10s. Epic may be slow — try again.'
+          : `FHIR request error: ${message}`,
+      }
+    }
   }
+
+  // Should not reach here, but TypeScript safety
+  return { data: null, error: 'FHIR request failed after retries' }
 }
