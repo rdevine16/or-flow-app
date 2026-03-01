@@ -31,36 +31,30 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
 
   // Parse params
   const facilityId = req.nextUrl.searchParams.get('facility_id')
-  const dateFrom = req.nextUrl.searchParams.get('date_from')
-  const dateTo = req.nextUrl.searchParams.get('date_to')
+  const dateFrom = req.nextUrl.searchParams.get('date_from') ?? undefined
+  const dateTo = req.nextUrl.searchParams.get('date_to') ?? undefined
+  const patientId = req.nextUrl.searchParams.get('patient_id') ?? undefined
   const practitionerId = req.nextUrl.searchParams.get('practitioner_id') ?? undefined
 
-  if (!facilityId || !dateFrom || !dateTo) {
+  if (!facilityId) {
     return NextResponse.json(
-      { error: 'facility_id, date_from, and date_to are required' },
+      { error: 'facility_id is required' },
       { status: 400 }
     )
   }
 
-  // Validate date range: forward only, max 30 days
-  const fromDate = new Date(dateFrom)
-  const toDate = new Date(dateTo)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  // Validate date range if both provided: max 30 days span
+  if (dateFrom && dateTo) {
+    const fromDate = new Date(dateFrom + 'T00:00:00')
+    const toDate = new Date(dateTo + 'T00:00:00')
 
-  if (fromDate < today) {
-    return NextResponse.json(
-      { error: 'date_from must be today or in the future' },
-      { status: 400 }
-    )
-  }
-
-  const daysDiff = Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24))
-  if (daysDiff > MAX_DATE_RANGE_DAYS) {
-    return NextResponse.json(
-      { error: `Date range cannot exceed ${MAX_DATE_RANGE_DAYS} days` },
-      { status: 400 }
-    )
+    const daysDiff = Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysDiff > MAX_DATE_RANGE_DAYS) {
+      return NextResponse.json(
+        { error: `Date range cannot exceed ${MAX_DATE_RANGE_DAYS} days` },
+        { status: 400 }
+      )
+    }
   }
 
   // Verify facility access
@@ -87,11 +81,11 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     )
   }
 
-  // Search FHIR for appointments
+  // Search FHIR for appointments (Epic requires patient parameter)
   const { data: appointments, error: searchError } = await searchSurgicalAppointments(
     supabase,
     facilityId,
-    { dateFrom, dateTo, practitionerId }
+    { dateFrom, dateTo, patientId, practitionerId }
   )
 
   if (searchError) {

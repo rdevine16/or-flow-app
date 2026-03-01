@@ -41,6 +41,7 @@ interface ConnectionStatusResult {
   connected_by: string | null
   token_expires_at: string | null
   fhir_base_url: string
+  client_id: string
 }
 
 /** Get connection status (limited fields — safe for non-admin users).
@@ -63,22 +64,27 @@ async function upsertConnection(
   connectionData: {
     fhir_base_url: string
     client_id: string
+    client_secret?: string
     status?: string
     connected_by?: string
   }
 ): Promise<DALResult<EpicConnection>> {
+  const row: Record<string, unknown> = {
+    facility_id: facilityId,
+    fhir_base_url: connectionData.fhir_base_url,
+    client_id: connectionData.client_id,
+    status: connectionData.status || 'disconnected',
+    connected_by: connectionData.connected_by,
+  }
+
+  // Only include client_secret if provided (avoids overwriting with null on reconnect)
+  if (connectionData.client_secret !== undefined) {
+    row.client_secret = connectionData.client_secret
+  }
+
   const { data, error } = await supabase
     .from('epic_connections')
-    .upsert(
-      {
-        facility_id: facilityId,
-        fhir_base_url: connectionData.fhir_base_url,
-        client_id: connectionData.client_id,
-        status: connectionData.status || 'disconnected',
-        connected_by: connectionData.connected_by,
-      },
-      { onConflict: 'facility_id' }
-    )
+    .upsert(row, { onConflict: 'facility_id' })
     .select('*')
     .single()
 
@@ -344,10 +350,32 @@ async function checkDuplicateImport(
 // EXPORT
 // =====================================================
 
+/** Get facility FHIR URL config for display.
+ *  Used by the config GET endpoint. */
+async function getConnectionConfig(
+  supabase: AnySupabaseClient,
+  facilityId: string
+): Promise<DALResult<{ fhir_base_url: string }>> {
+  const { data, error } = await supabase
+    .from('epic_connections')
+    .select('fhir_base_url')
+    .eq('facility_id', facilityId)
+    .single()
+
+  if (error || !data) return { data: null, error }
+
+  const row = data as unknown as { fhir_base_url: string }
+  return {
+    data: { fhir_base_url: row.fhir_base_url },
+    error: null,
+  }
+}
+
 export const epicDAL = {
   // Connections
   getConnection,
   getConnectionStatus,
+  getConnectionConfig,
   upsertConnection,
   updateConnection,
   // Entity Mappings

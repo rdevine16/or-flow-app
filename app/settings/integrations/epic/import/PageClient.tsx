@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -16,6 +16,8 @@ import {
   Loader2,
   ExternalLink,
   Ban,
+  User,
+  X,
 } from 'lucide-react'
 import { useCurrentUser } from '@/hooks'
 
@@ -55,6 +57,14 @@ interface ImportSummary {
   total: number
   success: number
   failed: number
+}
+
+interface PatientResult {
+  id: string
+  name: string | null
+  birthDate: string | null
+  gender: string | null
+  mrn: string | null
 }
 
 // =====================================================
@@ -189,6 +199,18 @@ export default function EpicImportPage() {
   const router = useRouter()
   const { data: currentUser } = useCurrentUser()
 
+  // Patient search state
+  const [patientQuery, setPatientQuery] = useState('')
+  const [patientResults, setPatientResults] = useState<PatientResult[]>([])
+  const [searchingPatients, setSearchingPatients] = useState(false)
+  const [patientSearchError, setPatientSearchError] = useState<string | null>(null)
+  const [selectedPatient, setSelectedPatient] = useState<PatientResult | null>(null)
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false)
+  const [usePatientId, setUsePatientId] = useState(false)
+  const [patientIdInput, setPatientIdInput] = useState('')
+  const patientSearchRef = useRef<HTMLDivElement>(null)
+  const patientDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
   // Search state
   const [dateFrom, setDateFrom] = useState(getDefaultDateFrom)
   const [dateTo, setDateTo] = useState(getDefaultDateTo)
@@ -207,11 +229,122 @@ export default function EpicImportPage() {
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null)
 
   // =====================================================
-  // SEARCH
+  // PATIENT SEARCH
+  // =====================================================
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (patientSearchRef.current && !patientSearchRef.current.contains(e.target as Node)) {
+        setShowPatientDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handlePatientQueryChange = useCallback((value: string) => {
+    setPatientQuery(value)
+    setShowPatientDropdown(true)
+
+    // Clear previous debounce
+    if (patientDebounceRef.current) {
+      clearTimeout(patientDebounceRef.current)
+    }
+
+    // If a patient was selected but user is typing again, clear selection
+    if (selectedPatient) {
+      setSelectedPatient(null)
+    }
+
+    // Debounce the search
+    if (value.trim().length >= 2 && currentUser?.facilityId) {
+      patientDebounceRef.current = setTimeout(async () => {
+        setSearchingPatients(true)
+        setPatientSearchError(null)
+        try {
+          const params = new URLSearchParams({
+            facility_id: currentUser.facilityId,
+            name: value.trim(),
+          })
+          const response = await fetch(`/api/epic/patients/search?${params}`)
+          const json = await response.json()
+
+          if (response.ok) {
+            setPatientResults(json.data || [])
+          } else if (response.status === 403 && json.scopeError) {
+            // Epic didn't grant Patient.search scope — switch to ID mode
+            setPatientResults([])
+            setUsePatientId(true)
+            setPatientSearchError(null)
+          } else {
+            setPatientResults([])
+            setPatientSearchError(json.error || 'Search failed')
+          }
+        } catch {
+          setPatientResults([])
+          setPatientSearchError('Failed to connect to search')
+        } finally {
+          setSearchingPatients(false)
+        }
+      }, 400)
+    } else {
+      setPatientResults([])
+    }
+  }, [currentUser?.facilityId, selectedPatient])
+
+  const handleSelectPatient = useCallback((patient: PatientResult) => {
+    setSelectedPatient(patient)
+    setPatientQuery(patient.name ?? patient.mrn ?? patient.id)
+    setShowPatientDropdown(false)
+    setPatientResults([])
+  }, [])
+
+  const handleClearPatient = useCallback(() => {
+    setSelectedPatient(null)
+    setPatientQuery('')
+    setPatientIdInput('')
+    setPatientResults([])
+  }, [])
+
+  const handlePatientIdLookup = useCallback(async () => {
+    if (!currentUser?.facilityId || !patientIdInput.trim()) return
+
+    setSearchingPatients(true)
+    setPatientSearchError(null)
+    try {
+      const params = new URLSearchParams({
+        facility_id: currentUser.facilityId,
+        patient_id: patientIdInput.trim(),
+      })
+      const response = await fetch(`/api/epic/patients/search?${params}`)
+      const json = await response.json()
+
+      if (response.ok && json.data?.length > 0) {
+        setSelectedPatient(json.data[0])
+        setPatientQuery(json.data[0].name ?? json.data[0].id)
+      } else {
+        setPatientSearchError(json.error || 'Patient not found with that ID')
+      }
+    } catch {
+      setPatientSearchError('Failed to look up patient')
+    } finally {
+      setSearchingPatients(false)
+    }
+  }, [currentUser?.facilityId, patientIdInput])
+
+  // =====================================================
+  // APPOINTMENT SEARCH
   // =====================================================
 
   const handleSearch = useCallback(async () => {
     if (!currentUser?.facilityId) return
+
+    // Patient is required by Epic for appointment search
+    if (!selectedPatient) {
+      setSearchError('Please search for and select a patient first. Epic requires a patient to search appointments.')
+      return
+    }
 
     setSearching(true)
     setSearchError(null)
@@ -224,9 +357,12 @@ export default function EpicImportPage() {
     try {
       const params = new URLSearchParams({
         facility_id: currentUser.facilityId,
-        date_from: dateFrom,
-        date_to: dateTo,
+        patient_id: selectedPatient.id,
       })
+
+      // Dates are optional — omit for "all dates"
+      if (dateFrom) params.set('date_from', dateFrom)
+      if (dateTo) params.set('date_to', dateTo)
 
       const response = await fetch(`/api/epic/cases/search?${params}`)
       const json = await response.json()
@@ -250,7 +386,7 @@ export default function EpicImportPage() {
     } finally {
       setSearching(false)
     }
-  }, [currentUser?.facilityId, dateFrom, dateTo])
+  }, [currentUser?.facilityId, dateFrom, dateTo, selectedPatient])
 
   // =====================================================
   // SELECTION
@@ -351,29 +487,167 @@ export default function EpicImportPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Import Cases from Epic</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Search for upcoming appointments in Epic and import them as ORbit cases
+            Search for patient appointments in Epic and import them as ORbit cases
           </p>
         </div>
       </div>
 
       {/* Search Controls */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 mb-6">
+        {/* Patient Search Row */}
+        <div className="mb-4">
+          <div className="flex items-center gap-3 mb-1">
+            <label className="block text-sm font-medium text-slate-700">
+              Patient <span className="text-red-400">*</span>
+            </label>
+            {!selectedPatient && (
+              <button
+                type="button"
+                onClick={() => { setUsePatientId(!usePatientId); setPatientSearchError(null) }}
+                className="text-xs text-blue-600 hover:text-blue-700"
+              >
+                {usePatientId ? 'Search by name instead' : 'Use Patient FHIR ID'}
+              </button>
+            )}
+          </div>
+          <div ref={patientSearchRef} className="relative max-w-md">
+            {selectedPatient ? (
+              <div className="flex items-center gap-2 px-3 py-2 border border-emerald-200 bg-emerald-50 rounded-lg">
+                <User className="w-4 h-4 text-emerald-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-slate-900">
+                    {selectedPatient.name ?? 'Unknown'}
+                  </span>
+                  {selectedPatient.mrn && (
+                    <span className="text-xs text-slate-500 ml-2">MRN: {selectedPatient.mrn}</span>
+                  )}
+                  {selectedPatient.birthDate && (
+                    <span className="text-xs text-slate-500 ml-2">DOB: {formatDate(selectedPatient.birthDate)}</span>
+                  )}
+                </div>
+                <button
+                  onClick={handleClearPatient}
+                  className="p-0.5 hover:bg-emerald-100 rounded transition-colors"
+                  title="Clear patient"
+                >
+                  <X className="w-4 h-4 text-emerald-600" />
+                </button>
+              </div>
+            ) : usePatientId ? (
+              /* Patient ID input mode */
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={patientIdInput}
+                    onChange={e => { setPatientIdInput(e.target.value); setPatientSearchError(null) }}
+                    onKeyDown={e => e.key === 'Enter' && handlePatientIdLookup()}
+                    placeholder="Enter Patient FHIR ID (e.g., erXuFYUfucBZaryVksYEcMg3)"
+                    className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <button
+                  onClick={handlePatientIdLookup}
+                  disabled={searchingPatients || !patientIdInput.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {searchingPatients ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    'Look Up'
+                  )}
+                </button>
+              </div>
+            ) : (
+              /* Name search mode */
+              <>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={patientQuery}
+                    onChange={e => handlePatientQueryChange(e.target.value)}
+                    onFocus={() => patientResults.length > 0 && setShowPatientDropdown(true)}
+                    placeholder="Search by patient name..."
+                    className="w-full pl-10 pr-10 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {searchingPatients && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />
+                  )}
+                </div>
+
+                {/* Patient Results Dropdown */}
+                {showPatientDropdown && patientQuery.trim().length >= 2 && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {searchingPatients ? (
+                      <div className="px-4 py-3 text-sm text-slate-500 flex items-center gap-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Searching Epic...
+                      </div>
+                    ) : patientSearchError ? (
+                      <div className="px-4 py-3 text-sm text-red-600">
+                        {patientSearchError}
+                      </div>
+                    ) : patientResults.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-slate-500">
+                        No patients found for &ldquo;{patientQuery}&rdquo;
+                      </div>
+                    ) : (
+                      patientResults.map(patient => (
+                        <button
+                          key={patient.id}
+                          onClick={() => handleSelectPatient(patient)}
+                          className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0 transition-colors"
+                        >
+                          <p className="text-sm font-medium text-slate-900">
+                            {patient.name ?? 'Unknown'}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {patient.mrn && `MRN: ${patient.mrn}`}
+                            {patient.mrn && patient.birthDate && ' · '}
+                            {patient.birthDate && `DOB: ${formatDate(patient.birthDate)}`}
+                            {(patient.mrn || patient.birthDate) && patient.gender && ' · '}
+                            {patient.gender && patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1)}
+                          </p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          {patientSearchError && !showPatientDropdown && (
+            <p className="text-xs text-red-500 mt-1">{patientSearchError}</p>
+          )}
+          <p className="text-xs text-slate-400 mt-1">
+            {usePatientId
+              ? 'Enter the patient\'s FHIR ID and click Look Up to verify.'
+              : 'Epic requires a patient to search appointments. Type at least 2 characters to search.'}
+          </p>
+        </div>
+
+        {/* Date Range Row (optional) */}
         <div className="flex items-end gap-4 flex-wrap">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">From Date</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              From Date <span className="text-xs text-slate-400 font-normal">(optional)</span>
+            </label>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="date"
                 value={dateFrom}
                 onChange={e => setDateFrom(e.target.value)}
-                min={getDefaultDateFrom()}
                 className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">To Date</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              To Date <span className="text-xs text-slate-400 font-normal">(optional)</span>
+            </label>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -385,9 +659,18 @@ export default function EpicImportPage() {
               />
             </div>
           </div>
+          {(dateFrom || dateTo) && (
+            <button
+              type="button"
+              onClick={() => { setDateFrom(''); setDateTo('') }}
+              className="text-xs text-blue-600 hover:text-blue-700 pb-2.5"
+            >
+              Clear dates (all)
+            </button>
+          )}
           <button
             onClick={handleSearch}
-            disabled={searching || !currentUser}
+            disabled={searching || !currentUser || !selectedPatient}
             className="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {searching ? (
@@ -395,7 +678,7 @@ export default function EpicImportPage() {
             ) : (
               <Search className="w-4 h-4" />
             )}
-            {searching ? 'Searching...' : 'Search Epic'}
+            {searching ? 'Searching...' : 'Search Appointments'}
           </button>
         </div>
       </div>
@@ -573,8 +856,8 @@ export default function EpicImportPage() {
           <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-slate-700 mb-1">No appointments found</h3>
           <p className="text-sm text-slate-500">
-            No surgical appointments were found in Epic for the selected date range.
-            Try adjusting the dates or check your Epic connection.
+            No appointments were found in Epic for this patient in the selected date range.
+            Try adjusting the dates or searching for a different patient.
           </p>
         </div>
       )}

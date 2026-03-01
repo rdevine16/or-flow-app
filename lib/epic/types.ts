@@ -179,6 +179,7 @@ export interface EpicConnection {
   facility_id: string
   fhir_base_url: string
   client_id: string
+  client_secret: string | null
   access_token: string | null
   refresh_token: string | null
   token_expires_at: string | null

@@ -33,8 +33,9 @@ export interface ResolvedAppointment {
 
 /** Search parameters for surgical appointments */
 export interface AppointmentSearchParams {
-  dateFrom: string   // YYYY-MM-DD
-  dateTo: string     // YYYY-MM-DD
+  dateFrom?: string   // YYYY-MM-DD (optional — omit for all dates)
+  dateTo?: string     // YYYY-MM-DD (optional — omit for all dates)
+  patientId?: string      // Epic Patient FHIR ID (required by Epic)
   practitionerId?: string  // Epic Practitioner FHIR ID
 }
 
@@ -93,14 +94,23 @@ export async function searchSurgicalAppointments(
   facilityId: string,
   params: AppointmentSearchParams
 ): Promise<{ data: FhirAppointment[]; error: string | null }> {
+  // Epic REQUIRES patient parameter for Appointment search
+  if (!params.patientId) {
+    return { data: [], error: 'Patient ID is required to search Epic appointments' }
+  }
+
   const searchParams = new URLSearchParams({
-    date: `ge${params.dateFrom}`,
+    patient: params.patientId,
     _count: '100',
-    'service-type': 'http://snomed.info/sct|387713003', // Surgical procedure
   })
 
-  // Add end date bound
-  searchParams.append('date', `le${params.dateTo}`)
+  // Date bounds are optional — omit to get all appointments for the patient
+  if (params.dateFrom) {
+    searchParams.append('date', `ge${params.dateFrom}`)
+  }
+  if (params.dateTo) {
+    searchParams.append('date', `le${params.dateTo}`)
+  }
 
   // Optional practitioner filter
   if (params.practitionerId) {
@@ -129,9 +139,9 @@ export async function searchSurgicalAppointments(
     return true
   })
 
-  // Filter to only booked/arrived/pending appointments (not cancelled/noshow)
+  // Filter out cancelled/noshow — keep active and fulfilled (past completed) appointments
   const activeAppointments = validAppointments.filter(a =>
-    ['booked', 'arrived', 'pending', 'proposed'].includes(a.status)
+    ['booked', 'arrived', 'pending', 'proposed', 'fulfilled', 'checked-in'].includes(a.status)
   )
 
   log.info('Fetched surgical appointments', {
@@ -209,6 +219,43 @@ export async function searchPractitioners(
   )
 
   if (error) {
+    return { data: [], error }
+  }
+
+  return { data: extractBundleEntries(bundle), error: null }
+}
+
+/**
+ * Search patients by name or identifier (MRN).
+ * Epic requires at least one search parameter.
+ */
+export async function searchPatients(
+  supabase: SupabaseClient,
+  facilityId: string,
+  params: { name?: string; identifier?: string }
+): Promise<{ data: FhirPatient[]; error: string | null }> {
+  const searchParams = new URLSearchParams({ _count: '20' })
+
+  if (params.name) {
+    searchParams.set('name', params.name)
+  }
+  if (params.identifier) {
+    searchParams.set('identifier', params.identifier)
+  }
+
+  // Epic requires at least one search parameter
+  if (!params.name && !params.identifier) {
+    return { data: [], error: 'Name or identifier is required to search patients' }
+  }
+
+  const { data: bundle, error } = await epicFhirRequest<FhirBundle<FhirPatient>>(
+    supabase,
+    facilityId,
+    `Patient?${searchParams.toString()}`
+  )
+
+  if (error) {
+    log.warn('Patient search failed', { facilityId, error })
     return { data: [], error }
   }
 

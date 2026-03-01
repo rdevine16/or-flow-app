@@ -19,14 +19,15 @@ import type { SmartConfiguration } from '@/lib/epic/types'
 
 const log = logger('epic-auth-connect')
 
-// FHIR scopes for ORbit (SMART v2 syntax)
+// FHIR scopes for ORbit (SMART v2 granular syntax)
+// .rs = read + search; Epic splits these into separate .r and .s grants
 const EPIC_SCOPES = [
-  'user/Appointment.read',
-  'user/ServiceRequest.read',
-  'user/Patient.read',
-  'user/Practitioner.read',
-  'user/Location.read',
-  'user/Procedure.read',
+  'user/Appointment.rs',
+  'user/ServiceRequest.rs',
+  'user/Patient.rs',
+  'user/Practitioner.rs',
+  'user/Location.rs',
+  'user/Procedure.rs',
   'openid',
   'fhirUser',
 ].join(' ')
@@ -62,23 +63,37 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     throw new AuthorizationError('Cannot connect Epic for another facility')
   }
 
+  // App-level credentials from env vars (ORbit's shared Epic app registration)
   const clientId = process.env.EPIC_CLIENT_ID
   const redirectUri = process.env.EPIC_REDIRECT_URI
-  const fhirBaseUrl = process.env.EPIC_FHIR_BASE_URL
 
-  if (!clientId || !redirectUri || !fhirBaseUrl) {
-    log.error('Missing Epic environment variables')
+  if (!clientId || !redirectUri) {
+    log.error('Missing Epic environment variables (CLIENT_ID or REDIRECT_URI)')
     return NextResponse.json(
-      { error: 'Epic integration is not configured' },
+      { error: 'Epic integration is not configured on the server' },
       { status: 500 }
     )
   }
 
-  // Ensure connection record exists (upsert)
-  await epicDAL.upsertConnection(supabase, facilityId, {
-    fhir_base_url: fhirBaseUrl,
-    client_id: clientId,
-  })
+  // Per-facility FHIR URL from DB, fall back to env var
+  const { data: existingConnection } = await epicDAL.getConnection(supabase, facilityId)
+  const fhirBaseUrl = existingConnection?.fhir_base_url || process.env.EPIC_FHIR_BASE_URL
+
+  if (!fhirBaseUrl) {
+    log.error('No FHIR base URL configured for facility', { facilityId })
+    return NextResponse.json(
+      { error: 'Please configure your Epic FHIR server URL first.' },
+      { status: 400 }
+    )
+  }
+
+  // Create connection record if one doesn't exist yet (e.g., env var fallback)
+  if (!existingConnection) {
+    await epicDAL.upsertConnection(supabase, facilityId, {
+      fhir_base_url: fhirBaseUrl,
+      client_id: clientId,
+    })
+  }
 
   // Fetch SMART configuration
   let smartConfig: SmartConfiguration
@@ -102,8 +117,11 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     )
   }
 
-  // Generate CSRF state
-  const state = crypto.randomUUID()
+  // Generate CSRF state — encode facilityId and userId in the state parameter
+  // so the callback doesn't depend on cookies (which break across domains/ngrok)
+  const nonce = crypto.randomUUID()
+  const statePayload = JSON.stringify({ nonce, facilityId, userId: user.id })
+  const state = Buffer.from(statePayload).toString('base64url')
 
   // Build authorization URL
   const authUrl = new URL(smartConfig.authorization_endpoint)
@@ -114,15 +132,7 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
   authUrl.searchParams.set('state', state)
   authUrl.searchParams.set('aud', fhirBaseUrl)
 
-  // Set state in HTTP-only cookie with 5 min TTL
   const response = NextResponse.redirect(authUrl.toString())
-  response.cookies.set('epic_oauth_state', JSON.stringify({ state, facilityId }), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 300, // 5 minutes
-    path: '/api/epic/auth',
-  })
 
   log.info('Epic OAuth flow initiated', { facilityId })
   return response
