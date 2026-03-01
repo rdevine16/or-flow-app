@@ -238,6 +238,52 @@ describe('epicDAL.batchUpdateFieldMappings', () => {
   })
 })
 
+describe('epicDAL.resetFieldMappingsToDefaults', () => {
+  it('should delete all existing and re-seed default mappings', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.neq.mockResolvedValueOnce({ error: null })
+    chainable.insert.mockResolvedValueOnce({ error: null })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await epicDAL.resetFieldMappingsToDefaults(client as any)
+
+    expect(result.success).toBe(true)
+    expect(client.from).toHaveBeenCalledWith('epic_field_mappings')
+    expect(chainable.delete).toHaveBeenCalled()
+    expect(chainable.neq).toHaveBeenCalledWith('id', '00000000-0000-0000-0000-000000000000')
+    expect(chainable.insert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ fhir_resource_type: 'Appointment', orbit_table: 'cases' }),
+        expect.objectContaining({ fhir_resource_type: 'Patient', orbit_table: 'patients' }),
+      ])
+    )
+  })
+
+  it('should return error if delete fails', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.neq.mockResolvedValueOnce({ error: { message: 'Delete failed' } })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await epicDAL.resetFieldMappingsToDefaults(client as any)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Delete failed')
+    expect(chainable.insert).not.toHaveBeenCalled()
+  })
+
+  it('should return error if insert fails', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.neq.mockResolvedValueOnce({ error: null })
+    chainable.insert.mockResolvedValueOnce({ error: { message: 'Insert failed' } })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await epicDAL.resetFieldMappingsToDefaults(client as any)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Insert failed')
+  })
+})
+
 // ============================================
 // EPIC IMPORT LOG
 // ============================================
