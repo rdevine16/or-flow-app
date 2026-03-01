@@ -166,15 +166,18 @@ describe('calculateORUtilization config', () => {
     }),
   ]
 
+  // roomHoursMap is required for utilization calculation
+  const roomHoursMap = { 'room-1': 10 }
+
   it('uses default utilization target (75%) when no config', () => {
-    const result = calculateORUtilization(cases, 10)
+    const result = calculateORUtilization(cases, 10, undefined, roomHoursMap)
     expect(result.target).toBe(75)
     expect(result.subtitle).toContain('75%')
     expect(result.targetMet).toBe(false) // 20% < 75%
   })
 
   it('uses custom utilization target from config', () => {
-    const result = calculateORUtilization(cases, 10, undefined, undefined, {
+    const result = calculateORUtilization(cases, 10, undefined, roomHoursMap, {
       utilizationTargetPercent: 15,
     })
     expect(result.target).toBe(15)
@@ -184,11 +187,11 @@ describe('calculateORUtilization config', () => {
 
   it('target-relative daily colors use utilization target', () => {
     // 20% utilization with 75% target → red (20 < 75 * 0.8 = 60)
-    const defaultResult = calculateORUtilization(cases, 10)
+    const defaultResult = calculateORUtilization(cases, 10, undefined, roomHoursMap)
     expect(defaultResult.dailyData![0].color).toBe('red')
 
     // 20% utilization with 20% target → green (20 ≥ 20)
-    const customResult = calculateORUtilization(cases, 10, undefined, undefined, {
+    const customResult = calculateORUtilization(cases, 10, undefined, roomHoursMap, {
       utilizationTargetPercent: 20,
     })
     expect(customResult.dailyData![0].color).toBe('green')

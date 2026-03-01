@@ -253,10 +253,10 @@ describe('ReviewDrawer', () => {
 
     it('displays detection time in banner', () => {
       render(<ReviewDrawer {...defaultProps} />)
-      // formatTimeAgo should produce something like "16h ago" based on the timestamp
+      // formatTimeAgo produces "2/20/2026" for dates >7 days old (detected_at is '2026-02-20T10:00:00Z')
       const drawerText = screen.getByTestId('review-drawer').textContent
       expect(drawerText).toContain('Detected')
-      expect(drawerText).toContain('ago')
+      expect(drawerText).toContain('2/20/2026')
     })
   })
 

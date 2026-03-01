@@ -140,9 +140,10 @@ describe('MilestoneTable — DeltaBadge integration', () => {
   it('does NOT render DeltaBadge for last milestone', () => {
     render(<MilestoneTable {...DEFAULT_PROPS} />)
     // Last milestone (Patient Out) has no duration → should show dash, not badge
-    // Count of delta badges: 3 milestones + 1 footer total = 4
+    // Count of delta badges: 3 milestones (Patient In, Incision, Closing)
+    // Footer no longer shows median or delta (statistically invalid to sum medians)
     const allBadges = screen.getAllByLabelText(/on pace|faster|slower/)
-    expect(allBadges.length).toBe(4) // Patient In, Incision, Closing + footer total
+    expect(allBadges.length).toBe(3) // Patient In, Incision, Closing only
   })
 })
 
@@ -179,16 +180,17 @@ describe('MilestoneTable — summary footer', () => {
     expect(screen.getByText('1h 30m')).toBeDefined()
   })
 
-  it('renders total median', () => {
+  it('does NOT render total median (statistically invalid)', () => {
     render(<MilestoneTable {...DEFAULT_PROPS} />)
-    // Surgeon medians: 18 + 50 + 12 = 80m → "1h 20m" (Patient Out has null median)
-    expect(screen.getByText('1h 20m')).toBeDefined()
+    // Footer no longer shows summed median because median of sums ≠ sum of medians
+    // This would be statistically misleading
+    expect(screen.queryByText('1h 20m')).toBeNull()
   })
 
-  it('renders total delta badge', () => {
+  it('does NOT render total delta badge (statistically invalid)', () => {
     render(<MilestoneTable {...DEFAULT_PROPS} />)
-    // Total delta: 90 - 80 = +10m
-    expect(screen.getByText('+10m')).toBeDefined()
+    // Footer no longer shows delta because it would be based on invalid summed median
+    expect(screen.queryByText('+10m')).toBeNull()
   })
 
   it('does not render footer when totalCaseMinutes is null', () => {

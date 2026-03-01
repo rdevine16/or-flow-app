@@ -208,8 +208,8 @@ describe('IssuesTable', () => {
 
   describe('expiration display', () => {
     it('shows days until expiration in monospace', () => {
-      const now = new Date('2026-02-20T10:00:00Z')
-      const expires = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000) // 10 days
+      const now = new Date('2026-03-01T10:00:00Z')
+      const expires = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000) // 10 days from now
 
       const issues = [createMockIssue({ expires_at: expires.toISOString() })]
 
@@ -220,8 +220,8 @@ describe('IssuesTable', () => {
     })
 
     it('shows red text when expiring within 7 days', () => {
-      const now = new Date('2026-02-20T10:00:00Z')
-      const expires = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000) // 5 days
+      const now = new Date('2026-03-01T10:00:00Z')
+      const expires = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000) // 5 days from now
 
       const issues = [createMockIssue({ expires_at: expires.toISOString() })]
 
@@ -232,8 +232,8 @@ describe('IssuesTable', () => {
     })
 
     it('shows amber text when expiring within 8-14 days', () => {
-      const now = new Date('2026-02-20T10:00:00Z')
-      const expires = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000) // 10 days
+      const now = new Date('2026-03-01T10:00:00Z')
+      const expires = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000) // 10 days from now
 
       const issues = [createMockIssue({ expires_at: expires.toISOString() })]
 

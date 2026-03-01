@@ -113,14 +113,57 @@ function createSupabaseMock(overrides: Record<string, unknown> = {}) {
       }
       return Promise.resolve({ data: null, error: null })
     }),
+    // Make chainable thenable for Promise.all (used in fetchOptions for users list)
+    then: vi.fn((resolve: (value: unknown) => void) => {
+      if (currentTable === 'users') {
+        resolve(defaultResults.users_list)
+      } else {
+        resolve({ data: null, error: null })
+      }
+    }),
   }
 
   const from = vi.fn((table: string) => {
     currentTable = table
     filterName = ''
 
-    // For tables that resolve via Promise.all in fetchOptions
-    if (table === 'or_rooms') Object.assign(chainable, { then: undefined })
+    // Handle special tables for Promise.all in fetchOptions
+    // These need to return thenables (Promise-like objects)
+    if (table === 'or_rooms') {
+      const roomsChain: Record<string, (...args: unknown[]) => unknown> = {}
+      roomsChain.select = vi.fn().mockReturnValue(roomsChain)
+      roomsChain.eq = vi.fn().mockReturnValue(roomsChain)
+      roomsChain.order = vi.fn(() => Promise.resolve(defaultResults.or_rooms))
+      return roomsChain as unknown
+    }
+    if (table === 'procedure_types') {
+      const procChain: Record<string, (...args: unknown[]) => unknown> = {}
+      procChain.select = vi.fn().mockReturnValue(procChain)
+      procChain.or = vi.fn().mockReturnValue(procChain)
+      procChain.order = vi.fn(() => Promise.resolve(defaultResults.procedure_types))
+      return procChain as unknown
+    }
+    if (table === 'case_statuses') {
+      const statusChain: Record<string, (...args: unknown[]) => unknown> = {}
+      statusChain.select = vi.fn().mockReturnValue(statusChain)
+      statusChain.order = vi.fn(() => Promise.resolve(defaultResults.case_statuses))
+      return statusChain as unknown
+    }
+    if (table === 'implant_companies') {
+      const companiesChain: Record<string, (...args: unknown[]) => unknown> = {}
+      companiesChain.select = vi.fn().mockReturnValue(companiesChain)
+      companiesChain.or = vi.fn().mockReturnValue(companiesChain)
+      companiesChain.order = vi.fn(() => Promise.resolve(defaultResults.implant_companies))
+      return companiesChain as unknown
+    }
+    if (table === 'payers') {
+      const payersChain: Record<string, (...args: unknown[]) => unknown> = {}
+      payersChain.select = vi.fn().mockReturnValue(payersChain)
+      payersChain.eq = vi.fn().mockReturnValue(payersChain)
+      payersChain.is = vi.fn().mockReturnValue(payersChain)
+      payersChain.order = vi.fn(() => Promise.resolve(defaultResults.payers))
+      return payersChain as unknown
+    }
     if (table === 'procedure_milestone_config') {
       // Return the milestone config result at the end of the chain
       const milestoneChain: Record<string, (...args: unknown[]) => unknown> = {}
@@ -135,6 +178,10 @@ function createSupabaseMock(overrides: Record<string, unknown> = {}) {
       } as unknown
     }
 
+    // For users table, we need to handle two different query patterns:
+    // 1. Initial facility fetch: .select('facility_id').eq('id', ...).single()
+    // 2. fetchOptions users list: .select('...').eq('facility_id', ...)
+    // Use the standard chainable which has both .single() and the ability to be awaited
     return chainable
   })
 
@@ -1198,7 +1245,8 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
         {
           id: 'conflict-1',
           case_number: 'C-OTHER-001',
-          start_time: '09:00:00',
+          start_time: '08:30:00',
+          procedure_type: { expected_duration_minutes: 60 },
           surgeon: { first_name: 'John', last_name: 'Doe' },
         },
       ])
@@ -1214,7 +1262,7 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
         expect(screen.getByTestId('room-conflict-warning')).toBeInTheDocument()
       }, { timeout: 2000 })
 
-      expect(screen.getByText(/Room has 1 other case on this date/)).toBeInTheDocument()
+      expect(screen.getByText(/1 overlapping case in this room/)).toBeInTheDocument()
       expect(screen.getByText(/C-OTHER-001/)).toBeInTheDocument()
     })
 
@@ -1273,7 +1321,8 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
         {
           id: 'conflict-1',
           case_number: 'C-OTHER-001',
-          start_time: '09:00:00',
+          start_time: '08:30:00',
+          procedure_type: { expected_duration_minutes: 60 },
           surgeon: { first_name: 'John', last_name: 'Doe' },
         },
       ])

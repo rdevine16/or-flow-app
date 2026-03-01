@@ -7,6 +7,14 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     globals: true,
     css: false,
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.claude/worktrees/**',
+      '**/cypress/**',
+      '**/.{idea,git,cache,output,temp}/**',
+      '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*'
+    ],
   },
   resolve: {
     alias: {

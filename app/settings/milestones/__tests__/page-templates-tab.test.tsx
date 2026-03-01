@@ -42,7 +42,7 @@ vi.mock('@/components/ui/Toast/ToastProvider', () => ({
 }))
 
 vi.mock('@/hooks/useSupabaseQuery', () => ({
-  useSupabaseQuery: () => ({ data: [], loading: false, error: null, setData: vi.fn(), refetch: vi.fn() }),
+  useSupabaseQuery: vi.fn(() => ({ data: [], loading: false, error: null, setData: vi.fn(), refetch: vi.fn() })),
   useCurrentUser: () => ({ data: { userId: 'u1', facilityId: 'f1' }, loading: false }),
 }))
 
@@ -54,6 +54,60 @@ vi.mock('@/components/settings/milestones/TemplateBuilder', () => ({
 // Mock PhaseLibrary
 vi.mock('@/components/settings/milestones/PhaseLibrary', () => ({
   PhaseLibrary: () => <div data-testid="phase-library">Phase Library Content</div>,
+}))
+
+// Mock useTemplateBuilder hook to avoid infinite loops and memory issues
+vi.mock('@/hooks/useTemplateBuilder', () => ({
+  useTemplateBuilder: () => ({
+    templates: [],
+    selectedTemplate: null,
+    selectedTemplateId: null,
+    items: [],
+    milestones: [],
+    phases: [],
+    availableMilestones: [],
+    availablePhases: [],
+    assignedMilestoneIds: new Set(),
+    assignedPhaseIds: new Set(),
+    procedureCounts: {},
+    loading: false,
+    itemsLoading: false,
+    error: null,
+    saving: false,
+    setSelectedTemplateId: vi.fn(),
+    createTemplate: vi.fn(),
+    duplicateTemplate: vi.fn(),
+    setDefaultTemplate: vi.fn(),
+    archiveTemplate: vi.fn(),
+    renameTemplate: vi.fn(),
+    addMilestoneToPhase: vi.fn(),
+    removeMilestone: vi.fn(),
+    removePhaseFromTemplate: vi.fn(),
+    reorderItemsInPhase: vi.fn(),
+    moveItemToPhase: vi.fn(),
+    moveItemToPhaseLocal: vi.fn(),
+    persistItemPosition: vi.fn(),
+    addPhaseToTemplate: vi.fn(),
+    nestPhaseAsSubPhase: vi.fn(),
+    removeSubPhase: vi.fn(),
+    emptyPhaseIds: new Set(),
+    dispatch: vi.fn(),
+    blockOrder: {},
+    updateBlockOrder: vi.fn(),
+    subPhaseMap: {},
+    requiredMilestoneItemIds: new Set(),
+    requiredPhaseIds: new Set(),
+  }),
+}))
+
+// Mock ProcedureTemplateAssignment
+vi.mock('@/components/settings/milestones/ProcedureTemplateAssignment', () => ({
+  ProcedureTemplateAssignment: () => <div data-testid="procedure-template-assignment">Procedure template assignment coming soon.</div>,
+}))
+
+// Mock SurgeonOverridePanel
+vi.mock('@/components/settings/milestones/SurgeonOverridePanel', () => ({
+  SurgeonOverridePanel: () => <div data-testid="surgeon-override-panel">Surgeon template overrides coming soon.</div>,
 }))
 
 // Import after mocks

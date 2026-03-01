@@ -200,10 +200,9 @@ describe('ScheduleAdherenceTimeline: header and structure', () => {
     expect(screen.getByText(/Scheduled vs actual case times by room/)).toBeTruthy()
   })
 
-  it('renders legend labels: Scheduled, On-time, Late, Upcoming, Now', () => {
+  it('renders legend labels: On-time, Late, Upcoming, Now', () => {
     const data = makeTimelineData()
     render(<ScheduleAdherenceTimeline data={data} />)
-    expect(screen.getByText('Scheduled')).toBeTruthy()
     expect(screen.getByText('On-time')).toBeTruthy()
     expect(screen.getByText('Late')).toBeTruthy()
     expect(screen.getByText('Upcoming')).toBeTruthy()

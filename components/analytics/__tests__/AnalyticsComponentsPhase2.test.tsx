@@ -339,10 +339,12 @@ describe('CasePhaseBarNested', () => {
         totalSeconds={1800}
       />
     )
-    // Sub-phase inset pills have class absolute top-0 bottom-0 rounded-sm
-    const subDivs = container.querySelectorAll('.absolute.top-0.bottom-0.rounded-sm')
+    // Sub-phase divs are positioned absolutely within the phase container
+    // They use inline styles (top: 2, bottom: 2, borderRadius: 2) rather than classes
+    const phaseContainer = container.querySelector('.h-full.relative')!
+    const absoluteOverlays = phaseContainer.querySelectorAll('.absolute.inset-0 > .absolute')
     // Only the 360s sub (20%) should render; the 1s sub (0.055%) is skipped
-    expect(subDivs.length).toBe(1)
+    expect(absoluteOverlays.length).toBe(1)
   })
 })
 
@@ -386,8 +388,12 @@ describe('DayTimeline', () => {
     const c = makeCase({ id: 'c1' })
     const flags = { 'c1': [makeFlag({ severity: 'warning' })] }
     const { container } = render(<DayTimeline cases={[c]} caseFlags={flags} />)
-    // Flag indicator is a small div with bg-orange-500
-    const orangeDot = container.querySelector('.bg-orange-500')
+    // Flag indicator uses inline style background: '#f97316' (orange-500 hex)
+    const spans = container.querySelectorAll('span.rounded-full')
+    const orangeDot = Array.from(spans).find(el =>
+      (el as HTMLElement).style.background === 'rgb(249, 115, 22)' ||
+      (el as HTMLElement).style.background === '#f97316'
+    )
     expect(orangeDot).toBeTruthy()
   })
 
@@ -395,7 +401,12 @@ describe('DayTimeline', () => {
     const c = makeCase({ id: 'c1' })
     const flags = { 'c1': [makeFlag({ severity: 'positive' })] }
     const { container } = render(<DayTimeline cases={[c]} caseFlags={flags} />)
-    const greenDot = container.querySelector('.bg-green-500')
+    // Flag indicator uses inline style background: '#22c55e' (green-500 hex)
+    const spans = container.querySelectorAll('span.rounded-full')
+    const greenDot = Array.from(spans).find(el =>
+      (el as HTMLElement).style.background === 'rgb(34, 197, 94)' ||
+      (el as HTMLElement).style.background === '#22c55e'
+    )
     expect(greenDot).toBeTruthy()
   })
 })
