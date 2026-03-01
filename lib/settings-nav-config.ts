@@ -234,7 +234,6 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/integrations',
         icon: Puzzle,
         description: 'Connect external systems',
-        badge: 'soon',
         permission: 'settings.manage',
       },
     ],
