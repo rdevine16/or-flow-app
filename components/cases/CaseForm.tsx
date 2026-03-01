@@ -120,6 +120,18 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const [repRequiredOverride, setRepRequiredOverride] = useState<boolean | null>(null)
   const [originalRepRequiredOverride, setOriginalRepRequiredOverride] = useState<boolean | null>(null)
 
+  // Patient fields state
+  const [patientFirstName, setPatientFirstName] = useState('')
+  const [patientLastName, setPatientLastName] = useState('')
+  const [patientMrn, setPatientMrn] = useState('')
+  const [patientDob, setPatientDob] = useState('')
+  const [patientId, setPatientId] = useState<string | null>(null)
+  const [originalPatientId, setOriginalPatientId] = useState<string | null>(null)
+  const [mrnConflict, setMrnConflict] = useState<{ id: string; first_name: string; last_name: string } | null>(null)
+  const [showMrnConflictModal, setShowMrnConflictModal] = useState(false)
+  const [checkingMrn, setCheckingMrn] = useState(false)
+  const mrnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Phase 3.1: Staff assignment state
   const [selectedStaff, setSelectedStaff] = useState<StaffSelection[]>([])
   const [originalStaff, setOriginalStaff] = useState<StaffSelection[]>([])
@@ -208,6 +220,57 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       }
     }, 300)
   }, [userFacilityId, mode, caseId, supabase])
+
+  // MRN lookup — check for existing patient with this MRN in the facility
+  const checkMrnLookup = useCallback((mrn: string) => {
+    if (mrnTimerRef.current) clearTimeout(mrnTimerRef.current)
+
+    if (!mrn.trim()) {
+      setMrnConflict(null)
+      setCheckingMrn(false)
+      return
+    }
+
+    setCheckingMrn(true)
+
+    mrnTimerRef.current = setTimeout(async () => {
+      if (!userFacilityId) {
+        setCheckingMrn(false)
+        return
+      }
+
+      const { data, error: queryError } = await supabase
+        .from('patients')
+        .select('id, first_name, last_name')
+        .eq('facility_id', userFacilityId)
+        .eq('mrn', mrn.trim())
+        .eq('is_active', true)
+        .maybeSingle()
+
+      setCheckingMrn(false)
+
+      if (queryError || !data) {
+        setMrnConflict(null)
+        return
+      }
+
+      // Skip if this is the patient already linked to the case
+      if (data.id === patientId) {
+        setMrnConflict(null)
+        return
+      }
+
+      setMrnConflict(data as { id: string; first_name: string; last_name: string })
+      setShowMrnConflictModal(true)
+    }, 400)
+  }, [userFacilityId, patientId, supabase])
+
+  // Cleanup MRN timer
+  useEffect(() => {
+    return () => {
+      if (mrnTimerRef.current) clearTimeout(mrnTimerRef.current)
+    }
+  }, [])
 
   // Phase 3.3: Room conflict detection — checks for time-overlapping cases in the same room
   const checkRoomConflicts = useCallback((roomId: string, date: string, time: string, procedureTypeId: string) => {
@@ -311,8 +374,11 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     if (selectedStaff.length !== originalStaff.length ||
         selectedStaff.some(s => !originalStaff.find(o => o.user_id === s.user_id))) return true
 
+    // Compare patient link
+    if (patientId !== originalPatientId) return true
+
     return false
-  }, [formData, originalData, selectedCompanyIds, originalCompanyIds, selectedComplexityIds, originalComplexityIds, repRequiredOverride, originalRepRequiredOverride, selectedStaff, originalStaff])
+  }, [formData, originalData, selectedCompanyIds, originalCompanyIds, selectedComplexityIds, originalComplexityIds, repRequiredOverride, originalRepRequiredOverride, selectedStaff, originalStaff, patientId, originalPatientId])
 
   const handleCancel = useCallback(() => {
     if (isDirty) {
@@ -477,6 +543,23 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       setRepRequiredOverride(data.rep_required_override)
       setOriginalRepRequiredOverride(data.rep_required_override)
 
+      // Load linked patient data
+      if (data.patient_id) {
+        setPatientId(data.patient_id)
+        setOriginalPatientId(data.patient_id)
+        const { data: patientData } = await supabase
+          .from('patients')
+          .select('first_name, last_name, mrn, date_of_birth')
+          .eq('id', data.patient_id)
+          .single()
+        if (patientData) {
+          setPatientFirstName(patientData.first_name || '')
+          setPatientLastName(patientData.last_name || '')
+          setPatientMrn(patientData.mrn || '')
+          setPatientDob(patientData.date_of_birth || '')
+        }
+      }
+
       // Fetch existing implant companies for this case
       const { data: caseCompanies } = await supabase
         .from('case_implant_companies')
@@ -587,6 +670,98 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   }
 
   // ============================================
+  // PATIENT VALIDATION: Conditional required logic
+  // ============================================
+
+  const validatePatientFields = (): Record<string, string> => {
+    const errors: Record<string, string> = {}
+    const hasAny = !!(patientFirstName || patientLastName || patientMrn || patientDob)
+    if (hasAny) {
+      if (!patientFirstName.trim()) errors.patient_first_name = 'First name is required when entering patient information'
+      if (!patientLastName.trim()) errors.patient_last_name = 'Last name is required when entering patient information'
+    }
+    return errors
+  }
+
+  /**
+   * Create or find a patient record for the case.
+   * Returns the patient UUID or null if no patient data entered.
+   */
+  const resolvePatientId = async (): Promise<string | null> => {
+    const hasAny = !!(patientFirstName || patientLastName || patientMrn || patientDob)
+    if (!hasAny) return null
+    if (!userFacilityId) return null
+
+    // If MRN conflict was resolved by linking to existing patient
+    if (patientId && mrnConflict && patientId === mrnConflict.id) {
+      // Update the existing patient with any new data
+      await supabase
+        .from('patients')
+        .update({
+          first_name: patientFirstName.trim(),
+          last_name: patientLastName.trim(),
+          date_of_birth: patientDob || null,
+        })
+        .eq('id', patientId)
+      return patientId
+    }
+
+    // If editing and patient already linked — update the patient record
+    if (patientId) {
+      await supabase
+        .from('patients')
+        .update({
+          first_name: patientFirstName.trim(),
+          last_name: patientLastName.trim(),
+          mrn: patientMrn.trim() || null,
+          date_of_birth: patientDob || null,
+        })
+        .eq('id', patientId)
+      return patientId
+    }
+
+    // Check for existing patient by MRN first
+    if (patientMrn.trim()) {
+      const { data: existing } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('facility_id', userFacilityId)
+        .eq('mrn', patientMrn.trim())
+        .eq('is_active', true)
+        .maybeSingle()
+
+      if (existing) {
+        // Update existing patient with latest info
+        await supabase
+          .from('patients')
+          .update({
+            first_name: patientFirstName.trim(),
+            last_name: patientLastName.trim(),
+            date_of_birth: patientDob || null,
+          })
+          .eq('id', existing.id)
+        return existing.id
+      }
+    }
+
+    // Create new patient
+    const { data: newPatient, error: patientError } = await supabase
+      .from('patients')
+      .insert({
+        facility_id: userFacilityId,
+        first_name: patientFirstName.trim(),
+        last_name: patientLastName.trim(),
+        mrn: patientMrn.trim() || null,
+        date_of_birth: patientDob || null,
+      })
+      .select('id')
+      .single()
+
+    if (patientError || !newPatient) return null
+    return newPatient.id
+  }
+
+  // ============================================
   // DRAFT SAVE: Relaxed validation, no milestones
   // ============================================
   const handleSaveDraft = async () => {
@@ -671,6 +846,10 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
 
     // Validate required fields via Zod schema
     const errors = validateForm()
+
+    // Patient field validation (conditional required)
+    const patientErrors = validatePatientFields()
+    Object.assign(errors, patientErrors)
 
     // Phase 1.4: Block if case number is a known duplicate
     if (caseNumberUnique === false) {
@@ -766,6 +945,9 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     let savedCaseId: string
 
     if (mode === 'create') {
+      // Resolve patient (create or find) before case creation
+      const resolvedPatientId = await resolvePatientId()
+
       // Phase 1.1: Atomic case+milestone creation via RPC
       const currentUser = (await supabase.auth.getUser()).data.user
       const { data: rpcCaseId, error: rpcError } = await supabase.rpc('create_case_with_milestones', {
@@ -783,6 +965,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         p_notes: formData.notes || null,
         p_rep_required_override: repRequiredOverride,
         p_staff_assignments: selectedStaff.length > 0 ? JSON.stringify(selectedStaff) : null,
+        p_patient_id: resolvedPatientId,
+        p_source: 'manual',
       })
 
       result = rpcError
@@ -905,7 +1089,15 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         )
       }
     } else {
-      result = await supabase.from('cases').update(caseData).eq('id', caseId).select().single()
+      // Resolve patient for edit mode
+      const hasAnyPatient = !!(patientFirstName || patientLastName || patientMrn || patientDob)
+      let editPatientId: string | null = null
+      if (hasAnyPatient) {
+        editPatientId = await resolvePatientId()
+      }
+      // Update case with patient_id (null to unlink if all patient fields cleared)
+      const updateData = { ...caseData, patient_id: editPatientId }
+      result = await supabase.from('cases').update(updateData).eq('id', caseId).select().single()
       savedCaseId = caseId!
       
       if (!result.error && result.data && originalData) {
@@ -1267,7 +1459,145 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       )}
 
-      {/* 5. Case Number — with real-time uniqueness check */}
+      {/* 5. Patient Information (optional) */}
+      <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-800">Patient Information</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Optional — if any field is entered, first and last name become required
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">First Name</label>
+            <input
+              type="text"
+              value={patientFirstName}
+              onChange={(e) => {
+                setPatientFirstName(e.target.value)
+                if (fieldErrors.patient_first_name) {
+                  setFieldErrors(prev => { const next = { ...prev }; delete next.patient_first_name; return next })
+                }
+              }}
+              className={`w-full px-4 py-2.5 rounded-xl border ${fieldErrors.patient_first_name ? 'border-red-400 ring-2 ring-red-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
+              placeholder="First name"
+            />
+            {fieldErrors.patient_first_name && (
+              <p className="text-red-600 text-xs mt-1">{fieldErrors.patient_first_name}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Last Name</label>
+            <input
+              type="text"
+              value={patientLastName}
+              onChange={(e) => {
+                setPatientLastName(e.target.value)
+                if (fieldErrors.patient_last_name) {
+                  setFieldErrors(prev => { const next = { ...prev }; delete next.patient_last_name; return next })
+                }
+              }}
+              className={`w-full px-4 py-2.5 rounded-xl border ${fieldErrors.patient_last_name ? 'border-red-400 ring-2 ring-red-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
+              placeholder="Last name"
+            />
+            {fieldErrors.patient_last_name && (
+              <p className="text-red-600 text-xs mt-1">{fieldErrors.patient_last_name}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">MRN</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={patientMrn}
+                onChange={(e) => setPatientMrn(e.target.value)}
+                onBlur={() => checkMrnLookup(patientMrn)}
+                className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                placeholder="Medical Record Number"
+              />
+              {checkingMrn && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Date of Birth</label>
+            <input
+              type="date"
+              value={patientDob}
+              onChange={(e) => setPatientDob(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            />
+          </div>
+        </div>
+        {/* Linked patient indicator */}
+        {patientId && (
+          <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 px-3 py-2 rounded-lg">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            Linked to existing patient record
+            <button
+              type="button"
+              onClick={() => {
+                setPatientId(null)
+                setPatientFirstName('')
+                setPatientLastName('')
+                setPatientMrn('')
+                setPatientDob('')
+              }}
+              className="ml-auto text-slate-500 hover:text-red-600 transition-colors"
+            >
+              Unlink
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* MRN Conflict Modal */}
+      {showMrnConflictModal && mrnConflict && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold text-slate-900">MRN Already Exists</h3>
+            <p className="text-sm text-slate-600 mt-2">
+              MRN <span className="font-mono font-medium">{patientMrn}</span> already exists for{' '}
+              <span className="font-medium">{mrnConflict.first_name} {mrnConflict.last_name}</span>.
+            </p>
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  // Link to existing patient
+                  setPatientId(mrnConflict.id)
+                  setPatientFirstName(mrnConflict.first_name)
+                  setPatientLastName(mrnConflict.last_name)
+                  setShowMrnConflictModal(false)
+                  setMrnConflict(null)
+                }}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors"
+              >
+                Link Existing Patient
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // Clear MRN and create new
+                  setPatientMrn('')
+                  setShowMrnConflictModal(false)
+                  setMrnConflict(null)
+                }}
+                className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Clear MRN
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Case Number — with real-time uniqueness check */}
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-2">
           Case Number <span className="text-red-600">*</span>

@@ -35,6 +35,7 @@ function makeCaseItem(overrides: Partial<CaseListItem> = {}): CaseListItem {
     start_time: '08:00:00',
     status_id: 'status-1',
     data_validated: true,
+    is_excluded_from_metrics: false,
     or_room_id: 'room-1',
     surgeon_id: 'surgeon-1',
     facility_id: 'facility-1',
@@ -45,6 +46,9 @@ function makeCaseItem(overrides: Partial<CaseListItem> = {}): CaseListItem {
     case_status: { name: 'Completed' },
     procedure_type: { id: 'proc-1', name: 'Total Hip', procedure_category_id: null, expected_duration_minutes: 90 },
     case_completion_stats: { total_duration_minutes: 120 },
+    patient_id: null,
+    source: 'manual',
+    patient: null,
     ...overrides,
   }
 }

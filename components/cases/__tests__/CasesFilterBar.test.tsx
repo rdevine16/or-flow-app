@@ -26,6 +26,8 @@ function renderFilterBar(overrides: Partial<Parameters<typeof CasesFilterBar>[0]
   const defaultProps = {
     searchInput: '',
     onSearchChange: vi.fn(),
+    dateRangePreset: 'all_time',
+    onDateRangeChange: vi.fn(),
     surgeonIds: [] as string[],
     onSurgeonIdsChange: vi.fn(),
     roomIds: [] as string[],
@@ -49,7 +51,7 @@ function renderFilterBar(overrides: Partial<Parameters<typeof CasesFilterBar>[0]
 describe('CasesFilterBar — unit', () => {
   it('renders search input with placeholder', () => {
     renderFilterBar()
-    expect(screen.getByPlaceholderText('Search cases, surgeons, rooms...')).toBeDefined()
+    expect(screen.getByPlaceholderText('Search cases, patients, surgeons, rooms...')).toBeDefined()
   })
 
   it('renders surgeon, room, and procedure filter dropdown buttons', () => {
@@ -71,7 +73,7 @@ describe('CasesFilterBar — unit', () => {
 
   it('renders search input with provided value', () => {
     renderFilterBar({ searchInput: 'C-001' })
-    const input = screen.getByPlaceholderText('Search cases, surgeons, rooms...') as HTMLInputElement
+    const input = screen.getByPlaceholderText('Search cases, patients, surgeons, rooms...') as HTMLInputElement
     expect(input.value).toBe('C-001')
   })
 })
@@ -134,7 +136,7 @@ describe('CasesFilterBar — interactions', () => {
     const user = userEvent.setup()
     const { props } = renderFilterBar()
 
-    const input = screen.getByPlaceholderText('Search cases, surgeons, rooms...')
+    const input = screen.getByPlaceholderText('Search cases, patients, surgeons, rooms...')
     await user.type(input, 'C')
 
     expect(props.onSearchChange).toHaveBeenCalledWith('C')
@@ -213,7 +215,7 @@ describe('CasesFilterBar — search suggestions', () => {
     const user = userEvent.setup()
     renderFilterBar({ searchInput: 'Sm' })
 
-    const input = screen.getByPlaceholderText('Search cases, surgeons, rooms...')
+    const input = screen.getByPlaceholderText('Search cases, patients, surgeons, rooms...')
     await user.click(input)
 
     // The suggestions should show for the current search input
@@ -226,7 +228,7 @@ describe('CasesFilterBar — search suggestions', () => {
     const user = userEvent.setup()
     renderFilterBar({ searchInput: 'OR-1' })
 
-    const input = screen.getByPlaceholderText('Search cases, surgeons, rooms...')
+    const input = screen.getByPlaceholderText('Search cases, patients, surgeons, rooms...')
     await user.click(input)
 
     // OR-1 should appear as a suggestion
@@ -238,7 +240,7 @@ describe('CasesFilterBar — search suggestions', () => {
     const user = userEvent.setup()
     const { props } = renderFilterBar({ searchInput: 'Smith' })
 
-    const input = screen.getByPlaceholderText('Search cases, surgeons, rooms...')
+    const input = screen.getByPlaceholderText('Search cases, patients, surgeons, rooms...')
     await user.click(input)
 
     // Click the surgeon suggestion

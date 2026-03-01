@@ -10,7 +10,7 @@ type MockSupabaseClient = unknown
 // ============================================
 
 describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
-  it('CaseListItem does not include patient_name or patient_mrn', () => {
+  it('CaseListItem does not include patient_name or patient_mrn as flat fields', () => {
     const item: CaseListItem = {
       id: 'case-1',
       case_number: 'C-001',
@@ -18,16 +18,18 @@ describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
       start_time: '07:30',
       status_id: 'scheduled',
       data_validated: false,
+      is_excluded_from_metrics: false,
       or_room_id: 'room-1',
       surgeon_id: 'surgeon-1',
+      patient_id: null,
       facility_id: 'facility-1',
-
+      source: 'manual',
       created_at: '2026-03-15T00:00:00Z',
       created_by: 'user-1',
     }
 
     expect(item.case_number).toBe('C-001')
-    // TypeScript enforces no patient_name/patient_mrn at compile time
+    // patient_name/patient_mrn are inside patient join, not flat fields
     expect('patient_name' in item).toBe(false)
     expect('patient_mrn' in item).toBe(false)
   })
@@ -40,10 +42,12 @@ describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
       start_time: '07:30',
       status_id: 'scheduled',
       data_validated: false,
+      is_excluded_from_metrics: false,
       or_room_id: 'room-1',
       surgeon_id: 'surgeon-1',
+      patient_id: null,
       facility_id: 'facility-1',
-
+      source: 'manual',
       created_at: '2026-03-15T00:00:00Z',
       created_by: 'user-1',
     }
@@ -59,10 +63,12 @@ describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
       start_time: null,
       status_id: null,
       data_validated: false,
+      is_excluded_from_metrics: false,
       or_room_id: null,
       surgeon_id: null,
+      patient_id: null,
       facility_id: 'facility-1',
-
+      source: 'manual',
       created_at: '2026-03-15T00:00:00Z',
       created_by: null,
     }
@@ -103,7 +109,7 @@ describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
     expect(milestone.facility_milestone?.display_order).toBe(1)
   })
 
-  it('CaseDetail inherits from CaseListItem without patient fields', () => {
+  it('CaseDetail inherits from CaseListItem with patient join', () => {
     const detail: CaseDetail = {
       id: 'case-3',
       case_number: 'C-003',
@@ -111,13 +117,15 @@ describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
       start_time: '08:00',
       status_id: 'scheduled',
       data_validated: false,
+      is_excluded_from_metrics: false,
       or_room_id: 'room-1',
       surgeon_id: 'surgeon-1',
+      patient_id: null,
       facility_id: 'facility-1',
+      source: 'manual',
       created_at: '2026-03-15T00:00:00Z',
       created_by: 'user-1',
-      patient_dob: null,
-      patient_phone: null,
+      patient: null,
       laterality: null,
       anesthesia_type: null,
       notes: null,
@@ -125,6 +133,7 @@ describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
       called_back_at: null,
       called_back_by: null,
       complexity_id: null,
+      milestone_template_id: null,
       case_milestones: [],
       case_flags: [],
       case_staff: [],
@@ -227,17 +236,19 @@ describe('casesDAL.recordMilestone — Phase 5.2', () => {
   })
 })
 
-describe('casesDAL.search — Phase 5.2', () => {
+describe('casesDAL.search — Phase 5.2 + Phase 1 (patient search)', () => {
   const chainable = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     ilike: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn(),
   }
 
   const mockSupabase = {
     from: vi.fn().mockReturnValue(chainable),
+    rpc: vi.fn(),
   }
 
   beforeEach(() => {
@@ -245,14 +256,27 @@ describe('casesDAL.search — Phase 5.2', () => {
     mockSupabase.from.mockReturnValue(chainable)
   })
 
-  it('should search by case_number only (no patient_name)', async () => {
+  it('should call search_cases_by_text RPC with facility and search term', async () => {
+    mockSupabase.rpc.mockResolvedValue({ data: ['case-1'], error: null })
     chainable.limit.mockResolvedValue({ data: [], error: null })
 
     await casesDAL.search(mockSupabase as MockSupabaseClient as SupabaseClient, 'facility-1', 'C-001')
 
-    expect(chainable.ilike).toHaveBeenCalledWith('case_number', '%C-001%')
-    // Should NOT use .or() with patient_name
-    expect(chainable.eq).toHaveBeenCalledWith('facility_id', 'facility-1')
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('search_cases_by_text', {
+      p_facility_id: 'facility-1',
+      p_search_term: 'C-001',
+    })
+  })
+
+  it('should return empty array when RPC returns no matches', async () => {
+    mockSupabase.rpc.mockResolvedValue({ data: [], error: null })
+
+    const result = await casesDAL.search(mockSupabase as MockSupabaseClient as SupabaseClient, 'facility-1', 'nonexistent')
+
+    expect(result.data).toEqual([])
+    expect(result.error).toBeNull()
+    // Should NOT call .from() for main query when no matches
+    expect(mockSupabase.from).not.toHaveBeenCalled()
   })
 })
 
@@ -288,7 +312,7 @@ describe('CasesFilterParams — Phase 4 type alignment', () => {
 // DAL FILTER METHOD TESTS — Phase 4
 // ============================================
 
-describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
+describe('casesDAL.listForCasesPage with filters — Phase 4 + Phase 1 (patient search)', () => {
   const chainable = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
@@ -302,11 +326,13 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
 
   const mockSupabase = {
     from: vi.fn().mockReturnValue(chainable),
+    rpc: vi.fn(),
   }
 
   beforeEach(() => {
     vi.clearAllMocks()
     mockSupabase.from.mockReturnValue(chainable)
+    mockSupabase.rpc.mockResolvedValue({ data: ['case-1'], error: null })
     chainable.select.mockReturnThis()
     chainable.eq.mockReturnThis()
     chainable.gte.mockReturnThis()
@@ -317,7 +343,7 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
     chainable.range.mockResolvedValue({ data: [], error: null, count: 0 })
   })
 
-  it('applies search filter as ilike on case_number', async () => {
+  it('applies search filter via search_cases_by_text RPC', async () => {
     await casesDAL.listForCasesPage(
       mockSupabase as unknown as Parameters<typeof casesDAL.listForCasesPage>[0],
       'facility-1',
@@ -329,7 +355,11 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
       { search: 'C-001' },
     )
 
-    expect(chainable.ilike).toHaveBeenCalledWith('case_number', '%C-001%')
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('search_cases_by_text', {
+      p_facility_id: 'facility-1',
+      p_search_term: 'C-001',
+    })
+    expect(chainable.in).toHaveBeenCalledWith('id', ['case-1'])
   })
 
   it('applies surgeon filter as in on surgeon_id', async () => {
@@ -389,7 +419,11 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
       { search: 'test', surgeonIds: ['s-1'], roomIds: ['r-1'], procedureIds: ['p-1'] },
     )
 
-    expect(chainable.ilike).toHaveBeenCalledWith('case_number', '%test%')
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('search_cases_by_text', {
+      p_facility_id: 'facility-1',
+      p_search_term: 'test',
+    })
+    expect(chainable.in).toHaveBeenCalledWith('id', ['case-1'])
     expect(chainable.in).toHaveBeenCalledWith('surgeon_id', ['s-1'])
     expect(chainable.in).toHaveBeenCalledWith('or_room_id', ['r-1'])
     expect(chainable.in).toHaveBeenCalledWith('procedure_type_id', ['p-1'])

@@ -76,10 +76,12 @@ interface CaseData {
   notes: string | null
   surgeon_left_at: string | null
   milestone_template_id: string | null
+  source: string
   or_rooms: { name: string }[] | { name: string } | null
   procedure_types: { name: string }[] | { name: string } | null
   case_statuses: { id: string; name: string }[] | { id: string; name: string } | null
   surgeon: { id: string; first_name: string; last_name: string }[] | { id: string; first_name: string; last_name: string } | null
+  patient: { first_name: string | null; last_name: string | null; mrn: string | null; date_of_birth: string | null }[] | { first_name: string | null; last_name: string | null; mrn: string | null; date_of_birth: string | null } | null
 }
 
 interface User {
@@ -196,11 +198,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       const { data: caseResult, error: caseError } = await supabase
         .from('cases')
         .select(`
-          id, case_number, scheduled_date, start_time, operative_side, procedure_type_id, surgeon_id, or_room_id, is_draft, notes, call_time, surgeon_left_at, milestone_template_id,
+          id, case_number, scheduled_date, start_time, operative_side, procedure_type_id, surgeon_id, or_room_id, is_draft, notes, call_time, surgeon_left_at, milestone_template_id, source,
           or_rooms (name),
           procedure_types (name),
           case_statuses (id, name),
-          surgeon:users!cases_surgeon_id_fkey (id, first_name, last_name)
+          surgeon:users!cases_surgeon_id_fkey (id, first_name, last_name),
+          patient:patients!cases_patient_id_fkey (first_name, last_name, mrn, date_of_birth)
         `)
         .eq('id', id)
         .single()
@@ -1044,6 +1047,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const procedure = getJoinedValue(caseData?.procedure_types)
   const status = getJoinedValue(caseData?.case_statuses)
   const surgeon = getJoinedValue(caseData?.surgeon)
+  const patient = getJoinedValue(caseData?.patient)
   // Calculate times
   const patientInMilestone = milestoneTypes.find(mt => mt.name === 'patient_in')
   const patientOutMilestone = milestoneTypes.find(mt => mt.name === 'patient_out')
@@ -1342,6 +1346,19 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 {caseData.operative_side && (<><span className="text-slate-300">&middot;</span><span className="capitalize">{caseData.operative_side}</span></>)}
                 {surgeon && (<><span className="text-slate-300">&middot;</span><span>Dr. {surgeon.last_name}</span></>)}
                 {caseData.start_time && (<><span className="text-slate-300">&middot;</span><span>{formatDisplayTime(caseData.start_time, { fallback: '--:--' })}</span></>)}
+                {patient && (patient.first_name || patient.last_name) && (
+                  <><span className="text-slate-300">&middot;</span>
+                  <span className="group relative cursor-default">
+                    {patient.first_name} {patient.last_name}
+                    {(patient.mrn || patient.date_of_birth) && (
+                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                        {patient.mrn && <>MRN: {patient.mrn}</>}
+                        {patient.mrn && patient.date_of_birth && <> &middot; </>}
+                        {patient.date_of_birth && <>DOB: {patient.date_of_birth}</>}
+                      </span>
+                    )}
+                  </span></>
+                )}
                 {caseSequence && (<><span className="text-slate-300">&middot;</span><span>Case {caseSequence.current} of {caseSequence.total}</span></>)}
               </div>
             </div>

@@ -296,7 +296,7 @@ function SearchInput({
       <input
         ref={inputRef}
         type="text"
-        placeholder="Search cases, surgeons, rooms..."
+        placeholder="Search cases, patients, surgeons, rooms..."
         value={value}
         onChange={(e) => {
           onChange(e.target.value)

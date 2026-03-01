@@ -11,6 +11,14 @@ import { getLocalDateString } from '@/lib/date-utils'
 // TYPES
 // ============================================
 
+/** Patient info from joined patients table */
+export interface CasePatient {
+  first_name: string | null
+  last_name: string | null
+  mrn: string | null
+  date_of_birth: string | null
+}
+
 /** Minimal case for list views */
 export interface CaseListItem {
   id: string
@@ -22,7 +30,9 @@ export interface CaseListItem {
   is_excluded_from_metrics: boolean
   or_room_id: string | null
   surgeon_id: string | null
+  patient_id: string | null
   facility_id: string
+  source: string
   created_at: string
   created_by: string | null
   surgeon?: { first_name: string; last_name: string } | null
@@ -30,6 +40,7 @@ export interface CaseListItem {
   case_status?: { name: string } | null
   procedure_type?: { id: string; name: string; procedure_category_id: string | null; expected_duration_minutes: number | null } | null
   case_completion_stats?: { total_duration_minutes: number | null } | null
+  patient?: CasePatient | null
 }
 
 /** Tab identifiers for the cases page status tabs */
@@ -52,8 +63,6 @@ export interface CaseFlagSummary {
 
 /** Full case with all milestones for detail/edit views */
 export interface CaseDetail extends CaseListItem {
-  patient_dob: string | null
-  patient_phone: string | null
   laterality: string | null
   anesthesia_type: string | null
   notes: string | null
@@ -129,13 +138,14 @@ export interface CaseForAnalytics {
 
 const CASE_LIST_SELECT = `
   id, case_number,
-  scheduled_date, start_time, status_id, data_validated, is_excluded_from_metrics, or_room_id, surgeon_id, facility_id,
-  created_at, created_by,
+  scheduled_date, start_time, status_id, data_validated, is_excluded_from_metrics, or_room_id, surgeon_id, patient_id, facility_id,
+  source, created_at, created_by,
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
   or_room:or_rooms(name),
   case_status:case_statuses(name),
   procedure_type:procedure_types(id, name, procedure_category_id, expected_duration_minutes),
-  case_completion_stats(total_duration_minutes)
+  case_completion_stats(total_duration_minutes),
+  patient:patients!cases_patient_id_fkey(first_name, last_name, mrn, date_of_birth)
 ` as const
 
 const CASE_DETAIL_SELECT = `
@@ -144,6 +154,7 @@ const CASE_DETAIL_SELECT = `
   or_room:or_rooms(name),
   case_status:case_statuses(name),
   procedure_type:procedure_types(id, name, procedure_category_id, expected_duration_minutes),
+  patient:patients!cases_patient_id_fkey(first_name, last_name, mrn, date_of_birth),
   case_milestones(id, case_id, facility_milestone_id, recorded_at, recorded_by,
     facility_milestone:facility_milestones(name, display_name, display_order)
   ),
@@ -259,7 +270,7 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
   },
 
   /**
-   * Search cases by case number
+   * Search cases by case number, patient name, or MRN
    */
   async search(
     supabase: AnySupabaseClient,
@@ -267,11 +278,20 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
     searchTerm: string,
     limit: number = 10,
   ): Promise<DALListResult<CaseListItem>> {
+    // Use RPC to search across case_number + patient name + MRN
+    const { data: matchingIds } = await supabase.rpc('search_cases_by_text', {
+      p_facility_id: facilityId,
+      p_search_term: searchTerm,
+    })
+
+    if (!matchingIds || matchingIds.length === 0) {
+      return { data: [], error: null }
+    }
+
     const { data, error } = await supabase
       .from('cases')
       .select(CASE_LIST_SELECT)
-      .eq('facility_id', facilityId)
-      .ilike('case_number', `%${searchTerm}%`)
+      .in('id', matchingIds as string[])
       .order('scheduled_date', { ascending: false })
       .limit(limit)
 
@@ -393,7 +413,17 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
 
     // Entity filters
     if (filters?.search) {
-      query = query.ilike('case_number', `%${filters.search}%`)
+      // Use RPC to search across case_number + patient name + MRN
+      const { data: matchingIds } = await supabase.rpc('search_cases_by_text', {
+        p_facility_id: facilityId,
+        p_search_term: filters.search,
+      })
+      if (matchingIds && matchingIds.length > 0) {
+        query = query.in('id', matchingIds as string[])
+      } else {
+        // No matches — return empty
+        return { data: [], error: null, count: 0 }
+      }
     }
     if (filters?.surgeonIds && filters.surgeonIds.length > 0) {
       query = query.in('surgeon_id', filters.surgeonIds)
@@ -440,15 +470,29 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
   ): Promise<{ data: Record<CasesPageTab, number>; error: PostgrestError | null }> {
     const today = getLocalDateString()
 
+    // Pre-fetch matching IDs for text search (shared across all tab count queries)
+    let searchMatchIds: string[] | null = null
+    if (filters?.search) {
+      const { data: matchingIds } = await supabase.rpc('search_cases_by_text', {
+        p_facility_id: facilityId,
+        p_search_term: filters.search,
+      })
+      searchMatchIds = (matchingIds as string[] | null) ?? []
+      if (searchMatchIds.length === 0) {
+        // No matches — return zero counts
+        return { data: { all: 0, today: 0, scheduled: 0, in_progress: 0, completed: 0, data_quality: 0 }, error: null }
+      }
+    }
+
     const baseFilter = () => {
       let q = supabase
         .from('cases')
         .select('id', { count: 'exact', head: true })
         .eq('facility_id', facilityId)
 
-      // Apply entity filters to counts so badges reflect filtered state
-      if (filters?.search) {
-        q = q.ilike('case_number', `%${filters.search}%`)
+      // Apply text search filter via pre-fetched IDs
+      if (searchMatchIds) {
+        q = q.in('id', searchMatchIds)
       }
       if (filters?.surgeonIds && filters.surgeonIds.length > 0) {
         q = q.in('surgeon_id', filters.surgeonIds)

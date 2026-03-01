@@ -99,6 +99,11 @@ function getSurgeonName(surgeon: { first_name: string; last_name: string } | nul
   return `Dr. ${surgeon.last_name}`
 }
 
+function getPatientName(patient: { first_name: string | null; last_name: string | null } | null | undefined): string {
+  if (!patient || (!patient.first_name && !patient.last_name)) return '\u2014'
+  return `${patient.last_name || ''}, ${patient.first_name || ''}`.replace(/^, |, $/g, '')
+}
+
 function formatDuration(minutes: number | null): string {
   if (minutes == null || minutes <= 0) return '\u2014'
   const h = Math.floor(minutes / 60)
@@ -410,6 +415,7 @@ export default function CasesTable({
         const proc = row.original.procedure_type
         const categoryId = proc?.procedure_category_id
         const categoryName = categoryId ? categoryNameById.get(categoryId) ?? null : null
+        const isEpic = row.original.source === 'epic'
         return (
           <div className="flex items-center gap-2.5 min-w-0">
             <ProcedureIcon categoryName={categoryName} size={18} className="text-slate-400 flex-shrink-0" />
@@ -417,8 +423,13 @@ export default function CasesTable({
               <div className="text-sm font-medium text-slate-900 truncate">
                 {proc?.name ?? 'Unknown Procedure'}
               </div>
-              <div className="text-xs text-slate-500 truncate">
-                {row.original.case_number}
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 truncate">
+                <span>{row.original.case_number}</span>
+                {isEpic && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold bg-purple-100 text-purple-700 rounded">
+                    Epic
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -439,6 +450,21 @@ export default function CasesTable({
         </span>
       ),
       size: 150,
+    },
+
+    // Patient
+    {
+      id: 'patient',
+      header: () => (
+        <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Patient</span>
+      ),
+      cell: ({ row }) => (
+        <span className="text-sm text-slate-700 truncate">
+          {getPatientName(row.original.patient)}
+        </span>
+      ),
+      size: 140,
+      enableSorting: false,
     },
 
     // Room

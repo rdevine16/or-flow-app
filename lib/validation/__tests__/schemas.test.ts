@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createCaseSchema, bulkCaseRowSchema, bulkCaseSubmissionSchema, recordMilestoneSchema, draftCaseSchema, validateField } from '../schemas'
+import { createCaseSchema, bulkCaseRowSchema, bulkCaseSubmissionSchema, recordMilestoneSchema, draftCaseSchema, patientFieldsSchema, validateField } from '../schemas'
 
 describe('createCaseSchema — Phase 1.3', () => {
   const validData = {
@@ -349,6 +349,105 @@ describe('recordMilestoneSchema — Phase 5.3', () => {
 // ============================================
 // DRAFT CASE SCHEMA — Phase 5.3
 // ============================================
+
+// ============================================
+// PATIENT FIELDS SCHEMA — Phase 1 (Epic FHIR)
+// ============================================
+
+describe('patientFieldsSchema — Phase 1', () => {
+  it('accepts empty patient fields (no patient info)', () => {
+    const result = patientFieldsSchema.safeParse({
+      patient_first_name: '',
+      patient_last_name: '',
+      patient_mrn: '',
+      patient_dob: '',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts all fields provided', () => {
+    const result = patientFieldsSchema.safeParse({
+      patient_first_name: 'Jane',
+      patient_last_name: 'Doe',
+      patient_mrn: 'MRN-12345',
+      patient_dob: '1990-05-15',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('requires first and last name when any field is provided', () => {
+    const result = patientFieldsSchema.safeParse({
+      patient_first_name: '',
+      patient_last_name: '',
+      patient_mrn: 'MRN-123',
+      patient_dob: '',
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0].message).toContain('First name and last name are required')
+    }
+  })
+
+  it('requires last name when first name is provided', () => {
+    const result = patientFieldsSchema.safeParse({
+      patient_first_name: 'Jane',
+      patient_last_name: '',
+      patient_mrn: '',
+      patient_dob: '',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('requires first name when last name is provided', () => {
+    const result = patientFieldsSchema.safeParse({
+      patient_first_name: '',
+      patient_last_name: 'Doe',
+      patient_mrn: '',
+      patient_dob: '',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts first and last name without MRN or DOB', () => {
+    const result = patientFieldsSchema.safeParse({
+      patient_first_name: 'Jane',
+      patient_last_name: 'Doe',
+      patient_mrn: '',
+      patient_dob: '',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects invalid DOB format', () => {
+    const result = patientFieldsSchema.safeParse({
+      patient_first_name: 'Jane',
+      patient_last_name: 'Doe',
+      patient_mrn: '',
+      patient_dob: '05/15/1990',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects first name over 100 characters', () => {
+    const result = patientFieldsSchema.safeParse({
+      patient_first_name: 'x'.repeat(101),
+      patient_last_name: 'Doe',
+      patient_mrn: '',
+      patient_dob: '',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects MRN over 50 characters', () => {
+    const result = patientFieldsSchema.safeParse({
+      patient_first_name: 'Jane',
+      patient_last_name: 'Doe',
+      patient_mrn: 'x'.repeat(51),
+      patient_dob: '',
+    })
+    expect(result.success).toBe(false)
+  })
+})
 
 describe('draftCaseSchema — Phase 5.3', () => {
   it('requires only scheduled_date', () => {

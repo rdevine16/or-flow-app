@@ -130,6 +130,27 @@ export const bulkCaseSubmissionSchema = z.object({
 export type BulkCaseSubmissionInput = z.infer<typeof bulkCaseSubmissionSchema>
 
 // ============================================
+// PATIENT SCHEMAS
+// ============================================
+
+/** Patient fields for case form — conditional validation: if any field entered, first_name + last_name required */
+export const patientFieldsSchema = z.object({
+  patient_first_name: z.string().max(100, 'First name too long').optional().or(z.literal('')),
+  patient_last_name: z.string().max(100, 'Last name too long').optional().or(z.literal('')),
+  patient_mrn: z.string().max(50, 'MRN too long').optional().or(z.literal('')),
+  patient_dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format').optional().or(z.literal('')),
+}).refine((data) => {
+  const hasAnyField = !!(data.patient_first_name || data.patient_last_name || data.patient_mrn || data.patient_dob)
+  if (!hasAnyField) return true
+  return !!(data.patient_first_name && data.patient_last_name)
+}, {
+  message: 'First name and last name are required when entering patient information',
+  path: ['patient_first_name'],
+})
+
+export type PatientFieldsInput = z.infer<typeof patientFieldsSchema>
+
+// ============================================
 // MILESTONE SCHEMAS
 // ============================================
 

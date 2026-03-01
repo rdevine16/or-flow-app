@@ -473,18 +473,25 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     if (exportData.length === 0) return
 
     // Format as CSV
-    const headers = ['Case ID', 'Case Number', 'Procedure', 'Surgeon', 'Room', 'Date', 'Time', 'Status', 'Validated']
-    const rows = exportData.map(c => [
-      c.id,
-      c.case_number,
-      c.procedure_type?.name ?? '',
-      c.surgeon ? `Dr. ${c.surgeon.last_name}` : '',
-      c.or_room?.name ?? '',
-      c.scheduled_date,
-      c.start_time ?? '',
-      c.case_status?.name ?? '',
-      c.data_validated ? 'Yes' : 'No',
-    ])
+    const headers = ['Case ID', 'Case Number', 'Procedure', 'Surgeon', 'Patient Name', 'Patient MRN', 'Room', 'Date', 'Time', 'Status', 'Validated']
+    const rows = exportData.map(c => {
+      const patientName = c.patient
+        ? [c.patient.last_name, c.patient.first_name].filter(Boolean).join(', ')
+        : ''
+      return [
+        c.id,
+        c.case_number,
+        c.procedure_type?.name ?? '',
+        c.surgeon ? `Dr. ${c.surgeon.last_name}` : '',
+        patientName,
+        c.patient?.mrn ?? '',
+        c.or_room?.name ?? '',
+        c.scheduled_date,
+        c.start_time ?? '',
+        c.case_status?.name ?? '',
+        c.data_validated ? 'Yes' : 'No',
+      ]
+    })
 
     const csvContent = [
       headers.join(','),
