@@ -713,9 +713,12 @@ export default function EpicImportPage() {
               {previews.filter(p => p.status === 'missing_mappings').length > 0 && (
                 <>
                   <span className="text-xs text-slate-400">|</span>
-                  <span className="text-sm text-amber-600">
-                    {previews.filter(p => p.status === 'missing_mappings').length} missing mappings
-                  </span>
+                  <a
+                    href="/settings/integrations/epic/mappings"
+                    className="text-sm text-amber-600 hover:text-amber-700 underline underline-offset-2"
+                  >
+                    {previews.filter(p => p.status === 'missing_mappings').length} missing mappings — configure
+                  </a>
                 </>
               )}
               {previews.filter(p => p.status === 'already_imported').length > 0 && (
@@ -740,6 +743,27 @@ export default function EpicImportPage() {
               {importing ? 'Importing...' : `Import Selected (${selectedIds.size})`}
             </button>
           </div>
+
+          {/* Missing Mappings Banner */}
+          {previews.some(p => p.status === 'missing_mappings') && readyCases.length === 0 && (
+            <div className="mx-6 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">Entity mappings needed</p>
+                <p className="text-sm text-amber-700 mt-1">
+                  The discovered Epic surgeons and rooms need to be mapped to ORbit entities before importing.
+                  The search has automatically registered them on the mappings page.
+                </p>
+                <a
+                  href="/settings/integrations/epic/mappings"
+                  className="inline-flex items-center gap-1.5 mt-2 px-4 py-2 text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors"
+                >
+                  Configure Mappings
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+          )}
 
           {/* Table */}
           <div className="overflow-x-auto">

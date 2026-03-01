@@ -137,6 +137,69 @@ export const GET = withErrorHandler(async (req: NextRequest) => {
     }
   }
 
+  // Auto-register discovered Epic entities as unmapped entity mapping rows.
+  // This populates the mappings page so the user can map them before importing.
+  const existingKeys = new Set(
+    entityMappings.map(m => `${m.mapping_type}:${m.epic_resource_id}`)
+  )
+
+  const upsertPromises: Promise<unknown>[] = []
+
+  for (const p of previews) {
+    // Register practitioners
+    if (p.epicPractitionerId && !existingKeys.has(`surgeon:${p.epicPractitionerId}`)) {
+      existingKeys.add(`surgeon:${p.epicPractitionerId}`)
+      upsertPromises.push(
+        epicDAL.upsertEntityMapping(supabase, {
+          facility_id: facilityId,
+          connection_id: connection.id,
+          mapping_type: 'surgeon',
+          epic_resource_type: 'Practitioner',
+          epic_resource_id: p.epicPractitionerId,
+          epic_display_name: p.surgeonName ?? undefined,
+        })
+      )
+    }
+
+    // Register locations
+    if (p.epicLocationId && !existingKeys.has(`room:${p.epicLocationId}`)) {
+      existingKeys.add(`room:${p.epicLocationId}`)
+      upsertPromises.push(
+        epicDAL.upsertEntityMapping(supabase, {
+          facility_id: facilityId,
+          connection_id: connection.id,
+          mapping_type: 'room',
+          epic_resource_type: 'Location',
+          epic_resource_id: p.epicLocationId,
+          epic_display_name: p.roomName ?? undefined,
+        })
+      )
+    }
+
+    // Register service types as procedures
+    if (p.epicServiceType && !existingKeys.has(`procedure:${p.epicServiceType}`)) {
+      existingKeys.add(`procedure:${p.epicServiceType}`)
+      upsertPromises.push(
+        epicDAL.upsertEntityMapping(supabase, {
+          facility_id: facilityId,
+          connection_id: connection.id,
+          mapping_type: 'procedure',
+          epic_resource_type: 'ServiceType',
+          epic_resource_id: p.epicServiceType,
+          epic_display_name: p.epicServiceType,
+        })
+      )
+    }
+  }
+
+  if (upsertPromises.length > 0) {
+    await Promise.allSettled(upsertPromises)
+    log.info('Auto-registered Epic entities', {
+      facilityId,
+      count: upsertPromises.length,
+    })
+  }
+
   // Sort by date/time
   previews.sort((a, b) => {
     const dateA = a.scheduledDate ?? ''
