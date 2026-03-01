@@ -229,6 +229,18 @@ export type AuditAction =
   | 'flag_rule.updated'
   | 'flag_rule.archived'
   | 'flag_rule.restored'
+  // Epic Integration
+  | 'epic.connected'
+  | 'epic.disconnected'
+  | 'epic.token_expired'
+  | 'epic.cases_imported'
+  | 'epic.case_import_failed'
+  | 'epic.mapping_created'
+  | 'epic.mapping_updated'
+  | 'epic.mapping_deleted'
+  | 'epic.auto_match_run'
+  | 'epic.field_mapping_updated'
+  | 'epic.field_mapping_reset'
 // Human-readable labels for audit log display
 export const auditActionLabels: Record<AuditAction, string> = {
     // Block Schedules
@@ -428,6 +440,18 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'flag_rule.updated': 'updated a flag rule',
   'flag_rule.archived': 'archived a flag rule',
   'flag_rule.restored': 'restored a flag rule',
+  // Epic Integration
+  'epic.connected': 'connected to Epic',
+  'epic.disconnected': 'disconnected from Epic',
+  'epic.token_expired': 'Epic token expired',
+  'epic.cases_imported': 'imported cases from Epic',
+  'epic.case_import_failed': 'failed to import case from Epic',
+  'epic.mapping_created': 'created Epic entity mapping',
+  'epic.mapping_updated': 'updated Epic entity mapping',
+  'epic.mapping_deleted': 'deleted Epic entity mapping',
+  'epic.auto_match_run': 'ran Epic auto-matching',
+  'epic.field_mapping_updated': 'updated Epic field mapping',
+  'epic.field_mapping_reset': 'reset Epic field mappings to defaults',
 // Data Quality
   'data_quality.issue_resolved': 'resolved a data quality issue',
   'data_quality.issue_excluded': 'excluded a data quality issue',
@@ -2816,6 +2840,164 @@ export const flagRuleAudit = {
       targetId: ruleId,
       targetLabel: ruleName,
       facilityId: facilityId ?? undefined,
+    })
+  },
+}
+
+// =====================================================
+// EPIC INTEGRATION
+// =====================================================
+
+export const epicAudit = {
+  async connected(
+    supabase: SupabaseClient,
+    facilityId: string,
+    fhirBaseUrl: string
+  ) {
+    await log(supabase, 'epic.connected', {
+      targetType: 'epic_connection',
+      targetLabel: 'Epic FHIR Connection',
+      facilityId,
+      newValues: { fhir_base_url: fhirBaseUrl },
+    })
+  },
+
+  async disconnected(
+    supabase: SupabaseClient,
+    facilityId: string
+  ) {
+    await log(supabase, 'epic.disconnected', {
+      targetType: 'epic_connection',
+      targetLabel: 'Epic FHIR Connection',
+      facilityId,
+    })
+  },
+
+  async tokenExpired(
+    supabase: SupabaseClient,
+    facilityId: string
+  ) {
+    await log(supabase, 'epic.token_expired', {
+      targetType: 'epic_connection',
+      targetLabel: 'Epic FHIR Connection',
+      facilityId,
+    })
+  },
+
+  async casesImported(
+    supabase: SupabaseClient,
+    facilityId: string,
+    importCount: number,
+    successCount: number,
+    failedCount: number
+  ) {
+    await log(supabase, 'epic.cases_imported', {
+      targetType: 'epic_import',
+      targetLabel: `${successCount} cases imported`,
+      facilityId,
+      metadata: {
+        total_attempted: importCount,
+        success_count: successCount,
+        failed_count: failedCount,
+      },
+    })
+  },
+
+  async caseImportFailed(
+    supabase: SupabaseClient,
+    facilityId: string,
+    fhirAppointmentId: string,
+    errorMessage: string
+  ) {
+    await log(supabase, 'epic.case_import_failed', {
+      targetType: 'epic_import',
+      targetLabel: `FHIR Appointment ${fhirAppointmentId}`,
+      facilityId,
+      success: false,
+      errorMessage,
+      metadata: { fhir_appointment_id: fhirAppointmentId },
+    })
+  },
+
+  async mappingCreated(
+    supabase: SupabaseClient,
+    facilityId: string,
+    mappingType: string,
+    epicName: string,
+    orbitName: string
+  ) {
+    await log(supabase, 'epic.mapping_created', {
+      targetType: 'epic_entity_mapping',
+      targetLabel: `${mappingType}: ${epicName} → ${orbitName}`,
+      facilityId,
+      newValues: { mapping_type: mappingType, epic_name: epicName, orbit_name: orbitName },
+    })
+  },
+
+  async mappingUpdated(
+    supabase: SupabaseClient,
+    facilityId: string,
+    mappingType: string,
+    epicName: string,
+    oldOrbitName: string,
+    newOrbitName: string
+  ) {
+    await log(supabase, 'epic.mapping_updated', {
+      targetType: 'epic_entity_mapping',
+      targetLabel: `${mappingType}: ${epicName}`,
+      facilityId,
+      oldValues: { orbit_name: oldOrbitName },
+      newValues: { orbit_name: newOrbitName },
+    })
+  },
+
+  async mappingDeleted(
+    supabase: SupabaseClient,
+    facilityId: string,
+    mappingType: string,
+    epicName: string
+  ) {
+    await log(supabase, 'epic.mapping_deleted', {
+      targetType: 'epic_entity_mapping',
+      targetLabel: `${mappingType}: ${epicName}`,
+      facilityId,
+    })
+  },
+
+  async autoMatchRun(
+    supabase: SupabaseClient,
+    facilityId: string,
+    mappingType: string,
+    autoApplied: number,
+    suggestions: number
+  ) {
+    await log(supabase, 'epic.auto_match_run', {
+      targetType: 'epic_entity_mapping',
+      targetLabel: `Auto-match ${mappingType}`,
+      facilityId,
+      metadata: {
+        mapping_type: mappingType,
+        auto_applied: autoApplied,
+        suggestions,
+      },
+    })
+  },
+
+  async fieldMappingUpdated(
+    supabase: SupabaseClient,
+    changedCount: number
+  ) {
+    await log(supabase, 'epic.field_mapping_updated', {
+      targetType: 'epic_field_mapping',
+      targetLabel: `${changedCount} field mapping(s) updated`,
+      metadata: { changed_count: changedCount },
+    })
+  },
+
+  async fieldMappingReset(supabase: SupabaseClient) {
+    await log(supabase, 'epic.field_mapping_reset', {
+      targetType: 'epic_field_mapping',
+      targetLabel: 'Field mappings reset to defaults',
     })
   },
 }

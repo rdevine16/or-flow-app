@@ -34,6 +34,7 @@ const ACTION_CATEGORIES: Record<string, string[]> = {
   'Procedures': ['procedure_type.created', 'procedure_type.updated', 'procedure_type.deleted'],
   'Users': ['user.created', 'user.invited', 'user.invitation_accepted', 'user.updated', 'user.deleted', 'user.deactivated', 'user.reactivated', 'user.role_changed'],
   'Settings': ['milestone_type.created', 'milestone_type.updated', 'milestone_type.deleted', 'milestone_type.reordered'],
+  'Epic Integration': ['epic.connected', 'epic.disconnected', 'epic.token_expired', 'epic.cases_imported', 'epic.case_import_failed', 'epic.mapping_created', 'epic.mapping_updated', 'epic.mapping_deleted', 'epic.auto_match_run'],
 }
 
 const getActionColor = (action: string): string => {

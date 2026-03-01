@@ -49,6 +49,7 @@ const ACTION_CATEGORIES: Record<string, string[]> = {
   'Facilities': ['facility.created', 'facility.updated', 'facility.deleted', 'facility.subscription_changed'],
   'Settings': ['milestone_type.created', 'milestone_type.updated', 'milestone_type.deleted', 'milestone_type.reordered'],
   'Admin': ['admin.impersonation_started', 'admin.impersonation_ended', 'admin.procedure_template_created', 'admin.procedure_template_updated', 'admin.procedure_template_deleted'],
+  'Epic Integration': ['epic.connected', 'epic.disconnected', 'epic.token_expired', 'epic.cases_imported', 'epic.case_import_failed', 'epic.mapping_created', 'epic.mapping_updated', 'epic.mapping_deleted', 'epic.auto_match_run', 'epic.field_mapping_updated', 'epic.field_mapping_reset'],
 }
 
 const getActionColor = (action: string): string => {

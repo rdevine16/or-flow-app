@@ -28,6 +28,7 @@ export { usersDAL } from './users'
 export { facilitiesDAL } from './facilities'
 export { lookupsDAL } from './lookups'
 export * as flagRulesDAL from './flag-rules'
+export { epicDAL } from './epic'
 
 // ============================================
 // SHARED TYPES
