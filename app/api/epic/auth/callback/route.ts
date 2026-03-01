@@ -33,6 +33,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${appUrl}/login?error=auth_required`)
     }
 
+    // Verify facility admin or global admin (prevent non-admins from completing OAuth)
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('access_level, facility_id')
+      .eq('id', user.id)
+      .single()
+
+    if (!userProfile || !['facility_admin', 'global_admin'].includes(userProfile.access_level)) {
+      log.error('Non-admin attempted OAuth callback', { userId: user.id })
+      return NextResponse.redirect(
+        `${epicSettingsUrl}?error=${encodeURIComponent('Only facility admins can connect to Epic')}`
+      )
+    }
+
     // Extract query params
     const code = req.nextUrl.searchParams.get('code')
     const state = req.nextUrl.searchParams.get('state')
@@ -81,6 +95,18 @@ export async function GET(req: NextRequest) {
     }
 
     const facilityId = cookieData.facilityId
+
+    // Verify user has access to the facility in the cookie state
+    if (userProfile.access_level === 'facility_admin' && userProfile.facility_id !== facilityId) {
+      log.error('Facility admin attempted OAuth callback for another facility', {
+        userId: user.id,
+        userFacility: userProfile.facility_id,
+        cookieFacility: facilityId,
+      })
+      return NextResponse.redirect(
+        `${epicSettingsUrl}?error=${encodeURIComponent('Cannot connect Epic for another facility')}`
+      )
+    }
 
     // Get FHIR base URL and SMART configuration
     const fhirBaseUrl = process.env.EPIC_FHIR_BASE_URL

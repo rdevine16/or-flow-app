@@ -125,6 +125,28 @@ vi.mock('@/lib/dal/epic', () => ({
 }))
 
 import { epicDAL } from '@/lib/dal/epic'
+import type { EpicEntityMapping, EpicMappingType } from '@/lib/epic/types'
+import type { PostgrestError } from '@supabase/supabase-js'
+
+/** Helper to create a type-safe mock EpicEntityMapping */
+function mockMapping(overrides: Partial<EpicEntityMapping> & {
+  id: string
+  connection_id: string
+  mapping_type: EpicMappingType
+  epic_resource_type: string
+  epic_resource_id: string
+}): EpicEntityMapping {
+  return {
+    facility_id: 'fac-1',
+    epic_display_name: null,
+    orbit_entity_id: null,
+    match_method: 'manual',
+    match_confidence: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...overrides,
+  }
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -141,17 +163,14 @@ describe('autoMatchSurgeons', () => {
     // Mock Epic mappings with unmapped surgeon "Smith, John" (exact match to surg-1)
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'surgeon',
           epic_resource_type: 'Practitioner',
           epic_resource_id: 'epic-prac-1',
-          epic_display_name: 'Smith, John', // Exact match
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+          epic_display_name: 'Smith, John',
+        }),
       ],
       error: null,
     })
@@ -181,42 +200,17 @@ describe('autoMatchSurgeons', () => {
   })
 
   it('suggests medium-confidence matches (0.70-0.89)', async () => {
-    // Mock Epic mapping with medium match: "Smoth, John" (2 char diff from "Smith, John")
-    // "smith, john" vs "smoth, john" → distance 1 (i→o), length 11 → 1 - 1/11 = 0.91 (too high!)
-    // Need a name with lower similarity: "Smythe, Jonathan" vs "Smith, John"
+    // Use "Smythe, John" which will score around 0.75 (suggest range)
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
-          id: 'map-1',
-          connection_id: 'conn-1',
-          mapping_type: 'surgeon',
-          epic_resource_type: 'Practitioner',
-          epic_resource_id: 'epic-prac-1',
-          epic_display_name: 'Smith, Jon', // "smith, jon" vs "smith, john" → distance 1, length 11 → 0.91 (still too high!)
-          // Better: "Smythe, John" vs "Smith, John" → "smythe, john" vs "smith, john"
-          // distance 3 (i→y, insert h, insert e), length 12 → 1 - 3/12 = 0.75
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ],
-      error: null,
-    })
-
-    // Actually use "Smythe, John" which will score around 0.75 (suggest range)
-    vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
-      data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'surgeon',
           epic_resource_type: 'Practitioner',
           epic_resource_id: 'epic-prac-1',
           epic_display_name: 'Smythe, John', // 0.75 match
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        }),
       ],
       error: null,
     })
@@ -234,20 +228,16 @@ describe('autoMatchSurgeons', () => {
   })
 
   it('skips low-confidence matches (< 0.70)', async () => {
-    // Mock Epic mapping with completely different name
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'surgeon',
           epic_resource_type: 'Practitioner',
           epic_resource_id: 'epic-prac-1',
           epic_display_name: 'Williams, Robert', // No good match
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        }),
       ],
       error: null,
     })
@@ -265,17 +255,14 @@ describe('autoMatchSurgeons', () => {
   it('skips Epic entities with empty display names', async () => {
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'surgeon',
           epic_resource_type: 'Practitioner',
           epic_resource_id: 'epic-prac-1',
           epic_display_name: '', // Empty name
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        }),
       ],
       error: null,
     })
@@ -289,21 +276,17 @@ describe('autoMatchSurgeons', () => {
   })
 
   it('prevents double-mapping (already-mapped ORbit entities are excluded)', async () => {
-    // Mock Epic mappings: one unmapped, one already mapped to surg-1
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'surgeon',
           epic_resource_type: 'Practitioner',
           epic_resource_id: 'epic-prac-1',
           epic_display_name: 'Smith, John', // Would match surg-1
-          orbit_entity_id: null, // Unmapped
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        {
+        }),
+        mockMapping({
           id: 'map-2',
           connection_id: 'conn-1',
           mapping_type: 'surgeon',
@@ -311,9 +294,7 @@ describe('autoMatchSurgeons', () => {
           epic_resource_id: 'epic-prac-2',
           epic_display_name: 'Smith, J.',
           orbit_entity_id: 'surg-1', // ALREADY MAPPED
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        }),
       ],
       error: null,
     })
@@ -324,24 +305,20 @@ describe('autoMatchSurgeons', () => {
     // map-1 should NOT match surg-1 (already taken), should match next-best or skip
     const map1Result = result.results.find(r => r.epicResourceId === 'epic-prac-1')
     expect(map1Result?.orbitEntityId).not.toBe('surg-1')
-    // Either matched to a different surgeon or skipped
     expect(['skipped', 'suggested', 'auto_applied']).toContain(map1Result?.action)
   })
 
   it('handles empty ORbit surgeons list', async () => {
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'surgeon',
           epic_resource_type: 'Practitioner',
           epic_resource_id: 'epic-prac-1',
           epic_display_name: 'Smith, John',
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        }),
       ],
       error: null,
     })
@@ -356,9 +333,16 @@ describe('autoMatchSurgeons', () => {
   })
 
   it('handles DAL errors gracefully', async () => {
+    const mockError = {
+      message: 'Database error',
+      details: '',
+      hint: '',
+      code: 'PGRST000',
+      name: 'PostgrestError',
+    } as PostgrestError
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [],
-      error: new Error('Database error'),
+      error: mockError,
     })
 
     const supabase = {} as any
@@ -381,17 +365,14 @@ describe('autoMatchRooms', () => {
   it('auto-applies exact room name matches', async () => {
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'room',
           epic_resource_type: 'Location',
           epic_resource_id: 'epic-loc-1',
           epic_display_name: 'OR 1',
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        }),
       ],
       error: null,
     })
@@ -411,17 +392,14 @@ describe('autoMatchRooms', () => {
   it('suggests close room name matches (e.g., "OR-1" vs "OR 1")', async () => {
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'room',
           epic_resource_type: 'Location',
           epic_resource_id: 'epic-loc-1',
           epic_display_name: 'OR-1', // Close but not exact
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        }),
       ],
       error: null,
     })
@@ -429,7 +407,6 @@ describe('autoMatchRooms', () => {
     const supabase = {} as any
     const result = await autoMatchRooms(supabase, 'conn-1', 'fac-1', mockRooms)
 
-    // Should be suggested or auto-applied depending on exact similarity
     const match = result.results[0]
     expect(match.orbitEntityId).toBe('room-1')
     expect(['suggested', 'auto_applied']).toContain(match.action)
@@ -445,17 +422,14 @@ describe('autoMatchProcedures', () => {
   it('auto-applies exact procedure name matches', async () => {
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'procedure',
           epic_resource_type: 'ServiceType',
           epic_resource_id: 'epic-svc-1',
           epic_display_name: 'Knee Replacement',
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        }),
       ],
       error: null,
     })
@@ -475,17 +449,14 @@ describe('autoMatchProcedures', () => {
   it('suggests close procedure name matches (typos, abbreviations)', async () => {
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'procedure',
           epic_resource_type: 'ServiceType',
           epic_resource_id: 'epic-svc-1',
           epic_display_name: 'Kne Replacement', // Typo
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        }),
       ],
       error: null,
     })
@@ -493,7 +464,6 @@ describe('autoMatchProcedures', () => {
     const supabase = {} as any
     const result = await autoMatchProcedures(supabase, 'conn-1', 'fac-1', mockProcedures)
 
-    // Should be a high-confidence suggestion
     const match = result.results[0]
     expect(match.orbitEntityId).toBe('proc-1')
     expect(match.confidence).toBeGreaterThan(0.8)
@@ -508,17 +478,14 @@ describe('auto-matcher edge cases', () => {
   it('rounds confidence to 2 decimal places', async () => {
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'surgeon',
           epic_resource_type: 'Practitioner',
           epic_resource_id: 'epic-prac-1',
           epic_display_name: 'Smith, John',
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        }),
       ],
       error: null,
     })
@@ -547,28 +514,22 @@ describe('auto-matcher edge cases', () => {
   it('processes multiple unmapped entities in a single run', async () => {
     vi.mocked(epicDAL.listEntityMappings).mockResolvedValue({
       data: [
-        {
+        mockMapping({
           id: 'map-1',
           connection_id: 'conn-1',
           mapping_type: 'surgeon',
           epic_resource_type: 'Practitioner',
           epic_resource_id: 'epic-prac-1',
           epic_display_name: 'Smith, John',
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        {
+        }),
+        mockMapping({
           id: 'map-2',
           connection_id: 'conn-1',
           mapping_type: 'surgeon',
           epic_resource_type: 'Practitioner',
           epic_resource_id: 'epic-prac-2',
           epic_display_name: 'Doe, Jane',
-          orbit_entity_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        }),
       ],
       error: null,
     })

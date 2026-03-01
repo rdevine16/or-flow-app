@@ -142,7 +142,7 @@ describe('POST /api/epic/mappings/auto-match', () => {
 
     vi.mocked(createClient).mockResolvedValue(mockSupabase as any)
     vi.mocked(epicDAL.getConnection).mockResolvedValue({
-      data: { id: 'conn-1', fhir_base_url: 'https://fhir.epic.com', status: 'active' },
+      data: { id: 'conn-1', fhir_base_url: 'https://fhir.epic.com', status: 'connected' } as any,
       error: null,
     })
     vi.mocked(usersDAL.listSurgeons).mockResolvedValue({ data: [], error: null })
@@ -221,12 +221,12 @@ describe('POST /api/epic/mappings/auto-match', () => {
 
     vi.mocked(createClient).mockResolvedValue(mockSupabase as any)
     vi.mocked(epicDAL.getConnection).mockResolvedValue({
-      data: { id: 'conn-1', fhir_base_url: 'https://fhir.epic.com', status: 'active' },
+      data: { id: 'conn-1', fhir_base_url: 'https://fhir.epic.com', status: 'connected' } as any,
       error: null,
     })
     vi.mocked(usersDAL.listSurgeons).mockResolvedValue({
       data: [
-        { id: 'surg-1', first_name: 'John', last_name: 'Smith', access_level: 'surgeon' },
+        { id: 'surg-1', first_name: 'John', last_name: 'Smith', closing_workflow: null, closing_handoff_minutes: null },
       ],
       error: null,
     })
@@ -263,19 +263,19 @@ describe('POST /api/epic/mappings/auto-match', () => {
 
     vi.mocked(createClient).mockResolvedValue(mockSupabase as any)
     vi.mocked(epicDAL.getConnection).mockResolvedValue({
-      data: { id: 'conn-1', fhir_base_url: 'https://fhir.epic.com', status: 'active' },
+      data: { id: 'conn-1', fhir_base_url: 'https://fhir.epic.com', status: 'connected' } as any,
       error: null,
     })
     vi.mocked(usersDAL.listSurgeons).mockResolvedValue({
-      data: [{ id: 'surg-1', first_name: 'John', last_name: 'Smith', access_level: 'surgeon' }],
+      data: [{ id: 'surg-1', first_name: 'John', last_name: 'Smith', closing_workflow: null, closing_handoff_minutes: null }],
       error: null,
     })
     vi.mocked(facilitiesDAL.getRooms).mockResolvedValue({
-      data: [{ id: 'room-1', name: 'OR 1' }],
+      data: [{ id: 'room-1', name: 'OR 1', display_order: 1, is_active: true }],
       error: null,
     })
     vi.mocked(lookupsDAL.procedureTypes).mockResolvedValue({
-      data: [{ id: 'proc-1', name: 'Knee Replacement' }],
+      data: [{ id: 'proc-1', name: 'Knee Replacement', category: null, body_region: null, is_active: true }],
       error: null,
     })
     vi.mocked(autoMatchSurgeons).mockResolvedValue({
@@ -322,7 +322,7 @@ describe('POST /api/epic/mappings/auto-match', () => {
 
     vi.mocked(createClient).mockResolvedValue(mockSupabase as any)
     vi.mocked(epicDAL.getConnection).mockResolvedValue({
-      data: { id: 'conn-1', fhir_base_url: 'https://fhir.epic.com', status: 'active' },
+      data: { id: 'conn-1', fhir_base_url: 'https://fhir.epic.com', status: 'connected' } as any,
       error: null,
     })
     vi.mocked(usersDAL.listSurgeons).mockResolvedValue({ data: [], error: null })
@@ -388,13 +388,13 @@ describe('POST /api/epic/mappings/auto-match', () => {
 
     vi.mocked(createClient).mockResolvedValue(mockSupabase as any)
     vi.mocked(epicDAL.getConnection).mockResolvedValue({
-      data: { id: 'conn-1', fhir_base_url: 'https://fhir.epic.com', status: 'active' },
+      data: { id: 'conn-1', fhir_base_url: 'https://fhir.epic.com', status: 'connected' } as any,
       error: null,
     })
 
     const mockSurgeons = [
-      { id: 'surg-1', first_name: 'John', last_name: 'Smith', access_level: 'surgeon' },
-      { id: 'surg-2', first_name: 'Jane', last_name: 'Doe', access_level: 'surgeon' },
+      { id: 'surg-1', first_name: 'John', last_name: 'Smith', closing_workflow: null, closing_handoff_minutes: null },
+      { id: 'surg-2', first_name: 'Jane', last_name: 'Doe', closing_workflow: null, closing_handoff_minutes: null },
     ]
     const mockRooms = [
       { id: 'room-1', name: 'OR 1' },

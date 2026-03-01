@@ -220,9 +220,9 @@ describe('epicFhirRequest', () => {
     await epicFhirRequest(mockSupabase as any, 'fac-1', 'Patient/123')
 
     const fetchCall = vi.mocked(global.fetch).mock.calls[0]
-    const fetchOptions = fetchCall[1]
+    const fetchOptions = fetchCall?.[1]
     expect(fetchOptions).toHaveProperty('signal')
-    expect(fetchOptions.signal).toBeInstanceOf(AbortSignal)
+    expect(fetchOptions!.signal).toBeInstanceOf(AbortSignal)
   })
 
   it('handles 401 by marking token as expired', async () => {

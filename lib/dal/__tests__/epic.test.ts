@@ -68,8 +68,7 @@ describe('epicDAL.getConnection', () => {
 })
 
 describe('epicDAL.getConnectionStatus', () => {
-  it('should select limited columns for connection status', async () => {
-    const { client, chainable } = createMockSupabase()
+  it('should call RPC with facility_id parameter', async () => {
     const mockStatus = {
       id: 'conn-1',
       status: 'connected',
@@ -78,14 +77,17 @@ describe('epicDAL.getConnectionStatus', () => {
       token_expires_at: '2026-03-01T13:00:00Z',
       fhir_base_url: 'https://fhir.epic.com',
     }
-    chainable.single.mockResolvedValue({ data: mockStatus, error: null })
+    const rpcChain = {
+      single: vi.fn().mockResolvedValue({ data: mockStatus, error: null }),
+    }
+    const client = {
+      rpc: vi.fn().mockReturnValue(rpcChain),
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await epicDAL.getConnectionStatus(client as any, 'fac-1')
 
-    expect(chainable.select).toHaveBeenCalledWith(
-      'id, status, last_connected_at, connected_by, token_expires_at, fhir_base_url'
-    )
+    expect(client.rpc).toHaveBeenCalledWith('get_epic_connection_status', { p_facility_id: 'fac-1' })
     expect(result.data).toEqual(mockStatus)
   })
 })

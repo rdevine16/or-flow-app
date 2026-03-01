@@ -43,15 +43,14 @@ interface ConnectionStatusResult {
   fhir_base_url: string
 }
 
-/** Get connection status (limited fields — safe for non-admin users) */
+/** Get connection status (limited fields — safe for non-admin users).
+ * Uses a security-definer RPC to prevent non-admin access to token columns. */
 async function getConnectionStatus(
   supabase: AnySupabaseClient,
   facilityId: string
 ): Promise<DALResult<ConnectionStatusResult>> {
   const { data, error } = await supabase
-    .from('epic_connections')
-    .select('id, status, last_connected_at, connected_by, token_expires_at, fhir_base_url')
-    .eq('facility_id', facilityId)
+    .rpc('get_epic_connection_status', { p_facility_id: facilityId })
     .single()
 
   return { data: data as unknown as ConnectionStatusResult | null, error }

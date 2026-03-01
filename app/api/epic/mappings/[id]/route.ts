@@ -44,6 +44,21 @@ export const DELETE = withErrorHandler(async (
     return NextResponse.json({ error: 'Mapping ID is required' }, { status: 400 })
   }
 
+  // Verify the mapping belongs to the user's facility before deleting
+  const { data: mapping, error: fetchError } = await supabase
+    .from('epic_entity_mappings')
+    .select('id, facility_id')
+    .eq('id', id)
+    .single()
+
+  if (fetchError || !mapping) {
+    return NextResponse.json({ error: 'Mapping not found' }, { status: 404 })
+  }
+
+  if (userProfile.access_level === 'facility_admin' && userProfile.facility_id !== mapping.facility_id) {
+    throw new AuthorizationError('Cannot delete mappings from another facility')
+  }
+
   const { error } = await epicDAL.deleteEntityMapping(supabase, id)
 
   if (error) {
