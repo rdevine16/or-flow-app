@@ -4,6 +4,8 @@ import { NotificationBell } from '../NotificationBell'
 import type { DashboardAlert } from '@/lib/hooks/useDashboardAlerts'
 
 // Mutable mock state
+let mockFacilityId = 'facility-1'
+
 const mockAlertsReturn = {
   data: null as DashboardAlert[] | null,
   loading: false,
@@ -21,6 +23,13 @@ const mockUnreadCountReturn = {
   clearCount: vi.fn(),
   refetch: vi.fn(),
 }
+
+vi.mock('@/lib/UserContext', () => ({
+  useUser: () => ({
+    effectiveFacilityId: mockFacilityId,
+    userData: { userId: 'user-1' },
+  }),
+}))
 
 vi.mock('@/lib/hooks/useDashboardAlerts', () => ({
   useDashboardAlerts: () => mockAlertsReturn,
@@ -59,6 +68,7 @@ const mockAlerts: DashboardAlert[] = [
 
 describe('NotificationBell', () => {
   beforeEach(() => {
+    mockFacilityId = 'facility-1'
     mockAlertsReturn.data = mockAlerts
     mockAlertsReturn.loading = false
     mockAlertsReturn.error = null
@@ -115,5 +125,20 @@ describe('NotificationBell', () => {
     render(<NotificationBell />)
     fireEvent.click(screen.getByRole('button', { name: /notifications/i }))
     expect(screen.getByTestId('notification-panel')).toBeTruthy()
+  })
+
+  it('closes panel when facility switches', () => {
+    const { rerender } = render(<NotificationBell />)
+
+    // Open the panel
+    fireEvent.click(screen.getByRole('button', { name: /notifications/i }))
+    expect(screen.getByTestId('notification-panel')).toBeTruthy()
+
+    // Simulate facility switch
+    mockFacilityId = 'facility-2'
+    rerender(<NotificationBell />)
+
+    // Panel should be closed
+    expect(screen.queryByTestId('notification-panel')).toBeNull()
   })
 })

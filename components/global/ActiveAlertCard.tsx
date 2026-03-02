@@ -1,9 +1,11 @@
 // components/global/ActiveAlertCard.tsx
 // Active (computed) alert card for the notification panel.
 // Displays priority dot, icon, title, description, dismiss button, and click-through.
+// Fade-out animation on dismiss before removing from DOM.
 
 'use client'
 
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import {
   X,
@@ -32,6 +34,8 @@ const PRIORITY_COLORS: Record<AlertPriority, string> = {
   low: 'bg-slate-400',
 }
 
+const DISMISS_DURATION_MS = 250
+
 // ============================================
 // Component
 // ============================================
@@ -44,18 +48,26 @@ interface ActiveAlertCardProps {
 
 export function ActiveAlertCard({ alert, onDismiss, onNavigate }: ActiveAlertCardProps) {
   const Icon = ALERT_ICONS[alert.type]
+  const [dismissing, setDismissing] = useState(false)
 
-  const handleDismiss = (e: React.MouseEvent) => {
+  const handleDismiss = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    onDismiss(alert.id)
-  }
+    setDismissing(true)
+    // Wait for fade-out animation to complete, then trigger actual dismiss
+    setTimeout(() => onDismiss(alert.id), DISMISS_DURATION_MS)
+  }, [alert.id, onDismiss])
 
   return (
     <Link
       href={alert.linkTo}
       onClick={onNavigate}
-      className="flex items-start gap-3 px-4 py-3 hover:bg-amber-50/50 transition-colors group rounded-lg"
+      className={`flex items-start gap-3 px-4 py-3 hover:bg-amber-50/50 transition-all group rounded-lg ${
+        dismissing
+          ? 'opacity-0 scale-95 max-h-0 py-0 overflow-hidden'
+          : 'opacity-100 scale-100 max-h-24'
+      }`}
+      style={{ transitionDuration: `${DISMISS_DURATION_MS}ms` }}
     >
       <div className={`w-2 h-2 rounded-full ${PRIORITY_COLORS[alert.priority]} mt-1.5 shrink-0`} />
       <Icon className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />

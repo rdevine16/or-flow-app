@@ -2,19 +2,29 @@
 // Notification bell for the global header.
 // Badge = unread DB notifications + active dashboard alerts.
 // Click opens the slide-out NotificationPanel.
+// Closes panel and resets on facility switch.
 
 'use client'
 
 import { useState } from 'react'
 import { Bell } from 'lucide-react'
+import { useUser } from '@/lib/UserContext'
 import { useDashboardAlerts } from '@/lib/hooks/useDashboardAlerts'
 import { useUnreadCount } from '@/lib/hooks/useUnreadCount'
 import { NotificationPanel } from './NotificationPanel'
 
 export function NotificationBell() {
+  const { effectiveFacilityId } = useUser()
   const { data: alerts } = useDashboardAlerts()
   const { count: unreadCount } = useUnreadCount()
   const [panelOpen, setPanelOpen] = useState(false)
+  const [prevFacilityId, setPrevFacilityId] = useState(effectiveFacilityId)
+
+  // Close panel on facility switch (React-approved render-time state adjustment)
+  if (prevFacilityId !== effectiveFacilityId) {
+    setPrevFacilityId(effectiveFacilityId)
+    if (panelOpen) setPanelOpen(false)
+  }
 
   const alertCount = alerts?.length ?? 0
   const totalBadge = unreadCount + alertCount

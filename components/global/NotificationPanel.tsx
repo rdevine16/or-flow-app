@@ -6,7 +6,6 @@
 
 'use client'
 
-import { useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import Link from 'next/link'
 import {
@@ -68,16 +67,6 @@ export function NotificationPanel({ open, onOpenChange }: NotificationPanelProps
   const hasAlerts = activeAlerts.length > 0
   const hasUnread = notifications.some(n => !n.is_read)
 
-  // Keyboard: Escape closes panel
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onOpenChange(false)
-    }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [open, onOpenChange])
-
   const handleMarkAsRead = async (id: string) => {
     await markAsRead(id)
     decrement()
@@ -109,7 +98,7 @@ export function NotificationPanel({ open, onOpenChange }: NotificationPanelProps
 
         {/* Panel */}
         <Dialog.Content
-          className="drawer-content fixed right-0 top-0 h-full w-96 max-w-[90vw] bg-white shadow-2xl z-50 flex flex-col outline-none"
+          className="drawer-content fixed right-0 top-0 h-full w-full sm:w-96 sm:max-w-[90vw] bg-white shadow-2xl z-50 flex flex-col outline-none"
           aria-describedby={undefined}
         >
           {/* Header */}
@@ -157,9 +146,7 @@ export function NotificationPanel({ open, onOpenChange }: NotificationPanelProps
                 {!alertsCollapsed && (
                   <div className="pb-2">
                     {alertsLoading ? (
-                      <div className="px-5 py-3">
-                        <div className="h-10 bg-slate-100 rounded-lg animate-pulse" />
-                      </div>
+                      <AlertSkeleton />
                     ) : activeAlerts.length === 0 ? (
                       <div className="px-5 py-3 text-xs text-slate-400 text-center">
                         No active alerts
@@ -321,6 +308,23 @@ function TabButton({
     >
       {label}
     </button>
+  )
+}
+
+function AlertSkeleton() {
+  return (
+    <div className="px-4 py-2 space-y-2">
+      {[1, 2].map(i => (
+        <div key={i} className="flex items-start gap-3 animate-pulse py-2">
+          <div className="w-2 h-2 rounded-full bg-amber-200 mt-1.5" />
+          <div className="w-4 h-4 rounded bg-slate-200 mt-0.5" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3.5 bg-slate-200 rounded w-2/3" />
+            <div className="h-3 bg-slate-100 rounded w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 

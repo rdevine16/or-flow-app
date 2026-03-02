@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { ActiveAlertCard } from '../ActiveAlertCard'
 import type { DashboardAlert } from '@/lib/hooks/useDashboardAlerts'
 
@@ -25,6 +25,11 @@ describe('ActiveAlertCard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('renders alert title and description', () => {
@@ -60,12 +65,22 @@ describe('ActiveAlertCard', () => {
     expect(mockNavigate).toHaveBeenCalled()
   })
 
-  it('calls onDismiss when dismiss button is clicked', () => {
-    render(
+  it('starts fade-out on dismiss click, calls onDismiss after 250ms', () => {
+    const { container } = render(
       <ActiveAlertCard alert={mockAlert} onDismiss={mockDismiss} onNavigate={mockNavigate} />
     )
     const dismissButton = screen.getByRole('button', { name: /dismiss/i })
     fireEvent.click(dismissButton)
+
+    // onDismiss should NOT be called immediately (fade-out in progress)
+    expect(mockDismiss).not.toHaveBeenCalled()
+
+    // Card should have fade-out classes (opacity-0)
+    const link = container.querySelector('a')
+    expect(link?.className).toContain('opacity-0')
+
+    // After 250ms timeout, onDismiss fires
+    act(() => { vi.advanceTimersByTime(250) })
     expect(mockDismiss).toHaveBeenCalledWith('alert-behind-schedule')
   })
 
@@ -75,6 +90,8 @@ describe('ActiveAlertCard', () => {
     )
     const dismissButton = screen.getByRole('button', { name: /dismiss/i })
     fireEvent.click(dismissButton)
+
+    act(() => { vi.advanceTimersByTime(250) })
     expect(mockDismiss).toHaveBeenCalled()
     expect(mockNavigate).not.toHaveBeenCalled()
   })
