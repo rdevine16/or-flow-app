@@ -313,10 +313,28 @@ async function queryStaleCases(
 // Hook
 // ============================================
 
+const DISMISSED_ALERTS_KEY = 'dismissed_alerts'
+
+function getDismissedIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const raw = sessionStorage.getItem(DISMISSED_ALERTS_KEY)
+    if (!raw) return new Set()
+    return new Set(JSON.parse(raw) as string[])
+  } catch {
+    return new Set()
+  }
+}
+
+function setDismissedIds(ids: Set<string>) {
+  if (typeof window === 'undefined') return
+  sessionStorage.setItem(DISMISSED_ALERTS_KEY, JSON.stringify([...ids]))
+}
+
 export function useDashboardAlerts() {
   const { effectiveFacilityId } = useUser()
 
-  return useSupabaseQuery<DashboardAlert[]>(
+  const queryResult = useSupabaseQuery<DashboardAlert[]>(
     async (supabase) => {
       const facilityId = effectiveFacilityId!
 
@@ -338,11 +356,41 @@ export function useDashboardAlerts() {
         }
       }
 
-      return sortAlerts(alerts)
+      const sorted = sortAlerts(alerts)
+
+      // Prune dismissed IDs: remove any that no longer exist in the current alerts
+      const currentIds = new Set(sorted.map(a => a.id))
+      const dismissed = getDismissedIds()
+      let changed = false
+      for (const id of dismissed) {
+        if (!currentIds.has(id)) {
+          dismissed.delete(id)
+          changed = true
+        }
+      }
+      if (changed) setDismissedIds(dismissed)
+
+      return sorted
     },
     {
       deps: [effectiveFacilityId],
       enabled: !!effectiveFacilityId,
     }
   )
+
+  return {
+    ...queryResult,
+    /** Dismiss an alert by ID (persists in sessionStorage until data refresh clears it) */
+    dismissAlert: (id: string) => {
+      const dismissed = getDismissedIds()
+      dismissed.add(id)
+      setDismissedIds(dismissed)
+      // Remove from displayed data via setData
+      queryResult.setData(
+        queryResult.data?.filter(a => a.id !== id) ?? null
+      )
+    },
+    /** Check if an alert is currently dismissed */
+    isDismissed: (id: string) => getDismissedIds().has(id),
+  }
 }
