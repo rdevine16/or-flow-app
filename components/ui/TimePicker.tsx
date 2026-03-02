@@ -10,6 +10,7 @@ interface TimePickerProps {
   error?: string
   label?: string
   required?: boolean
+  disabled?: boolean
 }
 
 // Common OR start times for quick selection
@@ -52,6 +53,7 @@ export default function TimePicker({
   error,
   label,
   required,
+  disabled,
 }: TimePickerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -113,13 +115,16 @@ export default function TimePicker({
       {/* Trigger button */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-4 py-3 text-left bg-white border rounded-xl flex items-center justify-between transition-all duration-200 ${
-          error
-            ? 'border-red-400 ring-2 ring-red-500/20'
-            : isOpen
-              ? 'border-blue-500 ring-2 ring-blue-500/20'
-              : 'border-slate-200 hover:border-slate-300'
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+        className={`w-full px-4 py-3 text-left border rounded-xl flex items-center justify-between transition-all duration-200 ${
+          disabled
+            ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed'
+            : error
+              ? 'bg-white border-red-400 ring-2 ring-red-500/20'
+              : isOpen
+                ? 'bg-white border-blue-500 ring-2 ring-blue-500/20'
+                : 'bg-white border-slate-200 hover:border-slate-300'
         }`}
       >
         <span className="text-slate-900 font-medium tabular-nums">

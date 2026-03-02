@@ -37,6 +37,7 @@
 'use client'
 
 import { ReactNode, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { Spinner } from '@/components/ui/Loading'
 import { tokens, buttonVariants } from '@/lib/design-tokens'
@@ -129,7 +130,7 @@ export function Modal({
     (child: React.ReactElement) => child?.type !== ModalFooter
   )
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <div
@@ -195,7 +196,8 @@ export function Modal({
           {footer}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }
 

@@ -6,6 +6,7 @@
 'use client'
 
 import { ReactNode, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { tokens } from '@/lib/design-tokens'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Spinner } from '@/components/ui/Loading'
@@ -161,7 +162,7 @@ export function ConfirmDialog({
 
   if (!open) return null
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <div
@@ -236,7 +237,8 @@ export function ConfirmDialog({
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }
 
