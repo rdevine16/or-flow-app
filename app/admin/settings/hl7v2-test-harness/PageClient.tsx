@@ -18,6 +18,7 @@ import RoomPool from '@/components/integrations/test-data/RoomPool'
 import PatientPool from '@/components/integrations/test-data/PatientPool'
 import DiagnosisPool from '@/components/integrations/test-data/DiagnosisPool'
 import ScheduleManager from '@/components/integrations/test-data/ScheduleManager'
+import { useAutoPush } from '@/hooks/useAutoPush'
 import { ehrTestDataDAL } from '@/lib/dal/ehr-test-data'
 import {
   Play,
@@ -155,6 +156,9 @@ export default function HL7v2TestHarnessPage() {
 
   // Facility selector (shared across tabs)
   const [selectedFacilityId, setSelectedFacilityId] = useState('')
+
+  // Auto-push hook (shared with ScheduleManager)
+  const autoPush = useAutoPush(selectedFacilityId)
 
   // Data source toggle (shared between scenario tabs)
   const [dataSource, setDataSource] = useState<DataSource>('database')
@@ -437,7 +441,13 @@ export default function HL7v2TestHarnessPage() {
           )}
 
           {activeTopTab === 'schedules' && (
-            <ScheduleManager facilityId={selectedFacilityId} />
+            <ScheduleManager
+              facilityId={selectedFacilityId}
+              autoPushEnabled={autoPush.enabled}
+              onAutoPushToggle={autoPush.setEnabled}
+              onAutoPush={autoPush.push}
+              getAutoPushStatus={autoPush.getStatus}
+            />
           )}
         </div>
       </Container>

@@ -37,7 +37,7 @@ const TRIGGER_EVENTS: { value: EhrTestTriggerEvent; label: string; color: string
 interface ScheduleEntryFormProps {
   open: boolean
   onClose: () => void
-  onSaved: () => void
+  onSaved: (savedId?: string) => void
   facilityId: string
   editingSchedule: EhrTestScheduleWithEntities | null
 }
@@ -286,6 +286,7 @@ export default function ScheduleEntryForm({
     setSaving(true)
 
     try {
+      let savedId: string | undefined
       if (editingSchedule) {
         const updates: EhrTestScheduleUpdate = {
           patient_id: patientId,
@@ -301,8 +302,9 @@ export default function ScheduleEntryForm({
           notes: notes.trim() || null,
           sequence_order: sequenceOrder,
         }
-        const { error } = await ehrTestDataDAL.updateSchedule(supabase, editingSchedule.id, updates)
+        const { data, error } = await ehrTestDataDAL.updateSchedule(supabase, editingSchedule.id, updates)
         if (error) throw error
+        savedId = data?.id || editingSchedule.id
       } else {
         const insert: EhrTestScheduleInsert = {
           facility_id: facilityId,
@@ -319,10 +321,11 @@ export default function ScheduleEntryForm({
           notes: notes.trim() || undefined,
           sequence_order: sequenceOrder,
         }
-        const { error } = await ehrTestDataDAL.createSchedule(supabase, insert)
+        const { data, error } = await ehrTestDataDAL.createSchedule(supabase, insert)
         if (error) throw error
+        savedId = data?.id
       }
-      onSaved()
+      onSaved(savedId)
       onClose()
     } catch (err) {
       // Error handled by parent via toast

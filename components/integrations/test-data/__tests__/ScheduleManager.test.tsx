@@ -415,6 +415,223 @@ describe('ScheduleManager - Integration Tests', () => {
   })
 })
 
+describe('ScheduleManager - Auto-Push Integration Tests', () => {
+  const mockOnAutoPush = vi.fn()
+  const mockOnAutoPushToggle = vi.fn()
+  const mockGetAutoPushStatus = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(ehrTestDataDAL.listSchedules).mockResolvedValue({
+      data: mockSchedules,
+      error: null,
+    })
+    mockOnAutoPush.mockResolvedValue(true)
+    mockGetAutoPushStatus.mockReturnValue(undefined)
+  })
+
+  it('renders auto-push toggle when onAutoPushToggle is provided', async () => {
+    render(
+      <ScheduleManager
+        facilityId="fac-1"
+        autoPushEnabled={false}
+        onAutoPushToggle={mockOnAutoPushToggle}
+        onAutoPush={mockOnAutoPush}
+        getAutoPushStatus={mockGetAutoPushStatus}
+      />
+    )
+    await waitForTableLoaded()
+
+    expect(screen.getByText('Auto-push to listener')).toBeInTheDocument()
+    expect(screen.getByRole('switch')).toBeInTheDocument()
+  })
+
+  it('does not render auto-push toggle when onAutoPushToggle is not provided', async () => {
+    render(<ScheduleManager facilityId="fac-1" />)
+    await waitForTableLoaded()
+
+    expect(screen.queryByText('Auto-push to listener')).not.toBeInTheDocument()
+  })
+
+  it('calls onAutoPushToggle when toggle is clicked', async () => {
+    const user = userEvent.setup()
+    render(
+      <ScheduleManager
+        facilityId="fac-1"
+        autoPushEnabled={false}
+        onAutoPushToggle={mockOnAutoPushToggle}
+        onAutoPush={mockOnAutoPush}
+        getAutoPushStatus={mockGetAutoPushStatus}
+      />
+    )
+    await waitForTableLoaded()
+
+    const toggle = screen.getByRole('switch')
+    await user.click(toggle)
+
+    expect(mockOnAutoPushToggle).toHaveBeenCalledWith(true)
+  })
+
+  it('renders per-row push button when onAutoPush is provided', async () => {
+    render(
+      <ScheduleManager
+        facilityId="fac-1"
+        autoPushEnabled={false}
+        onAutoPushToggle={mockOnAutoPushToggle}
+        onAutoPush={mockOnAutoPush}
+        getAutoPushStatus={mockGetAutoPushStatus}
+      />
+    )
+    await waitForTableLoaded()
+
+    const pushButtons = screen.getAllByTitle('Push SIU message')
+    expect(pushButtons.length).toBe(3)
+  })
+
+  it('calls onAutoPush when per-row push button is clicked', async () => {
+    const user = userEvent.setup()
+    render(
+      <ScheduleManager
+        facilityId="fac-1"
+        autoPushEnabled={false}
+        onAutoPushToggle={mockOnAutoPushToggle}
+        onAutoPush={mockOnAutoPush}
+        getAutoPushStatus={mockGetAutoPushStatus}
+      />
+    )
+    await waitForTableLoaded()
+
+    const pushButtons = screen.getAllByTitle('Push SIU message')
+    await user.click(pushButtons[0])
+
+    expect(mockOnAutoPush).toHaveBeenCalledWith(
+      'sched-1',
+      'create',
+      expect.objectContaining({ id: 'sched-1', trigger_event: 'S12' })
+    )
+  })
+
+  it('calls onAutoPush with delete action for S15 push', async () => {
+    const user = userEvent.setup()
+    render(
+      <ScheduleManager
+        facilityId="fac-1"
+        autoPushEnabled={false}
+        onAutoPushToggle={mockOnAutoPushToggle}
+        onAutoPush={mockOnAutoPush}
+        getAutoPushStatus={mockGetAutoPushStatus}
+      />
+    )
+    await waitForTableLoaded()
+
+    const pushButtons = screen.getAllByTitle('Push SIU message')
+    await user.click(pushButtons[2])
+
+    expect(mockOnAutoPush).toHaveBeenCalledWith(
+      'sched-3',
+      'delete',
+      expect.objectContaining({ id: 'sched-3', trigger_event: 'S15' })
+    )
+  })
+
+  it('auto-pushes S15 on delete when auto-push is enabled', async () => {
+    const user = userEvent.setup()
+    vi.mocked(ehrTestDataDAL.deleteSchedule).mockResolvedValue({ error: null })
+
+    render(
+      <ScheduleManager
+        facilityId="fac-1"
+        autoPushEnabled={true}
+        onAutoPushToggle={mockOnAutoPushToggle}
+        onAutoPush={mockOnAutoPush}
+        getAutoPushStatus={mockGetAutoPushStatus}
+      />
+    )
+    await waitForTableLoaded()
+
+    // Click delete on the second entry (S13)
+    const deleteButtons = screen.getAllByTitle('Delete')
+    await user.click(deleteButtons[1])
+
+    await waitFor(() => {
+      expect(screen.getByText(/Delete schedule entry\?/i)).toBeInTheDocument()
+    })
+
+    // Find and click confirm button
+    const dialog = screen.getByText(/Delete schedule entry\?/i).closest('[role="dialog"]') || document.body
+    const confirmButtons = Array.from(dialog.querySelectorAll('button')).filter(
+      (btn) => btn.textContent?.match(/confirm|delete/i) && !btn.textContent?.match(/cancel/i)
+    )
+    await user.click(confirmButtons[0])
+
+    // Verify delete was called
+    await waitFor(() => {
+      expect(ehrTestDataDAL.deleteSchedule).toHaveBeenCalledWith(expect.anything(), 'sched-2')
+    })
+
+    // Verify auto-push was called with 'delete' action and captured data
+    await waitFor(() => {
+      expect(mockOnAutoPush).toHaveBeenCalledWith(
+        'sched-2',
+        'delete',
+        expect.objectContaining({ id: 'sched-2', trigger_event: 'S13' })
+      )
+    })
+  })
+
+  it('does NOT auto-push on delete when auto-push is disabled', async () => {
+    const user = userEvent.setup()
+    vi.mocked(ehrTestDataDAL.deleteSchedule).mockResolvedValue({ error: null })
+
+    render(
+      <ScheduleManager
+        facilityId="fac-1"
+        autoPushEnabled={false}
+        onAutoPushToggle={mockOnAutoPushToggle}
+        onAutoPush={mockOnAutoPush}
+        getAutoPushStatus={mockGetAutoPushStatus}
+      />
+    )
+    await waitForTableLoaded()
+
+    const deleteButtons = screen.getAllByTitle('Delete')
+    await user.click(deleteButtons[1])
+
+    await waitFor(() => {
+      expect(screen.getByText(/Delete schedule entry\?/i)).toBeInTheDocument()
+    })
+
+    const dialog = screen.getByText(/Delete schedule entry\?/i).closest('[role="dialog"]') || document.body
+    const confirmButtons = Array.from(dialog.querySelectorAll('button')).filter(
+      (btn) => btn.textContent?.match(/confirm|delete/i) && !btn.textContent?.match(/cancel/i)
+    )
+    await user.click(confirmButtons[0])
+
+    await waitFor(() => {
+      expect(ehrTestDataDAL.deleteSchedule).toHaveBeenCalledWith(expect.anything(), 'sched-2')
+    })
+
+    // Auto-push should NOT have been called
+    expect(mockOnAutoPush).not.toHaveBeenCalled()
+  })
+
+  it('reflects toggle enabled state in aria-checked', async () => {
+    render(
+      <ScheduleManager
+        facilityId="fac-1"
+        autoPushEnabled={true}
+        onAutoPushToggle={mockOnAutoPushToggle}
+        onAutoPush={mockOnAutoPush}
+        getAutoPushStatus={mockGetAutoPushStatus}
+      />
+    )
+    await waitForTableLoaded()
+
+    const toggle = screen.getByRole('switch')
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+  })
+})
+
 describe('ScheduleManager - Workflow Tests', () => {
   it('admin views entries, searches, and interacts with CRUD actions', async () => {
     const user = userEvent.setup()

@@ -18,11 +18,17 @@ import {
   CalendarClock,
   ArrowUpDown,
   Link2,
+  Send,
+  CheckCircle2,
+  XCircle,
+  Loader2,
 } from 'lucide-react'
 import type {
   EhrTestScheduleWithEntities,
   EhrTestTriggerEvent,
 } from '@/lib/integrations/shared/integration-types'
+import type { AutoPushAction } from '@/lib/hl7v2/test-harness/auto-push'
+import type { AutoPushStatus } from '@/hooks/useAutoPush'
 
 // -- Trigger event badge config -----------------------------------------------
 
@@ -62,15 +68,49 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+// -- Push status indicator ----------------------------------------------------
+
+function PushStatusBadge({ status }: { status: AutoPushStatus }) {
+  if (status.state === 'pending') {
+    return <Loader2 className="w-3.5 h-3.5 text-violet-500 animate-spin" />
+  }
+  if (status.state === 'success') {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-xs text-green-600" title={status.message}>
+        <CheckCircle2 className="w-3.5 h-3.5" />
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs text-red-500" title={status.message}>
+      <XCircle className="w-3.5 h-3.5" />
+    </span>
+  )
+}
+
 // -- Props --------------------------------------------------------------------
 
 interface ScheduleManagerProps {
   facilityId: string
+  autoPushEnabled?: boolean
+  onAutoPushToggle?: (value: boolean) => void
+  onAutoPush?: (
+    scheduleId: string,
+    action: AutoPushAction,
+    scheduleData?: EhrTestScheduleWithEntities,
+  ) => Promise<boolean>
+  getAutoPushStatus?: (scheduleId: string) => AutoPushStatus | undefined
 }
 
 // -- Component ----------------------------------------------------------------
 
-export default function ScheduleManager({ facilityId }: ScheduleManagerProps) {
+export default function ScheduleManager({
+  facilityId,
+  autoPushEnabled = false,
+  onAutoPushToggle,
+  onAutoPush,
+  getAutoPushStatus,
+}: ScheduleManagerProps) {
   const supabase = createClient()
   const { showToast } = useToast()
 
@@ -127,6 +167,26 @@ export default function ScheduleManager({ facilityId }: ScheduleManagerProps) {
     setShowForm(true)
   }
 
+  // Manual per-row push handler
+  const handleManualPush = async (schedule: EhrTestScheduleWithEntities) => {
+    if (!onAutoPush) return
+    // Use the schedule's trigger event to determine the action
+    const actionMap: Record<string, AutoPushAction> = {
+      S12: 'create',
+      S13: 'update',
+      S14: 'update',
+      S15: 'delete',
+      S16: 'delete',
+    }
+    const action = actionMap[schedule.trigger_event] || 'create'
+    const success = await onAutoPush(schedule.id, action, schedule)
+    if (success) {
+      showToast({ type: 'success', title: `${schedule.trigger_event} message sent` })
+    } else {
+      showToast({ type: 'error', title: `Failed to send ${schedule.trigger_event} message` })
+    }
+  }
+
   // Delete click — count references first
   const handleDeleteClick = async (schedule: EhrTestScheduleWithEntities) => {
     // Count how many other schedules reference this one (only relevant for S12 entries)
@@ -145,9 +205,10 @@ export default function ScheduleManager({ facilityId }: ScheduleManagerProps) {
     setDeleteTarget(schedule)
   }
 
-  // Execute delete
+  // Execute delete — capture data before deletion for auto-push
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return
+    const capturedData = { ...deleteTarget }
     setDeleting(true)
     try {
       const { error } = await ehrTestDataDAL.deleteSchedule(supabase, deleteTarget.id)
@@ -155,6 +216,16 @@ export default function ScheduleManager({ facilityId }: ScheduleManagerProps) {
       showToast({ type: 'success', title: 'Schedule entry deleted' })
       setDeleteTarget(null)
       refetch()
+
+      // Auto-push S15 if enabled
+      if (autoPushEnabled && onAutoPush) {
+        const success = await onAutoPush(capturedData.id, 'delete', capturedData)
+        if (success) {
+          showToast({ type: 'success', title: 'Deleted & S15 sent' })
+        } else {
+          showToast({ type: 'warning', title: 'Deleted but push failed' })
+        }
+      }
     } catch (err) {
       showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to delete schedule entry' })
     } finally {
@@ -162,10 +233,29 @@ export default function ScheduleManager({ facilityId }: ScheduleManagerProps) {
     }
   }
 
-  // On form saved
-  const handleSaved = () => {
-    showToast({ type: 'success', title: editingSchedule ? 'Schedule entry updated' : 'Schedule entry added' })
+  // On form saved — auto-push handled by ScheduleEntryForm via callback
+  const handleSaved = (savedId?: string) => {
+    const isEdit = !!editingSchedule
+    showToast({ type: 'success', title: isEdit ? 'Schedule entry updated' : 'Schedule entry added' })
     refetch()
+
+    // Auto-push if enabled (create or update)
+    if (autoPushEnabled && onAutoPush && savedId) {
+      const action: AutoPushAction = isEdit ? 'update' : 'create'
+      onAutoPush(savedId, action).then((success) => {
+        if (success) {
+          showToast({
+            type: 'success',
+            title: `Saved & ${isEdit ? 'S14' : 'S12'} sent`,
+          })
+        } else {
+          showToast({
+            type: 'warning',
+            title: `Saved but push failed`,
+          })
+        }
+      })
+    }
   }
 
   if (!facilityId) {
@@ -198,6 +288,35 @@ export default function ScheduleManager({ facilityId }: ScheduleManagerProps) {
               Add Entry
             </button>
           </div>
+
+          {/* Auto-push toggle */}
+          {onAutoPushToggle && (
+            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div>
+                <div className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5 text-violet-500" />
+                  Auto-push to listener
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Automatically send SIU messages when schedule entries are created, edited, or deleted
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={autoPushEnabled}
+                onClick={() => onAutoPushToggle(!autoPushEnabled)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 ${
+                  autoPushEnabled ? 'bg-violet-600' : 'bg-slate-200'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    autoPushEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          )}
 
           {/* Search */}
           <div className="relative">
@@ -237,82 +356,99 @@ export default function ScheduleManager({ facilityId }: ScheduleManagerProps) {
                     <th className="text-left py-2 px-2 font-medium text-slate-500">Time</th>
                     <th className="text-left py-2 px-2 font-medium text-slate-500 w-14">Dur</th>
                     <th className="text-left py-2 px-2 font-medium text-slate-500 w-14">Ref</th>
-                    <th className="text-right py-2 px-2 font-medium text-slate-500 w-20">Actions</th>
+                    <th className="text-right py-2 px-2 font-medium text-slate-500 w-28">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredSchedules.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50 group">
-                      <td className="py-2 px-2 text-slate-500 font-mono text-xs">
-                        {s.sequence_order}
-                      </td>
-                      <td className="py-2 px-2">
-                        <Badge variant={getTriggerBadgeVariant(s.trigger_event)} size="sm">
-                          {s.trigger_event} {getTriggerLabel(s.trigger_event)}
-                        </Badge>
-                      </td>
-                      <td className="py-2 px-2 text-slate-900">
-                        <div className="font-medium truncate max-w-[120px]">
-                          {s.patient ? `${s.patient.last_name}, ${s.patient.first_name}` : '—'}
-                        </div>
-                        {s.patient?.mrn && (
-                          <div className="text-xs text-slate-400 font-mono">{s.patient.mrn}</div>
-                        )}
-                      </td>
-                      <td className="py-2 px-2 text-slate-700 truncate max-w-[100px]">
-                        {s.surgeon?.name || '—'}
-                      </td>
-                      <td className="py-2 px-2 text-slate-700">
-                        <div className="truncate max-w-[120px]">{s.procedure?.name || '—'}</div>
-                        {s.procedure?.cpt_code && (
-                          <div className="text-xs text-slate-400 font-mono">{s.procedure.cpt_code}</div>
-                        )}
-                      </td>
-                      <td className="py-2 px-2 text-slate-700 truncate max-w-[80px]">
-                        {s.room?.name || '—'}
-                      </td>
-                      <td className="py-2 px-2 text-slate-700 whitespace-nowrap">
-                        {formatDate(s.scheduled_date)}
-                      </td>
-                      <td className="py-2 px-2 text-slate-700 whitespace-nowrap font-mono text-xs">
-                        {formatTime12h(s.start_time)}
-                      </td>
-                      <td className="py-2 px-2 text-slate-600 text-xs">
-                        {s.duration_min}m
-                      </td>
-                      <td className="py-2 px-2">
-                        {s.referenced_schedule && s.referenced_schedule.id ? (
-                          <span
-                            className="inline-flex items-center gap-0.5 text-xs text-blue-600"
-                            title={`References ${s.referenced_schedule.external_case_id || s.referenced_schedule.id.slice(0, 8)}`}
-                          >
-                            <Link2 className="w-3 h-3" />
-                            {s.referenced_schedule.external_case_id?.replace('TEST-', '') || '...'}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2 text-right">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleEdit(s)}
-                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Edit"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(s)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredSchedules.map((s) => {
+                    const pushStatus = getAutoPushStatus?.(s.id)
+                    return (
+                      <tr key={s.id} className="hover:bg-slate-50 group">
+                        <td className="py-2 px-2 text-slate-500 font-mono text-xs">
+                          {s.sequence_order}
+                        </td>
+                        <td className="py-2 px-2">
+                          <Badge variant={getTriggerBadgeVariant(s.trigger_event)} size="sm">
+                            {s.trigger_event} {getTriggerLabel(s.trigger_event)}
+                          </Badge>
+                        </td>
+                        <td className="py-2 px-2 text-slate-900">
+                          <div className="font-medium truncate max-w-[120px]">
+                            {s.patient ? `${s.patient.last_name}, ${s.patient.first_name}` : '—'}
+                          </div>
+                          {s.patient?.mrn && (
+                            <div className="text-xs text-slate-400 font-mono">{s.patient.mrn}</div>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-slate-700 truncate max-w-[100px]">
+                          {s.surgeon?.name || '—'}
+                        </td>
+                        <td className="py-2 px-2 text-slate-700">
+                          <div className="truncate max-w-[120px]">{s.procedure?.name || '—'}</div>
+                          {s.procedure?.cpt_code && (
+                            <div className="text-xs text-slate-400 font-mono">{s.procedure.cpt_code}</div>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-slate-700 truncate max-w-[80px]">
+                          {s.room?.name || '—'}
+                        </td>
+                        <td className="py-2 px-2 text-slate-700 whitespace-nowrap">
+                          {formatDate(s.scheduled_date)}
+                        </td>
+                        <td className="py-2 px-2 text-slate-700 whitespace-nowrap font-mono text-xs">
+                          {formatTime12h(s.start_time)}
+                        </td>
+                        <td className="py-2 px-2 text-slate-600 text-xs">
+                          {s.duration_min}m
+                        </td>
+                        <td className="py-2 px-2">
+                          {s.referenced_schedule && s.referenced_schedule.id ? (
+                            <span
+                              className="inline-flex items-center gap-0.5 text-xs text-blue-600"
+                              title={`References ${s.referenced_schedule.external_case_id || s.referenced_schedule.id.slice(0, 8)}`}
+                            >
+                              <Link2 className="w-3 h-3" />
+                              {s.referenced_schedule.external_case_id?.replace('TEST-', '') || '...'}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {/* Push status indicator */}
+                            {pushStatus && <PushStatusBadge status={pushStatus} />}
+
+                            {/* Per-row push button */}
+                            {onAutoPush && (
+                              <button
+                                onClick={() => handleManualPush(s)}
+                                className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                title="Push SIU message"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => handleEdit(s)}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                              title="Edit"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(s)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
