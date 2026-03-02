@@ -579,17 +579,21 @@ app/
 
 ## Estimated Effort by Phase
 
-| Phase | Description | Complexity | Claude Code Sessions |
-|-------|-------------|------------|---------------------|
-| 1 | HL7v2 Parser & Message Models | Medium | 1 session |
-| 2 | Database Schema Extensions | Light | 1 session |
-| 3 | Case Import Service | Heavy | 2 sessions |
-| 4 | HL7v2 Listener (Edge Function) | Medium-Heavy | 1-2 sessions |
-| 5 | Test Harness (generator + UI) | Medium-Heavy | 2 sessions |
-| 6 | Admin UI (tabs, review queue, mappings, logs) | Heavy | 2-3 sessions |
-| 7 | HIPAA Compliance & Audit Trail | Medium | 1 session |
+| Phase | Description | Complexity | Claude Code Sessions | Status |
+|-------|-------------|------------|---------------------|--------|
+| 1 | HL7v2 Parser & Message Models | Medium | 1 session | Done |
+| 2 | Database Schema Extensions | Light | 1 session | Done |
+| 3 | Case Import Service | Heavy | 2 sessions | Done |
+| 4 | HL7v2 Listener (Edge Function) | Medium-Heavy | 1-2 sessions | Done |
+| 5 | Test Harness (generator + UI) | Medium-Heavy | 2 sessions | Done |
+| 6 | Admin UI (tabs, review queue, mappings, logs) | Heavy | 2-3 sessions | Done |
+| 7 | HIPAA Compliance & Audit Trail | Medium | 1 session | Done |
+| 8 | Test Data Manager — Schema & DAL | Medium | 1 session | Pending |
+| 9 | Global Admin CRUD UI — Entity Pools | Medium-Heavy | 2 sessions | Pending |
+| 10 | Global Admin CRUD UI — Schedule Entries | Medium-Heavy | 2 sessions | Pending |
+| 11 | Rewire Test Harness to Database-Driven Data | Medium | 1-2 sessions | Pending |
 
-**Total: ~10-12 Claude Code sessions**
+**Total: ~14-17 Claude Code sessions** (Phases 1-7 complete, Phases 8-11 pending)
 
 **Commit after each phase:**
 1. `feat(hl7v2): phase 1 - message parser and SIU type definitions`
@@ -599,3 +603,7 @@ app/
 5. `feat(hl7v2): phase 5 - test harness with SIU generator and admin control panel`
 6. `feat(hl7v2): phase 6 - admin UI for integration management and monitoring`
 7. `feat(hl7v2): phase 7 - HIPAA audit trail and raw message retention purge`
+8. `feat(hl7v2): phase 8 - test data manager schema and DAL`
+9. `feat(hl7v2): phase 9 - global admin CRUD UI for test entity pools`
+10. `feat(hl7v2): phase 10 - global admin CRUD UI for test schedule entries`
+11. `feat(hl7v2): phase 11 - rewire test harness to use database-driven test data`

@@ -5,7 +5,7 @@
 
 ## Summary
 
-Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Replaces the FHIR-based approach (patient-centric, doesn't expose surgical scheduling). **Primary goal:** test harness to validate Epic HL7v2 field mappings without paying $1,900/year for Epic sandbox. 7 phases, ~10-12 sessions.
+Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Replaces the FHIR-based approach (patient-centric, doesn't expose surgical scheduling). **Primary goal:** test harness to validate Epic HL7v2 field mappings without paying $1,900/year for Epic sandbox. Phases 1-7 build the core pipeline. Phases 8-11 add a database-driven Test Data Manager in global admin, replacing hardcoded test data with CRUD-able entity pools and schedule entries so you can hand-craft test cases and validate the import pipeline under different facility mapping states (none, partial, complete). 11 phases, ~14-17 sessions.
 
 ## Interview Notes (Key Decisions)
 
@@ -33,6 +33,13 @@ Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Re
 | 20 | UI layout | Tabs: Overview (with setup card) \| Review Queue \| Mappings \| Logs |
 | 21 | Mappings tab | Same pattern as FHIR (3 sub-tabs: Surgeons \| Rooms \| Procedures) |
 | 22 | Retention | Build raw message purge mechanism now (pg_cron, configurable retention) |
+| 23 | Test data source | Replace hardcoded `surgical-data.ts` with database-driven CRUD in global admin |
+| 24 | Test data scope | Global (not per-facility) — any facility can be selected at test time |
+| 25 | Entity pools | CRUD surgeons (name, NPI, specialty), procedures (name, CPT, ICD-10, duration), rooms (name, location code), patients (name, MRN, DOB, gender) |
+| 26 | Schedule entries | Hand-craft individual test cases: pick patient + surgeon + procedure + room + date/time + trigger event (S12/S13/S14/S15) |
+| 27 | Reschedule/cancel | Schedule entries can reference an existing case (same external_case_id) for S13/S14/S15 message generation |
+| 28 | Mapping testing | No staging/production mode — test different facility mapping states (none, partial, full) by managing `ehr_entity_mappings` directly |
+| 29 | Phase structure | **11 phases** (added Phases 8-11: Test Data Manager) |
 
 ---
 
@@ -394,6 +401,315 @@ Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Re
 
 ---
 
+## Phase 8: Test Data Manager — Schema & DAL
+
+**Complexity:** Medium (1 session)
+
+### What it does
+- Creates database tables for CRUD-able test data that replaces hardcoded `surgical-data.ts`
+- Five entity pool tables: test surgeons, procedures, rooms, patients, diagnoses
+- One schedule entries table: ties entities together with date/time/duration and trigger event
+- DAL functions for full CRUD on all six tables
+- All tables are **facility-scoped** (`facility_id` FK) — each facility gets its own test data pool, allowing testing of facility-specific entity mapping scenarios
+
+### Files touched
+
+| File | Change |
+|------|--------|
+| `supabase/migrations/YYYYMMDD000004_ehr_test_data_tables.sql` | **Create** — 6 tables: `ehr_test_surgeons`, `ehr_test_procedures`, `ehr_test_rooms`, `ehr_test_patients`, `ehr_test_diagnoses`, `ehr_test_schedules` + RLS (global admin only) + indexes |
+| `lib/dal/ehr-test-data.ts` | **Create** — Full CRUD DAL: `listTestSurgeons`, `createTestSurgeon`, `updateTestSurgeon`, `deleteTestSurgeon` (and same pattern for procedures, rooms, patients, diagnoses, schedules) |
+| `lib/integrations/shared/integration-types.ts` | **Modify** — Add TypeScript interfaces: `EhrTestSurgeon`, `EhrTestProcedure`, `EhrTestRoom`, `EhrTestPatient`, `EhrTestDiagnosis`, `EhrTestSchedule` |
+
+### Database schema
+
+```sql
+-- Facility-scoped test data pools (each facility gets its own test data)
+
+CREATE TABLE ehr_test_surgeons (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  facility_id UUID NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,                -- "SMITH, JOHN A"
+  npi TEXT,                          -- "1234567890"
+  specialty TEXT,                    -- "Orthopedics"
+  external_provider_id TEXT,         -- Epic provider ID (appears in AIP segment)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE ehr_test_procedures (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  facility_id UUID NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,                -- "Total knee arthroplasty"
+  cpt_code TEXT,                     -- "27447"
+  typical_duration_min INTEGER,      -- 120
+  specialty TEXT,                    -- "Orthopedics" (for filtering)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE ehr_test_rooms (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  facility_id UUID NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,                -- "OR-3"
+  location_code TEXT,                -- "OR3" (Epic AIL segment value)
+  room_type TEXT,                    -- "operating_room", "endo_suite", "cath_lab"
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE ehr_test_patients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  facility_id UUID NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  mrn TEXT,                          -- "MRN12345"
+  date_of_birth DATE,
+  gender TEXT CHECK (gender IN ('M', 'F', 'O', 'U')),
+  address_line TEXT,                 -- "123 Main St"
+  city TEXT,
+  state TEXT,
+  zip TEXT,
+  phone TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE ehr_test_diagnoses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  facility_id UUID NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
+  icd10_code TEXT NOT NULL,          -- "M17.11"
+  description TEXT NOT NULL,         -- "Primary osteoarthritis, right knee"
+  specialty TEXT,                    -- "Orthopedics" (for filtering/grouping)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE ehr_test_schedules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  facility_id UUID NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
+  patient_id UUID NOT NULL REFERENCES ehr_test_patients(id) ON DELETE CASCADE,
+  surgeon_id UUID NOT NULL REFERENCES ehr_test_surgeons(id) ON DELETE CASCADE,
+  procedure_id UUID NOT NULL REFERENCES ehr_test_procedures(id) ON DELETE CASCADE,
+  room_id UUID NOT NULL REFERENCES ehr_test_rooms(id) ON DELETE CASCADE,
+  diagnosis_id UUID REFERENCES ehr_test_diagnoses(id) ON DELETE SET NULL,
+  scheduled_date DATE NOT NULL,
+  start_time TIME NOT NULL,          -- "07:30:00"
+  duration_min INTEGER NOT NULL,     -- 120
+  trigger_event TEXT NOT NULL DEFAULT 'S12'
+    CHECK (trigger_event IN ('S12', 'S13', 'S14', 'S15', 'S16')),
+  external_case_id TEXT,             -- Auto-generated if null, reuse for S13/S14/S15
+  references_schedule_id UUID REFERENCES ehr_test_schedules(id) ON DELETE SET NULL,
+    -- For S13/S14/S15: points to the original S12 entry (inherits external_case_id)
+  notes TEXT,                        -- Optional description of what this test case tests
+  sequence_order INTEGER DEFAULT 0,  -- Controls send order in test harness
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+### Key implementation notes
+- **Facility-scoped**: All test data tables have `facility_id` FK — each facility gets its own test data pool for testing facility-specific entity mapping scenarios
+- **RLS**: Only global admins can CRUD. Facility-scoped queries filter by `facility_id` in DAL functions.
+- **Separate diagnoses pool**: `ehr_test_diagnoses` is a standalone table (not embedded in procedures). Schedule entries reference a diagnosis via `diagnosis_id` FK (nullable — diagnosis is optional).
+- `ehr_test_schedules.references_schedule_id` links reschedule/modify/cancel entries back to the original S12. The test harness uses this to carry the same `external_case_id` across the message sequence.
+- If `external_case_id` is null on an S12 entry, auto-generate one (e.g., `TEST-{uuid short}`)
+- `sequence_order` controls the order messages are sent — lets you ensure S12 fires before its S13/S15
+- DAL functions follow existing `lib/dal/` patterns: take `supabase` client, return `{ data, error }` tuple
+- Add indexes on `facility_id` for all tables
+
+### Commit message
+`feat(hl7v2): phase 8 - test data manager schema and DAL for configurable test entity pools`
+
+### 3-stage test gate
+1. **Unit:** All CRUD DAL functions work correctly for all 6 tables. Schedule entry with foreign keys validates. `references_schedule_id` correctly links S13→S12 entries. Auto-generation of `external_case_id` when null. Diagnosis CRUD with ICD-10 code validation.
+2. **Integration:** Create surgeon + procedure + room + patient + diagnosis → create schedule entry referencing all five → query schedule with joined entity data → verify complete record. Delete surgeon → verify cascade deletes related schedule entries. Verify facility_id scoping on all queries.
+3. **Workflow:** Create full test dataset for a facility (3 surgeons, 5 procedures, 2 rooms, 4 patients, 4 diagnoses) → create 5 schedule entries with different trigger events → query in sequence_order → verify complete test scenario is retrievable. Verify data is isolated per facility.
+
+---
+
+## Phase 9: Global Admin CRUD UI — Entity Pools
+
+**Complexity:** Medium-Heavy (2 sessions)
+
+### What it does
+- Adds entity pool management tabs to the existing test harness page at `app/admin/settings/hl7v2-test-harness/`
+- Five entity pool sub-tabs: Surgeons, Procedures, Rooms, Patients, Diagnoses
+- Each sub-tab has a data table with inline add/edit/delete
+- Standard CRUD patterns with form validation
+- Adds the test harness page to the global admin navigation sidebar (currently missing)
+
+### Files touched
+
+| File | Change |
+|------|--------|
+| `app/admin/settings/hl7v2-test-harness/PageClient.tsx` | **Modify** — Add top-level tabs: "Run Scenarios" (existing control panel) | "Entity Pools" (new) | "Schedules" (Phase 10 placeholder). Entity Pools tab contains 5 sub-tabs. Add facility selector that scopes all test data. |
+| `components/integrations/test-data/SurgeonPool.tsx` | **Create** — CRUD table for test surgeons: name, NPI, specialty, external ID |
+| `components/integrations/test-data/ProcedurePool.tsx` | **Create** — CRUD table for test procedures: name, CPT, duration, specialty |
+| `components/integrations/test-data/RoomPool.tsx` | **Create** — CRUD table for test rooms: name, location code, type |
+| `components/integrations/test-data/PatientPool.tsx` | **Create** — CRUD table for test patients: name, MRN, DOB, gender, address, phone |
+| `components/integrations/test-data/DiagnosisPool.tsx` | **Create** — CRUD table for test diagnoses: ICD-10 code, description, specialty |
+| `components/layouts/navigation-config.tsx` | **Modify** — Add "HL7v2 Test Harness" to admin nav groups (under Configuration or new Integrations group) |
+
+### UI detail
+
+**Top-level tab layout on test harness page:**
+- Tab 1: **Run Scenarios** — existing control panel (scenario picker, preview, send)
+- Tab 2: **Entity Pools** — new, contains 5 sub-tabs below
+- Tab 3: **Schedules** — placeholder for Phase 10
+
+**Entity Pool sub-tabs (Surgeons | Procedures | Rooms | Patients | Diagnoses):**
+Each sub-tab follows the same pattern:
+1. **Header**: Entity count badge, "Add {Entity}" button
+2. **Data table**: Columns for all fields, sortable, searchable
+3. **Add row**: Click "Add" → inline form row appears at top of table (or dialog)
+4. **Edit**: Click row → fields become editable inline (or edit dialog)
+5. **Delete**: Delete button with confirmation dialog ("This will also delete N schedule entries that reference this entity")
+6. **Validation**: Required fields enforced, CPT/NPI format validation where applicable
+
+**Facility selector**: Shared across all tabs — appears at the top of the page. All entity pool data is filtered by the selected facility.
+
+### Key implementation notes
+- **Global admin only** — same auth gate as existing test harness page
+- **Facility-scoped data**: All CRUD operations include `facility_id` from the selected facility
+- Use shadcn `DataTable` pattern with inline editing
+- **Specialty dropdown** for surgeons, procedures, and diagnoses: Orthopedics, Ophthalmology, GI, Spine, General Surgery, Urology, ENT, Cardiothoracic, Neurosurgery, Plastics, Vascular (or free text)
+- **Gender select** for patients: M, F, O, U
+- **Room type select**: Operating Room, Endo Suite, Cath Lab, Minor Procedure Room
+- Deletion cascade warning: if a surgeon is referenced by schedule entries, show count in confirmation dialog
+- **No bulk import yet** — manual entry one by one as discussed
+- Use `useSupabaseQuery` for all data fetching
+- **Admin nav**: Add test harness link to `adminNavGroups` in `navigation-config.tsx`
+
+### Commit message
+`feat(hl7v2): phase 9 - global admin CRUD UI for test entity pools (surgeons, procedures, rooms, patients, diagnoses)`
+
+### 3-stage test gate
+1. **Unit:** Each pool component renders correctly with test data. Add form validates required fields. Delete shows correct cascade count. Edit persists changes. Diagnoses pool validates ICD-10 code format.
+2. **Integration:** Add a surgeon via UI → verify row appears in table → edit NPI → verify update persists → delete → verify gone from table and DB. Same for each entity type including diagnoses. Facility selector changes → verify data filters correctly.
+3. **Workflow:** Global admin navigates to test harness via admin sidebar nav → selects a facility → switches to Entity Pools tab → creates 2 surgeons, 3 procedures, 2 rooms, 3 patients, 4 diagnoses across all sub-tabs → verifies all data persists across tab switches and page reloads. Switch facility → verify empty pools for new facility.
+
+---
+
+## Phase 10: Global Admin CRUD UI — Schedule Entries
+
+**Complexity:** Medium-Heavy (2 sessions)
+
+### What it does
+- Third tab on the test harness page: "Schedules"
+- CRUD interface for building individual test cases
+- Each schedule entry picks a patient, surgeon, procedure, room, and diagnosis from the entity pools
+- Set date, time, duration, and trigger event (S12/S13/S14/S15/S16)
+- For reschedule/modify/cancel entries, reference an existing S12 entry
+- Sequence ordering to control message send order
+
+### Files touched
+
+| File | Change |
+|------|--------|
+| `components/integrations/test-data/ScheduleManager.tsx` | **Create** — Main schedule CRUD component with data table and add/edit forms |
+| `components/integrations/test-data/ScheduleEntryForm.tsx` | **Create** — Form for creating/editing a schedule entry: entity selectors, date/time pickers, trigger event dropdown, reference selector |
+| `app/admin/settings/hl7v2-test-harness/PageClient.tsx` | **Modify** — Wire up Schedules tab to ScheduleManager component |
+
+### UI detail
+
+**Schedule table columns:**
+- Sequence # (editable, controls send order)
+- Trigger Event (badge: S12=green "New", S13=blue "Reschedule", S14=yellow "Modify", S15=red "Cancel", S16=red "Discontinue")
+- Patient (name + MRN)
+- Surgeon (name)
+- Procedure (name + CPT)
+- Room (name)
+- Diagnosis (ICD-10 code)
+- Date
+- Start Time
+- Duration
+- References (shows which S12 entry this modifies/cancels, if applicable)
+- Notes (free text)
+- Actions (edit, delete)
+
+**Add/Edit form:**
+- **Trigger Event** dropdown (S12, S13, S14, S15, S16) — shown prominently
+- **If S13/S14/S15/S16**: "References Case" dropdown showing existing S12 entries (displays patient + procedure + date). When selected, auto-fills patient/surgeon/procedure/room from the referenced entry (editable for S13/S14 to test changes)
+- **Patient** searchable select from `ehr_test_patients`
+- **Surgeon** searchable select from `ehr_test_surgeons`
+- **Procedure** searchable select from `ehr_test_procedures` (selecting auto-fills duration with `typical_duration_min`)
+- **Room** searchable select from `ehr_test_rooms`
+- **Diagnosis** searchable select from `ehr_test_diagnoses` (optional — ICD-10 code + description)
+- **Date** date picker
+- **Start Time** time picker
+- **Duration** number input (pre-filled from procedure, editable)
+- **External Case ID** auto-generated for S12, inherited from reference for S13-S16 (shown read-only)
+- **Notes** text input (optional — e.g., "Tests unknown surgeon scenario")
+- **Sequence Order** number input
+
+### Key implementation notes
+- **Searchable selects** use shadcn `Combobox` pattern — shows entity name + key field (NPI for surgeons, CPT for procedures, MRN for patients)
+- **S13/S14 auto-fill**: When user selects "References Case" for an S13, it pre-fills all entity fields from the referenced S12 — but they can change any field (that's the point of reschedule/modify)
+- **S15/S16 auto-fill**: Same as S13 but fields are read-only (cancel doesn't change case details)
+- **Sequence validation**: Warn if an S13/S14/S15 has a lower sequence_order than its referenced S12 (would send cancel before create)
+- **External case ID**: Auto-generated as `TEST-{shortUUID}` for S12 entries. For S13-S16, inherited from the referenced S12's external_case_id.
+- Consider a "visual timeline" view showing cases on a day grid — nice to have, not required
+
+### Commit message
+`feat(hl7v2): phase 10 - global admin CRUD UI for test schedule entries with trigger event sequencing`
+
+### 3-stage test gate
+1. **Unit:** Schedule form validates required fields. S13 auto-fills from referenced S12. Sequence order validation warns on out-of-order. Trigger event badges render correctly. External case ID auto-generates for S12 and inherits for S13-S16.
+2. **Integration:** Create S12 entry with all entity references → create S13 referencing it → verify external_case_id matches → create S15 referencing same S12 → verify complete sequence. Delete S12 → verify S13/S15 handle cascade (SET NULL on references_schedule_id).
+3. **Workflow:** Build a complete test scenario: 3 new cases (S12) across 2 rooms → reschedule one (S13) → cancel one (S15) → verify sequence ordering is correct → verify all entries visible in table with correct badges and references.
+
+---
+
+## Phase 11: Rewire Test Harness to Use Database-Driven Test Data
+
+**Complexity:** Medium (1-2 sessions)
+
+### What it does
+- Modifies the existing test harness at `/admin/settings/hl7v2-test-harness/` to read from the Test Data Manager tables instead of hardcoded `surgical-data.ts`
+- The test harness reads schedule entries, converts each to an SIU message using the entity pool data, and sends them through the pipeline in sequence_order
+- Existing scenario runner logic (algorithmic generation) is replaced by direct database reads
+- Hardcoded `surgical-data.ts` is deprecated (kept for unit tests but no longer used by the test harness UI)
+
+### Files touched
+
+| File | Change |
+|------|--------|
+| `lib/hl7v2/test-harness/db-scenario-runner.ts` | **Create** — New scenario runner that reads from `ehr_test_schedules` + entity tables, converts to SIU messages, sends in sequence |
+| `lib/hl7v2/test-harness/schedule-to-siu.ts` | **Create** — Converts a schedule entry (with joined entity data) into a properly formatted SIU message string |
+| `app/admin/settings/hl7v2-test-harness/PageClient.tsx` | **Modify** — Replace scenario picker (Full Day, Chaos, Multi-Day) with "Send Test Schedules" flow that reads from Test Data Manager |
+| `app/api/integrations/test-harness/route.ts` | **Modify** — Add new mode that reads schedule entries from DB instead of generating algorithmically |
+| `lib/hl7v2/test-harness/scenario-runner.ts` | **Modify** — Keep existing algorithmic scenarios as fallback, add `runFromDatabase()` method |
+| `lib/hl7v2/test-harness/surgical-data.ts` | **No change** — Kept for unit tests but no longer imported by test harness UI |
+
+### Test harness UI changes
+
+Replace the current scenario picker with:
+1. **Data source toggle**: "Test Data Manager" (default, reads from DB) — the old algorithmic scenarios can be removed or kept as a secondary option
+2. **Schedule preview**: Shows all schedule entries from the Test Data Manager, ordered by `sequence_order`, with entity details and trigger event badges
+3. **Facility selector**: Same as before — pick which facility to send test messages to
+4. **"Send All" button**: Sends all schedule entries as SIU messages in sequence_order
+5. **Per-entry send**: Optionally send individual schedule entries (for targeted testing)
+6. **Results**: Same results display as before — per-message ACK status, links to integration logs
+7. **Quick link**: "Manage Test Data" button → switches to Entity Pools tab
+
+### Key implementation notes
+- `schedule-to-siu.ts` is the critical new file — it takes a schedule entry (with joined surgeon, procedure, room, patient data) and builds a complete SIU message string matching the Epic OpTime format
+- Uses the existing `siu-generator.ts` message-building functions where possible, just swapping the data source
+- **Message sequencing**: Send messages with configurable delay between them (default 200ms) to let the pipeline process each one
+- **External case ID**: S12 entries generate the ID, S13-S16 entries carry the same ID from their referenced S12
+- **Facility API key**: Same as current — looks up the selected facility's `ehr_integrations` config for the API key
+- The test harness becomes a "send what I configured" tool rather than a "generate random scenarios" tool
+
+### Commit message
+`feat(hl7v2): phase 11 - rewire test harness to use database-driven test data from Test Data Manager`
+
+### 3-stage test gate
+1. **Unit:** `schedule-to-siu.ts` converts a schedule entry into a valid SIU message (parse it back and verify all fields). S12 generates correct external_case_id. S13 carries referenced S12's external_case_id. All trigger events produce correct SIU message type.
+2. **Integration:** Create test data (surgeon + procedure + room + patient + 3 schedule entries) → run test harness against a facility → verify 3 SIU messages sent → verify cases appear in facility's case list → verify integration logs show correct processing.
+3. **Workflow:** Full end-to-end: Admin creates test data in Test Data Manager → navigates to test harness → sees schedule entries in preview → selects facility with NO entity mappings → sends → checks review queue shows all 3 as pending_review with unmatched entities → resolves entities → approves → cases created → sends again → this time auto-resolves (mappings exist) → cases created without review.
+
+---
+
 ## Dependencies
 
 ```
@@ -405,6 +721,11 @@ Phase 2 (Schema) ──┘                                                      
                                                                                    │
                                                                                    ↓
                                                                           Phase 7 (HIPAA/Audit)
+
+Phase 8 (Test Data Schema) ──→ Phase 9 (Entity Pool UI) ──→ Phase 10 (Schedule UI) ──→ Phase 11 (Rewire Harness)
+                                                                                              │
+                                                                                              ↓
+                                                                                    Phase 5 (Test Harness, modified)
 ```
 
 - P3 depends on P1 (parser) + P2 (schema/DAL)
@@ -413,6 +734,10 @@ Phase 2 (Schema) ──┘                                                      
 - P6 depends on P2 (DAL) + P3 (import service for approve flow) + P5 (test harness controls)
 - P7 depends on P6 (UI hooks for PHI access tracking)
 - P1 and P2 are independent of each other
+- P8 is independent of P1-P7 (new tables, no conflicts) but logically follows P7
+- P9 depends on P8 (needs test data tables)
+- P10 depends on P9 (schedule entries reference entity pools)
+- P11 depends on P10 (needs schedule data to read) + P5 (modifies existing test harness)
 
 ## Environment Variables (New)
 
@@ -424,17 +749,21 @@ Phase 2 (Schema) ──┘                                                      
 
 ## Estimated Effort
 
-| Phase | Description | Complexity | Sessions |
-|-------|-------------|------------|----------|
-| 1 | HL7v2 Parser & Message Models | Medium | 1 |
-| 2 | Database Schema Extensions | Light | 1 |
-| 3 | Case Import Service | Heavy | 2 |
-| 4 | HL7v2 Listener (Edge Function) | Medium-Heavy | 1-2 |
-| 5 | Test Harness (generator + UI) | Medium-Heavy | 2 |
-| 6 | Admin UI (tabs, review queue, mappings, logs) | Heavy | 2-3 |
-| 7 | HIPAA Compliance & Audit Trail | Medium | 1 |
+| Phase | Description | Complexity | Sessions | Status |
+|-------|-------------|------------|----------|--------|
+| 1 | HL7v2 Parser & Message Models | Medium | 1 | Done |
+| 2 | Database Schema Extensions | Light | 1 | Done |
+| 3 | Case Import Service | Heavy | 2 | Done |
+| 4 | HL7v2 Listener (Edge Function) | Medium-Heavy | 1-2 | Done |
+| 5 | Test Harness (generator + UI) | Medium-Heavy | 2 | Done |
+| 6 | Admin UI (tabs, review queue, mappings, logs) | Heavy | 2-3 | Done |
+| 7 | HIPAA Compliance & Audit Trail | Medium | 1 | Done |
+| 8 | Test Data Manager — Schema & DAL | Medium | 1 | Pending |
+| 9 | Global Admin CRUD UI — Entity Pools | Medium-Heavy | 2 | Pending |
+| 10 | Global Admin CRUD UI — Schedule Entries | Medium-Heavy | 2 | Pending |
+| 11 | Rewire Test Harness to Database-Driven Data | Medium | 1-2 | Pending |
 
-**Total: ~10-12 Claude Code sessions**
+**Total: ~14-17 Claude Code sessions** (Phases 1-7 complete, Phases 8-11 pending)
 
 ## Risk Assessment
 
