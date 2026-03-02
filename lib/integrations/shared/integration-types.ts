@@ -161,3 +161,228 @@ export interface EhrEntityMappingInsert {
   match_method?: EhrMatchMethod
   match_confidence?: number
 }
+
+// =====================================================
+// Test Data Manager — Entity Pool Types
+// =====================================================
+
+export type EhrTestRoomType = 'operating_room' | 'endo_suite' | 'cath_lab' | 'minor_procedure_room'
+
+export type EhrTestGender = 'M' | 'F' | 'O' | 'U'
+
+export type EhrTestTriggerEvent = 'S12' | 'S13' | 'S14' | 'S15' | 'S16'
+
+/** Row from ehr_test_surgeons table */
+export interface EhrTestSurgeon {
+  id: string
+  facility_id: string
+  name: string
+  npi: string | null
+  specialty: string | null
+  external_provider_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Row from ehr_test_procedures table */
+export interface EhrTestProcedure {
+  id: string
+  facility_id: string
+  name: string
+  cpt_code: string | null
+  typical_duration_min: number | null
+  specialty: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Row from ehr_test_rooms table */
+export interface EhrTestRoom {
+  id: string
+  facility_id: string
+  name: string
+  location_code: string | null
+  room_type: EhrTestRoomType | null
+  created_at: string
+  updated_at: string
+}
+
+/** Row from ehr_test_patients table */
+export interface EhrTestPatient {
+  id: string
+  facility_id: string
+  first_name: string
+  last_name: string
+  mrn: string | null
+  date_of_birth: string | null
+  gender: EhrTestGender | null
+  address_line: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
+  phone: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Row from ehr_test_diagnoses table */
+export interface EhrTestDiagnosis {
+  id: string
+  facility_id: string
+  icd10_code: string
+  description: string
+  specialty: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Row from ehr_test_schedules table */
+export interface EhrTestSchedule {
+  id: string
+  facility_id: string
+  patient_id: string
+  surgeon_id: string
+  procedure_id: string
+  room_id: string
+  diagnosis_id: string | null
+  scheduled_date: string
+  start_time: string
+  duration_min: number
+  trigger_event: EhrTestTriggerEvent
+  external_case_id: string | null
+  references_schedule_id: string | null
+  notes: string | null
+  sequence_order: number
+  created_at: string
+  updated_at: string
+}
+
+/** Schedule row with joined entity data (for display) */
+export interface EhrTestScheduleWithEntities extends EhrTestSchedule {
+  patient: EhrTestPatient | null
+  surgeon: EhrTestSurgeon | null
+  procedure: EhrTestProcedure | null
+  room: EhrTestRoom | null
+  diagnosis: EhrTestDiagnosis | null
+  referenced_schedule: Pick<EhrTestSchedule, 'id' | 'external_case_id' | 'trigger_event'> | null
+}
+
+// =====================================================
+// Test Data Manager — Insert/Update Types
+// =====================================================
+
+export interface EhrTestSurgeonInsert {
+  facility_id: string
+  name: string
+  npi?: string
+  specialty?: string
+  external_provider_id?: string
+}
+
+export interface EhrTestSurgeonUpdate {
+  name?: string
+  npi?: string | null
+  specialty?: string | null
+  external_provider_id?: string | null
+}
+
+export interface EhrTestProcedureInsert {
+  facility_id: string
+  name: string
+  cpt_code?: string
+  typical_duration_min?: number
+  specialty?: string
+}
+
+export interface EhrTestProcedureUpdate {
+  name?: string
+  cpt_code?: string | null
+  typical_duration_min?: number | null
+  specialty?: string | null
+}
+
+export interface EhrTestRoomInsert {
+  facility_id: string
+  name: string
+  location_code?: string
+  room_type?: EhrTestRoomType
+}
+
+export interface EhrTestRoomUpdate {
+  name?: string
+  location_code?: string | null
+  room_type?: EhrTestRoomType | null
+}
+
+export interface EhrTestPatientInsert {
+  facility_id: string
+  first_name: string
+  last_name: string
+  mrn?: string
+  date_of_birth?: string
+  gender?: EhrTestGender
+  address_line?: string
+  city?: string
+  state?: string
+  zip?: string
+  phone?: string
+}
+
+export interface EhrTestPatientUpdate {
+  first_name?: string
+  last_name?: string
+  mrn?: string | null
+  date_of_birth?: string | null
+  gender?: EhrTestGender | null
+  address_line?: string | null
+  city?: string | null
+  state?: string | null
+  zip?: string | null
+  phone?: string | null
+}
+
+export interface EhrTestDiagnosisInsert {
+  facility_id: string
+  icd10_code: string
+  description: string
+  specialty?: string
+}
+
+export interface EhrTestDiagnosisUpdate {
+  icd10_code?: string
+  description?: string
+  specialty?: string | null
+}
+
+export interface EhrTestScheduleInsert {
+  facility_id: string
+  patient_id: string
+  surgeon_id: string
+  procedure_id: string
+  room_id: string
+  diagnosis_id?: string
+  scheduled_date: string
+  start_time: string
+  duration_min: number
+  trigger_event?: EhrTestTriggerEvent
+  external_case_id?: string
+  references_schedule_id?: string
+  notes?: string
+  sequence_order?: number
+}
+
+export interface EhrTestScheduleUpdate {
+  patient_id?: string
+  surgeon_id?: string
+  procedure_id?: string
+  room_id?: string
+  diagnosis_id?: string | null
+  scheduled_date?: string
+  start_time?: string
+  duration_min?: number
+  trigger_event?: EhrTestTriggerEvent
+  external_case_id?: string | null
+  references_schedule_id?: string | null
+  notes?: string | null
+  sequence_order?: number
+}
