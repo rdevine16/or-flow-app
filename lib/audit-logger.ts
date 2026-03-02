@@ -241,6 +241,18 @@ export type AuditAction =
   | 'epic.auto_match_run'
   | 'epic.field_mapping_updated'
   | 'epic.field_mapping_reset'
+  // EHR HL7v2 Integration (HIPAA audit)
+  | 'ehr.phi_accessed'
+  | 'ehr.import_approved'
+  | 'ehr.import_rejected'
+  | 'ehr.entity_mapping_created'
+  | 'ehr.entity_mapping_deleted'
+  | 'ehr.integration_enabled'
+  | 'ehr.integration_disabled'
+  | 'ehr.api_key_rotated'
+  | 'ehr.retention_updated'
+  | 'ehr.test_harness_run'
+  | 'ehr.raw_message_purged'
 // Human-readable labels for audit log display
 export const auditActionLabels: Record<AuditAction, string> = {
     // Block Schedules
@@ -452,6 +464,18 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'epic.auto_match_run': 'ran Epic auto-matching',
   'epic.field_mapping_updated': 'updated Epic field mapping',
   'epic.field_mapping_reset': 'reset Epic field mappings to defaults',
+  // EHR HL7v2 Integration (HIPAA)
+  'ehr.phi_accessed': 'viewed raw HL7v2 message containing PHI',
+  'ehr.import_approved': 'approved HL7v2 pending import',
+  'ehr.import_rejected': 'rejected HL7v2 pending import',
+  'ehr.entity_mapping_created': 'created EHR entity mapping',
+  'ehr.entity_mapping_deleted': 'deleted EHR entity mapping',
+  'ehr.integration_enabled': 'enabled EHR integration',
+  'ehr.integration_disabled': 'disabled EHR integration',
+  'ehr.api_key_rotated': 'rotated EHR integration API key',
+  'ehr.retention_updated': 'updated raw message retention policy',
+  'ehr.test_harness_run': 'ran HL7v2 test harness scenario',
+  'ehr.raw_message_purged': 'purged expired raw HL7v2 messages',
 // Data Quality
   'data_quality.issue_resolved': 'resolved a data quality issue',
   'data_quality.issue_excluded': 'excluded a data quality issue',
@@ -2998,6 +3022,147 @@ export const epicAudit = {
     await log(supabase, 'epic.field_mapping_reset', {
       targetType: 'epic_field_mapping',
       targetLabel: 'Field mappings reset to defaults',
+    })
+  },
+}
+
+// =====================================================
+// EHR HL7v2 AUDIT (HIPAA compliance)
+// =====================================================
+
+export const ehrAudit = {
+  async phiAccessed(
+    supabase: SupabaseClient,
+    facilityId: string,
+    logEntryId: string,
+    messageType: string
+  ) {
+    await log(supabase, 'ehr.phi_accessed', {
+      targetType: 'ehr_integration_log',
+      targetId: logEntryId,
+      targetLabel: `Viewed raw ${messageType} message`,
+      facilityId,
+    })
+  },
+
+  async importApproved(
+    supabase: SupabaseClient,
+    facilityId: string,
+    logEntryId: string,
+    caseId: string
+  ) {
+    await log(supabase, 'ehr.import_approved', {
+      targetType: 'ehr_integration_log',
+      targetId: logEntryId,
+      targetLabel: 'Approved HL7v2 import',
+      facilityId,
+      metadata: { case_id: caseId },
+    })
+  },
+
+  async importRejected(
+    supabase: SupabaseClient,
+    facilityId: string,
+    logEntryId: string,
+    reason: string
+  ) {
+    await log(supabase, 'ehr.import_rejected', {
+      targetType: 'ehr_integration_log',
+      targetId: logEntryId,
+      targetLabel: 'Rejected HL7v2 import',
+      facilityId,
+      metadata: { reason },
+    })
+  },
+
+  async entityMappingCreated(
+    supabase: SupabaseClient,
+    facilityId: string,
+    entityType: string,
+    externalName: string,
+    orbitName: string
+  ) {
+    await log(supabase, 'ehr.entity_mapping_created', {
+      targetType: 'ehr_entity_mapping',
+      targetLabel: `Mapped ${entityType}: ${externalName} → ${orbitName}`,
+      facilityId,
+      metadata: { entity_type: entityType, external_name: externalName, orbit_name: orbitName },
+    })
+  },
+
+  async entityMappingDeleted(
+    supabase: SupabaseClient,
+    facilityId: string,
+    entityType: string,
+    externalName: string
+  ) {
+    await log(supabase, 'ehr.entity_mapping_deleted', {
+      targetType: 'ehr_entity_mapping',
+      targetLabel: `Deleted ${entityType} mapping: ${externalName}`,
+      facilityId,
+    })
+  },
+
+  async integrationToggled(
+    supabase: SupabaseClient,
+    facilityId: string,
+    enabled: boolean
+  ) {
+    await log(supabase, enabled ? 'ehr.integration_enabled' : 'ehr.integration_disabled', {
+      targetType: 'ehr_integration',
+      targetLabel: `${enabled ? 'Enabled' : 'Disabled'} HL7v2 integration`,
+      facilityId,
+    })
+  },
+
+  async apiKeyRotated(
+    supabase: SupabaseClient,
+    facilityId: string
+  ) {
+    await log(supabase, 'ehr.api_key_rotated', {
+      targetType: 'ehr_integration',
+      targetLabel: 'Rotated HL7v2 API key',
+      facilityId,
+    })
+  },
+
+  async retentionUpdated(
+    supabase: SupabaseClient,
+    facilityId: string,
+    oldDays: number,
+    newDays: number
+  ) {
+    await log(supabase, 'ehr.retention_updated', {
+      targetType: 'ehr_integration',
+      targetLabel: `Updated retention: ${oldDays} → ${newDays} days`,
+      facilityId,
+      oldValues: { retention_days: oldDays },
+      newValues: { retention_days: newDays },
+    })
+  },
+
+  async testHarnessRun(
+    supabase: SupabaseClient,
+    facilityId: string,
+    scenario: string,
+    messageCount: number
+  ) {
+    await log(supabase, 'ehr.test_harness_run', {
+      targetType: 'ehr_integration',
+      targetLabel: `Ran test harness: ${scenario} (${messageCount} messages)`,
+      facilityId,
+      metadata: { scenario, message_count: messageCount },
+    })
+  },
+
+  async rawMessagePurged(
+    supabase: SupabaseClient,
+    purgedCount: number
+  ) {
+    await log(supabase, 'ehr.raw_message_purged', {
+      targetType: 'ehr_integration_log',
+      targetLabel: `Purged ${purgedCount} expired raw messages`,
+      metadata: { purged_count: purgedCount },
     })
   },
 }

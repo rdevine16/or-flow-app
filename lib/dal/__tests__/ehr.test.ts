@@ -855,3 +855,248 @@ describe('ehrDAL.getIntegrationStats', () => {
     expect(result.error).toEqual(mockError)
   })
 })
+
+// ============================================
+// PHI ACCESS LOGGING (Phase 7)
+// ============================================
+
+describe('ehrDAL.logPhiAccess', () => {
+  it('should insert PHI access log entry', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.insert.mockResolvedValue({ error: null })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.logPhiAccess(client as any, {
+      userId: 'user-123',
+      userEmail: 'admin@example.com',
+      facilityId: 'fac-1',
+      logEntryId: 'log-1',
+      accessType: 'view_raw_message',
+    })
+
+    expect(client.from).toHaveBeenCalledWith('ehr_phi_access_log')
+    expect(chainable.insert).toHaveBeenCalledWith({
+      user_id: 'user-123',
+      user_email: 'admin@example.com',
+      facility_id: 'fac-1',
+      log_entry_id: 'log-1',
+      access_type: 'view_raw_message',
+    })
+    expect(result.error).toBeNull()
+  })
+
+  it('should handle missing optional fields', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.insert.mockResolvedValue({ error: null })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await ehrDAL.logPhiAccess(client as any, {
+      userId: 'user-123',
+      facilityId: 'fac-1',
+      logEntryId: 'log-1',
+    })
+
+    expect(chainable.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_email: null,
+        access_type: 'view_raw_message',
+      })
+    )
+  })
+
+  it('should return error on insert failure', async () => {
+    const { client, chainable } = createMockSupabase()
+    const mockError = { message: 'RLS violation', code: '42501' }
+    chainable.insert.mockResolvedValue({ error: mockError })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.logPhiAccess(client as any, {
+      userId: 'user-123',
+      facilityId: 'fac-1',
+      logEntryId: 'log-1',
+    })
+
+    expect(result.error).toEqual(mockError)
+  })
+})
+
+describe('ehrDAL.listPhiAccessLogs', () => {
+  it('should list PHI access logs for a facility', async () => {
+    const { client, chainable } = createMockSupabase()
+    const mockLogs = [
+      {
+        id: 'phi-1',
+        user_id: 'user-123',
+        user_email: 'admin@example.com',
+        facility_id: 'fac-1',
+        log_entry_id: 'log-1',
+        access_type: 'view_raw_message',
+        created_at: '2026-03-01T12:00:00Z',
+      },
+    ]
+    chainable.order.mockResolvedValue({ data: mockLogs, error: null, count: 1 })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.listPhiAccessLogs(client as any, 'fac-1')
+
+    expect(chainable.select).toHaveBeenCalledWith('*', { count: 'exact' })
+    expect(chainable.eq).toHaveBeenCalledWith('facility_id', 'fac-1')
+    expect(chainable.order).toHaveBeenCalledWith('created_at', { ascending: false })
+    expect(result.data).toEqual(mockLogs)
+    expect(result.count).toBe(1)
+  })
+
+  it('should apply limit when provided', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.limit.mockResolvedValue({ data: [], error: null, count: 0 })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await ehrDAL.listPhiAccessLogs(client as any, 'fac-1', { limit: 50 })
+
+    expect(chainable.limit).toHaveBeenCalledWith(50)
+  })
+
+  it('should apply range for pagination when offset is provided', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.range.mockResolvedValue({ data: [], error: null, count: 0 })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await ehrDAL.listPhiAccessLogs(client as any, 'fac-1', { offset: 25, limit: 50 })
+
+    // offset: 25, limit: 50 → range(25, 74)
+    expect(chainable.range).toHaveBeenCalledWith(25, 74)
+  })
+
+  it('should return empty array when no logs exist', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.order.mockResolvedValue({ data: null, error: null, count: null })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.listPhiAccessLogs(client as any, 'fac-1')
+
+    expect(result.data).toEqual([])
+    expect(result.count).toBeUndefined()
+  })
+})
+
+describe('ehrDAL.purgeExpiredRawMessages', () => {
+  it('should call RPC function and return purged count', async () => {
+    const mockRpc = vi.fn().mockResolvedValue({ data: 42, error: null })
+    const client = { rpc: mockRpc }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.purgeExpiredRawMessages(client as any)
+
+    expect(mockRpc).toHaveBeenCalledWith('purge_expired_raw_messages')
+    expect(result.data).toBe(42)
+    expect(result.error).toBeNull()
+  })
+
+  it('should return 0 when RPC returns null', async () => {
+    const mockRpc = vi.fn().mockResolvedValue({ data: null, error: null })
+    const client = { rpc: mockRpc }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.purgeExpiredRawMessages(client as any)
+
+    expect(result.data).toBe(0)
+  })
+
+  it('should return error when RPC fails', async () => {
+    const mockError = { message: 'Permission denied', code: '42501' }
+    const mockRpc = vi.fn().mockResolvedValue({ data: null, error: mockError })
+    const client = { rpc: mockRpc }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.purgeExpiredRawMessages(client as any)
+
+    expect(result.error).toEqual(mockError)
+  })
+})
+
+describe('ehrDAL.updateRetentionDays', () => {
+  it('should merge retention_days into existing config and update', async () => {
+    const getChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: {
+          id: 'int-1',
+          config: { api_key: 'test-key', some_other_field: 'value' },
+        },
+        error: null,
+      }),
+    }
+
+    const updateChain = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    }
+
+    let callCount = 0
+    const client = {
+      from: vi.fn().mockImplementation(() => {
+        callCount++
+        return callCount === 1 ? getChain : updateChain
+      }),
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.updateRetentionDays(client as any, 'int-1', 90)
+
+    expect(client.from).toHaveBeenCalledWith('ehr_integrations')
+    expect(updateChain.update).toHaveBeenCalledWith({
+      config: { api_key: 'test-key', some_other_field: 'value', retention_days: 90 },
+    })
+    expect(updateChain.eq).toHaveBeenCalledWith('id', 'int-1')
+    expect(result.error).toBeNull()
+  })
+
+  it('should return early if integration not found', async () => {
+    const getChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found', code: 'PGRST116' } }),
+    }
+
+    const client = { from: vi.fn().mockReturnValue(getChain) }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.updateRetentionDays(client as any, 'nonexistent', 90)
+
+    expect(result.error).toBeTruthy()
+    // Should only call from() once (for the get), not proceed to update
+    expect(client.from).toHaveBeenCalledTimes(1)
+  })
+
+  it('should handle integration with empty config', async () => {
+    const getChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'int-1', config: {} },
+        error: null,
+      }),
+    }
+
+    const updateChain = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    }
+
+    let callCount = 0
+    const client = {
+      from: vi.fn().mockImplementation(() => {
+        callCount++
+        return callCount === 1 ? getChain : updateChain
+      }),
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await ehrDAL.updateRetentionDays(client as any, 'int-1', 30)
+
+    expect(updateChain.update).toHaveBeenCalledWith({
+      config: { retention_days: 30 },
+    })
+  })
+})

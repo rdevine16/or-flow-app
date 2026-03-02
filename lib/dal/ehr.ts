@@ -420,6 +420,109 @@ async function getIntegrationStats(
 }
 
 // =====================================================
+// PHI ACCESS & AUDIT
+// =====================================================
+
+/** PHI access types for tracking */
+type PhiAccessType = 'view_raw_message' | 'export_message' | 'view_parsed_data'
+
+/** Log a PHI access event (user viewed raw HL7v2 message) */
+async function logPhiAccess(
+  supabase: AnySupabaseClient,
+  params: {
+    userId: string
+    userEmail?: string
+    facilityId: string
+    logEntryId: string
+    accessType?: PhiAccessType
+  }
+): Promise<{ error: PostgrestError | null }> {
+  const { error } = await supabase
+    .from('ehr_phi_access_log')
+    .insert({
+      user_id: params.userId,
+      user_email: params.userEmail || null,
+      facility_id: params.facilityId,
+      log_entry_id: params.logEntryId,
+      access_type: params.accessType || 'view_raw_message',
+    })
+
+  return { error }
+}
+
+/** List PHI access events for a facility (for audit reporting) */
+async function listPhiAccessLogs(
+  supabase: AnySupabaseClient,
+  facilityId: string,
+  options?: { limit?: number; offset?: number }
+): Promise<DALListResult<{
+  id: string
+  user_id: string
+  user_email: string | null
+  facility_id: string
+  log_entry_id: string
+  access_type: string
+  created_at: string
+}>> {
+  let q = supabase
+    .from('ehr_phi_access_log')
+    .select('*', { count: 'exact' })
+    .eq('facility_id', facilityId)
+    .order('created_at', { ascending: false })
+
+  if (options?.limit) {
+    q = q.limit(options.limit)
+  }
+  if (options?.offset) {
+    q = q.range(options.offset, options.offset + (options.limit || 25) - 1)
+  }
+
+  const { data, error, count } = await q
+  return { data: (data as unknown as Array<{
+    id: string
+    user_id: string
+    user_email: string | null
+    facility_id: string
+    log_entry_id: string
+    access_type: string
+    created_at: string
+  }>) || [], error, count: count ?? undefined }
+}
+
+/** Manually trigger raw message purge (calls DB function) */
+async function purgeExpiredRawMessages(
+  supabase: AnySupabaseClient
+): Promise<DALResult<number>> {
+  const { data, error } = await supabase
+    .rpc('purge_expired_raw_messages')
+
+  return { data: (data as number) ?? 0, error }
+}
+
+/** Update retention days in integration config */
+async function updateRetentionDays(
+  supabase: AnySupabaseClient,
+  integrationId: string,
+  retentionDays: number
+): Promise<{ error: PostgrestError | null }> {
+  // Read current config, merge retention_days, update
+  const { data: integration, error: fetchError } = await getIntegration(supabase, integrationId)
+  if (fetchError || !integration) return { error: fetchError }
+
+  const updatedConfig = {
+    ...integration.config,
+    retention_days: retentionDays,
+  }
+
+  const { error } = await supabase
+    .from('ehr_integrations')
+    .update({ config: updatedConfig })
+    .eq('id', integrationId)
+
+  return { error }
+}
+
+// =====================================================
 // EXPORT
 // =====================================================
 
@@ -448,4 +551,9 @@ export const ehrDAL = {
   resolveEntity,
   // Stats
   getIntegrationStats,
+  // PHI Access & Audit
+  logPhiAccess,
+  listPhiAccessLogs,
+  purgeExpiredRawMessages,
+  updateRetentionDays,
 }

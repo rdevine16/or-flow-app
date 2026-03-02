@@ -29,11 +29,15 @@ import {
   User,
   Scissors,
   MapPin,
+  Clock,
+  Save,
 } from 'lucide-react'
 import { useCurrentUser, useSurgeons, useRooms, useProcedureTypes } from '@/hooks'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useIntegrationRealtime } from '@/hooks/useIntegrationRealtime'
+import { usePhiAudit } from '@/hooks/usePhiAudit'
 import { ehrDAL } from '@/lib/dal/ehr'
+import { ehrAudit } from '@/lib/audit-logger'
 import { createClient } from '@/lib/supabase'
 import SetupInstructionsCard from '@/components/integrations/SetupInstructionsCard'
 import HL7MessageViewer from '@/components/integrations/HL7MessageViewer'
@@ -273,6 +277,12 @@ export default function EpicHL7v2IntegrationPage() {
     }
   }, [surgeonEntities, roomEntities, procedureEntities])
 
+  // PHI access tracking (HIPAA)
+  const { logAccess: logPhiAccess } = usePhiAudit({
+    userId,
+    facilityId,
+  })
+
   // =====================================================
   // ACTION HANDLERS
   // =====================================================
@@ -317,12 +327,16 @@ export default function EpicHL7v2IntegrationPage() {
     setActionLoading('toggle')
     try {
       const supabase = createClient()
+      const newActive = !integration.is_active
       const { data, error } = await ehrDAL.upsertIntegration(supabase, {
         facility_id: integration.facility_id,
         integration_type: 'epic_hl7v2',
-        is_active: !integration.is_active,
+        is_active: newActive,
       })
-      if (!error && data) setIntegration(data)
+      if (!error && data) {
+        setIntegration(data)
+        await ehrAudit.integrationToggled(supabase, integration.facility_id, newActive)
+      }
     } finally {
       setActionLoading(null)
     }
@@ -343,7 +357,10 @@ export default function EpicHL7v2IntegrationPage() {
         integration_type: 'epic_hl7v2',
         config: updatedConfig,
       })
-      if (!error && data) setIntegration(data)
+      if (!error && data) {
+        setIntegration(data)
+        await ehrAudit.apiKeyRotated(supabase, integration.facility_id)
+      }
     } finally {
       setActionLoading(null)
     }
@@ -372,6 +389,7 @@ export default function EpicHL7v2IntegrationPage() {
 
       if (result.success && result.caseId) {
         await ehrDAL.approveImport(supabase, logEntry.id, result.caseId, userId)
+        await ehrAudit.importApproved(supabase, integration.facility_id, logEntry.id, result.caseId)
         setPendingReviews(prev => prev ? prev.filter(r => r.id !== logEntry.id) : [])
         refetchStats()
         refetchLogs()
@@ -382,7 +400,7 @@ export default function EpicHL7v2IntegrationPage() {
   }
 
   const handleRejectImport = async (logEntry: EhrIntegrationLog) => {
-    if (!userId) return
+    if (!userId || !facilityId) return
     const reason = prompt('Reason for rejection:')
     if (!reason) return
 
@@ -390,6 +408,7 @@ export default function EpicHL7v2IntegrationPage() {
     try {
       const supabase = createClient()
       await ehrDAL.rejectImport(supabase, logEntry.id, reason, userId)
+      await ehrAudit.importRejected(supabase, facilityId, logEntry.id, reason)
       setPendingReviews(prev => prev ? prev.filter(r => r.id !== logEntry.id) : [])
       refetchStats()
       refetchLogs()
@@ -421,6 +440,7 @@ export default function EpicHL7v2IntegrationPage() {
         if (updated) {
           setPendingReviews(prev => prev ? prev.map(r => r.id === logEntry.id ? updated : r) : [])
         }
+        await ehrAudit.entityMappingCreated(supabase, integration.facility_id, entityType, externalDisplayName, orbitDisplayName)
         refetchMappings()
       }
     } finally {
@@ -464,6 +484,34 @@ export default function EpicHL7v2IntegrationPage() {
         return data.id
       }
     }
+  }
+
+  const handleUpdateRetention = async (days: number) => {
+    if (!integration || !facilityId) return
+    setActionLoading('retention')
+    try {
+      const supabase = createClient()
+      const oldDays = integration.config?.retention_days ?? 90
+      const { error } = await ehrDAL.updateRetentionDays(supabase, integration.id, days)
+      if (!error) {
+        setIntegration({ ...integration, config: { ...integration.config, retention_days: days } })
+        await ehrAudit.retentionUpdated(supabase, facilityId, oldDays, days)
+      }
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleDeleteMapping = async (mappingId: string) => {
+    const supabase = createClient()
+    // Get mapping details for audit before deleting
+    const { data: mappings } = await ehrDAL.listEntityMappings(supabase, integration!.id)
+    const mapping = mappings?.find(m => m.id === mappingId)
+    await ehrDAL.deleteEntityMapping(supabase, mappingId)
+    if (mapping && facilityId) {
+      await ehrAudit.entityMappingDeleted(supabase, facilityId, mapping.entity_type, mapping.external_display_name || mapping.external_identifier)
+    }
+    refetchMappings()
   }
 
   // =====================================================
@@ -549,6 +597,7 @@ export default function EpicHL7v2IntegrationPage() {
           onSetup={handleSetup}
           onToggleActive={handleToggleActive}
           onRotateKey={handleRotateKey}
+          onUpdateRetention={handleUpdateRetention}
           onNavigateTab={setActiveTab}
           onNavigateLogsWithFilter={(filter) => { setActiveTab('logs'); setLogStatusFilter(filter) }}
         />
@@ -565,6 +614,7 @@ export default function EpicHL7v2IntegrationPage() {
           onReject={handleRejectImport}
           onResolveEntity={handleResolveEntity}
           onCreateEntity={handleCreateEntity}
+          onPhiAccess={logPhiAccess}
         />
       )}
 
@@ -576,11 +626,7 @@ export default function EpicHL7v2IntegrationPage() {
           setMappingTab={setMappingTab}
           entityMappings={entityMappings || []}
           loading={mappingsLoading}
-          onDelete={async (mappingId: string) => {
-            const supabase = createClient()
-            await ehrDAL.deleteEntityMapping(supabase, mappingId)
-            refetchMappings()
-          }}
+          onDelete={handleDeleteMapping}
         />
       )}
 
@@ -595,6 +641,7 @@ export default function EpicHL7v2IntegrationPage() {
           setPage={setLogPage}
           pageSize={PAGE_SIZE}
           onRefresh={refetchLogs}
+          onPhiAccess={logPhiAccess}
         />
       )}
     </div>
@@ -613,6 +660,7 @@ function OverviewTab({
   onSetup,
   onToggleActive,
   onRotateKey,
+  onUpdateRetention,
   onNavigateTab,
   onNavigateLogsWithFilter,
 }: {
@@ -623,6 +671,7 @@ function OverviewTab({
   onSetup: () => Promise<void>
   onToggleActive: () => Promise<void>
   onRotateKey: () => Promise<void>
+  onUpdateRetention: (days: number) => Promise<void>
   onNavigateTab: (tab: TabId) => void
   onNavigateLogsWithFilter: (filter: EhrProcessingStatus) => void
 }) {
@@ -734,6 +783,73 @@ function OverviewTab({
           <p className="text-2xl font-semibold text-red-600">{stats?.errors ?? 0}</p>
         </button>
       </div>
+
+      {/* Retention Policy Card */}
+      <RetentionPolicyCard
+        retentionDays={integration.config?.retention_days ?? 90}
+        actionLoading={actionLoading}
+        onUpdate={onUpdateRetention}
+      />
+    </div>
+  )
+}
+
+// =====================================================
+// RETENTION POLICY CARD
+// =====================================================
+
+const RETENTION_OPTIONS = [
+  { value: 30, label: '30 days' },
+  { value: 60, label: '60 days' },
+  { value: 90, label: '90 days (default)' },
+  { value: 180, label: '180 days' },
+  { value: 365, label: '1 year' },
+]
+
+function RetentionPolicyCard({
+  retentionDays,
+  actionLoading,
+  onUpdate,
+}: {
+  retentionDays: number
+  actionLoading: string | null
+  onUpdate: (days: number) => Promise<void>
+}) {
+  const [selectedDays, setSelectedDays] = useState(retentionDays)
+
+  const hasChanged = selectedDays !== retentionDays
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-6">
+      <div className="flex items-center gap-2 mb-1">
+        <Clock className="w-4 h-4 text-slate-500" />
+        <h3 className="font-medium text-slate-900">Raw Message Retention</h3>
+      </div>
+      <p className="text-xs text-slate-500 mb-4">
+        Raw HL7v2 messages contain PHI. They are automatically purged after the retention period.
+        Parsed data and audit logs are preserved indefinitely.
+      </p>
+      <div className="flex items-center gap-3">
+        <select
+          value={selectedDays}
+          onChange={(e) => setSelectedDays(Number(e.target.value))}
+          className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        >
+          {RETENTION_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        {hasChanged && (
+          <button
+            onClick={() => onUpdate(selectedDays)}
+            disabled={actionLoading === 'retention'}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'retention' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Save
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -751,6 +867,7 @@ function ReviewQueueTab({
   onReject,
   onResolveEntity,
   onCreateEntity,
+  onPhiAccess,
 }: {
   pendingReviews: EhrIntegrationLog[]
   loading: boolean
@@ -763,6 +880,7 @@ function ReviewQueueTab({
     extId: string, extName: string, orbitId: string, orbitName: string,
   ) => Promise<void>
   onCreateEntity: (formData: CreateEntityData) => Promise<string | null>
+  onPhiAccess: (logEntryId: string, messageType: string) => void
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
@@ -811,7 +929,13 @@ function ReviewQueueTab({
         return (
           <div key={entry.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             <button
-              onClick={() => setExpandedRow(isExpanded ? null : entry.id)}
+              onClick={() => {
+                const expanding = !isExpanded
+                setExpandedRow(expanding ? entry.id : null)
+                if (expanding && entry.raw_message) {
+                  onPhiAccess(entry.id, entry.message_type)
+                }
+              }}
               className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
             >
               {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />}
@@ -1054,6 +1178,7 @@ function LogsTab({
   setPage,
   pageSize,
   onRefresh,
+  onPhiAccess,
 }: {
   logEntries: EhrIntegrationLog[]
   loading: boolean
@@ -1063,6 +1188,7 @@ function LogsTab({
   setPage: (p: number) => void
   pageSize: number
   onRefresh: () => void
+  onPhiAccess: (logEntryId: string, messageType: string) => void
 }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
@@ -1132,7 +1258,13 @@ function LogsTab({
                         className={`border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${
                           entry.processing_status === 'error' ? 'bg-red-50/50' : ''
                         }`}
-                        onClick={() => setExpandedRow(isExpanded ? null : entry.id)}
+                        onClick={() => {
+                          const expanding = !isExpanded
+                          setExpandedRow(expanding ? entry.id : null)
+                          if (expanding && entry.raw_message) {
+                            onPhiAccess(entry.id, entry.message_type)
+                          }
+                        }}
                       >
                         <td className="px-4 py-3">
                           {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
