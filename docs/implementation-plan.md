@@ -5,7 +5,7 @@
 
 ## Summary
 
-Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Replaces the FHIR-based approach (patient-centric, doesn't expose surgical scheduling). **Primary goal:** test harness to validate Epic HL7v2 field mappings without paying $1,900/year for Epic sandbox. Phases 1-7 build the core pipeline. Phases 8-11 add a database-driven Test Data Manager in global admin, replacing hardcoded test data with CRUD-able entity pools and schedule entries so you can hand-craft test cases and validate the import pipeline under different facility mapping states (none, partial, complete). Phases 12-13 add auto-push behavior — when you create, edit, or delete a schedule entry, the corresponding SIU message (S12/S14/S15) is automatically sent to the facility's HL7v2 listener, mimicking how Epic pushes changes in production. Phases 14-15 redesign the review queue with a scannable list, slide-over drawer, and batch approval. 15 phases, ~18-21 sessions.
+Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Replaces the FHIR-based approach (patient-centric, doesn't expose surgical scheduling). **Primary goal:** test harness to validate Epic HL7v2 field mappings without paying $1,900/year for Epic sandbox. Phases 1-7 build the core pipeline. Phases 8-11 add a database-driven Test Data Manager in global admin, replacing hardcoded test data with CRUD-able entity pools and schedule entries so you can hand-craft test cases and validate the import pipeline under different facility mapping states (none, partial, complete). Phases 12-13 add auto-push behavior — when you create, edit, or delete a schedule entry, the corresponding SIU message (S12/S14/S15) is automatically sent to the facility's HL7v2 listener, mimicking how Epic pushes changes in production. Phases 14-15 redesign the review queue with a scannable list, slide-over drawer, and batch approval. Phases 16-17 add Case History — a dedicated audit trail for every case change (manual edits and Epic integration updates) displayed as a timeline tab in the case drawer. 17 phases, ~20-23 sessions.
 
 ## Interview Notes (Key Decisions)
 
@@ -39,9 +39,18 @@ Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Re
 | 26 | Schedule entries | Hand-craft individual test cases: pick patient + surgeon + procedure + room + date/time + trigger event (S12/S13/S14/S15) |
 | 27 | Reschedule/cancel | Schedule entries can reference an existing case (same external_case_id) for S13/S14/S15 message generation |
 | 28 | Mapping testing | No staging/production mode — test different facility mapping states (none, partial, full) by managing `ehr_entity_mappings` directly |
-| 29 | Phase structure | **15 phases** (added Phases 8-11: Test Data Manager, 12-13: Auto-Push, 14-15: Review Queue Redesign) |
+| 29 | Phase structure | **17 phases** (added Phases 8-11: Test Data Manager, 12-13: Auto-Push, 14-15: Review Queue Redesign, 16-17: Case History) |
 | 30 | Review queue UX | Scannable list rows with status icons + slide-over drawer (replaces collapsible inline expand) |
 | 31 | Batch approval | "Approve All (N)" button for bulk-approving ready imports with sequential processing |
+| 32 | Case history storage | Dedicated `case_history` table with PostgreSQL trigger on `cases` table (INSERT + UPDATE). Auto-captures every change — zero chance of missing updates. |
+| 33 | Case history granularity | One entry per save — single history row per UPDATE containing all changed fields as a diff |
+| 34 | Case history UI | Vertical timeline in new "History" tab in case drawer. Timestamps, change descriptions, source badges (Manual / Epic HL7v2) |
+| 35 | Case history scope | Cases table columns only + creation event. No milestone/flag/staff tracking (those have their own tabs) |
+| 36 | Case history attribution | Full — `auth.uid()` for browser requests, `set_config('app.current_user_id', ...)` fallback for service-role (Edge Function). Tracks both source and specific user |
+| 37 | Case history display | Resolve key FK fields (surgeon, procedure, room, patient, status, payer) to human-readable names at query time. Raw values for simple fields (date, time, notes, diagnosis) |
+| 38 | Case history permissions | All case viewers see the History tab — no special permission gate. Transparent change tracking for OR staff |
+| 39 | Case history HL7v2 link | Store `ehr_integration_log_id` on history rows. Timeline shows "View HL7v2 message" link for integration-sourced changes |
+| 40 | Case history user context | `auth.uid()` + `current_setting('app.current_user_id', true)` fallback in trigger. Covers browser (RLS) and service-role (Edge Function) paths |
 
 ---
 
@@ -889,6 +898,261 @@ Then creates the case directly via `create_case_with_milestones` RPC, skipping t
 
 ---
 
+## Phase 16: Case History — Schema, Trigger & DAL
+
+**Complexity:** Medium (1 session)
+
+### What it does
+- Creates a dedicated `case_history` table that automatically captures every INSERT and UPDATE on the `cases` table
+- PostgreSQL trigger fires on every cases INSERT/UPDATE, computing a diff of changed columns and storing old/new values
+- Tracks change source: manual edit (user via browser) vs Epic HL7v2 integration (service-role via Edge Function)
+- Full user attribution: `auth.uid()` for browser requests, `current_setting('app.current_user_id', true)` fallback for service-role calls
+- Optional `ehr_integration_log_id` FK links integration-sourced changes back to the raw HL7v2 message
+- DAL functions for querying history with FK resolution (surgeon names, procedure names, etc.)
+
+### Files touched
+
+| File | Change |
+|------|--------|
+| `supabase/migrations/YYYYMMDD000001_case_history.sql` | **Create** — `case_history` table, `trg_case_history` trigger function + trigger on `cases`, RLS policies, indexes |
+| `lib/dal/case-history.ts` | **Create** — DAL functions: `getCaseHistory(caseId)`, `getCaseHistoryCount(caseId)` with FK resolution joins |
+| `lib/integrations/shared/integration-types.ts` | **Modify** — Add `CaseHistoryEntry` TypeScript interface |
+| `lib/integrations/epic/case-import-service.ts` | **Modify** — Set `app.current_user_id` and `app.change_source` session config before case updates so the trigger captures attribution. Set `app.ehr_log_id` for HL7v2 link. |
+| `supabase/functions/hl7v2-listener/import-service.ts` | **Modify** — Same session config changes (Deno copy) |
+
+### Database schema
+
+```sql
+CREATE TABLE public.case_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  facility_id UUID NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
+
+  -- What changed
+  change_type TEXT NOT NULL CHECK (change_type IN ('created', 'updated', 'cancelled', 'status_change')),
+  changed_fields JSONB NOT NULL DEFAULT '{}',
+    -- { "surgeon_id": { "old": "uuid-old", "new": "uuid-new" },
+    --   "scheduled_date": { "old": "2026-03-15", "new": "2026-03-20" } }
+
+  -- Who/what made the change
+  change_source TEXT NOT NULL DEFAULT 'manual' CHECK (change_source IN ('manual', 'epic_hl7v2', 'system')),
+  changed_by UUID,             -- auth.uid() or app.current_user_id (NULL for system)
+
+  -- HL7v2 integration link (NULL for manual changes)
+  ehr_integration_log_id UUID REFERENCES ehr_integration_log(id) ON DELETE SET NULL,
+
+  -- Timestamps
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Indexes
+CREATE INDEX idx_case_history_case_id ON case_history(case_id, created_at DESC);
+CREATE INDEX idx_case_history_facility ON case_history(facility_id);
+CREATE INDEX idx_case_history_ehr_log ON case_history(ehr_integration_log_id) WHERE ehr_integration_log_id IS NOT NULL;
+```
+
+### Trigger function
+
+```sql
+CREATE OR REPLACE FUNCTION trg_case_history_fn()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_changed_fields JSONB := '{}';
+  v_change_type TEXT;
+  v_change_source TEXT;
+  v_changed_by UUID;
+  v_ehr_log_id UUID;
+  v_cols TEXT[] := ARRAY[
+    'case_number', 'scheduled_date', 'start_time', 'status_id', 'or_room_id',
+    'procedure_type_id', 'surgeon_id', 'patient_id', 'payer_id', 'operative_side',
+    'notes', 'primary_diagnosis_code', 'primary_diagnosis_desc', 'source',
+    'external_case_id', 'external_system', 'import_source', 'data_validated',
+    'is_excluded_from_metrics', 'cancelled_at', 'cancellation_reason_id',
+    'cancellation_notes', 'milestone_template_id', 'is_draft'
+  ];
+  v_col TEXT;
+  v_old_val TEXT;
+  v_new_val TEXT;
+BEGIN
+  -- Determine change source from session config (set by import service) or default to 'manual'
+  v_change_source := coalesce(current_setting('app.change_source', true), 'manual');
+
+  -- User attribution: auth.uid() for browser, fallback to session config for service-role
+  v_changed_by := coalesce(auth.uid(), current_setting('app.current_user_id', true)::UUID);
+
+  -- HL7v2 integration log link (set by import service before update)
+  v_ehr_log_id := current_setting('app.ehr_log_id', true)::UUID;
+
+  IF TG_OP = 'INSERT' THEN
+    v_change_type := 'created';
+    v_changed_fields := '{}';  -- No diff for creation, just record the event
+
+    INSERT INTO case_history (case_id, facility_id, change_type, changed_fields, change_source, changed_by, ehr_integration_log_id)
+    VALUES (NEW.id, NEW.facility_id, v_change_type, v_changed_fields, v_change_source, v_changed_by, v_ehr_log_id);
+
+    RETURN NEW;
+  END IF;
+
+  -- For UPDATE: compute diff of tracked columns
+  FOREACH v_col IN ARRAY v_cols LOOP
+    EXECUTE format('SELECT ($1).%I::TEXT, ($2).%I::TEXT', v_col, v_col)
+      INTO v_old_val, v_new_val
+      USING OLD, NEW;
+
+    IF v_old_val IS DISTINCT FROM v_new_val THEN
+      v_changed_fields := v_changed_fields || jsonb_build_object(
+        v_col, jsonb_build_object('old', v_old_val, 'new', v_new_val)
+      );
+    END IF;
+  END LOOP;
+
+  -- Skip if nothing actually changed (e.g., updated_at-only triggers)
+  IF v_changed_fields = '{}' THEN
+    RETURN NEW;
+  END IF;
+
+  -- Determine change_type
+  IF NEW.cancelled_at IS NOT NULL AND OLD.cancelled_at IS NULL THEN
+    v_change_type := 'cancelled';
+  ELSIF NEW.status_id IS DISTINCT FROM OLD.status_id THEN
+    v_change_type := 'status_change';
+  ELSE
+    v_change_type := 'updated';
+  END IF;
+
+  INSERT INTO case_history (case_id, facility_id, change_type, changed_fields, change_source, changed_by, ehr_integration_log_id)
+  VALUES (NEW.id, NEW.facility_id, v_change_type, v_changed_fields, v_change_source, v_changed_by, v_ehr_log_id);
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER trg_case_history
+  AFTER INSERT OR UPDATE ON cases
+  FOR EACH ROW
+  EXECUTE FUNCTION trg_case_history_fn();
+```
+
+### DAL function (key resolution)
+
+`getCaseHistory(caseId)` joins `case_history` with:
+- `users` (for `changed_by` → display name)
+- `case_statuses` (for `status_id` old/new → status label)
+- `users` again (for `surgeon_id` old/new → surgeon name)
+- `procedure_types` (for `procedure_type_id` old/new → procedure name)
+- `or_rooms` (for `or_room_id` old/new → room name)
+- `patients` (for `patient_id` old/new → patient name)
+- `payers` (for `payer_id` old/new → payer name)
+
+Returns enriched history entries with human-readable field labels and resolved values.
+
+### Key implementation notes
+- **Tracked columns:** 24 columns (all meaningful case fields). Excludes `updated_at`, `created_at`, `created_by`, `id`, `facility_id` (metadata/never changes)
+- **Skip no-op updates:** If only `updated_at` changes (from other triggers), `v_changed_fields` stays `{}` and no history row is inserted
+- **Session config for attribution:** The import service must call `SET LOCAL app.change_source = 'epic_hl7v2'` and `SET LOCAL app.ehr_log_id = '<log-uuid>'` before updating a case. `SET LOCAL` scopes to the current transaction only — no leakage.
+- **RLS on case_history:** Same facility-scoped pattern as other tables: `facility_id = get_my_facility_id()` for SELECT. No INSERT/UPDATE/DELETE via RLS — only the trigger writes.
+- **9th trigger on cases:** This becomes the 9th trigger. Test carefully that trigger ordering doesn't cause issues (AFTER trigger, so it fires after all BEFORE triggers complete).
+- **Edge Function copy:** Update the duplicated import service in `supabase/functions/hl7v2-listener/` to set the same session config variables.
+- **CaseHistoryEntry type:** `{ id, caseId, facilityId, changeType, changedFields, changeSource, changedBy, changedByName, ehrIntegrationLogId, createdAt }`
+
+### Commit message
+`feat(hl7v2): phase 16 - case history schema, trigger, and DAL for automatic change tracking`
+
+### 3-stage test gate
+1. **Unit:** DAL `getCaseHistory` returns correct type shape. `CaseHistoryEntry` interface matches DB schema. Session config helpers set/clear correctly.
+2. **Integration:** Create a case → verify `case_history` row with `change_type = 'created'`. Update case surgeon → verify history row with `changed_fields` containing surgeon_id old/new. Cancel case → verify history row with `change_type = 'cancelled'`. Send S14 via HL7v2 → verify history row with `change_source = 'epic_hl7v2'` and `ehr_integration_log_id` populated.
+3. **Workflow:** Manual case creation → edit surgeon + date → cancel case → query history → verify 3 entries in order (created → updated → cancelled) with correct attribution. Send S12 via test harness → send S14 → verify 2 history entries with `change_source = 'epic_hl7v2'` and links to integration log rows.
+
+---
+
+## Phase 17: Case History — Timeline UI in Case Drawer
+
+**Complexity:** Medium (1 session)
+
+### What it does
+- Adds a "History" tab to the case drawer (5th tab, visible to all case viewers)
+- Vertical timeline showing all changes to the case in reverse chronological order
+- Each entry shows: timestamp, change type badge, human-readable description of what changed, source badge (Manual / Epic HL7v2), and who made the change
+- Key FK fields (surgeon, procedure, room, patient, status, payer) resolved to display names
+- Integration-sourced entries show a "View HL7v2 message" link that opens the integration log detail
+
+### Files touched
+
+| File | Change |
+|------|--------|
+| `components/cases/CaseDrawer.tsx` | **Modify** — Add "History" tab (5th tab, always visible). Import and render `CaseDrawerHistory` component. |
+| `components/cases/CaseDrawerHistory.tsx` | **Create** — History tab content: fetches case history via DAL, renders vertical timeline with change entries |
+| `components/cases/CaseHistoryTimeline.tsx` | **Create** — Reusable timeline component: renders list of `CaseHistoryEntry` items as a vertical timeline with connecting line, timestamps, badges, and change descriptions |
+| `lib/hooks/useCaseHistory.ts` | **Create** — `useCaseHistory(caseId)` hook using `useSupabaseQuery` pattern — lazy-loads history when History tab is activated |
+
+### Timeline entry format
+
+Each timeline entry renders as:
+
+```
+● Created                                           Mar 1, 2026 2:30 PM
+  Case HL7-SC10001 created                          Manual · Ryan Devine
+
+● Updated                                           Mar 2, 2026 9:15 AM
+  Surgeon: Dr. Smith → Dr. Jones                    Epic HL7v2 · View message
+  Scheduled date: 3/15/2026 → 3/20/2026
+
+● Cancelled                                         Mar 3, 2026 11:00 AM
+  Case cancelled                                    Epic HL7v2 · View message
+```
+
+**Visual elements:**
+- Vertical connecting line (gray) between entries
+- Colored dot per change_type: green (created), blue (updated), amber (status_change), red (cancelled)
+- Change type badge: "Created" / "Updated" / "Status Change" / "Cancelled"
+- Source badge: subtle pill — "Manual" (gray) / "Epic HL7v2" (purple)
+- Changed-by name (or "System" if no user)
+- Relative time on hover ("2 hours ago")
+- "View message" link (only for `ehr_integration_log_id` entries) — opens integration log in new tab or dialog
+
+### Field display resolution
+
+| DB Column | Display Label | Old/New Format |
+|-----------|--------------|----------------|
+| `surgeon_id` | Surgeon | "Dr. Smith → Dr. Jones" (resolved from users table) |
+| `procedure_type_id` | Procedure | "Total Knee → Hip Replacement" (resolved from procedure_types) |
+| `or_room_id` | OR Room | "OR-3 → OR-5" (resolved from or_rooms) |
+| `patient_id` | Patient | "Jane Doe → John Smith" (resolved from patients) |
+| `status_id` | Status | "Scheduled → In Progress" (resolved from case_statuses) |
+| `payer_id` | Payer | "Blue Cross → Aetna" (resolved from payers) |
+| `scheduled_date` | Scheduled Date | "3/15/2026 → 3/20/2026" |
+| `start_time` | Start Time | "7:30 AM → 8:00 AM" |
+| `primary_diagnosis_code` | Diagnosis | "M17.11 → M16.11" |
+| `primary_diagnosis_desc` | Diagnosis Desc | "OA right knee → OA right hip" |
+| `operative_side` | Side | "Left → Right" |
+| `notes` | Notes | Shows truncated text diff |
+| `data_validated` | Validated | "No → Yes" |
+| `is_excluded_from_metrics` | Excluded | "No → Yes" |
+| `cancelled_at` | Cancelled At | Timestamp |
+| `cancellation_notes` | Cancel Notes | Text |
+| Other fields | Field name (title case) | Raw old → new values |
+
+### Key implementation notes
+- **Lazy loading**: History data fetched only when the History tab is activated (same pattern as other tabs)
+- **No special permission**: History tab visible to all users who can see the case — no `can('tab.case_history')` gate
+- **Tab position**: History is the last tab (after Financials, Milestones, Flags, and conditional Validation)
+- **Empty state**: If no history entries (legacy cases created before trigger), show "No history recorded for this case" message
+- **FK resolution**: Done in the DAL query via LEFT JOINs, not in the component. The hook receives already-resolved display names.
+- **"View message" link**: For entries with `ehr_integration_log_id`, render a link that navigates to `Settings > Integrations > Epic > Logs` filtered to that log entry. Use `router.push` with query param.
+- **Pagination**: Load last 50 entries initially, "Load more" button if case has extensive history. Most cases will have <20 entries.
+- **Timeline component**: Build as a reusable component (`CaseHistoryTimeline`) that takes an array of entries — could be reused elsewhere (e.g., full case detail page)
+- **Responsive**: Timeline works in the ~580px drawer width. Timestamp and source badges wrap on narrow viewports.
+
+### Commit message
+`feat(hl7v2): phase 17 - case history timeline tab in case drawer`
+
+### 3-stage test gate
+1. **Unit:** Timeline component renders entries with correct badges and colors. FK-resolved names display correctly. Empty state renders when no history. "View message" link appears only for HL7v2-sourced entries. Change descriptions format correctly for each field type.
+2. **Integration:** Create case → open drawer → History tab shows "Created" entry with correct timestamp and user. Edit case surgeon → History tab shows "Updated" entry with "Dr. Smith → Dr. Jones". Cancel case → History tab shows "Cancelled" entry.
+3. **Workflow:** Full end-to-end: Create case manually → edit it twice (change surgeon, then change date) → send S14 via test harness (change room) → open case drawer → History tab → verify 4 timeline entries: Created (Manual), Updated surgeon (Manual), Updated date (Manual), Updated room (Epic HL7v2 with "View message" link) → click "View message" → navigates to integration log detail.
+
+---
+
 ## Dependencies
 
 ```
@@ -910,6 +1174,9 @@ Phase 8 (Test Data Schema) ──→ Phase 9 (Entity Pool UI) ──→ Phase 10
                                                                                     Phase 13 (Auto-Push UI)
 
 Phase 6 (Admin UI) ──→ Phase 14 (Review Queue Redesign) ──→ Phase 15 (Approve All + Approve Fix)
+
+Phase 2 (Schema) ──→ Phase 16 (Case History Schema + Trigger) ──→ Phase 17 (Case History UI)
+Phase 3 (Import Service) ──┘
 ```
 
 - P3 depends on P1 (parser) + P2 (schema/DAL)
@@ -926,6 +1193,8 @@ Phase 6 (Admin UI) ──→ Phase 14 (Review Queue Redesign) ──→ Phase 15
 - P13 depends on P12 (wires auto-push API into ScheduleManager and ScheduleEntryForm UI)
 - P14 depends on P6 (Admin UI — review queue exists). Independent of P12-P13
 - P15 depends on P14 (drawer must exist for approve flow). Includes fix for broken handleApproveImport
+- P16 depends on P2 (ehr_integration_log FK) + P3 (import service for session config changes). Independent of P14-P15.
+- P17 depends on P16 (case_history table + DAL must exist). Independent of P14-P15.
 
 ## Environment Variables (New)
 
@@ -954,8 +1223,10 @@ Phase 6 (Admin UI) ──→ Phase 14 (Review Queue Redesign) ──→ Phase 15
 | 13 | Auto-Push UI — Toggle + Inline Feedback | Medium | 1 | Done |
 | 14 | Review Queue Redesign — Drawer + Scannable List | Medium | 1 | Pending |
 | 15 | Approve All + Approve Handler Fix | Light | 1 | Pending |
+| 16 | Case History — Schema, Trigger & DAL | Medium | 1 | Pending |
+| 17 | Case History — Timeline UI in Case Drawer | Medium | 1 | Pending |
 
-**Total: ~18-21 Claude Code sessions** (Phases 1-13 complete, Phases 14-15 pending)
+**Total: ~20-23 Claude Code sessions** (Phases 1-13 complete, Phases 14-17 pending)
 
 ## Risk Assessment
 
@@ -970,6 +1241,9 @@ Phase 6 (Admin UI) ──→ Phase 14 (Review Queue Redesign) ──→ Phase 15
 | Code duplication (lib/ ↔ Edge Function) | Parser, types, SIU parser, ACK generator duplicated into Edge Function. Keep both in sync manually. Consider shared package when monorepo tooling is adopted. |
 | Patient demographics mismatch | Cautious approach: flag for review. Admin verifies before case is created. Prevents wrong patient association. |
 | Message retry storms (integration engine retries) | Belt-and-suspenders dedup: message_control_id (MSH-10) + external_case_id. Cached ACK returned for duplicates. |
+| 9th trigger on cases table (case_history) | AFTER INSERT OR UPDATE trigger — fires after all BEFORE triggers complete. Skip no-op updates (only `updated_at` changed). Test trigger ordering carefully. |
+| Case history table growth | One row per case change. Typical case: 3-10 changes. Index on `(case_id, created_at DESC)` for fast reads. Consider partition by facility_id if volume becomes extreme. |
+| Legacy cases have no history | Cases created before the trigger will show empty history. Display "No history recorded" empty state — not a data loss issue. |
 
 ## Session Log
 <!-- Append phase completion entries here -->

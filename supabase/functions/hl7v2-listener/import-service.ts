@@ -25,6 +25,30 @@ const AUTO_MAP_THRESHOLD = 0.90;
 const SUGGEST_THRESHOLD = 0.70;
 
 // =====================================================
+// CHANGE TRACKING
+// =====================================================
+
+/**
+ * Tag the most recent case_history entry for a case with the correct
+ * change_source and ehr_integration_log_id.
+ * Uses the tag_latest_case_history RPC (SECURITY DEFINER, bypasses RLS).
+ */
+async function tagCaseHistoryEntry(
+  supabase: SupabaseClient,
+  caseId: string,
+  logEntryId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('tag_latest_case_history', {
+    p_case_id: caseId,
+    p_change_source: 'epic_hl7v2',
+    p_ehr_log_id: logEntryId,
+  });
+  if (error) {
+    console.warn('[import] Failed to tag case history:', error.message);
+  }
+}
+
+// =====================================================
 // PUBLIC TYPES
 // =====================================================
 
@@ -243,6 +267,9 @@ async function handleCreate(
     // Create case
     const caseId = await createCase(supabase, facilityId, caseData, matchResults);
 
+    // Tag case_history entries with HL7v2 attribution
+    await tagCaseHistoryEntry(supabase, caseId, logEntry.id);
+
     // Auto-save high-confidence mappings
     await saveAutoMappings(supabase, integrationId, facilityId, caseData, matchResults);
 
@@ -317,6 +344,9 @@ async function handleUpdate(
       throw new Error(`Case update failed: ${updateError.message}`);
     }
 
+    // Tag case_history entry with HL7v2 attribution
+    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id);
+
     await saveAutoMappings(supabase, integrationId, facilityId, caseData, matchResults);
     await updateLogProcessed(supabase, logEntry.id, existingCase.id);
 
@@ -374,6 +404,9 @@ async function handleCancel(
     if (updateError) {
       throw new Error(`Case cancellation failed: ${updateError.message}`);
     }
+
+    // Tag case_history entry with HL7v2 attribution
+    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id);
 
     await updateLogProcessed(supabase, logEntry.id, existingCase.id);
     return { success: true, action: 'cancelled', caseId: existingCase.id, logEntryId: logEntry.id, errorMessage: null };

@@ -375,6 +375,49 @@ export interface EhrTestScheduleInsert {
   sequence_order?: number
 }
 
+// =====================================================
+// Case History Types
+// =====================================================
+
+export type CaseHistoryChangeType = 'created' | 'updated' | 'cancelled' | 'status_change'
+
+export type CaseHistoryChangeSource = 'manual' | 'epic_hl7v2' | 'system'
+
+/** Shape of changed_fields JSONB — each key is a column name, value has old/new */
+export interface CaseHistoryChangedField {
+  old: string | null
+  new: string | null
+}
+
+/** Row from case_history table */
+export interface CaseHistoryEntry {
+  id: string
+  caseId: string
+  facilityId: string
+  changeType: CaseHistoryChangeType
+  changedFields: Record<string, CaseHistoryChangedField>
+  changeSource: CaseHistoryChangeSource
+  changedBy: string | null
+  changedByName: string | null
+  ehrIntegrationLogId: string | null
+  createdAt: string
+}
+
+/** Raw row shape from case_history table (snake_case DB columns) */
+export interface CaseHistoryRow {
+  id: string
+  case_id: string
+  facility_id: string
+  change_type: CaseHistoryChangeType
+  changed_fields: Record<string, CaseHistoryChangedField>
+  change_source: CaseHistoryChangeSource
+  changed_by: string | null
+  ehr_integration_log_id: string | null
+  created_at: string
+  // Joined fields
+  changed_by_user?: { first_name: string | null; last_name: string | null } | null
+}
+
 export interface EhrTestScheduleUpdate {
   patient_id?: string
   surgeon_id?: string

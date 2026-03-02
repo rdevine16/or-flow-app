@@ -497,3 +497,87 @@ describe('S13/S14 — update case', () => {
     expect(result.caseId).toBe('case-1')
   })
 })
+
+// =====================================================
+// CASE HISTORY ATTRIBUTION
+// =====================================================
+
+describe('case history attribution (tagCaseHistoryEntry)', () => {
+  it('calls tag_latest_case_history RPC after creating a case', async () => {
+    const supabase = createMockSupabase()
+    const siu = buildSIUMessage()
+    const result = await handleSIUMessage(supabase, siu, INTEGRATION, 'raw-message')
+
+    expect(result.success).toBe(true)
+    expect(result.action).toBe('created')
+
+    // Verify the rpc was called with tag_latest_case_history
+    const rpcMock = supabase.rpc as ReturnType<typeof vi.fn>
+    const rpcCalls = rpcMock.mock.calls
+    const tagCall = rpcCalls.find((call: unknown[]) => call[0] === 'tag_latest_case_history')
+    expect(tagCall).toBeDefined()
+    expect(tagCall![1]).toEqual({
+      p_case_id: 'new-case-1',
+      p_change_source: 'epic_hl7v2',
+      p_ehr_log_id: 'log-1',
+    })
+  })
+
+  it('calls tag_latest_case_history RPC after updating a case', async () => {
+    const supabase = createMockSupabase({ existingCase: { id: 'case-1' } })
+    const siu = buildSIUMessage({ triggerEvent: 'S14' })
+    const result = await handleSIUMessage(supabase, siu, INTEGRATION, 'raw-message')
+
+    expect(result.success).toBe(true)
+    expect(result.action).toBe('updated')
+
+    const rpcMock = supabase.rpc as ReturnType<typeof vi.fn>
+    const rpcCalls = rpcMock.mock.calls
+    const tagCall = rpcCalls.find((call: unknown[]) => call[0] === 'tag_latest_case_history')
+    expect(tagCall).toBeDefined()
+    expect(tagCall![1]).toEqual({
+      p_case_id: 'case-1',
+      p_change_source: 'epic_hl7v2',
+      p_ehr_log_id: 'log-1',
+    })
+  })
+
+  it('calls tag_latest_case_history RPC after cancelling a case', async () => {
+    const supabase = createMockSupabase({ existingCase: { id: 'case-1' }, cancelledStatusId: 'status-cancelled' })
+    const siu = buildSIUMessage({ triggerEvent: 'S15' })
+    const result = await handleSIUMessage(supabase, siu, INTEGRATION, 'raw-message')
+
+    expect(result.success).toBe(true)
+    expect(result.action).toBe('cancelled')
+
+    const rpcMock = supabase.rpc as ReturnType<typeof vi.fn>
+    const rpcCalls = rpcMock.mock.calls
+    const tagCall = rpcCalls.find((call: unknown[]) => call[0] === 'tag_latest_case_history')
+    expect(tagCall).toBeDefined()
+    expect(tagCall![1]).toEqual({
+      p_case_id: 'case-1',
+      p_change_source: 'epic_hl7v2',
+      p_ehr_log_id: 'log-1',
+    })
+  })
+
+  it('does NOT call tag_latest_case_history when message is queued for review', async () => {
+    vi.mocked(matchSurgeon).mockResolvedValue({
+      matched: false,
+      orbitSurgeonId: null,
+      orbitDisplayName: null,
+      confidence: 0.6,
+      matchSource: 'none',
+      suggestions: [],
+    })
+
+    const supabase = createMockSupabase()
+    const result = await handleSIUMessage(supabase, buildSIUMessage(), INTEGRATION, 'raw-message')
+
+    expect(result.action).toBe('pending_review')
+
+    const rpcMock = supabase.rpc as ReturnType<typeof vi.fn>
+    const tagCall = rpcMock.mock.calls.find((call: unknown[]) => call[0] === 'tag_latest_case_history')
+    expect(tagCall).toBeUndefined()
+  })
+})

@@ -30,6 +30,31 @@ const log = logger('case-import-service')
 const AUTO_MAP_THRESHOLD = 0.90
 
 // =====================================================
+// CHANGE TRACKING
+// =====================================================
+
+/**
+ * Tag the most recent case_history entry for a case with the correct
+ * change_source and ehr_integration_log_id.
+ *
+ * PostgREST runs each request as a separate transaction, so SET LOCAL
+ * session config won't persist across calls. Instead, we use a post-hoc
+ * correction: the trigger writes the history entry with defaults, then
+ * this RPC updates it with the correct attribution.
+ */
+async function tagCaseHistoryEntry(
+  supabase: AnySupabaseClient,
+  caseId: string,
+  logEntryId: string,
+): Promise<void> {
+  await supabase.rpc('tag_latest_case_history', {
+    p_case_id: caseId,
+    p_change_source: 'epic_hl7v2',
+    p_ehr_log_id: logEntryId,
+  })
+}
+
+// =====================================================
 // TYPES
 // =====================================================
 
@@ -207,6 +232,9 @@ async function handleCreate(
     // All entities matched — create the case
     const caseId = await createCase(supabase, facilityId, caseData, matchResults)
 
+    // Tag case_history entries (created + external tracking update) with HL7v2 attribution
+    await tagCaseHistoryEntry(supabase, caseId, logEntry.id)
+
     // Auto-save high-confidence fuzzy matches to entity mappings for future auto-resolution
     await saveAutoMappings(supabase, integrationId, facilityId, caseData, matchResults)
 
@@ -291,6 +319,9 @@ async function handleUpdate(
       throw new Error(`Case update failed: ${updateError.message}`)
     }
 
+    // Tag case_history entry with HL7v2 attribution
+    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id)
+
     await saveAutoMappings(supabase, integrationId, facilityId, caseData, matchResults)
     await logMessageProcessed(supabase, logEntry.id, existingCase.id)
 
@@ -351,6 +382,9 @@ async function handleCancel(
     if (updateError) {
       throw new Error(`Case cancellation failed: ${updateError.message}`)
     }
+
+    // Tag case_history entry with HL7v2 attribution
+    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id)
 
     await logMessageProcessed(supabase, logEntry.id, existingCase.id)
 
