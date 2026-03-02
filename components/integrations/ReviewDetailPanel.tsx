@@ -4,11 +4,17 @@
  * 3-column entity mapping layout for reviewing pending HL7v2 imports.
  * Shows: Epic data (left) → arrow (center) → ORbit mapping (right)
  * for ALL entities — matched AND unmatched — in a single table.
+ *
+ * Entity states:
+ * - Unmatched: review_notes.unmatched_<entity> → EntitySelector dropdown
+ * - Auto-matched: mapping found in ehr_entity_mappings → ORbit name + "Change" button
+ * - Case override: review_notes.matched_<entity> → ORbit name + blue badge + "Change"
+ * - No mapping: no unmatched entry + no mapping → EntitySelector dropdown
  */
 
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import {
   User,
   Scissors,
@@ -17,7 +23,6 @@ import {
   ArrowRight,
   CheckCircle2,
   AlertCircle,
-  XCircle,
   Ban,
   Loader2,
   Search,
@@ -25,11 +30,13 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
+  RefreshCw,
 } from 'lucide-react'
 import HL7MessageViewer from '@/components/integrations/HL7MessageViewer'
 import type {
   EhrIntegrationLog,
   EhrEntityType,
+  EhrEntityMapping,
   ReviewNotes,
   EntitySuggestion,
 } from '@/lib/integrations/shared/integration-types'
@@ -51,11 +58,18 @@ interface ReviewDetailPanelProps {
   allSurgeons: Array<{ id: string; label: string }>
   allProcedures: Array<{ id: string; label: string }>
   allRooms: Array<{ id: string; label: string }>
+  entityMappings: EhrEntityMapping[]
   onResolveEntity: (
     entry: EhrIntegrationLog,
     entityType: EhrEntityType,
     externalId: string,
     externalName: string,
+    orbitId: string,
+    orbitName: string,
+  ) => Promise<void>
+  onRemapCaseOnly: (
+    entry: EhrIntegrationLog,
+    entityType: EhrEntityType,
     orbitId: string,
     orbitName: string,
   ) => Promise<void>
@@ -126,6 +140,16 @@ const entityConfig = {
 } as const
 
 // =====================================================
+// ENTITY MATCH STATE
+// =====================================================
+
+type EntityMatchState =
+  | 'unmatched'       // review_notes.unmatched_<entity> exists
+  | 'auto_matched'    // mapping found in ehr_entity_mappings
+  | 'case_override'   // review_notes.matched_<entity> exists
+  | 'no_mapping'      // no unmatched + no mapping found
+
+// =====================================================
 // MAIN COMPONENT
 // =====================================================
 
@@ -134,7 +158,9 @@ export default function ReviewDetailPanel({
   allSurgeons,
   allProcedures,
   allRooms,
+  entityMappings,
   onResolveEntity,
+  onRemapCaseOnly,
   onCreateEntity,
   onApprove,
   onReject,
@@ -153,12 +179,46 @@ export default function ReviewDetailPanel({
   const epicRoom = parsed?.room as ParsedRoom | null
   const epicPatient = parsed?.patient as ParsedPatient | null
 
-  // Determine match status
-  const surgeonUnmatched = !!reviewNotes?.unmatched_surgeon
-  const procedureUnmatched = !!reviewNotes?.unmatched_procedure
-  const roomUnmatched = !!reviewNotes?.unmatched_room
+  // Build mapping lookup: Map<"entityType:externalIdentifier", EhrEntityMapping>
+  const mappingLookup = useMemo(() => {
+    const map = new Map<string, EhrEntityMapping>()
+    for (const m of entityMappings) {
+      map.set(`${m.entity_type}:${m.external_identifier}`, m)
+    }
+    return map
+  }, [entityMappings])
 
-  const hasUnmatched = surgeonUnmatched || procedureUnmatched || roomUnmatched || !!reviewNotes?.demographics_mismatch
+  // Lookup mapping for each entity
+  const surgeonMapping = epicSurgeon
+    ? mappingLookup.get(`surgeon:${epicSurgeon.npi}`) || mappingLookup.get(`surgeon:${epicSurgeon.name}`)
+    : undefined
+  const procedureMapping = epicProcedure
+    ? mappingLookup.get(`procedure:${epicProcedure.cptCode}`) || mappingLookup.get(`procedure:${epicProcedure.name}`)
+    : undefined
+  const roomMapping = epicRoom
+    ? mappingLookup.get(`room:${epicRoom.code}`) || mappingLookup.get(`room:${epicRoom.name}`)
+    : undefined
+
+  // Determine match state for each entity
+  const getMatchState = (
+    entityType: 'surgeon' | 'procedure' | 'room',
+    mapping: EhrEntityMapping | undefined,
+  ): EntityMatchState => {
+    const matchedKey = `matched_${entityType}` as keyof ReviewNotes
+    if (reviewNotes?.[matchedKey]) return 'case_override'
+    if (reviewNotes?.[`unmatched_${entityType}` as keyof ReviewNotes]) return 'unmatched'
+    if (mapping?.orbit_entity_id) return 'auto_matched'
+    return 'no_mapping'
+  }
+
+  const surgeonState = getMatchState('surgeon', surgeonMapping)
+  const procedureState = getMatchState('procedure', procedureMapping)
+  const roomState = getMatchState('room', roomMapping)
+
+  // Determine if we have any unresolved entities (blocks approve)
+  const hasUnresolved = surgeonState === 'unmatched' || surgeonState === 'no_mapping'
+    || procedureState === 'unmatched' || procedureState === 'no_mapping'
+    || !!reviewNotes?.demographics_mismatch
 
   // Header data
   const patientName = epicPatient
@@ -169,7 +229,7 @@ export default function ReviewDetailPanel({
     : 'Unknown'
   const caseId = (parsed?.externalCaseId as string) || 'N/A'
 
-  // Map handler
+  // Map handler (global mapping — upserts ehr_entity_mappings)
   const handleMap = async (
     entityType: EhrEntityType,
     externalId: string,
@@ -180,6 +240,20 @@ export default function ReviewDetailPanel({
     setResolving(entityType)
     try {
       await onResolveEntity(entry, entityType, externalId, externalName, orbitId, orbitName)
+    } finally {
+      setResolving(null)
+    }
+  }
+
+  // Case-only remap handler
+  const handleRemapCaseOnly = async (
+    entityType: EhrEntityType,
+    orbitId: string,
+    orbitName: string,
+  ) => {
+    setResolving(entityType)
+    try {
+      await onRemapCaseOnly(entry, entityType, orbitId, orbitName)
     } finally {
       setResolving(null)
     }
@@ -206,6 +280,23 @@ export default function ReviewDetailPanel({
   const handleHl7Expand = () => {
     setHl7Expanded(true)
     onPhiAccess(entry.id, entry.message_type)
+  }
+
+  // Get the display name for an auto-matched or case-overridden entity
+  const getOrbitDisplayName = (
+    entityType: 'surgeon' | 'procedure' | 'room',
+    state: EntityMatchState,
+    mapping: EhrEntityMapping | undefined,
+  ): string => {
+    if (state === 'case_override') {
+      const override = reviewNotes?.[`matched_${entityType}` as keyof ReviewNotes] as
+        { orbit_entity_id: string; orbit_display_name: string } | undefined
+      return override?.orbit_display_name || 'Unknown'
+    }
+    if (state === 'auto_matched' && mapping) {
+      return mapping.orbit_display_name || 'Unknown'
+    }
+    return ''
   }
 
   return (
@@ -241,11 +332,24 @@ export default function ReviewDetailPanel({
           epicName={epicSurgeon?.name || 'Unknown'}
           epicIdentifier={epicSurgeon?.npi}
           epicIdentifierLabel="NPI"
-          isUnmatched={surgeonUnmatched}
+          matchState={surgeonState}
+          orbitDisplayName={getOrbitDisplayName('surgeon', surgeonState, surgeonMapping)}
           suggestions={reviewNotes?.unmatched_surgeon?.suggestions || []}
           allEntities={allSurgeons}
           resolving={resolving === 'surgeon'}
           onMap={(orbitId, orbitName) =>
+            handleMap(
+              'surgeon',
+              epicSurgeon?.npi || epicSurgeon?.name || '',
+              epicSurgeon?.name || '',
+              orbitId,
+              orbitName,
+            )
+          }
+          onRemapCaseOnly={(orbitId, orbitName) =>
+            handleRemapCaseOnly('surgeon', orbitId, orbitName)
+          }
+          onRemapAllFuture={(orbitId, orbitName) =>
             handleMap(
               'surgeon',
               epicSurgeon?.npi || epicSurgeon?.name || '',
@@ -275,11 +379,24 @@ export default function ReviewDetailPanel({
           epicName={epicProcedure?.name || 'Unknown'}
           epicIdentifier={epicProcedure?.cptCode}
           epicIdentifierLabel="CPT"
-          isUnmatched={procedureUnmatched}
+          matchState={procedureState}
+          orbitDisplayName={getOrbitDisplayName('procedure', procedureState, procedureMapping)}
           suggestions={reviewNotes?.unmatched_procedure?.suggestions || []}
           allEntities={allProcedures}
           resolving={resolving === 'procedure'}
           onMap={(orbitId, orbitName) =>
+            handleMap(
+              'procedure',
+              epicProcedure?.cptCode || epicProcedure?.name || '',
+              epicProcedure?.name || '',
+              orbitId,
+              orbitName,
+            )
+          }
+          onRemapCaseOnly={(orbitId, orbitName) =>
+            handleRemapCaseOnly('procedure', orbitId, orbitName)
+          }
+          onRemapAllFuture={(orbitId, orbitName) =>
             handleMap(
               'procedure',
               epicProcedure?.cptCode || epicProcedure?.name || '',
@@ -309,11 +426,24 @@ export default function ReviewDetailPanel({
           epicName={epicRoom?.name || epicRoom?.code || 'Unknown'}
           epicIdentifier={epicRoom?.code && epicRoom?.name ? epicRoom.code : undefined}
           epicIdentifierLabel="Code"
-          isUnmatched={roomUnmatched}
+          matchState={roomState}
+          orbitDisplayName={getOrbitDisplayName('room', roomState, roomMapping)}
           suggestions={reviewNotes?.unmatched_room?.suggestions || []}
           allEntities={allRooms}
           resolving={resolving === 'room'}
           onMap={(orbitId, orbitName) =>
+            handleMap(
+              'room',
+              epicRoom?.code || epicRoom?.name || '',
+              epicRoom?.name || epicRoom?.code || '',
+              orbitId,
+              orbitName,
+            )
+          }
+          onRemapCaseOnly={(orbitId, orbitName) =>
+            handleRemapCaseOnly('room', orbitId, orbitName)
+          }
+          onRemapAllFuture={(orbitId, orbitName) =>
             handleMap(
               'room',
               epicRoom?.code || epicRoom?.name || '',
@@ -360,7 +490,7 @@ export default function ReviewDetailPanel({
             <span className="text-sm text-slate-700">
               {epicPatient ? `${epicPatient.firstName} ${epicPatient.lastName}` : 'Unknown'}
             </span>
-            <span className="text-xs text-slate-400">(info from Epic)</span>
+            <span className="text-xs text-slate-400">Matched by MRN on import</span>
           </div>
         </div>
       </div>
@@ -408,9 +538,9 @@ export default function ReviewDetailPanel({
       <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
         <button
           onClick={() => onApprove(entry)}
-          disabled={hasUnmatched || actionLoading === `approve-${entry.id}`}
+          disabled={hasUnresolved || actionLoading === `approve-${entry.id}`}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title={hasUnmatched ? 'Resolve all unmatched entities first' : 'Approve and create case'}
+          title={hasUnresolved ? 'Resolve all unmatched entities first' : 'Approve and create case'}
         >
           {actionLoading === `approve-${entry.id}` ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -445,11 +575,14 @@ interface EntityMappingRowProps {
   epicName: string
   epicIdentifier?: string
   epicIdentifierLabel?: string
-  isUnmatched: boolean
+  matchState: EntityMatchState
+  orbitDisplayName: string
   suggestions: EntitySuggestion[]
   allEntities: Array<{ id: string; label: string }>
   resolving: boolean
   onMap: (orbitEntityId: string, orbitDisplayName: string) => Promise<void>
+  onRemapCaseOnly: (orbitId: string, orbitName: string) => Promise<void>
+  onRemapAllFuture: (orbitId: string, orbitName: string) => Promise<void>
   onCreateAndMap: (formData: CreateEntityData) => Promise<void>
   defaultCreateData: CreateEntityData
 }
@@ -459,16 +592,22 @@ function EntityMappingRow({
   epicName,
   epicIdentifier,
   epicIdentifierLabel,
-  isUnmatched,
+  matchState,
+  orbitDisplayName,
   suggestions,
   allEntities,
   resolving,
   onMap,
+  onRemapCaseOnly,
+  onRemapAllFuture,
   onCreateAndMap,
   defaultCreateData,
 }: EntityMappingRowProps) {
   const config = entityConfig[entityType]
   const Icon = config.icon
+  const [showRemapSelector, setShowRemapSelector] = useState(false)
+
+  const isUnresolved = matchState === 'unmatched' || matchState === 'no_mapping'
 
   return (
     <div className="grid grid-cols-[1fr_40px_1fr] items-start px-4 py-3 border-t border-slate-100">
@@ -476,7 +615,7 @@ function EntityMappingRow({
       <div className="flex items-start gap-3">
         <span
           className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full border flex-shrink-0 ${
-            isUnmatched ? config.unmatchedColor : config.matchedColor
+            isUnresolved ? config.unmatchedColor : config.matchedColor
           }`}
         >
           <Icon className="w-3 h-3" />
@@ -489,8 +628,11 @@ function EntityMappingRow({
               {epicIdentifierLabel}: {epicIdentifier}
             </p>
           )}
-          {isUnmatched && (
+          {matchState === 'unmatched' && (
             <p className="text-xs text-red-500 mt-0.5">Needs mapping</p>
+          )}
+          {matchState === 'no_mapping' && (
+            <p className="text-xs text-amber-500 mt-0.5">No mapping found</p>
           )}
         </div>
       </div>
@@ -502,7 +644,8 @@ function EntityMappingRow({
 
       {/* Right: ORbit mapping */}
       <div>
-        {isUnmatched ? (
+        {/* UNMATCHED or NO_MAPPING: show entity selector */}
+        {isUnresolved && !showRemapSelector && (
           <EntitySelector
             entityType={entityType}
             suggestions={suggestions}
@@ -512,13 +655,183 @@ function EntityMappingRow({
             onCreateAndMap={onCreateAndMap}
             defaultCreateData={defaultCreateData}
           />
-        ) : (
+        )}
+
+        {/* AUTO-MATCHED: show ORbit name + green badge + Change */}
+        {matchState === 'auto_matched' && !showRemapSelector && (
           <div className="flex items-center gap-2 py-1">
             <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-            <div>
-              <span className="text-sm text-slate-700">{epicName}</span>
-              <span className="text-xs text-emerald-600 ml-2">Auto-matched</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-slate-700">{orbitDisplayName}</span>
+              <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded">
+                Auto-matched
+              </span>
+              <button
+                onClick={() => setShowRemapSelector(true)}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Change
+              </button>
             </div>
+          </div>
+        )}
+
+        {/* CASE_OVERRIDE: show ORbit name + blue badge + Change */}
+        {matchState === 'case_override' && !showRemapSelector && (
+          <div className="flex items-center gap-2 py-1">
+            <CheckCircle2 className="w-4 h-4 text-blue-500 flex-shrink-0" />
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-slate-700">{orbitDisplayName}</span>
+              <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded">
+                Case override
+              </span>
+              <button
+                onClick={() => setShowRemapSelector(true)}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Change
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* REMAP SELECTOR: shown when user clicks "Change" */}
+        {showRemapSelector && (
+          <RemapSelector
+            entityType={entityType}
+            allEntities={allEntities}
+            resolving={resolving}
+            onSelectCaseOnly={async (id, name) => {
+              await onRemapCaseOnly(id, name)
+              setShowRemapSelector(false)
+            }}
+            onSelectAllFuture={async (id, name) => {
+              await onRemapAllFuture(id, name)
+              setShowRemapSelector(false)
+            }}
+            onCancel={() => setShowRemapSelector(false)}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// =====================================================
+// REMAP SELECTOR (choose entity + scope: this case or all future)
+// =====================================================
+
+interface RemapSelectorProps {
+  entityType: EhrEntityType
+  allEntities: Array<{ id: string; label: string }>
+  resolving: boolean
+  onSelectCaseOnly: (entityId: string, displayName: string) => Promise<void>
+  onSelectAllFuture: (entityId: string, displayName: string) => Promise<void>
+  onCancel: () => void
+}
+
+function RemapSelector({
+  entityType,
+  allEntities,
+  resolving,
+  onSelectCaseOnly,
+  onSelectAllFuture,
+  onCancel,
+}: RemapSelectorProps) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedEntity, setSelectedEntity] = useState<{ id: string; label: string } | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  const filteredEntities = searchQuery.trim()
+    ? allEntities.filter(e => e.label.toLowerCase().includes(searchQuery.toLowerCase()))
+    : allEntities
+
+  if (resolving) {
+    return (
+      <div className="flex items-center gap-2 py-1">
+        <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+        <span className="text-sm text-slate-500">Updating mapping...</span>
+      </div>
+    )
+  }
+
+  // Step 2: After selecting an entity, show scope choice
+  if (selectedEntity) {
+    return (
+      <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+        <p className="text-xs text-slate-500">
+          Map to <span className="font-medium text-slate-700">{selectedEntity.label}</span>
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onSelectCaseOnly(selectedEntity.id, selectedEntity.label)}
+            className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+          >
+            This case only
+          </button>
+          <button
+            onClick={() => onSelectAllFuture(selectedEntity.id, selectedEntity.label)}
+            className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 transition-colors"
+          >
+            All future matches
+          </button>
+          <button
+            onClick={() => setSelectedEntity(null)}
+            className="px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+          >
+            Back
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Step 1: Entity search/selection
+  return (
+    <div ref={dropdownRef} className="border border-blue-200 rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-blue-50/50 border-b border-blue-100">
+        <span className="text-xs font-medium text-blue-700">Change {entityConfig[entityType].label.toLowerCase()}</span>
+        <button
+          onClick={onCancel}
+          className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+      <div className="p-2 border-b border-slate-100">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder={`Search ${entityConfig[entityType].label.toLowerCase()}s...`}
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none"
+          />
+        </div>
+      </div>
+      <div className="max-h-48 overflow-y-auto">
+        {filteredEntities.map(e => (
+          <button
+            key={e.id}
+            onClick={() => setSelectedEntity(e)}
+            className="w-full flex items-center justify-between px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
+          >
+            <span>{e.label}</span>
+            <span className="text-xs text-slate-400 flex-shrink-0 ml-2">Select</span>
+          </button>
+        ))}
+        {filteredEntities.length === 0 && (
+          <div className="px-3 py-4 text-center text-xs text-slate-400">
+            No matches found
           </div>
         )}
       </div>
@@ -527,7 +840,7 @@ function EntityMappingRow({
 }
 
 // =====================================================
-// ENTITY SELECTOR (combobox dropdown)
+// ENTITY SELECTOR (combobox dropdown for unmatched entities)
 // =====================================================
 
 interface EntitySelectorProps {

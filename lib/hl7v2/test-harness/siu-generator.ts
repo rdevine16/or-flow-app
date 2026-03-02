@@ -16,7 +16,6 @@ import type {
 import {
   PROCEDURES,
   SURGEONS,
-  ANESTHESIOLOGISTS,
   PATIENTS,
   OR_ROOMS,
   getProceduresBySpecialty,
@@ -108,15 +107,11 @@ export function generateSIUMessage(options: GenerateSIUOptions): GeneratedSIUMes
   const surgeon = options.surgeon || pickRandom(availableSurgeons, seed + 1);
   const patient = options.patient || pickRandom(PATIENTS, seed + 2);
   const room = options.room || pickRandom(OR_ROOMS, seed + 3);
-  const anesthesiologist = pickRandom(ANESTHESIOLOGISTS, seed + 4);
-
   const durationMinutes = options.durationMinutes || procedure.typicalDurationMinutes;
   const messageControlId = options.messageControlId || nextMessageId();
   const fillerStatusCode = options.fillerStatusCode || getDefaultFillerStatus(triggerEvent);
 
   const endDateTime = new Date(scheduledDateTime.getTime() + durationMinutes * 60_000);
-  const anesthesiaStartDateTime = new Date(scheduledDateTime.getTime() - 5 * 60_000);
-  const anesthesiaDuration = durationMinutes + 15; // 15 min extra for induction/recovery
 
   const now = new Date();
 
@@ -174,23 +169,13 @@ export function generateSIUMessage(options: GenerateSIUOptions): GeneratedSIUMes
     fillerStatusCode,
   }));
 
-  // AIP - Surgeon
+  // AIP - Surgeon (only provider included; anesthesiologist omitted)
   segments.push(buildAIP({
     provider: surgeon,
     role: 'SURGEON',
     setId: '1',
     startDateTime: scheduledDateTime,
     durationMinutes,
-    fillerStatusCode,
-  }));
-
-  // AIP - Anesthesiologist
-  segments.push(buildAIP({
-    provider: anesthesiologist,
-    role: 'ANESTHESIOLOGIST',
-    setId: '2',
-    startDateTime: anesthesiaStartDateTime,
-    durationMinutes: anesthesiaDuration,
     fillerStatusCode,
   }));
 

@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ReviewDetailPanel from '../ReviewDetailPanel'
-import type { EhrIntegrationLog } from '@/lib/integrations/shared/integration-types'
+import type { EhrIntegrationLog, EhrEntityMapping } from '@/lib/integrations/shared/integration-types'
 
 // ── Mock HL7MessageViewer ────────────────────────────────────────────────────
 vi.mock('@/components/integrations/HL7MessageViewer', () => ({
@@ -56,6 +56,34 @@ const mockRooms = [
   { id: 'room-1', label: 'OR 1' },
   { id: 'room-2', label: 'OR 2' },
   { id: 'room-3', label: 'OR 3' },
+]
+
+/** Entity mappings matching the test data's external identifiers */
+const mockEntityMappings: EhrEntityMapping[] = [
+  {
+    id: 'map-1', facility_id: 'fac-1', integration_id: 'int-1',
+    entity_type: 'surgeon', external_identifier: '1234567890',
+    external_display_name: 'JONES, EMILY A',
+    orbit_entity_id: 'surg-2', orbit_display_name: 'Jones, Emily',
+    match_method: 'auto', match_confidence: 0.85,
+    created_at: '2026-03-01T00:00:00Z', updated_at: '2026-03-01T00:00:00Z',
+  },
+  {
+    id: 'map-2', facility_id: 'fac-1', integration_id: 'int-1',
+    entity_type: 'procedure', external_identifier: '27447',
+    external_display_name: 'Total knee arthroplasty',
+    orbit_entity_id: 'proc-1', orbit_display_name: 'Total Knee Replacement',
+    match_method: 'auto', match_confidence: 0.82,
+    created_at: '2026-03-01T00:00:00Z', updated_at: '2026-03-01T00:00:00Z',
+  },
+  {
+    id: 'map-3', facility_id: 'fac-1', integration_id: 'int-1',
+    entity_type: 'room', external_identifier: 'OR3',
+    external_display_name: 'Operating Room 3',
+    orbit_entity_id: 'room-3', orbit_display_name: 'OR 3',
+    match_method: 'auto', match_confidence: 0.90,
+    created_at: '2026-03-01T00:00:00Z', updated_at: '2026-03-01T00:00:00Z',
+  },
 ]
 
 function createEntry(overrides: Partial<EhrIntegrationLog> = {}): EhrIntegrationLog {
@@ -133,7 +161,9 @@ const defaultProps = {
   allSurgeons: mockSurgeons,
   allProcedures: mockProcedures,
   allRooms: mockRooms,
+  entityMappings: mockEntityMappings,
   onResolveEntity: vi.fn().mockResolvedValue(undefined),
+  onRemapCaseOnly: vi.fn().mockResolvedValue(undefined),
   onCreateEntity: vi.fn().mockResolvedValue('new-entity-id'),
   onApprove: vi.fn().mockResolvedValue(undefined),
   onReject: vi.fn().mockResolvedValue(undefined),
@@ -180,23 +210,30 @@ describe('ReviewDetailPanel', () => {
       expect(screen.getByText(/CPT: 27447/)).toBeInTheDocument()
     })
 
-    it('shows auto-matched room with green checkmark', () => {
+    it('shows auto-matched room with ORbit name from mapping', () => {
       render(<ReviewDetailPanel entry={createEntry()} {...defaultProps} />)
-      // Room is NOT in review_notes.unmatched_room, so it's auto-matched
-      // Room name appears in both Epic column and ORbit (auto-matched) column
-      const roomTexts = screen.getAllByText('Operating Room 3')
-      expect(roomTexts.length).toBe(2) // Epic column + ORbit column
-      // Should show "Auto-matched" text for auto-matched entities
+      // Room is NOT in review_notes.unmatched_room, and has a mapping → auto_matched
+      // Epic column shows "Operating Room 3"
+      expect(screen.getByText('Operating Room 3')).toBeInTheDocument()
+      // ORbit column shows the mapped ORbit name, not the Epic name
+      expect(screen.getByText('OR 3')).toBeInTheDocument()
+      // Should show "Auto-matched" badge
       expect(screen.getByText('Auto-matched')).toBeInTheDocument()
     })
 
-    it('shows patient row as info-only (ORbit has no patients)', () => {
+    it('shows "Change" button on auto-matched entities', () => {
+      render(<ReviewDetailPanel entry={createEntry()} {...defaultProps} />)
+      // Room is auto-matched, so it should have a "Change" button
+      expect(screen.getByText('Change')).toBeInTheDocument()
+    })
+
+    it('shows patient row as info-only with MRN matching text', () => {
       render(<ReviewDetailPanel entry={createEntry()} {...defaultProps} />)
       // Patient name appears in both header and patient row
       const patientNames = screen.getAllByText('Doe, John')
       expect(patientNames.length).toBeGreaterThanOrEqual(2) // header + patient row
       expect(screen.getByText(/MRN: 12345/)).toBeInTheDocument()
-      expect(screen.getByText('(info from Epic)')).toBeInTheDocument()
+      expect(screen.getByText('Matched by MRN on import')).toBeInTheDocument()
     })
 
     it('shows selector dropdowns for unmatched entities', () => {
@@ -394,9 +431,7 @@ describe('ReviewDetailPanel', () => {
     })
 
     it('enables Approve when all entities are matched', () => {
-      const allMatchedEntry = createEntry({
-        review_notes: null,
-      })
+      const allMatchedEntry = createEntry({ review_notes: null })
       render(<ReviewDetailPanel entry={allMatchedEntry} {...defaultProps} />)
       const approveBtn = screen.getByRole('button', { name: /Approve Import/i })
       expect(approveBtn).not.toBeDisabled()
@@ -475,20 +510,208 @@ describe('ReviewDetailPanel', () => {
   })
 
   describe('All-matched state', () => {
-    it('shows all entities as auto-matched when review_notes is null', () => {
+    it('shows all entities as auto-matched when review_notes is null and mappings exist', () => {
       const allMatchedEntry = createEntry({ review_notes: null })
       render(<ReviewDetailPanel entry={allMatchedEntry} {...defaultProps} />)
 
-      // All 3 entity rows (surgeon, procedure, room) should show "Auto-matched" with their name
+      // All 3 entity rows (surgeon, procedure, room) should show "Auto-matched"
       const autoMatchedTexts = screen.getAllByText('Auto-matched')
       expect(autoMatchedTexts.length).toBe(3)
 
-      // Patient shows "info from Epic" instead
-      expect(screen.getByText('(info from Epic)')).toBeInTheDocument()
+      // ORbit names from mappings should appear
+      expect(screen.getByText('Jones, Emily')).toBeInTheDocument()
+      expect(screen.getByText('Total Knee Replacement')).toBeInTheDocument()
+      expect(screen.getByText('OR 3')).toBeInTheDocument()
+
+      // Patient shows MRN matching text
+      expect(screen.getByText('Matched by MRN on import')).toBeInTheDocument()
 
       // No selector dropdowns
       expect(screen.queryByText(/Select surgeon/i)).not.toBeInTheDocument()
       expect(screen.queryByText(/Select procedure/i)).not.toBeInTheDocument()
+    })
+
+    it('shows "Change" button on all auto-matched entities', () => {
+      const allMatchedEntry = createEntry({ review_notes: null })
+      render(<ReviewDetailPanel entry={allMatchedEntry} {...defaultProps} />)
+
+      const changeButtons = screen.getAllByText('Change')
+      expect(changeButtons.length).toBe(3) // surgeon, procedure, room
+    })
+  })
+
+  describe('Re-mapping (Change) flow', () => {
+    it('clicking "Change" opens remap selector with entity list', async () => {
+      const user = userEvent.setup()
+      const allMatchedEntry = createEntry({ review_notes: null })
+      render(<ReviewDetailPanel entry={allMatchedEntry} {...defaultProps} />)
+
+      // Click the first "Change" button (surgeon)
+      const changeButtons = screen.getAllByText('Change')
+      await user.click(changeButtons[0])
+
+      // Should show remap selector with search and entity list
+      await waitFor(() => {
+        expect(screen.getByText(/Change surgeon/i)).toBeInTheDocument()
+        expect(screen.getByText('Cancel')).toBeInTheDocument()
+      })
+    })
+
+    it('selecting an entity shows "This case only" and "All future matches" choices', async () => {
+      const user = userEvent.setup()
+      const allMatchedEntry = createEntry({ review_notes: null })
+      render(<ReviewDetailPanel entry={allMatchedEntry} {...defaultProps} />)
+
+      // Click Change on surgeon
+      const changeButtons = screen.getAllByText('Change')
+      await user.click(changeButtons[0])
+
+      // Select a different surgeon from the remap list
+      await waitFor(() => {
+        expect(screen.getByText('Smith, John')).toBeInTheDocument()
+      })
+      await user.click(screen.getByText('Smith, John'))
+
+      // Should show scope choice
+      await waitFor(() => {
+        expect(screen.getByText('This case only')).toBeInTheDocument()
+        expect(screen.getByText('All future matches')).toBeInTheDocument()
+      })
+    })
+
+    it('clicking "This case only" calls onRemapCaseOnly', async () => {
+      const user = userEvent.setup()
+      const allMatchedEntry = createEntry({ review_notes: null })
+      render(<ReviewDetailPanel entry={allMatchedEntry} {...defaultProps} />)
+
+      // Click Change on surgeon
+      const changeButtons = screen.getAllByText('Change')
+      await user.click(changeButtons[0])
+
+      // Select a different surgeon
+      await waitFor(() => {
+        expect(screen.getByText('Smith, John')).toBeInTheDocument()
+      })
+      await user.click(screen.getByText('Smith, John'))
+
+      // Click "This case only"
+      await user.click(screen.getByText('This case only'))
+
+      await waitFor(() => {
+        expect(defaultProps.onRemapCaseOnly).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'log-1' }),
+          'surgeon',
+          'surg-1',
+          'Smith, John',
+        )
+      })
+    })
+
+    it('clicking "All future matches" calls onResolveEntity', async () => {
+      const user = userEvent.setup()
+      const allMatchedEntry = createEntry({ review_notes: null })
+      render(<ReviewDetailPanel entry={allMatchedEntry} {...defaultProps} />)
+
+      // Click Change on surgeon
+      const changeButtons = screen.getAllByText('Change')
+      await user.click(changeButtons[0])
+
+      // Select a different surgeon
+      await waitFor(() => {
+        expect(screen.getByText('Smith, John')).toBeInTheDocument()
+      })
+      await user.click(screen.getByText('Smith, John'))
+
+      // Click "All future matches"
+      await user.click(screen.getByText('All future matches'))
+
+      await waitFor(() => {
+        expect(defaultProps.onResolveEntity).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'log-1' }),
+          'surgeon',
+          '1234567890',
+          'JONES, EMILY A',
+          'surg-1',
+          'Smith, John',
+        )
+      })
+    })
+
+    it('Cancel button closes remap selector', async () => {
+      const user = userEvent.setup()
+      const allMatchedEntry = createEntry({ review_notes: null })
+      render(<ReviewDetailPanel entry={allMatchedEntry} {...defaultProps} />)
+
+      // Click Change
+      const changeButtons = screen.getAllByText('Change')
+      await user.click(changeButtons[0])
+
+      // Verify remap UI is open
+      await waitFor(() => {
+        expect(screen.getByText(/Change surgeon/i)).toBeInTheDocument()
+      })
+
+      // Click Cancel
+      await user.click(screen.getByText('Cancel'))
+
+      // Should return to auto-matched display
+      await waitFor(() => {
+        expect(screen.queryByText(/Change surgeon/i)).not.toBeInTheDocument()
+        expect(screen.getByText('Jones, Emily')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Case override state', () => {
+    it('shows case override badge when review_notes.matched_* exists', () => {
+      const overrideEntry = createEntry({
+        review_notes: {
+          matched_surgeon: {
+            orbit_entity_id: 'surg-1',
+            orbit_display_name: 'Smith, John',
+          },
+        },
+      })
+      render(<ReviewDetailPanel entry={overrideEntry} {...defaultProps} />)
+
+      expect(screen.getByText('Case override')).toBeInTheDocument()
+      expect(screen.getByText('Smith, John')).toBeInTheDocument()
+    })
+
+    it('shows "Change" button on case override entities', () => {
+      const overrideEntry = createEntry({
+        review_notes: {
+          matched_surgeon: {
+            orbit_entity_id: 'surg-1',
+            orbit_display_name: 'Smith, John',
+          },
+        },
+      })
+      render(<ReviewDetailPanel entry={overrideEntry} {...defaultProps} />)
+
+      // Should have Change buttons (surgeon case override + room auto-matched)
+      const changeButtons = screen.getAllByText('Change')
+      expect(changeButtons.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  describe('No mapping state', () => {
+    it('shows entity selector when no mapping and no unmatched entry', () => {
+      // Room has no unmatched entry and no mapping → shows selector
+      const entry = createEntry()
+      render(
+        <ReviewDetailPanel
+          entry={entry}
+          {...defaultProps}
+          entityMappings={[]} // No mappings at all
+        />,
+      )
+
+      // Room should show selector since there's no mapping and no unmatched entry
+      // Surgeon and procedure have unmatched entries → always show selector
+      // Room with no mapping → also shows selector
+      const selectButtons = screen.getAllByText(/Select/i)
+      expect(selectButtons.length).toBeGreaterThanOrEqual(3) // surgeon + procedure + room
     })
   })
 })

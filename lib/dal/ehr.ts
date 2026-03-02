@@ -373,6 +373,35 @@ async function resolveEntity(
   return { error: updateError }
 }
 
+/**
+ * Resolve an entity for a SINGLE log entry only (case-level override).
+ * Does NOT update ehr_entity_mappings — preserves the existing global mapping.
+ * Stores the override in review_notes.matched_<entityType>.
+ */
+async function resolveEntityCaseOnly(
+  supabase: AnySupabaseClient,
+  logId: string,
+  entityType: EhrEntityType,
+  orbitEntityId: string,
+  orbitDisplayName: string
+): Promise<{ error: PostgrestError | null }> {
+  const { data: logEntry, error: fetchError } = await getLogEntry(supabase, logId)
+  if (fetchError || !logEntry) return { error: fetchError }
+
+  const reviewNotes = { ...(logEntry.review_notes || {}) } as Record<string, unknown>
+  // Store the case-level override
+  reviewNotes[`matched_${entityType}`] = { orbit_entity_id: orbitEntityId, orbit_display_name: orbitDisplayName }
+  // Clear unmatched entry if present (in case this was an unmatched entity)
+  delete reviewNotes[`unmatched_${entityType}`]
+
+  const { error: updateError } = await supabase
+    .from('ehr_integration_log')
+    .update({ review_notes: reviewNotes })
+    .eq('id', logId)
+
+  return { error: updateError }
+}
+
 /** Get integration stats (total imported, pending review, errors) */
 async function getIntegrationStats(
   supabase: AnySupabaseClient,
@@ -549,6 +578,7 @@ export const ehrDAL = {
   approveImport,
   rejectImport,
   resolveEntity,
+  resolveEntityCaseOnly,
   // Stats
   getIntegrationStats,
   // PHI Access & Audit

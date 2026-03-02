@@ -48,6 +48,7 @@ import type {
   EhrIntegrationLog,
   EhrProcessingStatus,
   EhrEntityType,
+  EhrEntityMapping,
   ReviewNotes,
 } from '@/lib/integrations/shared/integration-types'
 import { logger } from '@/lib/logger'
@@ -220,7 +221,7 @@ export default function EpicHL7v2IntegrationPage() {
     { deps: [facilityId, logStatusFilter, logPage], enabled: !!facilityId }
   )
 
-  // Entity mappings
+  // Entity mappings (filtered by tab — for MappingsTab display)
   const [mappingTab, setMappingTab] = useState<EhrEntityType>('surgeon')
   const {
     data: entityMappings,
@@ -233,6 +234,19 @@ export default function EpicHL7v2IntegrationPage() {
       return data
     },
     { deps: [integration?.id, mappingTab], enabled: !!integration }
+  )
+
+  // All entity mappings (unfiltered — for ReviewQueueTab auto-match lookup)
+  const {
+    data: allMappings,
+    refetch: refetchAllMappings,
+  } = useSupabaseQuery(
+    async (supabase) => {
+      if (!integration) return []
+      const { data } = await ehrDAL.listEntityMappings(supabase, integration.id)
+      return data
+    },
+    { deps: [integration?.id], enabled: !!integration }
   )
 
   // Lookup data
@@ -442,6 +456,31 @@ export default function EpicHL7v2IntegrationPage() {
         }
         await ehrAudit.entityMappingCreated(supabase, integration.facility_id, entityType, externalDisplayName, orbitDisplayName)
         refetchMappings()
+        refetchAllMappings()
+      }
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleRemapCaseOnly = async (
+    logEntry: EhrIntegrationLog,
+    entityType: EhrEntityType,
+    orbitEntityId: string,
+    orbitDisplayName: string,
+  ) => {
+    setActionLoading(`resolve-${logEntry.id}-${entityType}`)
+    try {
+      const supabase = createClient()
+      const { error } = await ehrDAL.resolveEntityCaseOnly(
+        supabase, logEntry.id, entityType, orbitEntityId, orbitDisplayName,
+      )
+
+      if (!error) {
+        const { data: updated } = await ehrDAL.getLogEntry(supabase, logEntry.id)
+        if (updated) {
+          setPendingReviews(prev => prev ? prev.map(r => r.id === logEntry.id ? updated : r) : [])
+        }
       }
     } finally {
       setActionLoading(null)
@@ -610,9 +649,11 @@ export default function EpicHL7v2IntegrationPage() {
           loading={reviewsLoading}
           actionLoading={actionLoading}
           getEntitiesForType={getEntitiesForType}
+          entityMappings={allMappings || []}
           onApprove={handleApproveImport}
           onReject={handleRejectImport}
           onResolveEntity={handleResolveEntity}
+          onRemapCaseOnly={handleRemapCaseOnly}
           onCreateEntity={handleCreateEntity}
           onPhiAccess={logPhiAccess}
         />
@@ -863,9 +904,11 @@ function ReviewQueueTab({
   loading,
   actionLoading,
   getEntitiesForType,
+  entityMappings,
   onApprove,
   onReject,
   onResolveEntity,
+  onRemapCaseOnly,
   onCreateEntity,
   onPhiAccess,
 }: {
@@ -873,11 +916,16 @@ function ReviewQueueTab({
   loading: boolean
   actionLoading: string | null
   getEntitiesForType: (type: EhrEntityType) => Array<{ id: string; label: string }>
+  entityMappings: EhrEntityMapping[]
   onApprove: (entry: EhrIntegrationLog) => Promise<void>
   onReject: (entry: EhrIntegrationLog) => Promise<void>
   onResolveEntity: (
     entry: EhrIntegrationLog, entityType: EhrEntityType,
     extId: string, extName: string, orbitId: string, orbitName: string,
+  ) => Promise<void>
+  onRemapCaseOnly: (
+    entry: EhrIntegrationLog, entityType: EhrEntityType,
+    orbitId: string, orbitName: string,
   ) => Promise<void>
   onCreateEntity: (formData: CreateEntityData) => Promise<string | null>
   onPhiAccess: (logEntryId: string, messageType: string) => void
@@ -954,7 +1002,9 @@ function ReviewQueueTab({
                 allSurgeons={getEntitiesForType('surgeon')}
                 allProcedures={getEntitiesForType('procedure')}
                 allRooms={getEntitiesForType('room')}
+                entityMappings={entityMappings}
                 onResolveEntity={onResolveEntity}
+                onRemapCaseOnly={onRemapCaseOnly}
                 onCreateEntity={onCreateEntity}
                 onApprove={onApprove}
                 onReject={onReject}

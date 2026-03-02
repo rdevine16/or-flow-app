@@ -60,6 +60,10 @@ export interface ReviewNotes {
     expected: string
     received: string
   }
+  // Case-level overrides (when user re-maps an auto-matched entity for one case only)
+  matched_surgeon?: { orbit_entity_id: string; orbit_display_name: string }
+  matched_procedure?: { orbit_entity_id: string; orbit_display_name: string }
+  matched_room?: { orbit_entity_id: string; orbit_display_name: string }
 }
 
 /** A suggested match from fuzzy matching */
