@@ -23,6 +23,7 @@ import {
   loadDatabaseScenario,
   sendDatabaseScenario,
 } from '@/lib/hl7v2/test-harness/db-scenario-runner';
+import { getIntegrationConfig } from '@/lib/hl7v2/test-harness/shared';
 
 const log = logger('test-harness-api');
 
@@ -258,39 +259,3 @@ async function handleDatabaseScenario(
   });
 }
 
-// ── Shared Helpers ───────────────────────────────────────────────────────────
-
-async function getIntegrationConfig(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  facilityId: string,
-): Promise<{ endpointUrl: string; apiKey: string }> {
-  const { data: integration } = await supabase
-    .from('ehr_integrations')
-    .select('id, config')
-    .eq('facility_id', facilityId)
-    .eq('integration_type', 'epic_hl7v2')
-    .single();
-
-  if (!integration) {
-    throw new ValidationError(
-      'No HL7v2 integration configured for this facility. Set up the integration first.'
-    );
-  }
-
-  const config = integration.config as Record<string, unknown>;
-  const apiKey = config.api_key as string;
-
-  if (!apiKey) {
-    throw new ValidationError('Integration has no API key configured');
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) {
-    throw new ValidationError('NEXT_PUBLIC_SUPABASE_URL not configured');
-  }
-
-  return {
-    endpointUrl: `${supabaseUrl}/functions/v1/hl7v2-listener`,
-    apiKey,
-  };
-}
