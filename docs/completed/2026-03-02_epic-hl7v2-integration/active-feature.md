@@ -1,0 +1,425 @@
+# Feature: Epic HL7v2 Surgical Case Scheduling Integration
+
+## Goal
+
+Build an HL7v2 SIU (Schedule Information Unsolicited) listener that receives **real-time push notifications** from Epic's OpTime module whenever a surgical case is created, modified, rescheduled, or canceled. This replaces the FHIR-based approach — Epic's FHIR APIs are patient-centric and do not expose surgical scheduling data (OR assignments, block times, procedure sequencing, surgeon-specific scheduling).
+
+The integration includes:
+1. **HL7v2 message parser** — decodes pipe-delimited SIU messages into typed TypeScript objects
+2. **Case import service** — maps parsed messages to ORbit database operations with entity matching
+3. **Edge Function listener** — HTTPS endpoint that receives messages from Epic integration engines (Mirth Connect, Rhapsody)
+4. **Review queue** — admin UI for resolving unmatched entities (create inline or map to existing)
+5. **Test harness** — generates realistic SIU messages for development/testing without Epic sandbox ($1,900/year)
+6. **Admin UI** — integration configuration, monitoring, log viewing
+
+---
+
+## Why HL7v2 Instead of FHIR
+
+### What Epic FHIR Gives You (Patient-Centric)
+- Patient demographics, conditions, medications, encounters
+- Practitioner lookup, organization data
+- Generic Appointment/ServiceRequest resources (clinic visits, not surgical cases)
+- **Does NOT include:** OR room assignments, surgical case IDs, block time allocations, procedure sequencing, surgeon-specific scheduling, case status events (wheels in, incision, wheels out)
+
+### What Epic HL7v2 Gives You (Surgical Schedule)
+- **Outgoing Surgical Case Scheduling** — sends SIU messages for new, rescheduled, updated, and canceled surgical cases
+- Real-time push: Epic sends messages to our listener automatically when the schedule changes
+- Contains: patient demographics, surgeon, procedure codes (CPT), OR room, scheduled date/time, case duration, diagnosis codes, case status — **exactly what ORbit needs to create cases**
+
+### What Happens to Existing FHIR Code
+- `lib/epic/` stays as-is — reusable for future ModMed FHIR integration
+- Patterns preserved: OAuth2 token management, patient demographic mapping, error handling, credential storage
+- Epic-specific FHIR REST logic is NOT reused (HL7v2 is fundamentally different — push-based, pipe-delimited, TCP/HTTP)
+- HL7v2 integration is net-new code in `lib/hl7v2/` and `lib/integrations/`
+
+---
+
+## HL7v2 SIU Message Format
+
+### Trigger Events ORbit Cares About
+
+| Event | Meaning | ORbit Action |
+|-------|---------|-------------|
+| `SIU^S12` | New surgical case booked | Create new case in `cases` table |
+| `SIU^S13` | Case rescheduled | Update case date/time/room |
+| `SIU^S14` | Case modified (details changed) | Update case details (surgeon, procedure, etc.) |
+| `SIU^S15` | Case canceled | Update case status to `cancelled` |
+| `SIU^S16` | Case discontinued (in-progress stop) | Update case status to `cancelled` with reason |
+
+### SIU Message Structure (Segments)
+
+```
+MSH — Message Header (sending app, receiving app, timestamp, message type, version)
+SCH — Schedule Activity (case ID, duration, start/end time, status, requesting provider)
+PID — Patient Identification (MRN, name, DOB, gender, address, phone)
+PV1 — Patient Visit (attending physician, facility, visit type)
+DG1 — Diagnosis (ICD-10 codes, diagnosis description) [optional, repeatable]
+RGS — Resource Group (groups the following resource segments)
+AIS — Appointment Information - Service (procedure/CPT code, start time, duration)
+AIG — Appointment Information - General Resource (equipment, staff)
+AIL — Appointment Information - Location (OR room, facility)
+AIP — Appointment Information - Personnel (surgeon, anesthesiologist, nurses)
+```
+
+### Example: Epic OpTime SIU^S12 (New Surgical Case)
+
+```
+MSH|^~\&|EPIC|SURGERY_CENTER|||20260301143022||SIU^S12|MSG00001|P|2.3||||||
+SCH|SC10001^SC10001|FL20001^FL20001|||SC10001|SURGERY^Surgical Case|Right knee total arthroplasty|SURGERY|120|min|^^120^20260315080000^20260315100000|||||1001^SMITH^JOHN^A^MD^^^^NPI^1234567890||||1001^SMITH^JOHN^A^MD^^^^|||||Booked
+PID|1||MRN12345^^^^MR||DOE^JANE^M^^||19650415|F|||123 Main St^^Springfield^IL^62704^US||(217)555-0123^HOME|(217)555-0456^WORK||S||ACCT98765|987-65-4321||||||||||||||||||
+PV1|1|O|OR3^^^SURGERY_CENTER^^^^^||||1001^SMITH^JOHN^A^MD^^^^||ORTHO||||||||||||12345||||||||||||||||||||||||||||V
+DG1|1|I10|M17.11^Primary osteoarthritis, right knee^I10|Primary osteoarthritis, right knee||
+RGS|1|A|RG001
+AIS|1|A|27447^Total knee arthroplasty^CPT|20260315080000|15|min|120|min|Booked||
+AIL|1|A|OR3^^^SURGERY_CENTER|^Operating Room 3||20260315080000|||120|min||Booked
+AIP|1|A|1001^SMITH^JOHN^A^MD^^^^|SURGEON||20260315080000|||120|min||Booked
+AIP|2|A|2001^JONES^MARIA^L^MD^^^^|ANESTHESIOLOGIST||20260315075500|||135|min||Booked
+```
+
+### Key Field Mappings: SIU → ORbit `cases` Table
+
+| SIU Segment.Field | HL7 Field | ORbit Column | Notes |
+|-------------------|-----------|-------------|-------|
+| `SCH-1` | Placer Appointment ID | `external_case_id` | Epic's internal case ID |
+| `SCH-2` | Filler Appointment ID | `external_filler_id` (in parsed_data) | Secondary Epic ID |
+| `SCH-7` | Appointment Reason | `notes` | Free text reason |
+| `SCH-11.4` | Start Date/Time | `scheduled_date` + `start_time` | Format: YYYYMMDDHHMMSS |
+| `SCH-11.5` | End Date/Time | Derive duration | End - Start = duration |
+| `SCH-25` | Filler Status Code | Map to `status_id` | Booked/Cancelled/etc. |
+| `PID-3` | Patient MRN | `patients.mrn` | Match or create patient |
+| `PID-5` | Patient Name | `patients.first_name`, `last_name` | Format: LAST^FIRST^MIDDLE |
+| `PID-7` | Date of Birth | `patients.date_of_birth` | Format: YYYYMMDD |
+| `PID-8` | Gender | (in parsed_data) | M/F/O/U |
+| `PV1-7` | Attending Doctor | `surgeon_id` | Match by NPI or name |
+| `PV1-3` | Assigned Location | `or_room_id` | Match OR room by name |
+| `DG1-3` | Diagnosis Code | `primary_diagnosis_code` | ICD-10 code |
+| `DG1-4` | Diagnosis Description | `primary_diagnosis_desc` | Text description |
+| `AIS-3` | Service/Procedure | `procedure_type_id` | Match by CPT code |
+| `AIS-7` | Duration | Used for duration calculation | In minutes |
+| `AIL-3` | Location | `or_room_id` | Confirm OR room |
+| `AIP-3` | Personnel | `surgeon_id` / staff | Match provider by ID/NPI |
+| `AIP-4` | Role | Staff role mapping | SURGEON, ANESTHESIOLOGIST, etc. |
+
+---
+
+## Database Changes
+
+### New Tables
+
+#### `ehr_integrations` — Per-facility integration configurations
+```sql
+id UUID PK DEFAULT gen_random_uuid(),
+facility_id UUID NOT NULL FK(facilities) ON DELETE CASCADE,
+integration_type TEXT NOT NULL CHECK (integration_type IN ('epic_hl7v2', 'modmed_fhir', 'csv_import')),
+display_name TEXT,
+config JSONB NOT NULL DEFAULT '{}',
+  -- config contents: { api_key, endpoint_url, auth_type: 'api_key'|'basic_auth',
+  --   basic_auth_user, basic_auth_pass, rate_limit_per_minute, field_overrides }
+is_active BOOLEAN NOT NULL DEFAULT true,
+last_message_at TIMESTAMPTZ,
+last_error TEXT,
+created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+UNIQUE(facility_id, integration_type)
+```
+
+#### `ehr_integration_log` — Audit trail for all inbound messages
+```sql
+id UUID PK DEFAULT gen_random_uuid(),
+facility_id UUID NOT NULL FK(facilities) ON DELETE CASCADE,
+integration_id UUID NOT NULL FK(ehr_integrations) ON DELETE CASCADE,
+message_type TEXT NOT NULL,  -- 'SIU^S12', 'SIU^S13', etc.
+message_control_id TEXT,      -- MSH-10 for dedup
+raw_message TEXT,             -- Full HL7v2 message for debugging (PHI!)
+parsed_data JSONB,            -- Structured extraction
+processing_status TEXT NOT NULL DEFAULT 'received'
+  CHECK (processing_status IN ('received', 'pending_review', 'processed', 'error', 'ignored')),
+error_message TEXT,
+external_case_id TEXT,
+case_id UUID FK(cases) ON DELETE SET NULL,  -- NULL until case created
+review_notes JSONB,           -- Unmatched entities + suggestions for review queue
+  -- { unmatched_surgeon: { name, npi, suggestions: [...] },
+  --   unmatched_procedure: { cpt, name, suggestions: [...] },
+  --   unmatched_room: { name, suggestions: [...] } }
+reviewed_by UUID FK(auth.users),
+reviewed_at TIMESTAMPTZ,
+created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+processed_at TIMESTAMPTZ
+```
+
+### Altered Tables
+
+#### `cases` — New columns
+- `external_case_id TEXT` — Epic's internal case ID (from SCH-1)
+- `external_system TEXT` — 'epic_hl7v2', 'epic_fhir', 'modmed', etc.
+- `import_source TEXT` — 'hl7v2', 'fhir', 'csv', 'manual'
+- `primary_diagnosis_code TEXT` — ICD-10 from DG1-3
+- `primary_diagnosis_desc TEXT` — from DG1-4
+- Update `source` CHECK constraint to include 'hl7v2' if needed
+
+#### `patients` — New columns
+- `external_patient_id TEXT` — Source system's patient ID
+
+### Indexes
+- `cases(external_case_id, external_system, facility_id)` — upsert deduplication
+- `patients(mrn, facility_id)` — patient matching
+- `patients(external_patient_id, facility_id)` — external ID lookup
+- `ehr_integration_log(facility_id, processing_status)` — review queue queries
+- `ehr_integration_log(external_case_id, facility_id)` — case lookup
+
+### RLS Policies
+Standard facility-scoped pattern using `get_my_facility_id()` and `get_my_access_level()`:
+- Facility admins can manage own facility's integrations and view logs
+- Global admins can manage all
+- Regular users can view own facility's log entries (read-only)
+
+---
+
+## Listener Architecture
+
+### Deployment: Supabase Edge Function
+- Path: `supabase/functions/hl7v2-listener/`
+- Accepts HTTP POST with HL7v2 message body
+- Content-Types: `application/hl7-v2`, `text/plain`, `x-application/hl7-v2+er7`
+- Returns HL7v2 ACK response (AA/AE/AR)
+
+### Authentication
+Plug-and-play with Epic integration engines:
+- **API key**: `X-Integration-Key` header — per-facility key stored in `ehr_integrations.config`
+- **Basic Auth**: `Authorization: Basic ...` — for integration engines that prefer Basic Auth
+- Facility looked up from credentials → all operations scoped to that facility
+- **No JWT** — Epic integration engines don't have Supabase accounts
+
+### Message Processing Flow
+```
+Epic OpTime → Integration Engine (Mirth/Rhapsody) → HTTPS POST → Edge Function
+  → Auth check (API key or Basic Auth)
+  → Parse HL7v2 message (generic parser → SIU parser)
+  → Log to ehr_integration_log (status: 'received')
+  → Match entities (surgeon, procedure, room, patient)
+  → If ALL matched: create/update/cancel case → status: 'processed'
+  → If ANY unmatched: status: 'pending_review' with review_notes
+  → Return HL7v2 ACK (AA for success, AE for error)
+```
+
+---
+
+## Entity Resolution (Review Queue UX)
+
+### When Entities Can't Be Matched
+
+When an SIU message references a surgeon, procedure, or OR room that doesn't exist in ORbit, the message is held in `pending_review` status. The admin resolves it from the review queue.
+
+### Review Queue Flow (Redesigned — Phase 14)
+1. Admin opens Settings → Integrations → Epic → Review Queue
+2. Sees scannable list of pending imports, each row showing:
+   - Status icon: green CheckCircle2 (ready to approve) or amber AlertCircle (needs entity mapping)
+   - Format: `New Case: 2/20/2026 9:30am Total Knee Dr Berra - Tracy Smith`
+3. Clicks a row → slide-over drawer opens from right with full entity mapping detail
+4. Drawer contains `ReviewDetailPanel` with:
+   - 3-column entity mapping table (Epic → Arrow → ORbit)
+   - EntitySelector dropdowns for unmatched entities with fuzzy match suggestions
+   - "Create New" inline forms for creating entities without leaving the page
+   - Collapsible HL7v2 raw message viewer
+5. Drawer header has Approve + Reject buttons for the individual case (Approve disabled until all required entities resolved)
+6. **"Approve All (N)"** button at top of queue batch-approves all ready imports (green icon)
+7. After approval → case created, log updated to 'processed', entry removed from queue, toast shown
+
+### Fuzzy Matching
+Reuses `lib/epic/auto-matcher.ts` Levenshtein distance engine:
+- >= 0.90 confidence: auto-suggest (shown first in suggestions)
+- 0.70-0.89: suggest (shown below auto-suggestions)
+- < 0.70: no suggestion
+
+### Entity Mapping Persistence
+When an admin maps "Dr. Smith" in Epic to "John Smith, MD" in ORbit, this mapping is saved. Future messages with the same identifier auto-resolve without review.
+
+---
+
+## Test Harness
+
+### Purpose
+Generates realistic SIU messages mimicking Epic OpTime output so the full pipeline can be developed and tested without Epic's paid sandbox.
+
+### Access
+- **Global admin only** — UI at `app/admin/settings/hl7v2-test-harness/`
+- API endpoint at `app/api/integrations/test-harness/` (global admin auth required)
+- Global admin selects a facility to test against
+
+### Scenarios
+1. **Full day** — 15 cases across 4 OR rooms, realistic 7:30am-5pm schedule
+2. **Chaos** — Normal day + random reschedules, cancellations, add-on cases
+3. **Multi-day** — Week of OR schedules
+
+### Surgical Data Pools (by specialty)
+- **Orthopedics**: Total knee (27447), Total hip (27130), ACL reconstruction (29888), Rotator cuff repair (29827), Carpal tunnel release (64721)
+- **Ophthalmology**: Cataract surgery (66984), Vitrectomy (67036), Glaucoma surgery (66170)
+- **GI**: Colonoscopy (45378), Upper endoscopy (43239), Lap cholecystectomy (47562)
+- **Spine**: Lumbar fusion (22612), Cervical discectomy (63075), Laminectomy (63047)
+- **General Surgery**: Lap hernia repair (49650), Lap appendectomy (44970)
+- Each procedure paired with matching ICD-10 code and typical duration
+
+---
+
+## Admin UI Changes
+
+### Integration Hub (replaces FHIR content at `app/settings/integrations/epic/`)
+
+**Layout** — swap FHIR-specific sections with HL7v2, keep existing card-based layout:
+
+- **Status card**: Active/inactive, last message received, message count today, error count
+- **Quick actions**: Copy API key, Copy endpoint URL, Toggle active/inactive
+- **Stats cards**: Total imported cases, Pending review count, Error count
+- **Navigation tabs**: Overview | Review Queue | Mappings | Logs
+
+### Subpages
+- **Review Queue** (`/epic/review-queue`): Pending imports with inline EntityResolver
+- **Mappings** (`/epic/mappings`): View/edit/delete entity mappings (surgeon, procedure, room)
+- **Logs** (`/epic/logs`): Filterable log table, expandable rows showing raw HL7v2 + parsed data
+
+---
+
+## Security & Compliance
+
+### HIPAA
+- HL7v2 messages contain PHI (patient name, DOB, MRN, diagnosis)
+- All transit encrypted (HTTPS/TLS 1.2+)
+- All storage in Supabase (HIPAA-covered on appropriate plan)
+- Audit log provides required access tracking via `ehr_integration_log`
+- Consider configurable retention policy for `raw_message` purging
+
+### Authentication
+- Per-facility API keys (rotate-able, stored in `ehr_integrations.config`)
+- Basic Auth support for integration engines that prefer it
+- RLS enforces facility scoping on all tables
+
+---
+
+## Production Deployment Path
+
+When a paying customer on Epic is ready:
+1. Customer's IT team configures "Outgoing Surgical Case Scheduling" interface to point at our HTTPS endpoint
+2. Epic sends via integration engine (Mirth Connect, Rhapsody) — standard HTTP POST
+3. Work with customer to validate field mappings (admin field mapping UI handles facility customizations)
+4. If customer requires TCP/MLLP: consider lightweight MLLP-to-HTTP proxy (many open-source options)
+5. Sign up for Epic Vendor Services ($1,900/year) for exact field mapping specs and production validation
+
+---
+
+## Review Q&A
+
+> Generated by /review on 2026-03-01
+
+### Planning Interview (initial)
+
+**Q1:** What should happen to the existing Epic FHIR code?
+**A1:** Keep as-is in `lib/epic/` for potential ModMed FHIR reuse later.
+
+**Q2:** Where should the HL7v2 listener live?
+**A2:** Supabase Edge Function — decoupled from web app, scales independently.
+
+**Q3:** Should new integration tables replace or coexist with existing Epic tables?
+**A3:** New generic `ehr_integrations` + `ehr_integration_log` tables. Existing `epic_*` tables stay dormant.
+
+**Q4:** Where should the admin UI live?
+**A4:** Replace FHIR content at `app/settings/integrations/epic/` — swap content, keep layout.
+
+**Q5:** Who can access the test harness?
+**A5:** Global admin only — UI at `app/admin/settings/hl7v2-test-harness/`, API at `app/api/integrations/test-harness/`.
+
+**Q6:** How should unmatched entities be handled?
+**A6:** Async review queue — messages land as `pending_review`, admin resolves inline (create entity or map to existing without leaving the page), then approves import. Cases not created until approved.
+
+**Q7:** What authentication should the listener use?
+**A7:** API key + Basic Auth — plug-and-play with Epic integration engines like Mirth Connect.
+
+**Q8:** How should the phases be structured?
+**A8:** 7 phases: Parser → Schema → Import Service → Listener → Test Harness → Admin UI → HIPAA/Audit.
+
+### Deep Design Review
+
+**Q9:** The codebase has 4 existing `epic_*` tables (connections, entity_mappings, field_mappings, import_log). The spec proposes new generic `ehr_*` tables. Two parallel table sets will coexist?
+**A9:** Yes — new generic tables. The old `epic_*` tables stay because they're referenced by existing FHIR code.
+
+**Q10:** Where should persistent entity mappings (Epic name → ORbit entity) for HL7v2 live?
+**A10:** New `ehr_entity_mappings` table — clean separation from the FHIR `epic_entity_mappings`.
+
+**Q11:** Supabase Edge Function (Deno runtime) vs Next.js API route for the HL7v2 listener?
+**A11:** Supabase Edge Function — most professional option. When a real customer connects, they just point their integration engine at the endpoint URL. Zero rework.
+
+**Q12:** Edge Function can't import from `lib/hl7v2/` (Deno vs Node). How to handle code sharing?
+**A12:** Duplicate the parser into the Edge Function directory. Edge Function gets its own copy of parser, types, siu-parser, and ack-generator.
+
+**Q13:** How much processing does the Edge Function do?
+**A13:** Full processing — parse → match entities → create/update cases → return ACK. The test harness validates the exact same code path that production uses.
+
+**Q14:** The `lib/epic/auto-matcher.ts` (Levenshtein distance) is needed for HL7v2 entity matching. Reuse or copy?
+**A14:** Import from `lib/epic/auto-matcher.ts` directly. The matching algorithm is string-generic.
+
+**Q15:** Where should the admin UI live? Spec says `app/settings/integrations/epic/`, impl plan says `app/admin/integrations/`.
+**A15:** Replace FHIR content at `app/settings/integrations/epic/`.
+
+**Q16:** UI layout: tabs vs cards + subpage navigation?
+**A16:** Tabs on the main page (spec as-written). 4 tabs: Overview, Review Queue, Mappings, Logs. Uses existing `SettingsTabLayout` component.
+
+**Q17:** Review queue: expandable row, drawer, or modal for entity resolution?
+**A17:** Expandable row — click a pending import row, it expands inline to show EntityResolver for each unmatched entity.
+
+**Q18:** How minimal should the inline "Create New" form be in the EntityResolver?
+**A18:** Minimal — only essential fields pre-filled from the HL7v2 message. Surgeon: name + NPI + specialty. Procedure: name + CPT code. Room: name. Admin can edit details later.
+
+**Q19:** Test harness UI location?
+**A19:** Separate page at `app/admin/settings/hl7v2-test-harness/` — global admin only. Clean separation from facility integration config.
+
+**Q20:** `cases.source` already exists with CHECK ('manual', 'epic', 'cerner'). The spec adds `external_system` and `import_source`. How to reconcile overlapping columns?
+**A20:** Keep all three — `source` stays as-is, add both `external_system` and `import_source`. Maximum flexibility.
+
+**Q21:** Should the import service auto-update patient demographics when MRN matches but name/DOB differ?
+**A21:** Flag for review if demographics differ. Most cautious approach for healthcare data — put the message in 'pending_review' status.
+
+**Q22:** Should imported cases fire the full trigger pipeline (milestone creation, stats recomputation)?
+**A22:** Yes — full trigger pipeline. Imported cases are first-class citizens. The test harness validates that triggers work correctly with imported data.
+
+**Q23:** Should the Logs tab use Supabase Realtime for live message streaming?
+**A23:** Yes — subscribe to `ehr_integration_log` INSERTs. New messages appear in real time. Great for monitoring during test harness runs.
+
+**Q24:** How should parse/processing errors be handled beyond the HL7v2 ACK?
+**A24:** Log with 'error' status + show in Logs tab with red error badge. Return AE (Application Error) ACK. No extra toast/notification needed.
+
+**Q25:** How should API keys be generated for the HL7v2 listener?
+**A25:** Auto-generate UUID on integration setup. Shown once in a copy-to-clipboard dialog. 'Rotate Key' button generates a new one (old one immediately invalid).
+
+**Q26:** What level of audit logging is needed?
+**A26:** Full HIPAA audit trail — integration log + admin action audit + tracking who views raw HL7v2 messages containing PHI.
+
+**Q27:** Test harness UI: simple scenario picker or full control panel?
+**A27:** Full control panel — scenario picker + facility selector + advanced options (number of cases, date range, specialties, surgeon names). Preview generated messages before sending.
+
+**Q28:** How should the Mappings tab be structured?
+**A28:** Same pattern as existing FHIR mappings — 3 sub-tabs (Surgeons | Rooms | Procedures) with filter pills (All | Mapped | Unmapped) and auto-match button.
+
+**Q29:** How should raw HL7v2 messages be displayed in the Logs tab?
+**A29:** Side-by-side: raw pipe-delimited text in monospace (left) + parsed structured data as key-value table (right). Audit event recorded when expanded.
+
+**Q30:** Should the existing FHIR UI pages be kept alongside HL7v2?
+**A30:** Remove FHIR pages completely, replace with HL7v2. `lib/epic/` code stays for future ModMed reuse, but FHIR UI is gone. Clean break.
+
+**Q31:** Message deduplication strategy?
+**A31:** Dedup at both levels — check `message_control_id` (MSH-10) in `ehr_integration_log` first (return cached ACK if already processed), then check `external_case_id + facility_id` on `cases` table. Belt and suspenders.
+
+**Q32:** How should the Edge Function access the database?
+**A32:** Service role key (`SUPABASE_SERVICE_ROLE_KEY`) to bypass RLS. Facility scoping enforced in application code (determined from API key lookup). Standard pattern for server-side operations.
+
+**Q33:** Should we build the raw message purge/retention mechanism now or stub it?
+**A33:** Build purge now — implement pg_cron job or Edge Function that deletes `raw_message` content older than the configurable retention period.
+
+**Q34:** Overview tab: should there be a setup instructions card with endpoint URL and API key for IT teams?
+**A34:** Yes — prominent setup instructions card at the top of Overview tab: endpoint URL (copy), API key (masked, click to reveal/copy), supported content types, example curl command.
+
+**Q35:** Should we adjust the phase structure given expanded scope (HIPAA audit, purge, full control panel)?
+**A35:** Add Phase 7 for HIPAA/Audit — separates compliance concerns (PHI access logging, purge mechanism, audit log integration) from feature logic. Total: 7 phases.
+
+### Key Context Clarification
+
+**Primary goal:** Build a test harness to validate Epic HL7v2 field mappings without paying $1,900/year for Epic's sandbox. The full pipeline (parser → listener → import service → case creation) must work end-to-end so test messages produce real cases that can be verified. When a paying customer connects, the same production code path is already validated.
