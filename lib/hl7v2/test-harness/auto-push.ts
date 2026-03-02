@@ -29,6 +29,9 @@ export interface AutoPushRequest {
   action: AutoPushAction;
   /** For delete: pre-captured schedule data (row may already be gone) */
   scheduleData?: EhrTestScheduleWithEntities;
+  /** Override trigger event — use the schedule's own trigger_event instead of deriving from action.
+   *  Used by manual per-row push to send S13/S16 correctly. */
+  triggerEventOverride?: SIUTriggerEvent;
 }
 
 export interface AutoPushResult {
@@ -65,7 +68,7 @@ export async function executeAutoPush(
   supabase: Awaited<ReturnType<typeof createClient>>,
   request: AutoPushRequest,
 ): Promise<AutoPushResult> {
-  const { scheduleId, facilityId, action, scheduleData } = request;
+  const { scheduleId, facilityId, action, scheduleData, triggerEventOverride } = request;
 
   // 1. Check integration config — skip silently if none configured
   const config = await getIntegrationConfigOrNull(supabase, facilityId);
@@ -90,8 +93,9 @@ export async function executeAutoPush(
     schedule = data;
   }
 
-  // 3. Convert to SIU with overridden trigger event
-  const triggerEvent = ACTION_TO_TRIGGER[action];
+  // 3. Convert to SIU — use explicit override if provided (manual push),
+  //    otherwise derive from CRUD action (auto-push on save/delete)
+  const triggerEvent = triggerEventOverride || ACTION_TO_TRIGGER[action];
 
   resetMessageCounter();
 

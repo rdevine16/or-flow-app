@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import type { AutoPushAction } from '@/lib/hl7v2/test-harness/auto-push'
 import type { EhrTestScheduleWithEntities } from '@/lib/integrations/shared/integration-types'
+import type { SIUTriggerEvent } from '@/lib/hl7v2/types'
 import { logger } from '@/lib/logger'
 
 const log = logger('useAutoPush')
@@ -23,6 +24,7 @@ interface AutoPushHookReturn {
     scheduleId: string,
     action: AutoPushAction,
     scheduleData?: EhrTestScheduleWithEntities,
+    triggerEventOverride?: SIUTriggerEvent,
   ) => Promise<boolean>
   getStatus: (scheduleId: string) => AutoPushStatus | undefined
   clearStatus: (scheduleId: string) => void
@@ -127,6 +129,7 @@ export function useAutoPush(facilityId: string): AutoPushHookReturn {
       scheduleId: string,
       action: AutoPushAction,
       scheduleData?: EhrTestScheduleWithEntities,
+      triggerEventOverride?: SIUTriggerEvent,
     ): Promise<boolean> => {
       if (!facilityId) return false
 
@@ -142,6 +145,7 @@ export function useAutoPush(facilityId: string): AutoPushHookReturn {
             facilityId,
             action,
             scheduleData,
+            triggerEventOverride,
           }),
         })
 

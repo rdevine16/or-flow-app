@@ -29,6 +29,7 @@ import type {
 } from '@/lib/integrations/shared/integration-types'
 import type { AutoPushAction } from '@/lib/hl7v2/test-harness/auto-push'
 import type { AutoPushStatus } from '@/hooks/useAutoPush'
+import type { SIUTriggerEvent } from '@/lib/hl7v2/types'
 
 // -- Trigger event badge config -----------------------------------------------
 
@@ -98,6 +99,7 @@ interface ScheduleManagerProps {
     scheduleId: string,
     action: AutoPushAction,
     scheduleData?: EhrTestScheduleWithEntities,
+    triggerEventOverride?: SIUTriggerEvent,
   ) => Promise<boolean>
   getAutoPushStatus?: (scheduleId: string) => AutoPushStatus | undefined
 }
@@ -167,10 +169,10 @@ export default function ScheduleManager({
     setShowForm(true)
   }
 
-  // Manual per-row push handler
+  // Manual per-row push handler — sends the schedule's own trigger_event
   const handleManualPush = async (schedule: EhrTestScheduleWithEntities) => {
     if (!onAutoPush) return
-    // Use the schedule's trigger event to determine the action
+    // Map trigger event to a CRUD action (for the auto-push request shape)
     const actionMap: Record<string, AutoPushAction> = {
       S12: 'create',
       S13: 'update',
@@ -179,7 +181,13 @@ export default function ScheduleManager({
       S16: 'delete',
     }
     const action = actionMap[schedule.trigger_event] || 'create'
-    const success = await onAutoPush(schedule.id, action, schedule)
+    // Pass the schedule's trigger_event as override so it isn't remapped by ACTION_TO_TRIGGER
+    const success = await onAutoPush(
+      schedule.id,
+      action,
+      schedule,
+      schedule.trigger_event as SIUTriggerEvent,
+    )
     if (success) {
       showToast({ type: 'success', title: `${schedule.trigger_event} message sent` })
     } else {

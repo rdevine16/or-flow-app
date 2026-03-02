@@ -18,6 +18,7 @@ import {
   type AutoPushRequest,
 } from '@/lib/hl7v2/test-harness/auto-push';
 import type { EhrTestScheduleWithEntities } from '@/lib/integrations/shared/integration-types';
+import type { SIUTriggerEvent } from '@/lib/hl7v2/types';
 
 const log = logger('auto-push-api');
 
@@ -44,11 +45,12 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
 
   // Parse and validate body
   const body = await req.json();
-  const { scheduleId, facilityId, action, scheduleData } = body as {
+  const { scheduleId, facilityId, action, scheduleData, triggerEventOverride } = body as {
     scheduleId: string;
     facilityId: string;
     action: AutoPushAction;
     scheduleData?: EhrTestScheduleWithEntities;
+    triggerEventOverride?: SIUTriggerEvent;
   };
 
   if (!scheduleId) {
@@ -86,6 +88,7 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
     facilityId,
     action,
     scheduleData,
+    triggerEventOverride,
   };
 
   const result = await executeAutoPush(supabase, request);
