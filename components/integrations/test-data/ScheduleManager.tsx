@@ -281,7 +281,7 @@ export default function ScheduleManager({ facilityId }: ScheduleManagerProps) {
                         {s.duration_min}m
                       </td>
                       <td className="py-2 px-2">
-                        {s.referenced_schedule ? (
+                        {s.referenced_schedule && s.referenced_schedule.id ? (
                           <span
                             className="inline-flex items-center gap-0.5 text-xs text-blue-600"
                             title={`References ${s.referenced_schedule.external_case_id || s.referenced_schedule.id.slice(0, 8)}`}
