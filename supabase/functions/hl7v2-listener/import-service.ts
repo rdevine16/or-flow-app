@@ -16,6 +16,7 @@ import type {
   EntitySuggestion,
   ReviewNotes,
 } from './types.ts';
+import { buildNotificationFromSIU, createNotificationForCase } from './notification-helper.ts';
 
 // =====================================================
 // CONSTANTS
@@ -276,6 +277,12 @@ async function handleCreate(
     await updateLogProcessed(supabase, logEntry.id, caseId);
     console.log('[import] Case created:', caseId);
 
+    // Create notification for case auto-created (non-blocking)
+    const notifData = buildNotificationFromSIU(siu, 'created', caseId);
+    if (notifData) {
+      await createNotificationForCase(supabase, facilityId, notifData);
+    }
+
     return { success: true, action: 'created', caseId, logEntryId: logEntry.id, errorMessage: null };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error creating case';
@@ -349,6 +356,12 @@ async function handleUpdate(
 
     await saveAutoMappings(supabase, integrationId, facilityId, caseData, matchResults);
     await updateLogProcessed(supabase, logEntry.id, existingCase.id);
+
+    // Create notification for case auto-updated (non-blocking)
+    const notifData = buildNotificationFromSIU(siu, 'updated', existingCase.id);
+    if (notifData) {
+      await createNotificationForCase(supabase, facilityId, notifData);
+    }
 
     return { success: true, action: 'updated', caseId: existingCase.id, logEntryId: logEntry.id, errorMessage: null };
   } catch (err) {
@@ -429,6 +442,13 @@ async function handleCancel(
     await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id);
 
     await updateLogProcessed(supabase, logEntry.id, existingCase.id);
+
+    // Create notification for case auto-cancelled (non-blocking)
+    const cancelNotifData = buildNotificationFromSIU(siu, 'cancelled', existingCase.id);
+    if (cancelNotifData) {
+      await createNotificationForCase(supabase, facilityId, cancelNotifData);
+    }
+
     return { success: true, action: 'cancelled', caseId: existingCase.id, logEntryId: logEntry.id, errorMessage: null };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error cancelling case';
