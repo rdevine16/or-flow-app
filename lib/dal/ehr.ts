@@ -286,6 +286,140 @@ async function deleteEntityMapping(
 }
 
 // =====================================================
+// REVIEW QUEUE OPERATIONS
+// =====================================================
+
+/** Approve a pending import — update log status to 'processed' and link to case */
+async function approveImport(
+  supabase: AnySupabaseClient,
+  logId: string,
+  caseId: string,
+  reviewedBy: string
+): Promise<{ error: PostgrestError | null }> {
+  const { error } = await supabase
+    .from('ehr_integration_log')
+    .update({
+      processing_status: 'processed',
+      case_id: caseId,
+      reviewed_by: reviewedBy,
+      reviewed_at: new Date().toISOString(),
+      processed_at: new Date().toISOString(),
+    })
+    .eq('id', logId)
+
+  return { error }
+}
+
+/** Reject a pending import — update log status to 'ignored' with reason */
+async function rejectImport(
+  supabase: AnySupabaseClient,
+  logId: string,
+  reason: string,
+  reviewedBy: string
+): Promise<{ error: PostgrestError | null }> {
+  const { error } = await supabase
+    .from('ehr_integration_log')
+    .update({
+      processing_status: 'ignored',
+      error_message: reason,
+      reviewed_by: reviewedBy,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', logId)
+
+  return { error }
+}
+
+/** Resolve an entity in a pending review — save entity mapping and update review_notes */
+async function resolveEntity(
+  supabase: AnySupabaseClient,
+  logId: string,
+  integrationId: string,
+  facilityId: string,
+  entityType: EhrEntityType,
+  externalIdentifier: string,
+  externalDisplayName: string,
+  orbitEntityId: string,
+  orbitDisplayName: string
+): Promise<{ error: PostgrestError | null }> {
+  // Save the entity mapping for future auto-resolution
+  const { error: mappingError } = await saveEntityMapping(supabase, {
+    facility_id: facilityId,
+    integration_id: integrationId,
+    entity_type: entityType,
+    external_identifier: externalIdentifier,
+    external_display_name: externalDisplayName,
+    orbit_entity_id: orbitEntityId,
+    orbit_display_name: orbitDisplayName,
+    match_method: 'manual',
+    match_confidence: 1.0,
+  })
+
+  if (mappingError) return { error: mappingError }
+
+  // Clear the unmatched entry from review_notes
+  const { data: logEntry, error: fetchError } = await getLogEntry(supabase, logId)
+  if (fetchError || !logEntry) return { error: fetchError }
+
+  const reviewNotes = { ...(logEntry.review_notes || {}) }
+  const noteKey = `unmatched_${entityType}` as keyof typeof reviewNotes
+  delete reviewNotes[noteKey]
+
+  const { error: updateError } = await supabase
+    .from('ehr_integration_log')
+    .update({ review_notes: reviewNotes })
+    .eq('id', logId)
+
+  return { error: updateError }
+}
+
+/** Get integration stats (total imported, pending review, errors) */
+async function getIntegrationStats(
+  supabase: AnySupabaseClient,
+  facilityId: string
+): Promise<DALResult<{
+  totalProcessed: number
+  pendingReview: number
+  errors: number
+  messagesToday: number
+}>> {
+  const today = new Date().toISOString().substring(0, 10)
+
+  const [processedRes, pendingRes, errorRes, todayRes] = await Promise.all([
+    supabase
+      .from('ehr_integration_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('facility_id', facilityId)
+      .eq('processing_status', 'processed'),
+    supabase
+      .from('ehr_integration_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('facility_id', facilityId)
+      .eq('processing_status', 'pending_review'),
+    supabase
+      .from('ehr_integration_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('facility_id', facilityId)
+      .eq('processing_status', 'error'),
+    supabase
+      .from('ehr_integration_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('facility_id', facilityId)
+      .gte('created_at', `${today}T00:00:00`),
+  ])
+
+  return {
+    data: {
+      totalProcessed: processedRes.count ?? 0,
+      pendingReview: pendingRes.count ?? 0,
+      errors: errorRes.count ?? 0,
+      messagesToday: todayRes.count ?? 0,
+    },
+    error: processedRes.error || pendingRes.error || errorRes.error || todayRes.error,
+  }
+}
+
+// =====================================================
 // EXPORT
 // =====================================================
 
@@ -308,4 +442,10 @@ export const ehrDAL = {
   saveEntityMapping,
   listEntityMappings,
   deleteEntityMapping,
+  // Review Queue
+  approveImport,
+  rejectImport,
+  resolveEntity,
+  // Stats
+  getIntegrationStats,
 }

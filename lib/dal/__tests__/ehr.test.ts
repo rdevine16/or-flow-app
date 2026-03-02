@@ -539,3 +539,319 @@ describe('ehrDAL.deleteEntityMapping', () => {
     expect(chainable.eq).toHaveBeenCalledWith('id', 'map-1')
   })
 })
+
+// ============================================
+// REVIEW QUEUE OPERATIONS
+// ============================================
+
+describe('ehrDAL.approveImport', () => {
+  it('should update log to processed with case_id and reviewer', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.eq.mockResolvedValue({ error: null })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.approveImport(client as any, 'log-1', 'case-123', 'user-1')
+
+    expect(client.from).toHaveBeenCalledWith('ehr_integration_log')
+    expect(chainable.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        processing_status: 'processed',
+        case_id: 'case-123',
+        reviewed_by: 'user-1',
+      })
+    )
+    expect(chainable.eq).toHaveBeenCalledWith('id', 'log-1')
+    expect(result.error).toBeNull()
+  })
+
+  it('should set reviewed_at and processed_at timestamps', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.eq.mockResolvedValue({ error: null })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await ehrDAL.approveImport(client as any, 'log-1', 'case-123', 'user-1')
+
+    const updateCall = chainable.update.mock.calls[0][0]
+    expect(updateCall.reviewed_at).toBeDefined()
+    expect(updateCall.processed_at).toBeDefined()
+    // Both should be ISO date strings
+    expect(new Date(updateCall.reviewed_at).toISOString()).toBe(updateCall.reviewed_at)
+    expect(new Date(updateCall.processed_at).toISOString()).toBe(updateCall.processed_at)
+  })
+
+  it('should return error when update fails', async () => {
+    const { client, chainable } = createMockSupabase()
+    const mockError = { message: 'Update failed', code: '42501' }
+    chainable.eq.mockResolvedValue({ error: mockError })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.approveImport(client as any, 'log-1', 'case-123', 'user-1')
+    expect(result.error).toEqual(mockError)
+  })
+})
+
+describe('ehrDAL.rejectImport', () => {
+  it('should update log to ignored with reason and reviewer', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.eq.mockResolvedValue({ error: null })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.rejectImport(client as any, 'log-1', 'Duplicate case', 'user-1')
+
+    expect(client.from).toHaveBeenCalledWith('ehr_integration_log')
+    expect(chainable.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        processing_status: 'ignored',
+        error_message: 'Duplicate case',
+        reviewed_by: 'user-1',
+      })
+    )
+    expect(chainable.eq).toHaveBeenCalledWith('id', 'log-1')
+    expect(result.error).toBeNull()
+  })
+
+  it('should set reviewed_at timestamp', async () => {
+    const { client, chainable } = createMockSupabase()
+    chainable.eq.mockResolvedValue({ error: null })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await ehrDAL.rejectImport(client as any, 'log-1', 'Bad data', 'user-1')
+
+    const updateCall = chainable.update.mock.calls[0][0]
+    expect(updateCall.reviewed_at).toBeDefined()
+    expect(new Date(updateCall.reviewed_at).toISOString()).toBe(updateCall.reviewed_at)
+  })
+
+  it('should return error when update fails', async () => {
+    const { client, chainable } = createMockSupabase()
+    const mockError = { message: 'Permission denied', code: '42501' }
+    chainable.eq.mockResolvedValue({ error: mockError })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.rejectImport(client as any, 'log-1', 'Reason', 'user-1')
+    expect(result.error).toEqual(mockError)
+  })
+})
+
+describe('ehrDAL.resolveEntity', () => {
+  it('should save entity mapping and clear review_notes for resolved entity type', async () => {
+    // resolveEntity makes 3 Supabase calls:
+    // 1. upsert to ehr_entity_mappings (saveEntityMapping)
+    // 2. select from ehr_integration_log (getLogEntry)
+    // 3. update ehr_integration_log (clear review_notes)
+    const callLog: Array<{ table: string; chain: Record<string, unknown> }> = []
+
+    const makeChainable = () => {
+      const c = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn(),
+        maybeSingle: vi.fn(),
+        upsert: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+      }
+      return c
+    }
+
+    let callCount = 0
+    const chains = [makeChainable(), makeChainable(), makeChainable()]
+
+    // Call 1 (saveEntityMapping → upsert): succeed
+    chains[0].single.mockResolvedValue({
+      data: { id: 'map-1', entity_type: 'surgeon' },
+      error: null,
+    })
+
+    // Call 2 (getLogEntry → select/single): return log with review_notes
+    chains[1].single.mockResolvedValue({
+      data: {
+        id: 'log-1',
+        review_notes: {
+          unmatched_surgeon: { identifier: 'NPI-12345', display_name: 'Dr. Smith' },
+          unmatched_room: { identifier: 'OR-3', display_name: 'OR Room 3' },
+        },
+      },
+      error: null,
+    })
+
+    // Call 3 (update review_notes): succeed
+    chains[2].eq.mockResolvedValue({ error: null })
+
+    const client = {
+      from: vi.fn().mockImplementation((table: string) => {
+        const chain = chains[callCount]
+        callCount++
+        callLog.push({ table, chain })
+        return chain
+      }),
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.resolveEntity(
+      client as any,
+      'log-1', 'int-1', 'fac-1',
+      'surgeon', 'NPI-12345', 'Dr. Smith',
+      'user-123', 'Dr. Smith (ORbit)'
+    )
+
+    expect(result.error).toBeNull()
+
+    // Verify call 1: upsert entity mapping
+    expect(callLog[0].table).toBe('ehr_entity_mappings')
+    expect(chains[0].upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity_type: 'surgeon',
+        external_identifier: 'NPI-12345',
+        orbit_entity_id: 'user-123',
+        match_method: 'manual',
+        match_confidence: 1.0,
+      }),
+      { onConflict: 'integration_id,entity_type,external_identifier' }
+    )
+
+    // Verify call 2: fetch log entry
+    expect(callLog[1].table).toBe('ehr_integration_log')
+    expect(chains[1].eq).toHaveBeenCalledWith('id', 'log-1')
+
+    // Verify call 3: update review_notes (surgeon removed, room remains)
+    expect(callLog[2].table).toBe('ehr_integration_log')
+    expect(chains[2].update).toHaveBeenCalledWith({
+      review_notes: {
+        unmatched_room: { identifier: 'OR-3', display_name: 'OR Room 3' },
+      },
+    })
+  })
+
+  it('should return early with error if saveEntityMapping fails', async () => {
+    const mappingChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'Conflict', code: '23505' },
+      }),
+      upsert: vi.fn().mockReturnThis(),
+    }
+
+    const client = {
+      from: vi.fn().mockReturnValue(mappingChain),
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.resolveEntity(
+      client as any,
+      'log-1', 'int-1', 'fac-1',
+      'surgeon', 'NPI-12345', 'Dr. Smith',
+      'user-123', 'Dr. Smith'
+    )
+
+    expect(result.error).toEqual(expect.objectContaining({ message: 'Conflict' }))
+    // Should only call from() once (for the upsert), not proceed to getLogEntry
+    expect(client.from).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ============================================
+// INTEGRATION STATS
+// ============================================
+
+describe('ehrDAL.getIntegrationStats', () => {
+  it('should return counts for processed, pending, errors, and today', async () => {
+    // getIntegrationStats makes 4 parallel queries via Promise.all
+    // Each uses: from().select().eq().eq() or .gte()
+    const makeStatsChain = (count: number) => {
+      const chain = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+      }
+      // The last call in each chain resolves with count
+      // For the first 3: .eq('processing_status', ...) is the terminal
+      // For the 4th: .gte('created_at', ...) is the terminal
+      chain.eq.mockReturnThis()
+      chain.gte.mockResolvedValue({ error: null, count })
+      return chain
+    }
+
+    let callCount = 0
+    const counts = [42, 5, 3, 10]
+    const chains = counts.map(c => makeStatsChain(c))
+
+    // For the first 3 chains, the terminal call is the second .eq()
+    // We need to track call count per chain to make the 2nd eq() resolve
+    for (let i = 0; i < 3; i++) {
+      let eqCallCount = 0
+      chains[i].eq.mockImplementation(() => {
+        eqCallCount++
+        // First eq is facility_id, second eq is processing_status (terminal)
+        if (eqCallCount >= 2) {
+          return Promise.resolve({ error: null, count: counts[i] })
+        }
+        return chains[i]
+      })
+    }
+
+    // Chain 4: terminal is .gte()
+    let chain4EqCount = 0
+    chains[3].eq.mockImplementation(() => {
+      chain4EqCount++
+      return chains[3]
+    })
+    chains[3].gte.mockResolvedValue({ error: null, count: counts[3] })
+
+    const client = {
+      from: vi.fn().mockImplementation(() => {
+        const chain = chains[callCount]
+        callCount++
+        return chain
+      }),
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.getIntegrationStats(client as any, 'fac-1')
+
+    expect(result.data).toEqual({
+      totalProcessed: 42,
+      pendingReview: 5,
+      errors: 3,
+      messagesToday: 10,
+    })
+    expect(result.error).toBeNull()
+    expect(client.from).toHaveBeenCalledTimes(4)
+  })
+
+  it('should return first error if any query fails', async () => {
+    const errorChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+    }
+
+    let callCount = 0
+    const mockError = { message: 'Connection failed', code: '08006' }
+
+    const client = {
+      from: vi.fn().mockImplementation(() => {
+        callCount++
+        const chain = { ...errorChain }
+        let eqCallCount = 0
+        chain.eq = vi.fn().mockImplementation(() => {
+          eqCallCount++
+          // After second .eq() call on first query, return error
+          if (callCount === 1 && eqCallCount === 2) {
+            return Promise.resolve({ error: mockError, count: null })
+          }
+          // Otherwise return chain for continued chaining
+          return chain
+        })
+        chain.gte = vi.fn().mockResolvedValue({ error: null, count: 0 })
+        chain.select = vi.fn().mockReturnValue(chain)
+        return chain
+      }),
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await ehrDAL.getIntegrationStats(client as any, 'fac-1')
+    expect(result.error).toEqual(mockError)
+  })
+})

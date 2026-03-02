@@ -1,61 +1,81 @@
 // app/settings/integrations/epic/PageClient.tsx
-// Epic Integration overview — configuration, connection status, quick actions, mapping summary
+// Epic HL7v2 Integration hub — Overview | Review Queue | Mappings | Logs
+// Replaces FHIR connection UI with HL7v2 integration management
 
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
+  LayoutDashboard,
+  ClipboardCheck,
   Link2,
-  Unlink,
-  MapPin,
-  Download,
+  ScrollText,
+  Activity,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
   RefreshCw,
-  Clock,
-  Shield,
+  Loader2,
+  Power,
+  RotateCw,
+  ChevronDown,
+  ChevronRight,
+  Ban,
   Users,
   LayoutGrid,
   ClipboardList,
-  Settings,
-  CheckCircle2,
-  AlertCircle,
-  Server,
+  User,
+  Scissors,
+  MapPin,
 } from 'lucide-react'
-import { useCurrentUser } from '@/hooks'
-import type { EpicConnectionStatus } from '@/lib/epic/types'
+import { useCurrentUser, useSurgeons, useRooms, useProcedureTypes } from '@/hooks'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
+import { useIntegrationRealtime } from '@/hooks/useIntegrationRealtime'
+import { ehrDAL } from '@/lib/dal/ehr'
+import { createClient } from '@/lib/supabase'
+import SetupInstructionsCard from '@/components/integrations/SetupInstructionsCard'
+import HL7MessageViewer from '@/components/integrations/HL7MessageViewer'
+import EntityResolver from '@/components/integrations/EntityResolver'
+import type { CreateEntityData } from '@/components/integrations/EntityResolver'
+import type {
+  EhrIntegration,
+  EhrIntegrationLog,
+  EhrProcessingStatus,
+  EhrEntityType,
+  ReviewNotes,
+} from '@/lib/integrations/shared/integration-types'
+import { logger } from '@/lib/logger'
+
+const log = logger('epic-integration-page')
 
 // =====================================================
 // TYPES
 // =====================================================
 
-interface ConnectionData {
-  id: string
-  status: EpicConnectionStatus
-  last_connected_at: string | null
-  connected_by: string | null
-  token_expires_at: string | null
-  fhir_base_url: string
-  client_id: string
+type TabId = 'overview' | 'review' | 'mappings' | 'logs'
+
+interface IntegrationStats {
+  totalProcessed: number
+  pendingReview: number
+  errors: number
+  messagesToday: number
 }
 
-interface MappingStats {
-  surgeon: { total: number; mapped: number }
-  room: { total: number; mapped: number }
-  procedure: { total: number; mapped: number }
-}
+// =====================================================
+// TAB CONFIG
+// =====================================================
 
-interface EpicStatusResponse {
-  connection: ConnectionData | null
-  mappingStats: MappingStats | null
-}
+const TABS: Array<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'review', label: 'Review Queue', icon: ClipboardCheck },
+  { id: 'mappings', label: 'Mappings', icon: Link2 },
+  { id: 'logs', label: 'Logs', icon: ScrollText },
+]
 
-interface EpicConfigResponse {
-  configured: boolean
-  config: {
-    fhir_base_url: string
-  } | null
-}
+const SUPABASE_PROJECT_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const PAGE_SIZE = 25
 
 // =====================================================
 // HELPERS
@@ -66,295 +86,391 @@ function formatDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleString()
 }
 
-function getTokenExpiryInfo(expiresAt: string | null): {
-  isExpired: boolean
-  minutesRemaining: number | null
-  label: string
-} {
-  if (!expiresAt) return { isExpired: true, minutesRemaining: null, label: 'No token' }
-  const now = Date.now()
-  const expires = new Date(expiresAt).getTime()
-  const diff = expires - now
-  if (diff <= 0) return { isExpired: true, minutesRemaining: 0, label: 'Expired' }
+function formatRelativeTime(dateStr: string | null): string {
+  if (!dateStr) return 'Never'
+  const diff = Date.now() - new Date(dateStr).getTime()
   const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return { isExpired: false, minutesRemaining: 0, label: 'Less than 1 minute' }
-  return { isExpired: false, minutesRemaining: minutes, label: `${minutes} min remaining` }
+  if (minutes < 1) return 'Just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
 }
 
-// =====================================================
-// SUB-COMPONENTS
-// =====================================================
-
-function StatusIndicator({ status }: { status: EpicConnectionStatus }) {
-  const config = {
-    connected: { color: 'bg-emerald-500', ring: 'ring-emerald-500/20', label: 'Connected' },
-    disconnected: { color: 'bg-slate-400', ring: 'ring-slate-400/20', label: 'Disconnected' },
-    token_expired: { color: 'bg-amber-500', ring: 'ring-amber-500/20', label: 'Token Expired' },
-    error: { color: 'bg-red-500', ring: 'ring-red-500/20', label: 'Error' },
-  }[status]
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className={`w-3 h-3 rounded-full ${config.color} ring-4 ${config.ring}`} />
-      <span className="text-sm font-medium text-slate-700">{config.label}</span>
-    </div>
-  )
-}
-
-function MappingStatCard({
-  icon: Icon,
-  label,
-  mapped,
-  total,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  mapped: number
-  total: number
-}) {
-  const pct = total > 0 ? Math.round((mapped / total) * 100) : 0
-  const color = total === 0 ? 'text-slate-400' : pct === 100 ? 'text-emerald-600' : pct > 0 ? 'text-amber-600' : 'text-red-500'
-
-  return (
-    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon className="w-4 h-4 text-slate-500" />
-        <span className="text-sm font-medium text-slate-700">{label}</span>
-      </div>
-      {total === 0 ? (
-        <p className="text-xs text-slate-400">No entities found</p>
-      ) : (
-        <>
-          <p className={`text-lg font-semibold ${color}`}>
-            {mapped} / {total}
-          </p>
-          <div className="w-full bg-slate-200 rounded-full h-1.5 mt-2">
-            <div
-              className={`h-1.5 rounded-full transition-all ${
-                pct === 100 ? 'bg-emerald-500' : pct > 0 ? 'bg-amber-500' : 'bg-slate-200'
-              }`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-// =====================================================
-// FHIR URL FORM
-// =====================================================
-
-function FhirUrlForm({
-  facilityId,
-  initialUrl,
-  onSaved,
-  onCancel,
-}: {
-  facilityId: string
-  initialUrl: string
-  onSaved: () => void
-  onCancel?: () => void
-}) {
-  const [fhirBaseUrl, setFhirBaseUrl] = useState(initialUrl)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    if (!fhirBaseUrl.trim()) {
-      setError('FHIR Base URL is required.')
-      return
-    }
-
-    setSaving(true)
-    try {
-      const res = await fetch('/api/epic/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          facility_id: facilityId,
-          fhir_base_url: fhirBaseUrl.trim(),
-        }),
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error || 'Failed to save configuration')
-        return
-      }
-
-      onSaved()
-    } catch {
-      setError('Network error. Please try again.')
-    } finally {
-      setSaving(false)
-    }
+function StatusBadge({ status }: { status: EhrProcessingStatus }) {
+  const config: Record<EhrProcessingStatus, { color: string; label: string }> = {
+    received: { color: 'bg-blue-100 text-blue-700', label: 'Received' },
+    pending_review: { color: 'bg-amber-100 text-amber-700', label: 'Pending Review' },
+    processed: { color: 'bg-emerald-100 text-emerald-700', label: 'Processed' },
+    error: { color: 'bg-red-100 text-red-700', label: 'Error' },
+    ignored: { color: 'bg-slate-100 text-slate-600', label: 'Ignored' },
   }
+  const c = config[status]
+  return <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${c.color}`}>{c.label}</span>
+}
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label htmlFor="fhirBaseUrl" className="block text-sm font-medium text-slate-700 mb-1">
-          Your Epic FHIR Server URL
-        </label>
-        <div className="relative">
-          <Server className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            id="fhirBaseUrl"
-            type="url"
-            value={fhirBaseUrl}
-            onChange={e => setFhirBaseUrl(e.target.value)}
-            placeholder="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4"
-            className="w-full pl-10 pr-3 py-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-          />
-        </div>
-        <p className="mt-1 text-xs text-slate-500">
-          Your hospital&apos;s Epic FHIR R4 endpoint. Ask your Epic administrator if you&apos;re unsure. Must include the full path (e.g., /api/FHIR/R4).
-        </p>
-      </div>
-
-      {error && (
-        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-red-700">{error}</p>
-        </div>
-      )}
-
-      <div className="flex items-center gap-3 pt-2">
-        <button
-          type="submit"
-          disabled={saving}
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-        >
-          {saving ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              Validating...
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="w-4 h-4" />
-              Validate & Save
-            </>
-          )}
-        </button>
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
-          >
-            Cancel
-          </button>
-        )}
-      </div>
-    </form>
-  )
+function UnmatchedBadges({ reviewNotes }: { reviewNotes: ReviewNotes | null }) {
+  if (!reviewNotes) return null
+  const badges: React.ReactNode[] = []
+  if (reviewNotes.unmatched_surgeon) {
+    badges.push(
+      <span key="surgeon" className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 border border-red-200">
+        <User className="w-3 h-3" />Surgeon
+      </span>
+    )
+  }
+  if (reviewNotes.unmatched_procedure) {
+    badges.push(
+      <span key="procedure" className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700 border border-orange-200">
+        <Scissors className="w-3 h-3" />Procedure
+      </span>
+    )
+  }
+  if (reviewNotes.unmatched_room) {
+    badges.push(
+      <span key="room" className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+        <MapPin className="w-3 h-3" />Room
+      </span>
+    )
+  }
+  if (reviewNotes.demographics_mismatch) {
+    badges.push(
+      <span key="demographics" className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+        Demographics
+      </span>
+    )
+  }
+  return badges.length > 0 ? <div className="flex flex-wrap gap-1">{badges}</div> : null
 }
 
 // =====================================================
 // MAIN COMPONENT
 // =====================================================
 
-export default function EpicOverviewPage() {
+export default function EpicHL7v2IntegrationPage() {
   const router = useRouter()
   const { data: currentUser } = useCurrentUser()
-  const [epicStatus, setEpicStatus] = useState<EpicStatusResponse | null>(null)
-  const [epicConfig, setEpicConfig] = useState<EpicConfigResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [disconnecting, setDisconnecting] = useState(false)
-  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
-  const [showConfigForm, setShowConfigForm] = useState(false)
+  const facilityId = currentUser?.facilityId
+  const userId = currentUser?.userId
 
-  const fetchStatus = useCallback(async () => {
-    if (!currentUser?.facilityId) return
-    try {
-      const res = await fetch(`/api/epic/status?facility_id=${currentUser.facilityId}`)
-      if (res.ok) {
-        setEpicStatus(await res.json())
-      }
-    } catch {
-      // Silently fail
-    }
-  }, [currentUser?.facilityId])
+  // Active tab
+  const [activeTab, setActiveTab] = useState<TabId>('overview')
 
-  const fetchConfig = useCallback(async () => {
-    if (!currentUser?.facilityId) return
-    try {
-      const res = await fetch(`/api/epic/config?facility_id=${currentUser.facilityId}`)
-      if (res.ok) {
-        setEpicConfig(await res.json())
-      }
-    } catch {
-      // Silently fail
-    }
-  }, [currentUser?.facilityId])
+  // Integration data
+  const {
+    data: integration,
+    loading: integrationLoading,
+    setData: setIntegration,
+  } = useSupabaseQuery<EhrIntegration | null>(
+    async (supabase) => {
+      const { data } = await ehrDAL.getIntegrationByFacility(supabase, facilityId!, 'epic_hl7v2')
+      return data
+    },
+    { deps: [facilityId], enabled: !!facilityId }
+  )
 
-  useEffect(() => {
-    // Don't resolve loading until currentUser is available — prevents flash of unconfigured state
-    if (!currentUser?.facilityId) return
-    Promise.all([fetchStatus(), fetchConfig()]).finally(() => setLoading(false))
-  }, [fetchStatus, fetchConfig, currentUser?.facilityId])
+  // Stats
+  const {
+    data: stats,
+    refetch: refetchStats,
+  } = useSupabaseQuery<IntegrationStats>(
+    async (supabase) => {
+      const { data } = await ehrDAL.getIntegrationStats(supabase, facilityId!)
+      return data!
+    },
+    { deps: [facilityId], enabled: !!facilityId }
+  )
 
-  // Live countdown timer — re-renders every 30s to keep token expiry display fresh
-  const [, setTick] = useState(0)
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Review queue
+  const {
+    data: pendingReviews,
+    loading: reviewsLoading,
+    setData: setPendingReviews,
+  } = useSupabaseQuery<EhrIntegrationLog[]>(
+    async (supabase) => {
+      const { data } = await ehrDAL.listPendingReviews(supabase, facilityId!, { limit: 50 })
+      return data
+    },
+    { deps: [facilityId], enabled: !!facilityId }
+  )
 
-  useEffect(() => {
-    const hasToken = epicStatus?.connection?.token_expires_at
-    if (!hasToken) return
+  // Log entries
+  const [logStatusFilter, setLogStatusFilter] = useState<EhrProcessingStatus | ''>('')
+  const [logPage, setLogPage] = useState(0)
 
-    tickRef.current = setInterval(() => {
-      setTick(t => t + 1)
-    }, 30_000)
-
-    return () => {
-      if (tickRef.current) clearInterval(tickRef.current)
-    }
-  }, [epicStatus?.connection?.token_expires_at])
-
-  const handleConnect = () => {
-    if (!currentUser?.facilityId) return
-    window.location.href = `/api/epic/auth/connect?facility_id=${currentUser.facilityId}`
-  }
-
-  const handleDisconnect = async () => {
-    if (!currentUser?.facilityId) return
-    setDisconnecting(true)
-    try {
-      const res = await fetch('/api/epic/auth/disconnect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ facility_id: currentUser.facilityId }),
+  const {
+    data: logEntries,
+    loading: logsLoading,
+    refetch: refetchLogs,
+    setData: setLogEntries,
+  } = useSupabaseQuery<EhrIntegrationLog[]>(
+    async (supabase) => {
+      const { data } = await ehrDAL.listLogEntries(supabase, facilityId!, {
+        status: logStatusFilter || undefined,
+        limit: PAGE_SIZE,
+        offset: logPage * PAGE_SIZE,
       })
-      if (res.ok) {
-        setShowDisconnectConfirm(false)
-        await fetchStatus()
+      return data
+    },
+    { deps: [facilityId, logStatusFilter, logPage], enabled: !!facilityId }
+  )
+
+  // Entity mappings
+  const [mappingTab, setMappingTab] = useState<EhrEntityType>('surgeon')
+  const {
+    data: entityMappings,
+    loading: mappingsLoading,
+    refetch: refetchMappings,
+  } = useSupabaseQuery(
+    async (supabase) => {
+      if (!integration) return []
+      const { data } = await ehrDAL.listEntityMappings(supabase, integration.id, mappingTab)
+      return data
+    },
+    { deps: [integration?.id, mappingTab], enabled: !!integration }
+  )
+
+  // Lookup data
+  const { data: surgeons } = useSurgeons(facilityId)
+  const { data: rooms } = useRooms(facilityId)
+  const { data: procedures } = useProcedureTypes(facilityId)
+
+  // Realtime
+  const handleRealtimeInsert = useCallback((entry: EhrIntegrationLog) => {
+    setLogEntries(prev => prev ? [entry, ...prev].slice(0, PAGE_SIZE) : [entry])
+    if (entry.processing_status === 'pending_review') {
+      setPendingReviews(prev => prev ? [entry, ...prev] : [entry])
+    }
+    refetchStats()
+  }, [setLogEntries, setPendingReviews, refetchStats])
+
+  useIntegrationRealtime({
+    facilityId,
+    onInsert: handleRealtimeInsert,
+    enabled: !!facilityId,
+  })
+
+  // Entity lookups for EntityResolver
+  const surgeonEntities = useMemo(
+    () => (surgeons || []).map(s => ({ id: s.id, label: `${s.last_name}, ${s.first_name}` })),
+    [surgeons]
+  )
+  const roomEntities = useMemo(
+    () => (rooms || []).map(r => ({ id: r.id, label: r.name })),
+    [rooms]
+  )
+  const procedureEntities = useMemo(
+    () => (procedures || []).map(p => ({ id: p.id, label: p.name })),
+    [procedures]
+  )
+
+  const getEntitiesForType = useCallback((type: EhrEntityType) => {
+    switch (type) {
+      case 'surgeon': return surgeonEntities
+      case 'room': return roomEntities
+      case 'procedure': return procedureEntities
+    }
+  }, [surgeonEntities, roomEntities, procedureEntities])
+
+  // =====================================================
+  // ACTION HANDLERS
+  // =====================================================
+
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  const handleSetup = async () => {
+    if (!facilityId) return
+    setActionLoading('setup')
+    try {
+      const supabase = createClient()
+      const apiKey = crypto.randomUUID()
+      const endpointUrl = `${SUPABASE_PROJECT_URL}/functions/v1/hl7v2-listener`
+
+      const { data, error } = await ehrDAL.upsertIntegration(supabase, {
+        facility_id: facilityId,
+        integration_type: 'epic_hl7v2',
+        display_name: 'Epic HL7v2',
+        config: {
+          api_key: apiKey,
+          endpoint_url: endpointUrl,
+          auth_type: 'api_key',
+          rate_limit_per_minute: 100,
+          retention_days: 90,
+        },
+        is_active: true,
+      })
+
+      if (error) {
+        log.error('Failed to set up integration', { error: error.message })
+        return
       }
-    } catch {
-      // Error will show via status refetch
+      setIntegration(data)
+      refetchStats()
     } finally {
-      setDisconnecting(false)
+      setActionLoading(null)
     }
   }
 
-  const handleConfigSaved = async () => {
-    setShowConfigForm(false)
-    await Promise.all([fetchStatus(), fetchConfig()])
+  const handleToggleActive = async () => {
+    if (!integration) return
+    setActionLoading('toggle')
+    try {
+      const supabase = createClient()
+      const { data, error } = await ehrDAL.upsertIntegration(supabase, {
+        facility_id: integration.facility_id,
+        integration_type: 'epic_hl7v2',
+        is_active: !integration.is_active,
+      })
+      if (!error && data) setIntegration(data)
+    } finally {
+      setActionLoading(null)
+    }
   }
 
-  const connection = epicStatus?.connection
-  const stats = epicStatus?.mappingStats
-  const isConnected = connection?.status === 'connected'
-  const isExpired = connection?.status === 'token_expired'
-  const tokenInfo = connection ? getTokenExpiryInfo(connection.token_expires_at) : null
-  const isConfigured = !!epicConfig?.configured
+  const handleRotateKey = async () => {
+    if (!integration) return
+    if (!confirm('Rotate API key? The old key will be immediately invalid.')) return
 
-  if (loading) {
+    setActionLoading('rotate')
+    try {
+      const supabase = createClient()
+      const newKey = crypto.randomUUID()
+      const updatedConfig = { ...integration.config, api_key: newKey }
+
+      const { data, error } = await ehrDAL.upsertIntegration(supabase, {
+        facility_id: integration.facility_id,
+        integration_type: 'epic_hl7v2',
+        config: updatedConfig,
+      })
+      if (!error && data) setIntegration(data)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleApproveImport = async (logEntry: EhrIntegrationLog) => {
+    if (!userId || !integration) return
+    setActionLoading(`approve-${logEntry.id}`)
+    try {
+      const supabase = createClient()
+      const { handleSIUMessage } = await import('@/lib/integrations/epic/case-import-service')
+      const { parseSIUMessage } = await import('@/lib/hl7v2/siu-parser')
+
+      if (!logEntry.raw_message) {
+        log.error('Cannot approve import: raw message not available')
+        return
+      }
+
+      const parseResult = parseSIUMessage(logEntry.raw_message)
+      if (!parseResult.success || !parseResult.message) {
+        log.error('Cannot approve import: parse failed', { errors: parseResult.errors })
+        return
+      }
+
+      const result = await handleSIUMessage(supabase, parseResult.message, integration, logEntry.raw_message)
+
+      if (result.success && result.caseId) {
+        await ehrDAL.approveImport(supabase, logEntry.id, result.caseId, userId)
+        setPendingReviews(prev => prev ? prev.filter(r => r.id !== logEntry.id) : [])
+        refetchStats()
+        refetchLogs()
+      }
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleRejectImport = async (logEntry: EhrIntegrationLog) => {
+    if (!userId) return
+    const reason = prompt('Reason for rejection:')
+    if (!reason) return
+
+    setActionLoading(`reject-${logEntry.id}`)
+    try {
+      const supabase = createClient()
+      await ehrDAL.rejectImport(supabase, logEntry.id, reason, userId)
+      setPendingReviews(prev => prev ? prev.filter(r => r.id !== logEntry.id) : [])
+      refetchStats()
+      refetchLogs()
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleResolveEntity = async (
+    logEntry: EhrIntegrationLog,
+    entityType: EhrEntityType,
+    externalIdentifier: string,
+    externalDisplayName: string,
+    orbitEntityId: string,
+    orbitDisplayName: string,
+  ) => {
+    if (!integration) return
+    setActionLoading(`resolve-${logEntry.id}-${entityType}`)
+    try {
+      const supabase = createClient()
+      const { error } = await ehrDAL.resolveEntity(
+        supabase, logEntry.id, integration.id, integration.facility_id,
+        entityType, externalIdentifier, externalDisplayName,
+        orbitEntityId, orbitDisplayName,
+      )
+
+      if (!error) {
+        const { data: updated } = await ehrDAL.getLogEntry(supabase, logEntry.id)
+        if (updated) {
+          setPendingReviews(prev => prev ? prev.map(r => r.id === logEntry.id ? updated : r) : [])
+        }
+        refetchMappings()
+      }
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleCreateEntity = async (formData: CreateEntityData): Promise<string | null> => {
+    if (!facilityId) return null
+    const supabase = createClient()
+
+    switch (formData.entityType) {
+      case 'surgeon': {
+        const nameParts = formData.name.split(',').map(s => s.trim())
+        const lastName = nameParts[0] || formData.name
+        const firstName = nameParts[1] || ''
+        const { data, error } = await supabase
+          .from('users')
+          .insert({ first_name: firstName, last_name: lastName, facility_id: facilityId, npi: formData.npi || null })
+          .select('id')
+          .single()
+        if (error) { log.error('Failed to create surgeon', { error: error.message }); return null }
+        return data.id
+      }
+      case 'procedure': {
+        const { data, error } = await supabase
+          .from('procedure_types')
+          .insert({ name: formData.name, facility_id: facilityId, is_active: true })
+          .select('id')
+          .single()
+        if (error) { log.error('Failed to create procedure', { error: error.message }); return null }
+        return data.id
+      }
+      case 'room': {
+        const { data, error } = await supabase
+          .from('or_rooms')
+          .insert({ name: formData.name, facility_id: facilityId, is_active: true })
+          .select('id')
+          .single()
+        if (error) { log.error('Failed to create room', { error: error.message }); return null }
+        return data.id
+      }
+    }
+  }
+
+  // =====================================================
+  // LOADING STATE
+  // =====================================================
+
+  if (integrationLoading) {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3 mb-6">
@@ -362,17 +478,20 @@ export default function EpicOverviewPage() {
             <ArrowLeft className="w-5 h-5 text-slate-500" />
           </button>
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Epic Integration</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">Epic HL7v2 Integration</h1>
             <p className="text-slate-500 text-sm">Loading...</p>
           </div>
         </div>
         <div className="animate-pulse space-y-4">
+          <div className="h-12 bg-slate-100 rounded-xl" />
           <div className="h-32 bg-slate-100 rounded-xl" />
-          <div className="h-24 bg-slate-100 rounded-xl" />
         </div>
       </div>
     )
   }
+
+  const endpointUrl = integration?.config?.endpoint_url || `${SUPABASE_PROJECT_URL}/functions/v1/hl7v2-listener`
+  const pendingCount = stats?.pendingReview ?? 0
 
   return (
     <div className="space-y-6">
@@ -381,272 +500,689 @@ export default function EpicOverviewPage() {
         <button onClick={() => router.push('/settings/integrations')} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
           <ArrowLeft className="w-5 h-5 text-slate-500" />
         </button>
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Epic Integration</h1>
-          <p className="text-slate-500 text-sm">Connect to Epic EHR via SMART on FHIR</p>
+        <div className="flex-1">
+          <h1 className="text-2xl font-semibold text-slate-900">Epic HL7v2 Integration</h1>
+          <p className="text-slate-500 text-sm">Receive surgical scheduling data via HL7v2 SIU messages</p>
+        </div>
+        {integration && (
+          <div className="flex items-center gap-2">
+            <div className={`w-2.5 h-2.5 rounded-full ${integration.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+            <span className="text-sm text-slate-600">{integration.is_active ? 'Active' : 'Inactive'}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Tab Bar */}
+      <div className="flex items-center gap-1 border-b border-slate-200">
+        {TABS.map(tab => {
+          const Icon = tab.icon
+          const isActive = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                isActive
+                  ? 'text-blue-700 border-blue-600'
+                  : 'text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {tab.label}
+              {tab.id === 'review' && pendingCount > 0 && (
+                <span className="px-1.5 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* TAB: OVERVIEW */}
+      {activeTab === 'overview' && (
+        <OverviewTab
+          integration={integration}
+          stats={stats}
+          endpointUrl={endpointUrl}
+          actionLoading={actionLoading}
+          onSetup={handleSetup}
+          onToggleActive={handleToggleActive}
+          onRotateKey={handleRotateKey}
+          onNavigateTab={setActiveTab}
+          onNavigateLogsWithFilter={(filter) => { setActiveTab('logs'); setLogStatusFilter(filter) }}
+        />
+      )}
+
+      {/* TAB: REVIEW QUEUE */}
+      {activeTab === 'review' && (
+        <ReviewQueueTab
+          pendingReviews={pendingReviews || []}
+          loading={reviewsLoading}
+          actionLoading={actionLoading}
+          getEntitiesForType={getEntitiesForType}
+          onApprove={handleApproveImport}
+          onReject={handleRejectImport}
+          onResolveEntity={handleResolveEntity}
+          onCreateEntity={handleCreateEntity}
+        />
+      )}
+
+      {/* TAB: MAPPINGS */}
+      {activeTab === 'mappings' && (
+        <MappingsTab
+          integration={integration}
+          mappingTab={mappingTab}
+          setMappingTab={setMappingTab}
+          entityMappings={entityMappings || []}
+          loading={mappingsLoading}
+          onDelete={async (mappingId: string) => {
+            const supabase = createClient()
+            await ehrDAL.deleteEntityMapping(supabase, mappingId)
+            refetchMappings()
+          }}
+        />
+      )}
+
+      {/* TAB: LOGS */}
+      {activeTab === 'logs' && (
+        <LogsTab
+          logEntries={logEntries || []}
+          loading={logsLoading}
+          statusFilter={logStatusFilter}
+          setStatusFilter={(f) => { setLogStatusFilter(f); setLogPage(0) }}
+          page={logPage}
+          setPage={setLogPage}
+          pageSize={PAGE_SIZE}
+          onRefresh={refetchLogs}
+        />
+      )}
+    </div>
+  )
+}
+
+// =====================================================
+// OVERVIEW TAB
+// =====================================================
+
+function OverviewTab({
+  integration,
+  stats,
+  endpointUrl,
+  actionLoading,
+  onSetup,
+  onToggleActive,
+  onRotateKey,
+  onNavigateTab,
+  onNavigateLogsWithFilter,
+}: {
+  integration: EhrIntegration | null
+  stats: IntegrationStats | null
+  endpointUrl: string
+  actionLoading: string | null
+  onSetup: () => Promise<void>
+  onToggleActive: () => Promise<void>
+  onRotateKey: () => Promise<void>
+  onNavigateTab: (tab: TabId) => void
+  onNavigateLogsWithFilter: (filter: EhrProcessingStatus) => void
+}) {
+  if (!integration) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
+        <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Activity className="w-8 h-8 text-blue-600" />
+        </div>
+        <h2 className="text-xl font-semibold text-slate-900 mb-2">Set Up HL7v2 Integration</h2>
+        <p className="text-slate-500 max-w-md mx-auto mb-6">
+          Generate an API key to start receiving surgical scheduling messages from your Epic integration engine.
+        </p>
+        <button
+          onClick={onSetup}
+          disabled={actionLoading === 'setup'}
+          className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+        >
+          {actionLoading === 'setup' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+          Initialize Integration
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <SetupInstructionsCard endpointUrl={endpointUrl} apiKey={integration.config?.api_key} isActive={integration.is_active} />
+
+      {/* Quick Actions */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onToggleActive}
+          disabled={actionLoading === 'toggle'}
+          className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 ${
+            integration.is_active
+              ? 'text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100'
+              : 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'
+          }`}
+        >
+          {actionLoading === 'toggle' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+          {integration.is_active ? 'Disable' : 'Enable'}
+        </button>
+        <button
+          onClick={onRotateKey}
+          disabled={actionLoading === 'rotate'}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
+        >
+          {actionLoading === 'rotate' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
+          Rotate API Key
+        </button>
+      </div>
+
+      {/* Status Card */}
+      <div className="bg-white border border-slate-200 rounded-xl p-6">
+        <h3 className="font-medium text-slate-900 mb-4">Connection Status</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
+          <div>
+            <p className="text-slate-500 mb-0.5">Status</p>
+            <div className="flex items-center gap-2">
+              <div className={`w-2.5 h-2.5 rounded-full ${integration.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+              <p className="font-medium text-slate-900">{integration.is_active ? 'Active' : 'Inactive'}</p>
+            </div>
+          </div>
+          <div>
+            <p className="text-slate-500 mb-0.5">Last Message</p>
+            <p className="font-medium text-slate-900">{formatRelativeTime(integration.last_message_at)}</p>
+          </div>
+          <div>
+            <p className="text-slate-500 mb-0.5">Messages Today</p>
+            <p className="font-medium text-slate-900">{stats?.messagesToday ?? 0}</p>
+          </div>
+          <div>
+            <p className="text-slate-500 mb-0.5">Last Error</p>
+            <p className={`font-medium ${integration.last_error ? 'text-red-600' : 'text-slate-900'}`}>
+              {integration.last_error || 'None'}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* State 1: Not Connected — show FHIR URL form + connect */}
-      {(!connection || connection.status === 'disconnected') && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          {!isConfigured || showConfigForm ? (
-            /* Step 1: Enter FHIR URL */
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-1">
-                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                  <Settings className="w-5 h-5 text-blue-600" />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <span className="text-sm text-slate-500">Total Imported</span>
+          </div>
+          <p className="text-2xl font-semibold text-slate-900">{stats?.totalProcessed ?? 0}</p>
+        </div>
+        <button
+          className="bg-white border border-slate-200 rounded-xl p-5 text-left hover:border-amber-300 transition-colors"
+          onClick={() => onNavigateTab('review')}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <AlertCircle className="w-4 h-4 text-amber-500" />
+            <span className="text-sm text-slate-500">Pending Review</span>
+          </div>
+          <p className="text-2xl font-semibold text-amber-600">{stats?.pendingReview ?? 0}</p>
+        </button>
+        <button
+          className="bg-white border border-slate-200 rounded-xl p-5 text-left hover:border-red-300 transition-colors"
+          onClick={() => onNavigateLogsWithFilter('error')}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <XCircle className="w-4 h-4 text-red-400" />
+            <span className="text-sm text-slate-500">Errors</span>
+          </div>
+          <p className="text-2xl font-semibold text-red-600">{stats?.errors ?? 0}</p>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// =====================================================
+// REVIEW QUEUE TAB
+// =====================================================
+
+function ReviewQueueTab({
+  pendingReviews,
+  loading,
+  actionLoading,
+  getEntitiesForType,
+  onApprove,
+  onReject,
+  onResolveEntity,
+  onCreateEntity,
+}: {
+  pendingReviews: EhrIntegrationLog[]
+  loading: boolean
+  actionLoading: string | null
+  getEntitiesForType: (type: EhrEntityType) => Array<{ id: string; label: string }>
+  onApprove: (entry: EhrIntegrationLog) => Promise<void>
+  onReject: (entry: EhrIntegrationLog) => Promise<void>
+  onResolveEntity: (
+    entry: EhrIntegrationLog, entityType: EhrEntityType,
+    extId: string, extName: string, orbitId: string, orbitName: string,
+  ) => Promise<void>
+  onCreateEntity: (formData: CreateEntityData) => Promise<string | null>
+}) {
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+
+  if (loading) {
+    return (
+      <div className="animate-pulse space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-20 bg-slate-100 rounded-lg" />
+        ))}
+      </div>
+    )
+  }
+
+  if (pendingReviews.length === 0) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
+        <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+        <p className="text-slate-500">No pending reviews. All imports are up to date.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">{pendingReviews.length} import{pendingReviews.length !== 1 ? 's' : ''} pending review</p>
+
+      {pendingReviews.map(entry => {
+        const isExpanded = expandedRow === entry.id
+        const parsed = entry.parsed_data as Record<string, unknown> | null
+        const patient = parsed?.patient as Record<string, string> | undefined
+        const patientName = patient ? `${patient.lastName}, ${patient.firstName}` : 'Unknown'
+        const procedure = parsed?.procedure as Record<string, string> | undefined
+        const procedureName = procedure?.name || 'Unknown'
+        const scheduledDate = parsed?.scheduledStart
+          ? new Date(parsed.scheduledStart as string).toLocaleDateString()
+          : 'Unknown'
+
+        const reviewNotes = entry.review_notes
+        const hasUnmatched = !!(
+          reviewNotes?.unmatched_surgeon ||
+          reviewNotes?.unmatched_procedure ||
+          reviewNotes?.unmatched_room ||
+          reviewNotes?.demographics_mismatch
+        )
+
+        return (
+          <div key={entry.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setExpandedRow(isExpanded ? null : entry.id)}
+              className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+            >
+              {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium text-slate-900">{patientName}</span>
+                  <span className="text-xs text-slate-400">{entry.message_type}</span>
+                  <span className="text-xs text-slate-400">{scheduledDate}</span>
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    {isConfigured ? 'Edit FHIR Server' : 'Set Up Epic Connection'}
-                  </h2>
-                  <p className="text-sm text-slate-500">
-                    Enter your hospital&apos;s Epic FHIR server URL to get started.
-                  </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">{procedureName}</span>
+                  <UnmatchedBadges reviewNotes={entry.review_notes} />
                 </div>
               </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <StatusBadge status={entry.processing_status} />
+                <span className="text-xs text-slate-400">{formatRelativeTime(entry.created_at)}</span>
+              </div>
+            </button>
 
-              <div className="mt-5">
-                {currentUser?.facilityId && (
-                  <FhirUrlForm
-                    facilityId={currentUser.facilityId}
-                    initialUrl={epicConfig?.config?.fhir_base_url || ''}
-                    onSaved={handleConfigSaved}
-                    onCancel={isConfigured ? () => setShowConfigForm(false) : undefined}
+            {isExpanded && (
+              <div className="border-t border-slate-200 p-4 space-y-4">
+                <HL7MessageViewer rawMessage={entry.raw_message} parsedData={entry.parsed_data} />
+
+                {reviewNotes?.unmatched_surgeon && (
+                  <EntityResolver
+                    entityType="surgeon"
+                    unmatchedName={reviewNotes.unmatched_surgeon.name}
+                    unmatchedIdentifier={reviewNotes.unmatched_surgeon.npi}
+                    suggestions={reviewNotes.unmatched_surgeon.suggestions || []}
+                    existingEntities={getEntitiesForType('surgeon')}
+                    onMap={async (orbitId, displayName) => {
+                      await onResolveEntity(entry, 'surgeon',
+                        reviewNotes.unmatched_surgeon!.npi || reviewNotes.unmatched_surgeon!.name,
+                        reviewNotes.unmatched_surgeon!.name, orbitId, displayName)
+                    }}
+                    onCreate={onCreateEntity}
                   />
                 )}
-              </div>
-            </div>
-          ) : (
-            /* Step 2: URL saved — show connect button */
-            <div className="p-8 text-center">
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Link2 className="w-8 h-8 text-blue-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-slate-900 mb-2">Connect to Epic</h2>
-              <p className="text-slate-500 max-w-md mx-auto mb-4">
-                You&apos;ll be redirected to your Epic login page to authorize ORbit.
-              </p>
 
-              {/* FHIR URL summary */}
-              <div className="bg-slate-50 rounded-lg p-3 max-w-md mx-auto mb-6 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm min-w-0">
-                  <Server className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                  <span className="text-slate-700 truncate">{epicConfig?.config?.fhir_base_url}</span>
-                </div>
-                <button
-                  onClick={() => setShowConfigForm(true)}
-                  className="text-xs text-blue-600 hover:text-blue-700 font-medium flex-shrink-0 ml-2"
-                >
-                  Change
-                </button>
-              </div>
-
-              {/* Requirements */}
-              <div className="bg-slate-50 rounded-lg p-4 max-w-sm mx-auto mb-6 text-left">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">You&apos;ll need</p>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-slate-600">
-                    <Shield className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                    Your Epic username and password
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-600">
-                    <Link2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                    Network access to your Epic server
-                  </li>
-                </ul>
-              </div>
-
-              <button
-                onClick={handleConnect}
-                className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Link2 className="w-4 h-4" />
-                Connect to Epic
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* State 2: Connected / Token Expired / Error */}
-      {connection && connection.status !== 'disconnected' && (
-        <>
-          {/* Connection Status Card */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="font-medium text-slate-900 mb-1">Connection Status</h3>
-                <StatusIndicator status={connection.status} />
-              </div>
-              <div className="flex items-center gap-2">
-                {(isExpired || connection.status === 'error') && (
-                  <button
-                    onClick={handleConnect}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Reconnect
-                  </button>
+                {reviewNotes?.unmatched_procedure && (
+                  <EntityResolver
+                    entityType="procedure"
+                    unmatchedName={reviewNotes.unmatched_procedure.name}
+                    unmatchedIdentifier={reviewNotes.unmatched_procedure.cpt}
+                    suggestions={reviewNotes.unmatched_procedure.suggestions || []}
+                    existingEntities={getEntitiesForType('procedure')}
+                    onMap={async (orbitId, displayName) => {
+                      await onResolveEntity(entry, 'procedure',
+                        reviewNotes.unmatched_procedure!.cpt || reviewNotes.unmatched_procedure!.name,
+                        reviewNotes.unmatched_procedure!.name, orbitId, displayName)
+                    }}
+                    onCreate={onCreateEntity}
+                  />
                 )}
-                <button
-                  onClick={() => setShowDisconnectConfirm(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-                >
-                  <Unlink className="w-3.5 h-3.5" />
-                  Disconnect
-                </button>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-slate-500 mb-0.5">Connected At</p>
-                <p className="text-slate-900 font-medium">{formatDate(connection.last_connected_at)}</p>
-              </div>
-              <div>
-                <p className="text-slate-500 mb-0.5">FHIR Server</p>
-                <p className="text-slate-900 font-medium truncate">{connection.fhir_base_url}</p>
-              </div>
-              <div>
-                <p className="text-slate-500 mb-0.5">Token Status</p>
-                {tokenInfo && (
-                  <div className="flex items-center gap-1.5">
-                    <Clock className={`w-3.5 h-3.5 ${tokenInfo.isExpired ? 'text-red-500' : tokenInfo.minutesRemaining !== null && tokenInfo.minutesRemaining < 10 ? 'text-amber-500' : 'text-emerald-500'}`} />
-                    <p className={`font-medium ${tokenInfo.isExpired ? 'text-red-600' : tokenInfo.minutesRemaining !== null && tokenInfo.minutesRemaining < 10 ? 'text-amber-600' : 'text-slate-900'}`}>
-                      {tokenInfo.label}
-                    </p>
+                {reviewNotes?.unmatched_room && (
+                  <EntityResolver
+                    entityType="room"
+                    unmatchedName={reviewNotes.unmatched_room.name}
+                    suggestions={reviewNotes.unmatched_room.suggestions || []}
+                    existingEntities={getEntitiesForType('room')}
+                    onMap={async (orbitId, displayName) => {
+                      await onResolveEntity(entry, 'room',
+                        reviewNotes.unmatched_room!.name,
+                        reviewNotes.unmatched_room!.name, orbitId, displayName)
+                    }}
+                    onCreate={onCreateEntity}
+                  />
+                )}
+
+                {reviewNotes?.demographics_mismatch && (
+                  <div className="flex items-center gap-2 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                    <AlertCircle className="w-4 h-4 text-purple-600" />
+                    <div>
+                      <p className="text-sm font-medium text-purple-800">Demographics Mismatch</p>
+                      <p className="text-xs text-purple-600">
+                        {reviewNotes.demographics_mismatch.field}: expected &quot;{reviewNotes.demographics_mismatch.expected}&quot;, received &quot;{reviewNotes.demographics_mismatch.received}&quot;
+                      </p>
+                    </div>
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
 
-          {/* Token Expiry Warning Banner */}
-          {tokenInfo && tokenInfo.minutesRemaining !== null && tokenInfo.minutesRemaining <= 10 && !tokenInfo.isExpired && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-amber-600" />
-                <div>
-                  <p className="text-sm font-medium text-amber-800">Token expiring soon</p>
-                  <p className="text-xs text-amber-600">
-                    {tokenInfo.minutesRemaining < 1 ? 'Less than 1 minute' : `${tokenInfo.minutesRemaining} minutes`} remaining. Reconnect to refresh your session.
-                  </p>
+                <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => onApprove(entry)}
+                    disabled={hasUnmatched || actionLoading === `approve-${entry.id}`}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={hasUnmatched ? 'Resolve all unmatched entities first' : 'Approve and create case'}
+                  >
+                    {actionLoading === `approve-${entry.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    Approve Import
+                  </button>
+                  <button
+                    onClick={() => onReject(entry)}
+                    disabled={actionLoading === `reject-${entry.id}`}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                  >
+                    {actionLoading === `reject-${entry.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+                    Reject
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={handleConnect}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-amber-700 bg-amber-100 rounded-lg hover:bg-amber-200 transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Reconnect
-              </button>
-            </div>
-          )}
-
-          {tokenInfo?.isExpired && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-red-500" />
-                <div>
-                  <p className="text-sm font-medium text-red-800">Token expired</p>
-                  <p className="text-xs text-red-600">
-                    Your Epic session has expired. Reconnect to continue using FHIR features.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleConnect}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Reconnect
-              </button>
-            </div>
-          )}
-
-          {/* Quick Actions */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <button
-              onClick={() => router.push('/settings/integrations/epic/import')}
-              disabled={!isConnected}
-              className="p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-200 hover:shadow-sm transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Download className="w-5 h-5 text-blue-600 mb-2" />
-              <p className="font-medium text-slate-900 text-sm">Import Cases</p>
-              <p className="text-xs text-slate-500 mt-0.5">Fetch appointments from Epic</p>
-            </button>
-
-            <button
-              onClick={() => router.push('/settings/integrations/epic/mappings')}
-              className="p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-200 hover:shadow-sm transition-all text-left"
-            >
-              <MapPin className="w-5 h-5 text-blue-600 mb-2" />
-              <p className="font-medium text-slate-900 text-sm">Entity Mappings</p>
-              <p className="text-xs text-slate-500 mt-0.5">Map surgeons, rooms, procedures</p>
-            </button>
-
-            <button
-              onClick={handleConnect}
-              disabled={isConnected}
-              className="p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-200 hover:shadow-sm transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCw className="w-5 h-5 text-blue-600 mb-2" />
-              <p className="font-medium text-slate-900 text-sm">Reconnect</p>
-              <p className="text-xs text-slate-500 mt-0.5">Refresh Epic OAuth token</p>
-            </button>
+            )}
           </div>
+        )
+      })}
+    </div>
+  )
+}
 
-          {/* Mapping Summary */}
-          {stats && (
-            <div className="bg-white border border-slate-200 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium text-slate-900">Entity Mapping Summary</h3>
-                <button
-                  onClick={() => router.push('/settings/integrations/epic/mappings')}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  Manage Mappings
-                </button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <MappingStatCard icon={Users} label="Surgeons" mapped={stats.surgeon.mapped} total={stats.surgeon.total} />
-                <MappingStatCard icon={LayoutGrid} label="Rooms" mapped={stats.room.mapped} total={stats.room.total} />
-                <MappingStatCard icon={ClipboardList} label="Procedures" mapped={stats.procedure.mapped} total={stats.procedure.total} />
-              </div>
-            </div>
-          )}
-        </>
-      )}
+// =====================================================
+// MAPPINGS TAB
+// =====================================================
 
-      {/* Disconnect Confirmation Dialog */}
-      {showDisconnectConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowDisconnectConfirm(false)} />
-          <div className="relative bg-white rounded-xl p-6 max-w-sm mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">Disconnect from Epic?</h3>
-            <p className="text-sm text-slate-500 mb-6">
-              This will revoke the access token and disconnect your facility from Epic. Existing imported cases will not be affected. You can reconnect at any time.
-            </p>
-            <div className="flex items-center gap-3 justify-end">
-              <button
-                onClick={() => setShowDisconnectConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDisconnect}
-                disabled={disconnecting}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                {disconnecting ? 'Disconnecting...' : 'Disconnect'}
-              </button>
-            </div>
+function MappingsTab({
+  integration,
+  mappingTab,
+  setMappingTab,
+  entityMappings,
+  loading,
+  onDelete,
+}: {
+  integration: EhrIntegration | null
+  mappingTab: EhrEntityType
+  setMappingTab: (tab: EhrEntityType) => void
+  entityMappings: Array<{
+    id: string; entity_type: string; external_identifier: string
+    external_display_name: string | null; orbit_entity_id: string | null
+    orbit_display_name: string | null; match_method: string; match_confidence: number | null
+  }>
+  loading: boolean
+  onDelete: (mappingId: string) => Promise<void>
+}) {
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  if (!integration) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
+        <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+        <p className="text-slate-500">Set up the integration first to manage entity mappings.</p>
+      </div>
+    )
+  }
+
+  const tabConfig: Array<{ type: EhrEntityType; icon: React.ComponentType<{ className?: string }>; label: string }> = [
+    { type: 'surgeon', icon: Users, label: 'Surgeons' },
+    { type: 'room', icon: LayoutGrid, label: 'Rooms' },
+    { type: 'procedure', icon: ClipboardList, label: 'Procedures' },
+  ]
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        {tabConfig.map(({ type, icon: Icon, label }) => (
+          <button
+            key={type}
+            onClick={() => setMappingTab(type)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+              mappingTab === type
+                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        {loading ? (
+          <div className="p-6 animate-pulse space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 bg-slate-100 rounded-lg" />)}
           </div>
+        ) : entityMappings.length === 0 ? (
+          <div className="p-8 text-center">
+            <p className="text-sm text-slate-400">No {mappingTab} mappings yet. Mappings are created when messages are processed or entities are resolved.</p>
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">External</th>
+                <th className="px-2 py-2.5 w-10" />
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ORbit Entity</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-24">Match</th>
+                <th className="px-4 py-2.5 w-16" />
+              </tr>
+            </thead>
+            <tbody>
+              {entityMappings.map(mapping => (
+                <tr key={mapping.id} className="border-b border-slate-100 last:border-0">
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-medium text-slate-900">{mapping.external_display_name || mapping.external_identifier}</p>
+                    <p className="text-xs text-slate-400">{mapping.external_identifier}</p>
+                  </td>
+                  <td className="px-2 py-3 text-center"><span className="text-slate-300">&rarr;</span></td>
+                  <td className="px-4 py-3"><p className="text-sm text-slate-900">{mapping.orbit_display_name || '\u2014'}</p></td>
+                  <td className="px-4 py-3">
+                    {mapping.match_method === 'auto' && mapping.match_confidence !== null && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-full">
+                        Auto {Math.round(mapping.match_confidence * 100)}%
+                      </span>
+                    )}
+                    {mapping.match_method === 'manual' && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">Manual</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={async () => { setDeleting(mapping.id); await onDelete(mapping.id); setDeleting(null) }}
+                      disabled={deleting === mapping.id}
+                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                      title="Remove mapping"
+                    >
+                      {deleting === mapping.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// =====================================================
+// LOGS TAB
+// =====================================================
+
+function LogsTab({
+  logEntries,
+  loading,
+  statusFilter,
+  setStatusFilter,
+  page,
+  setPage,
+  pageSize,
+  onRefresh,
+}: {
+  logEntries: EhrIntegrationLog[]
+  loading: boolean
+  statusFilter: EhrProcessingStatus | ''
+  setStatusFilter: (f: EhrProcessingStatus | '') => void
+  page: number
+  setPage: (p: number) => void
+  pageSize: number
+  onRefresh: () => void
+}) {
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+
+  const filterOptions: Array<{ value: EhrProcessingStatus | ''; label: string }> = [
+    { value: '', label: 'All' },
+    { value: 'processed', label: 'Processed' },
+    { value: 'pending_review', label: 'Pending' },
+    { value: 'error', label: 'Errors' },
+    { value: 'ignored', label: 'Ignored' },
+  ]
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          {filterOptions.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setStatusFilter(opt.value)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                statusFilter === opt.value ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
-      )}
+        <button
+          onClick={onRefresh}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Refresh
+        </button>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        {loading ? (
+          <div className="p-6 animate-pulse space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-12 bg-slate-100 rounded-lg" />)}
+          </div>
+        ) : logEntries.length === 0 ? (
+          <div className="p-8 text-center">
+            <p className="text-sm text-slate-400">
+              {statusFilter ? `No ${statusFilter.replace('_', ' ')} messages found.` : 'No messages received yet.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-4 py-2.5 w-8" />
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Time</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Type</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">External ID</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logEntries.map(entry => {
+                  const isExpanded = expandedRow === entry.id
+                  return (
+                    <React.Fragment key={entry.id}>
+                      <tr
+                        className={`border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${
+                          entry.processing_status === 'error' ? 'bg-red-50/50' : ''
+                        }`}
+                        onClick={() => setExpandedRow(isExpanded ? null : entry.id)}
+                      >
+                        <td className="px-4 py-3">
+                          {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDate(entry.created_at)}</td>
+                        <td className="px-4 py-3 text-sm font-mono text-slate-700">{entry.message_type}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{entry.external_case_id || '\u2014'}</td>
+                        <td className="px-4 py-3"><StatusBadge status={entry.processing_status} /></td>
+                        <td className="px-4 py-3 text-xs text-slate-500 truncate max-w-xs">
+                          {entry.error_message || (entry.case_id ? `Case: ${entry.case_id.substring(0, 8)}...` : '\u2014')}
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-4 bg-slate-50/50 border-b border-slate-200">
+                            <HL7MessageViewer rawMessage={entry.raw_message} parsedData={entry.parsed_data} />
+                            {entry.error_message && (
+                              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <p className="text-sm text-red-700">{entry.error_message}</p>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+
+            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
+              <button
+                onClick={() => setPage(Math.max(0, page - 1))}
+                disabled={page === 0}
+                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-slate-400">Page {page + 1}</span>
+              <button
+                onClick={() => setPage(page + 1)}
+                disabled={logEntries.length < pageSize}
+                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
