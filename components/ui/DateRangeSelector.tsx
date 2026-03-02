@@ -103,8 +103,21 @@ export function getPresetDates(preset: string): { start: string; end: string; la
       yearAgo.setFullYear(yearAgo.getFullYear() - 1)
       return { start: toDateStr(yearAgo), end, label: 'Last 12 Months' }
     }
+    case 'next_7': {
+      const sevenAhead = new Date(today)
+      sevenAhead.setDate(sevenAhead.getDate() + 7)
+      return { start: end, end: toDateStr(sevenAhead), label: 'Next 7 Days' }
+    }
+    case 'next_30': {
+      const thirtyAhead = new Date(today)
+      thirtyAhead.setDate(thirtyAhead.getDate() + 30)
+      return { start: end, end: toDateStr(thirtyAhead), label: 'Next 30 Days' }
+    }
     case 'all': {
-      return { start: '2020-01-01', end, label: 'All Time' }
+      // Include future scheduled cases (90 days ahead)
+      const futureEnd = new Date(today)
+      futureEnd.setDate(futureEnd.getDate() + 90)
+      return { start: '2020-01-01', end: toDateStr(futureEnd), label: 'All Time' }
     }
     default: {
       // Default to MTD
@@ -156,6 +169,13 @@ const presetGroups = [
     ],
   },
   {
+    label: 'Upcoming',
+    presets: [
+      { id: 'next_7', label: 'Next 7 Days' },
+      { id: 'next_30', label: 'Next 30 Days' },
+    ],
+  },
+  {
     label: 'Monthly',
     presets: [
       { id: 'mtd', label: 'This Month' },
@@ -183,8 +203,9 @@ const presetGroups = [
 export default function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [mode, setMode] = useState<'presets' | 'custom'>('presets')
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
+  const todayStr = useMemo(() => toDateStr(startOfDay(new Date())), [])
+  const [customStart, setCustomStart] = useState(todayStr)
+  const [customEnd, setCustomEnd] = useState(todayStr)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Derive current display label

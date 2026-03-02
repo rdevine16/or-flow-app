@@ -28,6 +28,7 @@ interface CancellationReason {
   category: string
   display_order: number
   is_active: boolean
+  is_system: boolean
   deleted_at: string | null
 }
 
@@ -36,6 +37,7 @@ interface CancellationReason {
 // ============================================================================
 
 const CATEGORIES = [
+  { value: 'system', label: 'System', color: 'bg-purple-50 text-purple-700 border-purple-200', desc: 'System-managed' },
   { value: 'patient', label: 'Patient', color: `${categoryColors.patient.bg} ${categoryColors.patient.text} ${categoryColors.patient.border}`, desc: 'Patient-related' },
   { value: 'scheduling', label: 'Scheduling', color: `${categoryColors.scheduling.bg} ${categoryColors.scheduling.text} ${categoryColors.scheduling.border}`, desc: 'Administrative' },
   { value: 'clinical', label: 'Clinical', color: `${categoryColors.clinical.bg} ${categoryColors.clinical.text} ${categoryColors.clinical.border}`, desc: 'Resources & staffing' },
@@ -319,7 +321,7 @@ export default function CancellationReasonsSettingsPage() {
                                   </div>
                                 </div>
 
-                                {canEdit && (
+                                {canEdit && !reason.is_system && (
                                   <div className="flex items-center gap-1">
                                     {reason.is_active ? (
                                         <>
@@ -336,6 +338,11 @@ export default function CancellationReasonsSettingsPage() {
                                       </button>
                                     )}
                                   </div>
+                                )}
+                                {reason.is_system && (
+                                  <span className="text-xs text-purple-500 font-medium px-2 py-1 bg-purple-50 rounded">
+                                    System
+                                  </span>
                                 )}
                               </div>
                             ))}

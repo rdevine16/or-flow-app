@@ -386,19 +386,39 @@ async function handleCancel(
       return { success: true, action: 'ignored', caseId: null, logEntryId: logEntry.id, errorMessage: null };
     }
 
-    const { data: cancelledStatus } = await supabase
-      .from('case_statuses')
-      .select('id')
-      .eq('name', 'cancelled')
-      .maybeSingle();
+    // Look up cancelled status and system cancellation reason in parallel
+    const [statusResult, reasonResult] = await Promise.all([
+      supabase
+        .from('case_statuses')
+        .select('id')
+        .eq('name', 'cancelled')
+        .maybeSingle(),
+      supabase
+        .from('cancellation_reasons')
+        .select('id')
+        .eq('facility_id', facilityId)
+        .eq('name', 'ehr_system_cancellation')
+        .eq('is_system', true)
+        .maybeSingle(),
+    ]);
 
-    if (!cancelledStatus) {
+    if (!statusResult.data) {
       throw new Error('Could not find "cancelled" status in case_statuses');
+    }
+
+    // Build update payload with cancellation metadata
+    const cancelUpdate: Record<string, unknown> = {
+      status_id: statusResult.data.id,
+      cancelled_at: new Date().toISOString(),
+      cancellation_notes: `Cancelled via EHR (${siu.triggerEvent}) – ${siu.sch.appointmentReason || 'no reason provided'}`,
+    };
+    if (reasonResult.data) {
+      cancelUpdate.cancellation_reason_id = reasonResult.data.id;
     }
 
     const { error: updateError } = await supabase
       .from('cases')
-      .update({ status_id: cancelledStatus.id })
+      .update(cancelUpdate)
       .eq('id', existingCase.id);
 
     if (updateError) {
