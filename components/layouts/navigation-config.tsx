@@ -2,7 +2,7 @@
 // Centralized navigation configuration for DashboardLayout
 
 import { ReactNode } from 'react'
-import { AlertTriangle, Ban, BarChart3, Bell, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, CreditCard, Database, FileText, Flag, FlaskConical, Home, KeyRound, LayoutGrid, Package, Settings, ShieldCheck, User } from 'lucide-react'
+import { AlertTriangle, Ban, BarChart3, Bell, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, CreditCard, Database, FileText, Flag, FlaskConical, Home, KeyRound, LayoutGrid, Package, Plug, Settings, ShieldCheck, User } from 'lucide-react'
 
 // ============================================
 // Types
@@ -71,6 +71,7 @@ export const navIcons = {
   payers: <CreditCard className={iconClass} />,
   notifications: <Bell className={iconClass} />,
   demoGenerator: <Database className={iconClass} />,
+  integrations: <Plug className={iconClass} />,
 }
 
 // ============================================
@@ -110,6 +111,12 @@ export const adminNavGroups: NavGroup[] = [
         name: 'Demo Generator',
         href: '/admin/demo',
         icon: navIcons.demoGenerator,
+        allowedRoles: ['global_admin'],
+      },
+      {
+        name: 'HL7v2 Test Harness',
+        href: '/admin/settings/hl7v2-test-harness',
+        icon: navIcons.integrations,
         allowedRoles: ['global_admin'],
       },
     ],
