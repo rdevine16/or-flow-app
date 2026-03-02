@@ -211,16 +211,20 @@ Epic OpTime → Integration Engine (Mirth/Rhapsody) → HTTPS POST → Edge Func
 
 When an SIU message references a surgeon, procedure, or OR room that doesn't exist in ORbit, the message is held in `pending_review` status. The admin resolves it from the review queue.
 
-### Review Queue Flow
+### Review Queue Flow (Redesigned — Phase 14)
 1. Admin opens Settings → Integrations → Epic → Review Queue
-2. Sees list of pending imports with colored badges showing which entities are unmatched
-3. Clicks a row → expands to show detail panel with `EntityResolver` for each unmatched entity
-4. **EntityResolver** shows:
-   - (a) Suggested matches from fuzzy matching with confidence %
-   - (b) Search bar to find existing ORbit entities
-   - (c) "Create New" button → inline form (create surgeon/procedure/room without leaving the page)
-5. After all entities resolved → "Approve Import" → case created, log updated to 'processed'
-6. "Reject" → log marked 'ignored' with reason
+2. Sees scannable list of pending imports, each row showing:
+   - Status icon: green CheckCircle2 (ready to approve) or amber AlertCircle (needs entity mapping)
+   - Format: `New Case: 2/20/2026 9:30am Total Knee Dr Berra - Tracy Smith`
+3. Clicks a row → slide-over drawer opens from right with full entity mapping detail
+4. Drawer contains `ReviewDetailPanel` with:
+   - 3-column entity mapping table (Epic → Arrow → ORbit)
+   - EntitySelector dropdowns for unmatched entities with fuzzy match suggestions
+   - "Create New" inline forms for creating entities without leaving the page
+   - Collapsible HL7v2 raw message viewer
+5. Drawer header has Approve + Reject buttons for the individual case (Approve disabled until all required entities resolved)
+6. **"Approve All (N)"** button at top of queue batch-approves all ready imports (green icon)
+7. After approval → case created, log updated to 'processed', entry removed from queue, toast shown
 
 ### Fuzzy Matching
 Reuses `lib/epic/auto-matcher.ts` Levenshtein distance engine:

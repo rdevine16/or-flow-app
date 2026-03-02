@@ -39,6 +39,7 @@ import { usePhiAudit } from '@/hooks/usePhiAudit'
 import { ehrDAL } from '@/lib/dal/ehr'
 import { ehrAudit } from '@/lib/audit-logger'
 import { createClient } from '@/lib/supabase'
+import { useToast } from '@/components/ui/Toast'
 import SetupInstructionsCard from '@/components/integrations/SetupInstructionsCard'
 import HL7MessageViewer from '@/components/integrations/HL7MessageViewer'
 import ReviewDetailPanel from '@/components/integrations/ReviewDetailPanel'
@@ -155,6 +156,7 @@ function UnmatchedBadges({ reviewNotes }: { reviewNotes: ReviewNotes | null }) {
 
 export default function EpicHL7v2IntegrationPage() {
   const router = useRouter()
+  const { showToast } = useToast()
   const { data: currentUser } = useCurrentUser()
   const facilityId = currentUser?.facilityId
   const userId = currentUser?.userId
@@ -381,33 +383,172 @@ export default function EpicHL7v2IntegrationPage() {
   }
 
   const handleApproveImport = async (logEntry: EhrIntegrationLog) => {
-    if (!userId || !integration) return
+    if (!userId || !integration || !facilityId) {
+      showToast({ type: 'error', title: 'Cannot approve', message: 'Missing user or integration context' })
+      return
+    }
     setActionLoading(`approve-${logEntry.id}`)
     try {
       const supabase = createClient()
-      const { handleSIUMessage } = await import('@/lib/integrations/epic/case-import-service')
-      const { parseSIUMessage } = await import('@/lib/hl7v2/siu-parser')
 
-      if (!logEntry.raw_message) {
-        log.error('Cannot approve import: raw message not available')
+      // 1. Re-fetch the log entry for the latest review_notes
+      const { data: freshEntry, error: fetchError } = await ehrDAL.getLogEntry(supabase, logEntry.id)
+      if (fetchError || !freshEntry) {
+        showToast({ type: 'error', title: 'Approval failed', message: fetchError?.message || 'Log entry not found' })
         return
       }
 
-      const parseResult = parseSIUMessage(logEntry.raw_message)
-      if (!parseResult.success || !parseResult.message) {
-        log.error('Cannot approve import: parse failed', { errors: parseResult.errors })
+      const parsed = freshEntry.parsed_data as Record<string, unknown> | null
+      const reviewNotes = freshEntry.review_notes as ReviewNotes | null
+
+      if (!parsed) {
+        showToast({ type: 'error', title: 'Approval failed', message: 'No parsed data available' })
         return
       }
 
-      const result = await handleSIUMessage(supabase, parseResult.message, integration, logEntry.raw_message)
+      // 2. Resolve entity IDs from case overrides → global mappings
+      const epicSurgeon = parsed.surgeon as { npi?: string; name?: string } | null
+      const epicProcedure = parsed.procedure as { cptCode?: string; name?: string } | null
+      const epicRoom = parsed.room as { code?: string; name?: string } | null
+      const epicPatient = parsed.patient as { mrn: string; firstName: string; lastName: string; dateOfBirth?: string; gender?: string } | null
 
-      if (result.success && result.caseId) {
-        await ehrDAL.approveImport(supabase, logEntry.id, result.caseId, userId)
-        await ehrAudit.importApproved(supabase, integration.facility_id, logEntry.id, result.caseId)
-        setPendingReviews(prev => prev ? prev.filter(r => r.id !== logEntry.id) : [])
-        refetchStats()
-        refetchLogs()
+      // Fetch fresh entity mappings for this integration
+      const { data: currentMappings } = await ehrDAL.listEntityMappings(supabase, integration.id)
+      const mappings = currentMappings || []
+
+      const resolveEntityId = (
+        entityType: 'surgeon' | 'procedure' | 'room',
+        identifiers: string[],
+      ): string | null => {
+        // Case override takes priority
+        const overrideKey = `matched_${entityType}` as keyof ReviewNotes
+        const override = reviewNotes?.[overrideKey] as { orbit_entity_id: string } | undefined
+        if (override?.orbit_entity_id) return override.orbit_entity_id
+
+        // Then check global entity mappings
+        for (const id of identifiers) {
+          if (!id) continue
+          const mapping = mappings.find(m => m.entity_type === entityType && m.external_identifier === id)
+          if (mapping?.orbit_entity_id) return mapping.orbit_entity_id
+        }
+        return null
       }
+
+      const surgeonId = resolveEntityId('surgeon', [epicSurgeon?.npi, epicSurgeon?.name].filter(Boolean) as string[])
+      const procedureId = resolveEntityId('procedure', [epicProcedure?.cptCode, epicProcedure?.name].filter(Boolean) as string[])
+      const roomId = resolveEntityId('room', [epicRoom?.code, epicRoom?.name].filter(Boolean) as string[])
+
+      if (!surgeonId || !procedureId) {
+        showToast({ type: 'error', title: 'Cannot approve', message: 'Surgeon and procedure must be resolved before approving' })
+        return
+      }
+
+      // 3. Match/create patient
+      let patientId: string | null = null
+      if (epicPatient?.mrn) {
+        const { matchOrCreatePatient } = await import('@/lib/integrations/epic/patient-matcher')
+        const patientResult = await matchOrCreatePatient(supabase, facilityId, {
+          mrn: epicPatient.mrn,
+          firstName: epicPatient.firstName,
+          lastName: epicPatient.lastName,
+          dateOfBirth: epicPatient.dateOfBirth || null,
+          gender: epicPatient.gender || '',
+          externalPatientId: epicPatient.mrn,
+        })
+        patientId = patientResult.patientId
+      }
+
+      // 4. Check for existing case (in case of re-approval after prior partial processing)
+      const externalCaseId = parsed.externalCaseId as string | undefined
+      let caseId: string | null = null
+
+      if (externalCaseId) {
+        const { data: existingCase } = await supabase
+          .from('cases')
+          .select('id')
+          .eq('facility_id', facilityId)
+          .eq('external_case_id', externalCaseId)
+          .eq('external_system', 'epic_hl7v2')
+          .maybeSingle()
+
+        if (existingCase) {
+          // Update existing case with resolved entities
+          await supabase.from('cases').update({
+            surgeon_id: surgeonId,
+            procedure_type_id: procedureId,
+            or_room_id: roomId,
+            patient_id: patientId,
+          }).eq('id', existingCase.id)
+          caseId = existingCase.id
+        }
+      }
+
+      // 5. Create case if none exists
+      if (!caseId) {
+        const { data: scheduledStatus } = await supabase
+          .from('case_statuses')
+          .select('id')
+          .eq('name', 'scheduled')
+          .maybeSingle()
+
+        if (!scheduledStatus) {
+          showToast({ type: 'error', title: 'Approval failed', message: 'Could not find "scheduled" status' })
+          return
+        }
+
+        const scheduledStart = parsed.scheduledStart as string | undefined
+        const scheduledDate = scheduledStart ? scheduledStart.substring(0, 10) : null
+        const startTime = scheduledStart && scheduledStart.length > 10 ? scheduledStart.substring(11, 19) : null
+        const caseNumber = externalCaseId ? `HL7-${externalCaseId}` : `HL7-${Date.now()}`
+
+        const { data: newCaseId, error: rpcError } = await supabase.rpc('create_case_with_milestones', {
+          p_case_number: caseNumber,
+          p_scheduled_date: scheduledDate,
+          p_start_time: startTime,
+          p_or_room_id: roomId,
+          p_procedure_type_id: procedureId,
+          p_status_id: scheduledStatus.id,
+          p_surgeon_id: surgeonId,
+          p_facility_id: facilityId,
+          p_created_by: null,
+          p_operative_side: null,
+          p_payer_id: null,
+          p_notes: null,
+          p_rep_required_override: null,
+          p_is_draft: false,
+          p_staff_assignments: null,
+          p_patient_id: patientId,
+          p_source: 'epic',
+        })
+
+        if (rpcError || !newCaseId) {
+          showToast({ type: 'error', title: 'Approval failed', message: rpcError?.message || 'Failed to create case' })
+          return
+        }
+
+        caseId = newCaseId as string
+
+        // Set external tracking columns
+        if (externalCaseId) {
+          await supabase.from('cases').update({
+            external_case_id: externalCaseId,
+            external_system: 'epic_hl7v2',
+            import_source: 'hl7v2',
+          }).eq('id', caseId)
+        }
+      }
+
+      // 6. Mark log entry as processed
+      await ehrDAL.approveImport(supabase, freshEntry.id, caseId, userId)
+      await ehrAudit.importApproved(supabase, integration.facility_id, freshEntry.id, caseId)
+      setPendingReviews(prev => prev ? prev.filter(r => r.id !== freshEntry.id) : [])
+      refetchStats()
+      refetchLogs()
+      showToast({ type: 'success', title: 'Import approved', message: 'Case created successfully' })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      log.error('Approve import failed', { logEntryId: logEntry.id, error: msg })
+      showToast({ type: 'error', title: 'Approval failed', message: msg })
     } finally {
       setActionLoading(null)
     }

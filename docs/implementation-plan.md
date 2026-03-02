@@ -5,7 +5,7 @@
 
 ## Summary
 
-Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Replaces the FHIR-based approach (patient-centric, doesn't expose surgical scheduling). **Primary goal:** test harness to validate Epic HL7v2 field mappings without paying $1,900/year for Epic sandbox. Phases 1-7 build the core pipeline. Phases 8-11 add a database-driven Test Data Manager in global admin, replacing hardcoded test data with CRUD-able entity pools and schedule entries so you can hand-craft test cases and validate the import pipeline under different facility mapping states (none, partial, complete). Phases 12-13 add auto-push behavior — when you create, edit, or delete a schedule entry, the corresponding SIU message (S12/S14/S15) is automatically sent to the facility's HL7v2 listener, mimicking how Epic pushes changes in production. 13 phases, ~16-19 sessions.
+Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Replaces the FHIR-based approach (patient-centric, doesn't expose surgical scheduling). **Primary goal:** test harness to validate Epic HL7v2 field mappings without paying $1,900/year for Epic sandbox. Phases 1-7 build the core pipeline. Phases 8-11 add a database-driven Test Data Manager in global admin, replacing hardcoded test data with CRUD-able entity pools and schedule entries so you can hand-craft test cases and validate the import pipeline under different facility mapping states (none, partial, complete). Phases 12-13 add auto-push behavior — when you create, edit, or delete a schedule entry, the corresponding SIU message (S12/S14/S15) is automatically sent to the facility's HL7v2 listener, mimicking how Epic pushes changes in production. Phases 14-15 redesign the review queue with a scannable list, slide-over drawer, and batch approval. 15 phases, ~18-21 sessions.
 
 ## Interview Notes (Key Decisions)
 
@@ -39,7 +39,9 @@ Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Re
 | 26 | Schedule entries | Hand-craft individual test cases: pick patient + surgeon + procedure + room + date/time + trigger event (S12/S13/S14/S15) |
 | 27 | Reschedule/cancel | Schedule entries can reference an existing case (same external_case_id) for S13/S14/S15 message generation |
 | 28 | Mapping testing | No staging/production mode — test different facility mapping states (none, partial, full) by managing `ehr_entity_mappings` directly |
-| 29 | Phase structure | **11 phases** (added Phases 8-11: Test Data Manager) |
+| 29 | Phase structure | **15 phases** (added Phases 8-11: Test Data Manager, 12-13: Auto-Push, 14-15: Review Queue Redesign) |
+| 30 | Review queue UX | Scannable list rows with status icons + slide-over drawer (replaces collapsible inline expand) |
+| 31 | Batch approval | "Approve All (N)" button for bulk-approving ready imports with sequential processing |
 
 ---
 
@@ -800,6 +802,93 @@ Replace the current scenario picker with:
 
 ---
 
+## Phase 14: Review Queue Redesign — Drawer + Scannable List
+
+**Complexity:** Medium (1 session)
+
+### Pre-work already done
+- `ReviewDetailPanel.tsx` already built with 3-column entity mapping layout (Epic → Arrow → ORbit), EntitySelector dropdowns, RemapSelector, and collapsible HL7 viewer (commits dc33a33, d4606b8)
+- Remaining scope: create drawer wrapper, redesign list rows to scannable format, export helpers, relocate approve/reject buttons to drawer header
+
+### What it does
+- Replaces the collapsible inline-expand review queue rows with a clean, scannable list format
+- Each row shows: status icon + "New Case: {date} {time} {procedure} {surgeon} - {patient}"
+- Clicking a row opens a professional slide-over drawer (instead of inline expansion) containing the entity mapping table, HL7 viewer, and approve/reject buttons
+- Status icon indicates readiness: green CheckCircle2 = all entities resolved, amber AlertCircle = needs attention
+- **Approve/Reject buttons at the TOP of the drawer** (header area) — for individual case approval only. Page-level "Approve All" button is Phase 15.
+
+### Files touched
+
+| File | Change |
+|------|--------|
+| `components/integrations/ImportReviewDrawer.tsx` | **Create** — Radix Dialog slide-over drawer wrapping ReviewDetailPanel. Follows `components/data-quality/ReviewDrawer.tsx` pattern (z-40 overlay, z-50 content, max-w-[580px], slide-in-from-right). Header with "Review Import" title + case summary line + Approve/Reject buttons. Scrollable body with entity mapping. |
+| `components/integrations/ReviewDetailPanel.tsx` | **Modify** — Export `getEntityMatchState()` and `computeHasUnresolved()` helper functions for reuse by list rows and drawer. Remove approve/reject button section (moves to drawer header) |
+| `app/settings/integrations/epic/PageClient.tsx` | **Modify** — Redesign `ReviewQueueTab`: replace `expandedRow` state with `selectedEntry` state. Replace collapsible cards with flat clickable list rows. Add `<ImportReviewDrawer>` component. Compute status icon per row using exported helpers |
+
+### Row format
+```
+[CheckCircle2] New Case:  2/20/2026 9:30am  Total Knee  Dr Berra  - Tracy Smith    3m ago
+```
+
+- Date/time from `parsed_data.scheduledStart` formatted as `M/D/YYYY h:mmam`
+- Procedure from `parsed_data.procedure.name`
+- Surgeon from `parsed_data.surgeon.name`, prefixed "Dr", last name only
+- Patient from `parsed_data.patient.firstName + lastName`
+
+### Drawer structure
+- **Header**: Gradient icon + "Review Import" title + close button. Summary line: case date/procedure/surgeon. **Approve + Reject buttons** in header (Approve disabled when `hasUnresolved`). These approve/reject the individual case only.
+- **Body**: Scrollable — `ReviewDetailPanel` (entity mapping table + HL7 viewer, without action buttons)
+- Pattern reference: `components/data-quality/ReviewDrawer.tsx`
+
+### Commit message
+`feat(hl7v2): phase 14 - review queue redesign with drawer and scannable list`
+
+### 3-stage test gate
+1. **Unit:** Status icon computation returns 'green' when surgeon + procedure resolved, 'amber' when any unmatched. Row format renders correct date/time/procedure/surgeon/patient.
+2. **Integration:** Click row → drawer opens with correct entity data. Resolve entity in drawer → row status icon updates. Approve in drawer header → entry removed from list + toast shown.
+3. **Workflow:** Open review queue → scan list for amber/green icons → click amber row → drawer opens → resolve unmatched surgeon → status icon changes to green → click Approve in drawer header → case created → toast "Import approved" → drawer closes → entry disappears from queue.
+
+---
+
+## Phase 15: Approve All Button + Approve Handler Fix
+
+**Complexity:** Light (1 session)
+
+### What it does
+- Adds an "Approve All (N)" button to the review queue header that batch-approves all ready imports
+- Fixes the broken `handleApproveImport` function that was silently failing (re-ran full pipeline → hit dedup → returned null caseId)
+- Adds toast feedback for all approval outcomes (success, validation errors, caught exceptions)
+
+### Files touched
+
+| File | Change |
+|------|--------|
+| `app/settings/integrations/epic/PageClient.tsx` | **Modify** — Add `handleApproveAll` handler (sequential loop over approvable entries). Add "Approve All (N)" button to ReviewQueueTab header. Fix `handleApproveImport` to resolve entities from `review_notes` + `ehr_entity_mappings` instead of re-running the full import pipeline. Add `useToast` for feedback |
+
+### Approve All button
+- Shown next to "X imports pending review" count
+- Label: "Approve All (N)" where N = count of entries with all entities resolved
+- Hidden when N = 0
+- Processes sequentially (same pattern as `app/cases/bulk-create/PageClient.tsx`)
+- Toast on completion: "Approved N imports" or partial failure message
+- Loading state with spinner during processing
+
+### handleApproveImport fix (already implemented in prior session)
+The fix resolves entity IDs from:
+1. `review_notes.matched_<entity>` (case-only overrides) — checked first
+2. `ehr_entity_mappings` table (global mappings) — checked second
+Then creates the case directly via `create_case_with_milestones` RPC, skipping the full pipeline.
+
+### Commit message
+`feat(hl7v2): phase 15 - approve all button and approval handler fix`
+
+### 3-stage test gate
+1. **Unit:** `handleApproveAll` only processes entries where `computeHasUnresolved === false`. Button shows correct count. Button hidden when count is 0.
+2. **Integration:** Click "Approve All (2)" → both ready entries approved → removed from queue → toast shown. Entries needing mapping remain in queue.
+3. **Workflow:** Open review queue with 5 pending (3 green, 2 amber) → click "Approve All (3)" → spinner shown → 3 entries processed → toast "Approved 3 imports" → queue shows 2 remaining amber entries → resolve one amber entry → "Approve All (1)" appears → approve it → 1 remaining.
+
+---
+
 ## Dependencies
 
 ```
@@ -819,6 +908,8 @@ Phase 8 (Test Data Schema) ──→ Phase 9 (Entity Pool UI) ──→ Phase 10
                                                                                               │
                                                                                               ↓
                                                                                     Phase 13 (Auto-Push UI)
+
+Phase 6 (Admin UI) ──→ Phase 14 (Review Queue Redesign) ──→ Phase 15 (Approve All + Approve Fix)
 ```
 
 - P3 depends on P1 (parser) + P2 (schema/DAL)
@@ -833,6 +924,8 @@ Phase 8 (Test Data Schema) ──→ Phase 9 (Entity Pool UI) ──→ Phase 10
 - P11 depends on P10 (needs schedule data to read) + P5 (modifies existing test harness)
 - P12 depends on P11 (uses schedule-to-siu converter + db-scenario-runner send logic)
 - P13 depends on P12 (wires auto-push API into ScheduleManager and ScheduleEntryForm UI)
+- P14 depends on P6 (Admin UI — review queue exists). Independent of P12-P13
+- P15 depends on P14 (drawer must exist for approve flow). Includes fix for broken handleApproveImport
 
 ## Environment Variables (New)
 
@@ -857,10 +950,12 @@ Phase 8 (Test Data Schema) ──→ Phase 9 (Entity Pool UI) ──→ Phase 10
 | 9 | Global Admin CRUD UI — Entity Pools | Medium-Heavy | 2 | Done |
 | 10 | Global Admin CRUD UI — Schedule Entries | Medium-Heavy | 2 | Done |
 | 11 | Rewire Test Harness to Database-Driven Data | Medium | 1-2 | Done |
-| 12 | Auto-Push API — SIU on Schedule CRUD | Medium | 1 | Pending |
-| 13 | Auto-Push UI — Toggle + Inline Feedback | Medium | 1 | Pending |
+| 12 | Auto-Push API — SIU on Schedule CRUD | Medium | 1 | Done |
+| 13 | Auto-Push UI — Toggle + Inline Feedback | Medium | 1 | Done |
+| 14 | Review Queue Redesign — Drawer + Scannable List | Medium | 1 | Pending |
+| 15 | Approve All + Approve Handler Fix | Light | 1 | Pending |
 
-**Total: ~16-19 Claude Code sessions** (Phases 1-11 complete, Phases 12-13 pending)
+**Total: ~18-21 Claude Code sessions** (Phases 1-13 complete, Phases 14-15 pending)
 
 ## Risk Assessment
 
