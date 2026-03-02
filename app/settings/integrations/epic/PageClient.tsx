@@ -345,169 +345,176 @@ export default function EpicHL7v2IntegrationPage() {
     }
   }
 
-  const handleApproveImport = async (logEntry: EhrIntegrationLog) => {
+  // Core approval logic — returns { success, error } without showing toasts.
+  // Used by both individual approve (with toasts) and batch approve (with summary toast).
+  const executeApproveImport = async (logEntry: EhrIntegrationLog): Promise<{ success: boolean; error?: string }> => {
     if (!userId || !integration || !facilityId) {
-      showToast({ type: 'error', title: 'Cannot approve', message: 'Missing user or integration context' })
-      return
+      return { success: false, error: 'Missing user or integration context' }
     }
+
+    const supabase = createClient()
+
+    // 1. Re-fetch the log entry for the latest review_notes
+    const { data: freshEntry, error: fetchError } = await ehrDAL.getLogEntry(supabase, logEntry.id)
+    if (fetchError || !freshEntry) {
+      return { success: false, error: fetchError?.message || 'Log entry not found' }
+    }
+
+    const parsed = freshEntry.parsed_data as Record<string, unknown> | null
+    const reviewNotes = freshEntry.review_notes as ReviewNotes | null
+
+    if (!parsed) {
+      return { success: false, error: 'No parsed data available' }
+    }
+
+    // 2. Resolve entity IDs from case overrides → global mappings
+    const epicSurgeon = parsed.surgeon as { npi?: string; name?: string } | null
+    const epicProcedure = parsed.procedure as { cptCode?: string; name?: string } | null
+    const epicRoom = parsed.room as { code?: string; name?: string } | null
+    const epicPatient = parsed.patient as { mrn: string; firstName: string; lastName: string; dateOfBirth?: string; gender?: string } | null
+
+    // Fetch fresh entity mappings for this integration
+    const { data: currentMappings } = await ehrDAL.listEntityMappings(supabase, integration.id)
+    const mappings = currentMappings || []
+
+    const resolveEntityId = (
+      entityType: 'surgeon' | 'procedure' | 'room',
+      identifiers: string[],
+    ): string | null => {
+      // Case override takes priority
+      const overrideKey = `matched_${entityType}` as keyof ReviewNotes
+      const override = reviewNotes?.[overrideKey] as { orbit_entity_id: string } | undefined
+      if (override?.orbit_entity_id) return override.orbit_entity_id
+
+      // Then check global entity mappings
+      for (const id of identifiers) {
+        if (!id) continue
+        const mapping = mappings.find(m => m.entity_type === entityType && m.external_identifier === id)
+        if (mapping?.orbit_entity_id) return mapping.orbit_entity_id
+      }
+      return null
+    }
+
+    const surgeonId = resolveEntityId('surgeon', [epicSurgeon?.npi, epicSurgeon?.name].filter(Boolean) as string[])
+    const procedureId = resolveEntityId('procedure', [epicProcedure?.cptCode, epicProcedure?.name].filter(Boolean) as string[])
+    const roomId = resolveEntityId('room', [epicRoom?.code, epicRoom?.name].filter(Boolean) as string[])
+
+    if (!surgeonId || !procedureId) {
+      return { success: false, error: 'Surgeon and procedure must be resolved before approving' }
+    }
+
+    // 3. Match/create patient
+    let patientId: string | null = null
+    if (epicPatient?.mrn) {
+      const { matchOrCreatePatient } = await import('@/lib/integrations/epic/patient-matcher')
+      const patientResult = await matchOrCreatePatient(supabase, facilityId, {
+        mrn: epicPatient.mrn,
+        firstName: epicPatient.firstName,
+        lastName: epicPatient.lastName,
+        dateOfBirth: epicPatient.dateOfBirth || null,
+        gender: epicPatient.gender || '',
+        externalPatientId: epicPatient.mrn,
+      })
+      patientId = patientResult.patientId
+    }
+
+    // 4. Check for existing case (in case of re-approval after prior partial processing)
+    const externalCaseId = parsed.externalCaseId as string | undefined
+    let caseId: string | null = null
+
+    if (externalCaseId) {
+      const { data: existingCase } = await supabase
+        .from('cases')
+        .select('id')
+        .eq('facility_id', facilityId)
+        .eq('external_case_id', externalCaseId)
+        .eq('external_system', 'epic_hl7v2')
+        .maybeSingle()
+
+      if (existingCase) {
+        // Update existing case with resolved entities
+        await supabase.from('cases').update({
+          surgeon_id: surgeonId,
+          procedure_type_id: procedureId,
+          or_room_id: roomId,
+          patient_id: patientId,
+        }).eq('id', existingCase.id)
+        caseId = existingCase.id
+      }
+    }
+
+    // 5. Create case if none exists
+    if (!caseId) {
+      const { data: scheduledStatus } = await supabase
+        .from('case_statuses')
+        .select('id')
+        .eq('name', 'scheduled')
+        .maybeSingle()
+
+      if (!scheduledStatus) {
+        return { success: false, error: 'Could not find "scheduled" status' }
+      }
+
+      const scheduledStart = parsed.scheduledStart as string | undefined
+      const scheduledDate = scheduledStart ? scheduledStart.substring(0, 10) : null
+      const startTime = scheduledStart && scheduledStart.length > 10 ? scheduledStart.substring(11, 19) : null
+      const caseNumber = externalCaseId ? `HL7-${externalCaseId}` : `HL7-${Date.now()}`
+
+      const { data: newCaseId, error: rpcError } = await supabase.rpc('create_case_with_milestones', {
+        p_case_number: caseNumber,
+        p_scheduled_date: scheduledDate,
+        p_start_time: startTime,
+        p_or_room_id: roomId,
+        p_procedure_type_id: procedureId,
+        p_status_id: scheduledStatus.id,
+        p_surgeon_id: surgeonId,
+        p_facility_id: facilityId,
+        p_created_by: null,
+        p_operative_side: null,
+        p_payer_id: null,
+        p_notes: null,
+        p_rep_required_override: null,
+        p_is_draft: false,
+        p_staff_assignments: null,
+        p_patient_id: patientId,
+        p_source: 'epic',
+      })
+
+      if (rpcError || !newCaseId) {
+        return { success: false, error: rpcError?.message || 'Failed to create case' }
+      }
+
+      caseId = newCaseId as string
+
+      // Set external tracking columns
+      if (externalCaseId) {
+        await supabase.from('cases').update({
+          external_case_id: externalCaseId,
+          external_system: 'epic_hl7v2',
+          import_source: 'hl7v2',
+        }).eq('id', caseId)
+      }
+    }
+
+    // 6. Mark log entry as processed
+    await ehrDAL.approveImport(supabase, freshEntry.id, caseId, userId)
+    await ehrAudit.importApproved(supabase, integration.facility_id, freshEntry.id, caseId)
+    setPendingReviews(prev => prev ? prev.filter(r => r.id !== freshEntry.id) : [])
+    refetchStats()
+    refetchLogs()
+
+    return { success: true }
+  }
+
+  const handleApproveImport = async (logEntry: EhrIntegrationLog) => {
     setActionLoading(`approve-${logEntry.id}`)
     try {
-      const supabase = createClient()
-
-      // 1. Re-fetch the log entry for the latest review_notes
-      const { data: freshEntry, error: fetchError } = await ehrDAL.getLogEntry(supabase, logEntry.id)
-      if (fetchError || !freshEntry) {
-        showToast({ type: 'error', title: 'Approval failed', message: fetchError?.message || 'Log entry not found' })
-        return
+      const result = await executeApproveImport(logEntry)
+      if (result.success) {
+        showToast({ type: 'success', title: 'Import approved', message: 'Case created successfully' })
+      } else {
+        showToast({ type: 'error', title: 'Approval failed', message: result.error || 'Unknown error' })
       }
-
-      const parsed = freshEntry.parsed_data as Record<string, unknown> | null
-      const reviewNotes = freshEntry.review_notes as ReviewNotes | null
-
-      if (!parsed) {
-        showToast({ type: 'error', title: 'Approval failed', message: 'No parsed data available' })
-        return
-      }
-
-      // 2. Resolve entity IDs from case overrides → global mappings
-      const epicSurgeon = parsed.surgeon as { npi?: string; name?: string } | null
-      const epicProcedure = parsed.procedure as { cptCode?: string; name?: string } | null
-      const epicRoom = parsed.room as { code?: string; name?: string } | null
-      const epicPatient = parsed.patient as { mrn: string; firstName: string; lastName: string; dateOfBirth?: string; gender?: string } | null
-
-      // Fetch fresh entity mappings for this integration
-      const { data: currentMappings } = await ehrDAL.listEntityMappings(supabase, integration.id)
-      const mappings = currentMappings || []
-
-      const resolveEntityId = (
-        entityType: 'surgeon' | 'procedure' | 'room',
-        identifiers: string[],
-      ): string | null => {
-        // Case override takes priority
-        const overrideKey = `matched_${entityType}` as keyof ReviewNotes
-        const override = reviewNotes?.[overrideKey] as { orbit_entity_id: string } | undefined
-        if (override?.orbit_entity_id) return override.orbit_entity_id
-
-        // Then check global entity mappings
-        for (const id of identifiers) {
-          if (!id) continue
-          const mapping = mappings.find(m => m.entity_type === entityType && m.external_identifier === id)
-          if (mapping?.orbit_entity_id) return mapping.orbit_entity_id
-        }
-        return null
-      }
-
-      const surgeonId = resolveEntityId('surgeon', [epicSurgeon?.npi, epicSurgeon?.name].filter(Boolean) as string[])
-      const procedureId = resolveEntityId('procedure', [epicProcedure?.cptCode, epicProcedure?.name].filter(Boolean) as string[])
-      const roomId = resolveEntityId('room', [epicRoom?.code, epicRoom?.name].filter(Boolean) as string[])
-
-      if (!surgeonId || !procedureId) {
-        showToast({ type: 'error', title: 'Cannot approve', message: 'Surgeon and procedure must be resolved before approving' })
-        return
-      }
-
-      // 3. Match/create patient
-      let patientId: string | null = null
-      if (epicPatient?.mrn) {
-        const { matchOrCreatePatient } = await import('@/lib/integrations/epic/patient-matcher')
-        const patientResult = await matchOrCreatePatient(supabase, facilityId, {
-          mrn: epicPatient.mrn,
-          firstName: epicPatient.firstName,
-          lastName: epicPatient.lastName,
-          dateOfBirth: epicPatient.dateOfBirth || null,
-          gender: epicPatient.gender || '',
-          externalPatientId: epicPatient.mrn,
-        })
-        patientId = patientResult.patientId
-      }
-
-      // 4. Check for existing case (in case of re-approval after prior partial processing)
-      const externalCaseId = parsed.externalCaseId as string | undefined
-      let caseId: string | null = null
-
-      if (externalCaseId) {
-        const { data: existingCase } = await supabase
-          .from('cases')
-          .select('id')
-          .eq('facility_id', facilityId)
-          .eq('external_case_id', externalCaseId)
-          .eq('external_system', 'epic_hl7v2')
-          .maybeSingle()
-
-        if (existingCase) {
-          // Update existing case with resolved entities
-          await supabase.from('cases').update({
-            surgeon_id: surgeonId,
-            procedure_type_id: procedureId,
-            or_room_id: roomId,
-            patient_id: patientId,
-          }).eq('id', existingCase.id)
-          caseId = existingCase.id
-        }
-      }
-
-      // 5. Create case if none exists
-      if (!caseId) {
-        const { data: scheduledStatus } = await supabase
-          .from('case_statuses')
-          .select('id')
-          .eq('name', 'scheduled')
-          .maybeSingle()
-
-        if (!scheduledStatus) {
-          showToast({ type: 'error', title: 'Approval failed', message: 'Could not find "scheduled" status' })
-          return
-        }
-
-        const scheduledStart = parsed.scheduledStart as string | undefined
-        const scheduledDate = scheduledStart ? scheduledStart.substring(0, 10) : null
-        const startTime = scheduledStart && scheduledStart.length > 10 ? scheduledStart.substring(11, 19) : null
-        const caseNumber = externalCaseId ? `HL7-${externalCaseId}` : `HL7-${Date.now()}`
-
-        const { data: newCaseId, error: rpcError } = await supabase.rpc('create_case_with_milestones', {
-          p_case_number: caseNumber,
-          p_scheduled_date: scheduledDate,
-          p_start_time: startTime,
-          p_or_room_id: roomId,
-          p_procedure_type_id: procedureId,
-          p_status_id: scheduledStatus.id,
-          p_surgeon_id: surgeonId,
-          p_facility_id: facilityId,
-          p_created_by: null,
-          p_operative_side: null,
-          p_payer_id: null,
-          p_notes: null,
-          p_rep_required_override: null,
-          p_is_draft: false,
-          p_staff_assignments: null,
-          p_patient_id: patientId,
-          p_source: 'epic',
-        })
-
-        if (rpcError || !newCaseId) {
-          showToast({ type: 'error', title: 'Approval failed', message: rpcError?.message || 'Failed to create case' })
-          return
-        }
-
-        caseId = newCaseId as string
-
-        // Set external tracking columns
-        if (externalCaseId) {
-          await supabase.from('cases').update({
-            external_case_id: externalCaseId,
-            external_system: 'epic_hl7v2',
-            import_source: 'hl7v2',
-          }).eq('id', caseId)
-        }
-      }
-
-      // 6. Mark log entry as processed
-      await ehrDAL.approveImport(supabase, freshEntry.id, caseId, userId)
-      await ehrAudit.importApproved(supabase, integration.facility_id, freshEntry.id, caseId)
-      setPendingReviews(prev => prev ? prev.filter(r => r.id !== freshEntry.id) : [])
-      refetchStats()
-      refetchLogs()
-      showToast({ type: 'success', title: 'Import approved', message: 'Case created successfully' })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       log.error('Approve import failed', { logEntryId: logEntry.id, error: msg })
@@ -645,6 +652,42 @@ export default function EpicHL7v2IntegrationPage() {
     }
   }
 
+  const [approveAllLoading, setApproveAllLoading] = useState(false)
+
+  const handleApproveAll = async (approvableEntries: EhrIntegrationLog[]) => {
+    if (approvableEntries.length === 0) return
+    setApproveAllLoading(true)
+    let successCount = 0
+    let failCount = 0
+
+    for (const entry of approvableEntries) {
+      try {
+        const result = await executeApproveImport(entry)
+        if (result.success) {
+          successCount++
+        } else {
+          failCount++
+          log.error('Batch approve: entry failed', { logEntryId: entry.id, error: result.error })
+        }
+      } catch (err) {
+        failCount++
+        log.error('Batch approve: entry threw', { logEntryId: entry.id, error: err instanceof Error ? err.message : 'Unknown' })
+      }
+    }
+
+    setApproveAllLoading(false)
+
+    if (failCount === 0) {
+      showToast({ type: 'success', title: 'Batch approval complete', message: `Approved ${successCount} import${successCount !== 1 ? 's' : ''}` })
+    } else {
+      showToast({
+        type: 'warning',
+        title: 'Batch approval partial',
+        message: `Approved ${successCount}, failed ${failCount}`,
+      })
+    }
+  }
+
   const handleDeleteMapping = async (mappingId: string) => {
     const supabase = createClient()
     // Get mapping details for audit before deleting
@@ -752,9 +795,11 @@ export default function EpicHL7v2IntegrationPage() {
           pendingReviews={pendingReviews || []}
           loading={reviewsLoading}
           actionLoading={actionLoading}
+          approveAllLoading={approveAllLoading}
           getEntitiesForType={getEntitiesForType}
           entityMappings={allMappings || []}
           onApprove={handleApproveImport}
+          onApproveAll={handleApproveAll}
           onReject={handleRejectImport}
           onResolveEntity={handleResolveEntity}
           onRemapCaseOnly={handleRemapCaseOnly}
@@ -1007,9 +1052,11 @@ function ReviewQueueTab({
   pendingReviews,
   loading,
   actionLoading,
+  approveAllLoading,
   getEntitiesForType,
   entityMappings,
   onApprove,
+  onApproveAll,
   onReject,
   onResolveEntity,
   onRemapCaseOnly,
@@ -1019,9 +1066,11 @@ function ReviewQueueTab({
   pendingReviews: EhrIntegrationLog[]
   loading: boolean
   actionLoading: string | null
+  approveAllLoading: boolean
   getEntitiesForType: (type: EhrEntityType) => Array<{ id: string; label: string }>
   entityMappings: EhrEntityMapping[]
   onApprove: (entry: EhrIntegrationLog) => Promise<void>
+  onApproveAll: (entries: EhrIntegrationLog[]) => Promise<void>
   onReject: (entry: EhrIntegrationLog) => Promise<void>
   onResolveEntity: (
     entry: EhrIntegrationLog, entityType: EhrEntityType,
@@ -1035,6 +1084,11 @@ function ReviewQueueTab({
   onPhiAccess: (logEntryId: string, messageType: string) => void
 }) {
   const [selectedEntry, setSelectedEntry] = useState<EhrIntegrationLog | null>(null)
+
+  const approvableEntries = useMemo(
+    () => pendingReviews.filter(entry => !computeHasUnresolved(entry, entityMappings)),
+    [pendingReviews, entityMappings]
+  )
 
   if (loading) {
     return (
@@ -1057,9 +1111,21 @@ function ReviewQueueTab({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-500">
-        {pendingReviews.length} import{pendingReviews.length !== 1 ? 's' : ''} pending review
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500">
+          {pendingReviews.length} import{pendingReviews.length !== 1 ? 's' : ''} pending review
+        </p>
+        {approvableEntries.length > 0 && (
+          <button
+            onClick={() => onApproveAll(approvableEntries)}
+            disabled={approveAllLoading}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+          >
+            {approveAllLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            Approve All ({approvableEntries.length})
+          </button>
+        )}
+      </div>
 
       {/* Scannable list */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
