@@ -16,6 +16,7 @@ export interface UserProfile {
   email: string
   first_name: string
   last_name: string
+  profile_image_url: string | null
   facility_id: string | null
   role_id: string | null
   access_level: string
@@ -54,7 +55,7 @@ export interface UserListItem {
 // ============================================
 
 const USER_PROFILE_SELECT = `
-  id, email, first_name, last_name, facility_id, role_id,
+  id, email, first_name, last_name, profile_image_url, facility_id, role_id,
   access_level, is_active, must_change_password, blocked,
   facility:facilities(name, timezone),
   role:user_roles(name)

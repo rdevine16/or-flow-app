@@ -11,12 +11,14 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { AlertCircle, Check, LogOut, X } from 'lucide-react'
+import ProfileImageUpload from '@/components/profile/ProfileImageUpload'
 
 interface UserProfile {
   id: string
   email: string
   first_name: string
   last_name: string
+  profile_image_url: string | null
   access_level: string
   facility_id: string | null
   created_at: string
@@ -255,14 +257,6 @@ const handleChangePassword = async () => {
     }
   }
 
-  // Get initials
-  const getInitials = () => {
-    if (firstName && lastName) {
-      return `${firstName[0]}${lastName[0]}`.toUpperCase()
-    }
-    return profile?.email?.[0]?.toUpperCase() || 'U'
-  }
-
   if (loading) {
     return (
       <DashboardLayout>
@@ -315,11 +309,16 @@ const handleChangePassword = async () => {
           {/* Left Column - Profile Card */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              {/* Avatar */}
-              <div className="flex flex-col items-center text-center mb-6">
-                <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-lg shadow-blue-500/25">
-                  {getInitials()}
-                </div>
+              {/* Avatar with upload */}
+              <ProfileImageUpload
+                userId={profile.id}
+                firstName={firstName}
+                lastName={lastName}
+                email={profile.email}
+                currentImageUrl={profile.profile_image_url}
+                onImageChange={(newUrl) => setProfile({ ...profile, profile_image_url: newUrl })}
+              />
+              <div className="text-center -mt-4 mb-6">
                 <h2 className="text-lg font-semibold text-slate-900">
                   {firstName} {lastName}
                 </h2>

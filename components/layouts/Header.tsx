@@ -17,6 +17,7 @@ import { getNavItemForPath } from '@/lib/settings-nav-config'
 interface UserData {
   firstName: string
   lastName: string
+  profileImageUrl: string | null
   accessLevel: string
   facilityId: string | null
   facilityName: string | null
@@ -173,9 +174,20 @@ export default function Header({
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             className="flex items-center gap-3 p-1.5 pr-3 hover:bg-slate-50 rounded-xl transition-all"
           >
-            <div className="w-9 h-9 bg-slate-700 rounded-xl flex items-center justify-center text-white text-sm font-semibold">
-              {userInitials}
-            </div>
+            {userData.profileImageUrl ? (
+              <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 relative">
+                <Image
+                  src={userData.profileImageUrl}
+                  alt=""
+                  fill
+                  className="object-cover"
+                />
+              </div>
+            ) : (
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold shadow-sm">
+                {userInitials}
+              </div>
+            )}
             <div className="text-left hidden sm:block">
               <p className="text-sm font-semibold text-slate-700">{userName}</p>
               <p className="text-xs text-slate-400">
@@ -195,9 +207,20 @@ export default function Header({
               {/* User Info */}
               <div className="px-4 py-3 border-b border-slate-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 bg-slate-700 rounded-xl flex items-center justify-center text-white font-semibold">
-                    {userInitials}
-                  </div>
+                  {userData.profileImageUrl ? (
+                    <div className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 relative">
+                      <Image
+                        src={userData.profileImageUrl}
+                        alt=""
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-11 h-11 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold shadow-sm">
+                      {userInitials}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-900 truncate">
                       {userName}

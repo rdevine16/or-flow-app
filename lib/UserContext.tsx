@@ -13,6 +13,7 @@ interface UserData {
   userEmail: string | null
   firstName: string
   lastName: string
+  profileImageUrl: string | null
   accessLevel: 'global_admin' | 'facility_admin' | 'coordinator' | 'user'
   facilityId: string | null
   facilityName: string | null
@@ -41,6 +42,7 @@ const defaultUserData: UserData = {
   userEmail: null,
   firstName: '',
   lastName: '',
+  profileImageUrl: null,
   accessLevel: 'user',
   facilityId: null,
   facilityName: null,
@@ -88,12 +90,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true
 
-    const fetchUser = async () => {
+    const fetchUser = async (retryCount = 0) => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
-        
+
         if (!isMounted) return
-        
+
         if (!user) {
           setUserData(defaultUserData)
           setLoading(false)
@@ -109,6 +111,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           .select(`
             first_name,
             last_name,
+            profile_image_url,
             access_level,
             facility_id,
             facilities (name, timezone)
@@ -120,7 +123,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
         if (userRecord) {
           const facilities = userRecord.facilities as { name: string; timezone: string }[] | { name: string; timezone: string } | null
-          
+
           // Handle both array and single object from Supabase
           let facility: { name: string; timezone: string } | null = null
           if (Array.isArray(facilities)) {
@@ -134,6 +137,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             userEmail: authUserEmail,
             firstName: userRecord.first_name || '',
             lastName: userRecord.last_name || '',
+            profileImageUrl: userRecord.profile_image_url || null,
             accessLevel: userRecord.access_level || 'user',
             facilityId: userRecord.facility_id,
             facilityName: facility?.name || null,
@@ -141,6 +145,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
           })
         }
       } catch (error) {
+        // Retry once on transient network failures before giving up
+        if (retryCount < 1 && error instanceof TypeError && isMounted) {
+          logger('UserContext').warn('Network error fetching user, retrying...', error)
+          setTimeout(() => fetchUser(retryCount + 1), 1000)
+          return
+        }
         logger('UserContext').error('Failed to fetch user', error)
       } finally {
         if (isMounted) {
