@@ -29,6 +29,7 @@ export { facilitiesDAL } from './facilities'
 export { lookupsDAL } from './lookups'
 export * as flagRulesDAL from './flag-rules'
 export { epicDAL } from './epic'
+export { ehrDAL } from './ehr'
 
 // ============================================
 // SHARED TYPES
