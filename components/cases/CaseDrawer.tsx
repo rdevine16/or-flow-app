@@ -19,7 +19,9 @@ import CaseDrawerFlags from '@/components/cases/CaseDrawerFlags'
 import CaseDrawerFinancials from '@/components/cases/CaseDrawerFinancials'
 import CaseDrawerMilestones from '@/components/cases/CaseDrawerMilestones'
 import CaseDrawerValidation from '@/components/cases/CaseDrawerValidation'
+import CaseDrawerHistory from '@/components/cases/CaseDrawerHistory'
 import { fetchMetricIssues, type MetricIssue } from '@/lib/dataQuality'
+import { useCaseHistory } from '@/lib/hooks/useCaseHistory'
 import {
   X,
   Ban,
@@ -42,7 +44,7 @@ interface CaseDrawerProps {
   onCancelCase?: (caseId: string, caseNumber: string) => void
 }
 
-type DrawerTab = 'financials' | 'milestones' | 'flags' | 'validation'
+type DrawerTab = 'financials' | 'milestones' | 'flags' | 'validation' | 'history'
 
 // ============================================
 // HELPERS
@@ -81,6 +83,10 @@ const BASE_TABS: { key: DrawerTab; label: string }[] = [
 
 const VALIDATION_TAB: { key: DrawerTab; label: string } = {
   key: 'validation', label: 'Validation',
+}
+
+const HISTORY_TAB: { key: DrawerTab; label: string } = {
+  key: 'history', label: 'History',
 }
 
 // ============================================
@@ -130,6 +136,7 @@ export default function CaseDrawer({
   const hasValidationIssues = !!(caseId && dqCaseIds?.has(caseId))
 
   // Build tabs dynamically — filter by permissions + include Validation when case has DQ issues
+  // History tab is always last and visible to all users (no permission gate)
   const tabs = useMemo(() => {
     const visible = BASE_TABS.filter((tab) => {
       if (tab.key === 'financials') return can('tab.case_financials')
@@ -137,8 +144,8 @@ export default function CaseDrawer({
       if (tab.key === 'flags') return can('tab.case_flags')
       return true
     })
-    if (hasValidationIssues && can('tab.case_validation')) return [...visible, VALIDATION_TAB]
-    return visible
+    if (hasValidationIssues && can('tab.case_validation')) return [...visible, VALIDATION_TAB, HISTORY_TAB]
+    return [...visible, HISTORY_TAB]
   }, [hasValidationIssues, can])
 
   // Lazy-load metric issues only when validation tab is active
@@ -176,6 +183,17 @@ export default function CaseDrawer({
     surgeonName,
     activeTab === 'financials' && !!caseDetail,
   )
+
+  // Lazy-load case history only when history tab is active
+  const {
+    entries: historyEntries,
+    loading: historyLoading,
+    error: historyError,
+    hasMore: historyHasMore,
+    loadMore: historyLoadMore,
+  } = useCaseHistory(caseId, {
+    enabled: activeTab === 'history',
+  })
 
   // Resolve display status
   const displayStatus = useMemo(() => {
@@ -372,6 +390,18 @@ export default function CaseDrawer({
                       issues={validationIssues ?? []}
                       loading={validationLoading}
                       caseId={caseId}
+                    />
+                  </div>
+                )}
+
+                {activeTab === 'history' && caseId && (
+                  <div className="animate-fade-in">
+                    <CaseDrawerHistory
+                      entries={historyEntries}
+                      loading={historyLoading}
+                      error={historyError}
+                      hasMore={historyHasMore}
+                      onLoadMore={historyLoadMore}
                     />
                   </div>
                 )}
