@@ -3,11 +3,12 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Code, Mail, Plus, Zap, CheckCircle2, AlertCircle, XCircle, ArrowRight } from 'lucide-react'
+import { Code, Mail, Plus, Zap, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
 import { useCurrentUser } from '@/hooks'
-import type { EpicConnectionStatus } from '@/lib/epic/types'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
+import { ehrDAL } from '@/lib/dal/ehr'
+import type { EhrIntegration } from '@/lib/integrations/shared/integration-types'
 
 // =====================================================
 // TYPES
@@ -23,21 +24,7 @@ interface Integration {
   comingSoon?: string
 }
 
-interface EpicStatusResponse {
-  connection: {
-    id: string
-    status: EpicConnectionStatus
-    last_connected_at: string | null
-    connected_by: string | null
-    token_expires_at: string | null
-    fhir_base_url: string
-  } | null
-  mappingStats: {
-    surgeon: { total: number; mapped: number }
-    room: { total: number; mapped: number }
-    procedure: { total: number; mapped: number }
-  } | null
-}
+// (EHR integration status is now read directly from ehr_integrations table)
 
 // =====================================================
 // INTEGRATION DATA (non-Epic — still coming soon)
@@ -168,17 +155,17 @@ const futureIntegrations: Integration[] = [
 // EPIC STATUS INDICATOR
 // =====================================================
 
-function EpicStatusBadge({ status }: { status: EpicConnectionStatus | null }) {
-  if (!status || status === 'disconnected') {
+function EpicStatusBadge({ integration }: { integration: EhrIntegration | null | undefined; loading?: boolean }) {
+  if (!integration) {
     return (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-600 bg-slate-100 rounded-full">
         <XCircle className="w-3.5 h-3.5" />
-        Not Connected
+        Not Configured
       </span>
     )
   }
 
-  if (status === 'connected') {
+  if (integration.is_active) {
     return (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">
         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -187,19 +174,10 @@ function EpicStatusBadge({ status }: { status: EpicConnectionStatus | null }) {
     )
   }
 
-  if (status === 'token_expired') {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-50 rounded-full">
-        <AlertCircle className="w-3.5 h-3.5" />
-        Token Expired
-      </span>
-    )
-  }
-
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-red-700 bg-red-50 rounded-full">
-      <AlertCircle className="w-3.5 h-3.5" />
-      Error
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-600 bg-slate-100 rounded-full">
+      <XCircle className="w-3.5 h-3.5" />
+      Disabled
     </span>
   )
 }
@@ -211,31 +189,18 @@ function EpicStatusBadge({ status }: { status: EpicConnectionStatus | null }) {
 export default function IntegrationsPage() {
   const router = useRouter()
   const { data: currentUser } = useCurrentUser()
-  const [epicStatus, setEpicStatus] = useState<EpicStatusResponse | null>(null)
-  const [epicLoading, setEpicLoading] = useState(true)
+  const facilityId = currentUser?.facilityId
 
-  useEffect(() => {
-    if (!currentUser?.facilityId) return
+  // Check HL7v2 integration status from ehr_integrations table
+  const { data: hl7v2Integration, loading: epicLoading } = useSupabaseQuery<EhrIntegration | null>(
+    async (supabase) => {
+      const { data } = await ehrDAL.getIntegrationByFacility(supabase, facilityId!, 'epic_hl7v2')
+      return data
+    },
+    { deps: [facilityId], enabled: !!facilityId }
+  )
 
-    async function fetchEpicStatus() {
-      try {
-        const res = await fetch(`/api/epic/status?facility_id=${currentUser!.facilityId}`)
-        if (res.ok) {
-          const data = await res.json()
-          setEpicStatus(data)
-        }
-      } catch {
-        // Silently fail — Epic may not be configured
-      } finally {
-        setEpicLoading(false)
-      }
-    }
-
-    fetchEpicStatus()
-  }, [currentUser?.facilityId])
-
-  const epicConnection = epicStatus?.connection
-  const isConnected = epicConnection?.status === 'connected'
+  const isConnected = !!hl7v2Integration?.is_active
 
   return (
     <>
@@ -273,27 +238,18 @@ export default function IntegrationsPage() {
                         Loading...
                       </span>
                     ) : (
-                      <EpicStatusBadge status={epicConnection?.status ?? null} />
+                      <EpicStatusBadge integration={hl7v2Integration} />
                     )}
                   </div>
                   <p className="text-sm text-slate-500">
-                    Sync surgical cases and patient scheduling with Epic EHR via SMART on FHIR
+                    Receive surgical scheduling data via HL7v2 SIU messages from Epic OpTime
                   </p>
 
-                  {/* Mapping stats when connected */}
-                  {isConnected && epicStatus?.mappingStats && (
-                    <div className="flex items-center gap-4 mt-3">
-                      {(['surgeon', 'room', 'procedure'] as const).map((type) => {
-                        const stat = epicStatus.mappingStats![type]
-                        if (stat.total === 0) return null
-                        return (
-                          <span key={type} className="text-xs text-slate-500">
-                            <span className="font-medium text-slate-700">{stat.mapped}/{stat.total}</span>{' '}
-                            {type}s mapped
-                          </span>
-                        )
-                      })}
-                    </div>
+                  {/* Last message indicator when connected */}
+                  {isConnected && hl7v2Integration?.last_message_at && (
+                    <p className="text-xs text-slate-400 mt-2">
+                      Last message: {new Date(hl7v2Integration.last_message_at).toLocaleString()}
+                    </p>
                   )}
                 </div>
               </div>

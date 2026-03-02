@@ -172,7 +172,6 @@ export default function HL7v2TestHarnessPage() {
       const { data, error } = await sb
         .from('facilities')
         .select('id, name')
-        .eq('is_active', true)
         .order('name')
       if (error) throw error
       return data || []
