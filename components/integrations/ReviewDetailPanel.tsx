@@ -23,7 +23,6 @@ import {
   ArrowRight,
   CheckCircle2,
   AlertCircle,
-  Ban,
   Loader2,
   Search,
   Plus,
@@ -53,7 +52,7 @@ export interface CreateEntityData {
   cptCode?: string
 }
 
-interface ReviewDetailPanelProps {
+export interface ReviewDetailPanelProps {
   entry: EhrIntegrationLog
   allSurgeons: Array<{ id: string; label: string }>
   allProcedures: Array<{ id: string; label: string }>
@@ -74,10 +73,7 @@ interface ReviewDetailPanelProps {
     orbitName: string,
   ) => Promise<void>
   onCreateEntity: (formData: CreateEntityData) => Promise<string | null>
-  onApprove: (entry: EhrIntegrationLog) => Promise<void>
-  onReject: (entry: EhrIntegrationLog) => Promise<void>
   onPhiAccess: (logEntryId: string, messageType: string) => void
-  actionLoading: string | null
 }
 
 // =====================================================
@@ -143,11 +139,74 @@ const entityConfig = {
 // ENTITY MATCH STATE
 // =====================================================
 
-type EntityMatchState =
+export type EntityMatchState =
   | 'unmatched'       // review_notes.unmatched_<entity> exists
   | 'auto_matched'    // mapping found in ehr_entity_mappings
   | 'case_override'   // review_notes.matched_<entity> exists
   | 'no_mapping'      // no unmatched + no mapping found
+
+// =====================================================
+// EXPORTED HELPERS (used by ImportReviewDrawer + list rows)
+// =====================================================
+
+/** Determine match state for a single entity given review notes + mapping lookup */
+export function getEntityMatchState(
+  entityType: 'surgeon' | 'procedure' | 'room',
+  reviewNotes: ReviewNotes | null,
+  mapping: EhrEntityMapping | undefined,
+): EntityMatchState {
+  const matchedKey = `matched_${entityType}` as keyof ReviewNotes
+  if (reviewNotes?.[matchedKey]) return 'case_override'
+  if (reviewNotes?.[`unmatched_${entityType}` as keyof ReviewNotes]) return 'unmatched'
+  if (mapping?.orbit_entity_id) return 'auto_matched'
+  return 'no_mapping'
+}
+
+/** Find the entity mapping for a given entity from the list of all mappings */
+export function findEntityMapping(
+  entityType: 'surgeon' | 'procedure' | 'room',
+  identifiers: string[],
+  entityMappings: EhrEntityMapping[],
+): EhrEntityMapping | undefined {
+  for (const id of identifiers) {
+    if (!id) continue
+    const mapping = entityMappings.find(
+      m => m.entity_type === entityType && m.external_identifier === id,
+    )
+    if (mapping) return mapping
+  }
+  return undefined
+}
+
+/** Check if an entry has unresolved entities that block approval */
+export function computeHasUnresolved(
+  entry: EhrIntegrationLog,
+  entityMappings: EhrEntityMapping[],
+): boolean {
+  const parsed = entry.parsed_data as Record<string, unknown> | null
+  const reviewNotes = entry.review_notes as ReviewNotes | null
+
+  const epicSurgeon = parsed?.surgeon as { npi?: string; name?: string } | null
+  const epicProcedure = parsed?.procedure as { cptCode?: string; name?: string } | null
+  const epicRoom = parsed?.room as { code?: string; name?: string } | null
+
+  const surgeonMapping = epicSurgeon
+    ? findEntityMapping('surgeon', [epicSurgeon.npi || '', epicSurgeon.name || ''], entityMappings)
+    : undefined
+  const procedureMapping = epicProcedure
+    ? findEntityMapping('procedure', [epicProcedure.cptCode || '', epicProcedure.name || ''], entityMappings)
+    : undefined
+  const roomMapping = epicRoom
+    ? findEntityMapping('room', [epicRoom.code || '', epicRoom.name || ''], entityMappings)
+    : undefined
+
+  const surgeonState = getEntityMatchState('surgeon', reviewNotes, surgeonMapping)
+  const procedureState = getEntityMatchState('procedure', reviewNotes, procedureMapping)
+
+  return surgeonState === 'unmatched' || surgeonState === 'no_mapping'
+    || procedureState === 'unmatched' || procedureState === 'no_mapping'
+    || !!reviewNotes?.demographics_mismatch
+}
 
 // =====================================================
 // MAIN COMPONENT
@@ -162,10 +221,7 @@ export default function ReviewDetailPanel({
   onResolveEntity,
   onRemapCaseOnly,
   onCreateEntity,
-  onApprove,
-  onReject,
   onPhiAccess,
-  actionLoading,
 }: ReviewDetailPanelProps) {
   const [hl7Expanded, setHl7Expanded] = useState(false)
   const [resolving, setResolving] = useState<string | null>(null)
@@ -199,26 +255,10 @@ export default function ReviewDetailPanel({
     ? mappingLookup.get(`room:${epicRoom.code}`) || mappingLookup.get(`room:${epicRoom.name}`)
     : undefined
 
-  // Determine match state for each entity
-  const getMatchState = (
-    entityType: 'surgeon' | 'procedure' | 'room',
-    mapping: EhrEntityMapping | undefined,
-  ): EntityMatchState => {
-    const matchedKey = `matched_${entityType}` as keyof ReviewNotes
-    if (reviewNotes?.[matchedKey]) return 'case_override'
-    if (reviewNotes?.[`unmatched_${entityType}` as keyof ReviewNotes]) return 'unmatched'
-    if (mapping?.orbit_entity_id) return 'auto_matched'
-    return 'no_mapping'
-  }
-
-  const surgeonState = getMatchState('surgeon', surgeonMapping)
-  const procedureState = getMatchState('procedure', procedureMapping)
-  const roomState = getMatchState('room', roomMapping)
-
-  // Determine if we have any unresolved entities (blocks approve)
-  const hasUnresolved = surgeonState === 'unmatched' || surgeonState === 'no_mapping'
-    || procedureState === 'unmatched' || procedureState === 'no_mapping'
-    || !!reviewNotes?.demographics_mismatch
+  // Determine match state for each entity (uses exported helper)
+  const surgeonState = getEntityMatchState('surgeon', reviewNotes, surgeonMapping)
+  const procedureState = getEntityMatchState('procedure', reviewNotes, procedureMapping)
+  const roomState = getEntityMatchState('room', reviewNotes, roomMapping)
 
   // Header data
   const patientName = epicPatient
@@ -534,34 +574,6 @@ export default function ReviewDetailPanel({
         )}
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
-        <button
-          onClick={() => onApprove(entry)}
-          disabled={hasUnresolved || actionLoading === `approve-${entry.id}`}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title={hasUnresolved ? 'Resolve all unmatched entities first' : 'Approve and create case'}
-        >
-          {actionLoading === `approve-${entry.id}` ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <CheckCircle2 className="w-4 h-4" />
-          )}
-          Approve Import
-        </button>
-        <button
-          onClick={() => onReject(entry)}
-          disabled={actionLoading === `reject-${entry.id}`}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
-        >
-          {actionLoading === `reject-${entry.id}` ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Ban className="w-4 h-4" />
-          )}
-          Reject
-        </button>
-      </div>
     </div>
   )
 }

@@ -7,7 +7,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import ReviewDetailPanel from '../ReviewDetailPanel'
+import ReviewDetailPanel, {
+  computeHasUnresolved,
+  getEntityMatchState,
+  findEntityMapping,
+} from '../ReviewDetailPanel'
 import type { EhrIntegrationLog, EhrEntityMapping } from '@/lib/integrations/shared/integration-types'
 
 // ── Mock HL7MessageViewer ────────────────────────────────────────────────────
@@ -165,10 +169,7 @@ const defaultProps = {
   onResolveEntity: vi.fn().mockResolvedValue(undefined),
   onRemapCaseOnly: vi.fn().mockResolvedValue(undefined),
   onCreateEntity: vi.fn().mockResolvedValue('new-entity-id'),
-  onApprove: vi.fn().mockResolvedValue(undefined),
-  onReject: vi.fn().mockResolvedValue(undefined),
   onPhiAccess: vi.fn(),
-  actionLoading: null,
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -423,50 +424,8 @@ describe('ReviewDetailPanel', () => {
     })
   })
 
-  describe('Approve/Reject', () => {
-    it('disables Approve when unmatched entities exist', () => {
-      render(<ReviewDetailPanel entry={createEntry()} {...defaultProps} />)
-      const approveBtn = screen.getByRole('button', { name: /Approve Import/i })
-      expect(approveBtn).toBeDisabled()
-    })
-
-    it('enables Approve when all entities are matched', () => {
-      const allMatchedEntry = createEntry({ review_notes: null })
-      render(<ReviewDetailPanel entry={allMatchedEntry} {...defaultProps} />)
-      const approveBtn = screen.getByRole('button', { name: /Approve Import/i })
-      expect(approveBtn).not.toBeDisabled()
-    })
-
-    it('calls onApprove when Approve button is clicked', async () => {
-      const user = userEvent.setup()
-      const allMatchedEntry = createEntry({ review_notes: null })
-      render(<ReviewDetailPanel entry={allMatchedEntry} {...defaultProps} />)
-
-      await user.click(screen.getByRole('button', { name: /Approve Import/i }))
-      expect(defaultProps.onApprove).toHaveBeenCalledWith(allMatchedEntry)
-    })
-
-    it('calls onReject when Reject button is clicked', async () => {
-      const user = userEvent.setup()
-      render(<ReviewDetailPanel entry={createEntry()} {...defaultProps} />)
-
-      await user.click(screen.getByRole('button', { name: /Reject/i }))
-      expect(defaultProps.onReject).toHaveBeenCalledWith(expect.objectContaining({ id: 'log-1' }))
-    })
-
-    it('shows loading state when approving', () => {
-      const allMatchedEntry = createEntry({ review_notes: null })
-      render(
-        <ReviewDetailPanel
-          entry={allMatchedEntry}
-          {...defaultProps}
-          actionLoading="approve-log-1"
-        />,
-      )
-      const approveBtn = screen.getByRole('button', { name: /Approve Import/i })
-      expect(approveBtn).toBeDisabled()
-    })
-  })
+  // Note: Approve/Reject buttons moved to ImportReviewDrawer (phase 14).
+  // Those interactions are tested in ImportReviewDrawer tests.
 
   describe('HL7 Message Viewer', () => {
     it('is collapsed by default', () => {
@@ -712,6 +671,275 @@ describe('ReviewDetailPanel', () => {
       // Room with no mapping → also shows selector
       const selectButtons = screen.getAllByText(/Select/i)
       expect(selectButtons.length).toBeGreaterThanOrEqual(3) // surgeon + procedure + room
+    })
+  })
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// EXPORTED HELPER FUNCTIONS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+describe('Exported helper functions', () => {
+  describe('findEntityMapping', () => {
+    it('returns mapping when found by entity type and external identifier', () => {
+      const mapping = findEntityMapping(
+        'surgeon',
+        ['1234567890'],
+        mockEntityMappings,
+      )
+      expect(mapping).toBeDefined()
+      expect(mapping?.entity_type).toBe('surgeon')
+      expect(mapping?.external_identifier).toBe('1234567890')
+      expect(mapping?.orbit_entity_id).toBe('surg-2')
+    })
+
+    it('returns undefined when no mapping exists for entity type', () => {
+      const mapping = findEntityMapping(
+        'surgeon',
+        ['unknown-npi'],
+        mockEntityMappings,
+      )
+      expect(mapping).toBeUndefined()
+    })
+
+    it('returns undefined when external identifier does not match', () => {
+      const mapping = findEntityMapping(
+        'surgeon',
+        ['9999999999'],
+        mockEntityMappings,
+      )
+      expect(mapping).toBeUndefined()
+    })
+
+    it('handles empty mappings array', () => {
+      const mapping = findEntityMapping('surgeon', ['1234567890'], [])
+      expect(mapping).toBeUndefined()
+    })
+
+    it('tries multiple identifiers and returns first match', () => {
+      const mapping = findEntityMapping(
+        'surgeon',
+        ['wrong-id', '1234567890', 'another-id'],
+        mockEntityMappings,
+      )
+      expect(mapping).toBeDefined()
+      expect(mapping?.orbit_entity_id).toBe('surg-2')
+    })
+
+    it('skips empty or null identifiers', () => {
+      const mapping = findEntityMapping(
+        'surgeon',
+        ['', '1234567890'],
+        mockEntityMappings,
+      )
+      expect(mapping).toBeDefined()
+      expect(mapping?.orbit_entity_id).toBe('surg-2')
+    })
+  })
+
+  describe('getEntityMatchState', () => {
+    it('returns "unmatched" when entity is in review_notes.unmatched_surgeon', () => {
+      const reviewNotes = {
+        unmatched_surgeon: {
+          name: 'JONES, EMILY A',
+          npi: '1234567890',
+          suggestions: [],
+        },
+      }
+      const mapping = undefined // No auto mapping
+      const state = getEntityMatchState('surgeon', reviewNotes, mapping)
+      expect(state).toBe('unmatched')
+    })
+
+    it('returns "case_override" when entity is in review_notes.matched_procedure', () => {
+      const reviewNotes = {
+        matched_procedure: {
+          orbit_procedure_id: 'proc-override',
+        },
+      }
+      const mapping = mockEntityMappings.find(m => m.entity_type === 'procedure')
+      const state = getEntityMatchState('procedure', reviewNotes, mapping)
+      expect(state).toBe('case_override')
+    })
+
+    it('returns "auto_matched" when mapping exists and no review_notes override', () => {
+      const reviewNotes = null
+      const mapping = mockEntityMappings.find(m => m.entity_type === 'surgeon')
+      const state = getEntityMatchState('surgeon', reviewNotes, mapping)
+      expect(state).toBe('auto_matched')
+    })
+
+    it('returns "no_mapping" when no mapping exists and not in review_notes', () => {
+      const reviewNotes = null
+      const mapping = undefined
+      const state = getEntityMatchState('surgeon', reviewNotes, mapping)
+      expect(state).toBe('no_mapping')
+    })
+
+    it('prioritizes case_override over auto_matched', () => {
+      // Even if a mapping exists, if there's a case override it should return case_override
+      const reviewNotes = {
+        matched_surgeon: {
+          orbit_surgeon_id: 'surg-override',
+        },
+      }
+      const mapping = mockEntityMappings.find(m => m.entity_type === 'surgeon')
+      const state = getEntityMatchState('surgeon', reviewNotes, mapping)
+      expect(state).toBe('case_override')
+    })
+
+    it('prioritizes unmatched over auto_matched', () => {
+      // If both unmatched AND mapping exist, unmatched takes precedence
+      const reviewNotes = {
+        unmatched_surgeon: {
+          name: 'JONES, EMILY A',
+          npi: '1234567890',
+          suggestions: [],
+        },
+      }
+      const mapping = mockEntityMappings.find(m => m.entity_type === 'surgeon')
+      const state = getEntityMatchState('surgeon', reviewNotes, mapping)
+      expect(state).toBe('unmatched')
+    })
+
+    it('handles room entity type with matched_room', () => {
+      const reviewNotes = {
+        matched_room: {
+          orbit_room_id: 'room-override',
+        },
+      }
+      const mapping = mockEntityMappings.find(m => m.entity_type === 'room')
+      const state = getEntityMatchState('room', reviewNotes, mapping)
+      expect(state).toBe('case_override')
+    })
+  })
+
+  describe('computeHasUnresolved', () => {
+    it('returns true when surgeon is unmatched', () => {
+      const entry = createEntry({
+        review_notes: {
+          unmatched_surgeon: {
+            name: 'JONES, EMILY A',
+            npi: '1234567890',
+            suggestions: [],
+          },
+        },
+      })
+      const hasUnresolved = computeHasUnresolved(entry, mockEntityMappings)
+      expect(hasUnresolved).toBe(true)
+    })
+
+    it('returns true when procedure is unmatched', () => {
+      const entry = createEntry({
+        review_notes: {
+          unmatched_procedure: {
+            cpt: '27447',
+            name: 'Total knee arthroplasty',
+            suggestions: [],
+          },
+        },
+      })
+      const hasUnresolved = computeHasUnresolved(entry, mockEntityMappings)
+      expect(hasUnresolved).toBe(true)
+    })
+
+    it('returns true when surgeon has no mapping', () => {
+      const defaultEntry = createEntry()
+      const entry = {
+        ...defaultEntry,
+        parsed_data: {
+          ...(defaultEntry.parsed_data as Record<string, unknown>),
+          surgeon: { npi: 'unknown-npi', name: 'Unknown Surgeon' },
+          // Keep procedure from default (has mapping)
+        },
+      }
+      const hasUnresolved = computeHasUnresolved(entry, mockEntityMappings)
+      expect(hasUnresolved).toBe(true)
+    })
+
+    it('returns true when procedure has no mapping', () => {
+      const defaultEntry = createEntry()
+      const entry = {
+        ...defaultEntry,
+        parsed_data: {
+          ...(defaultEntry.parsed_data as Record<string, unknown>),
+          procedure: { cptCode: 'unknown-code' },
+          // Keep surgeon from default (has mapping)
+        },
+      }
+      const hasUnresolved = computeHasUnresolved(entry, mockEntityMappings)
+      expect(hasUnresolved).toBe(true)
+    })
+
+    it('returns false when both surgeon and procedure are auto-matched', () => {
+      // Use createEntry with review_notes=null so it uses auto-mappings
+      const entry = createEntry({ review_notes: null })
+      const hasUnresolved = computeHasUnresolved(entry, mockEntityMappings)
+      expect(hasUnresolved).toBe(false)
+    })
+
+    it('returns false when both surgeon and procedure have case overrides', () => {
+      const entry = createEntry({
+        review_notes: {
+          matched_surgeon: {
+            orbit_surgeon_id: 'surg-1',
+          },
+          matched_procedure: {
+            orbit_procedure_id: 'proc-1',
+          },
+        },
+      })
+      const hasUnresolved = computeHasUnresolved(entry, mockEntityMappings)
+      expect(hasUnresolved).toBe(false)
+    })
+
+    it('returns false when mix of auto-matched and case overrides', () => {
+      // Start with default entry (has both surgeon and procedure data)
+      // Then add case override for procedure via review_notes
+      const entry = createEntry({
+        review_notes: {
+          matched_procedure: {
+            orbit_procedure_id: 'proc-override',
+          },
+        },
+        // surgeon npi '1234567890' from default createEntry will auto-match
+      })
+      const hasUnresolved = computeHasUnresolved(entry, mockEntityMappings)
+      expect(hasUnresolved).toBe(false)
+    })
+
+    it('returns true when demographics_mismatch is present', () => {
+      // Use default entry (has both surgeon and procedure mappings)
+      const entry = createEntry({
+        review_notes: {
+          demographics_mismatch: {
+            expected: { firstName: 'John', lastName: 'Smith' },
+            received: { firstName: 'Jane', lastName: 'Smith' },
+          },
+        },
+      })
+      const hasUnresolved = computeHasUnresolved(entry, mockEntityMappings)
+      expect(hasUnresolved).toBe(true)
+    })
+
+    it('returns true when parsed_data is null (cannot verify matches)', () => {
+      const entry = createEntry({ parsed_data: null })
+      const hasUnresolved = computeHasUnresolved(entry, mockEntityMappings)
+      // When parsed_data is null, there's no surgeon/procedure → both are undefined → no mapping → unresolved
+      expect(hasUnresolved).toBe(true)
+    })
+
+    it('returns true when surgeon and procedure are missing from parsed_data', () => {
+      const defaultEntry = createEntry()
+      const entry = {
+        ...defaultEntry,
+        parsed_data: {
+          room: { code: 'OR3' }, // Only room, no surgeon or procedure
+        },
+      }
+      const hasUnresolved = computeHasUnresolved(entry, mockEntityMappings)
+      // Missing surgeon/procedure → no mapping → unresolved
+      expect(hasUnresolved).toBe(true)
     })
   })
 })

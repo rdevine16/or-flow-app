@@ -22,13 +22,9 @@ import {
   RotateCw,
   ChevronDown,
   ChevronRight,
-  Ban,
   Users,
   LayoutGrid,
   ClipboardList,
-  User,
-  Scissors,
-  MapPin,
   Clock,
   Save,
 } from 'lucide-react'
@@ -42,7 +38,8 @@ import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast'
 import SetupInstructionsCard from '@/components/integrations/SetupInstructionsCard'
 import HL7MessageViewer from '@/components/integrations/HL7MessageViewer'
-import ReviewDetailPanel from '@/components/integrations/ReviewDetailPanel'
+import { computeHasUnresolved } from '@/components/integrations/ReviewDetailPanel'
+import ImportReviewDrawer from '@/components/integrations/ImportReviewDrawer'
 import type { CreateEntityData } from '@/components/integrations/ReviewDetailPanel'
 import type {
   EhrIntegration,
@@ -114,40 +111,6 @@ function StatusBadge({ status }: { status: EhrProcessingStatus }) {
   }
   const c = config[status]
   return <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${c.color}`}>{c.label}</span>
-}
-
-function UnmatchedBadges({ reviewNotes }: { reviewNotes: ReviewNotes | null }) {
-  if (!reviewNotes) return null
-  const badges: React.ReactNode[] = []
-  if (reviewNotes.unmatched_surgeon) {
-    badges.push(
-      <span key="surgeon" className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 border border-red-200">
-        <User className="w-3 h-3" />Surgeon
-      </span>
-    )
-  }
-  if (reviewNotes.unmatched_procedure) {
-    badges.push(
-      <span key="procedure" className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700 border border-orange-200">
-        <Scissors className="w-3 h-3" />Procedure
-      </span>
-    )
-  }
-  if (reviewNotes.unmatched_room) {
-    badges.push(
-      <span key="room" className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 border border-amber-200">
-        <MapPin className="w-3 h-3" />Room
-      </span>
-    )
-  }
-  if (reviewNotes.demographics_mismatch) {
-    badges.push(
-      <span key="demographics" className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700 border border-purple-200">
-        Demographics
-      </span>
-    )
-  }
-  return badges.length > 0 ? <div className="flex flex-wrap gap-1">{badges}</div> : null
 }
 
 // =====================================================
@@ -1071,13 +1034,13 @@ function ReviewQueueTab({
   onCreateEntity: (formData: CreateEntityData) => Promise<string | null>
   onPhiAccess: (logEntryId: string, messageType: string) => void
 }) {
-  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [selectedEntry, setSelectedEntry] = useState<EhrIntegrationLog | null>(null)
 
   if (loading) {
     return (
       <div className="animate-pulse space-y-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-20 bg-slate-100 rounded-lg" />
+          <div key={i} className="h-12 bg-slate-100 rounded-lg" />
         ))}
       </div>
     )
@@ -1094,69 +1057,134 @@ function ReviewQueueTab({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-500">{pendingReviews.length} import{pendingReviews.length !== 1 ? 's' : ''} pending review</p>
+      <p className="text-sm text-slate-500">
+        {pendingReviews.length} import{pendingReviews.length !== 1 ? 's' : ''} pending review
+      </p>
 
-      {pendingReviews.map(entry => {
-        const isExpanded = expandedRow === entry.id
-        const parsed = entry.parsed_data as Record<string, unknown> | null
-        const patient = parsed?.patient as Record<string, string> | undefined
-        const patientName = patient ? `${patient.lastName}, ${patient.firstName}` : 'Unknown'
-        const procedure = parsed?.procedure as Record<string, string> | undefined
-        const procedureName = procedure?.name || 'Unknown'
-        const scheduledDate = parsed?.scheduledStart
-          ? new Date(parsed.scheduledStart as string).toLocaleDateString()
-          : 'Unknown'
+      {/* Scannable list */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
+        {pendingReviews.map(entry => (
+          <ReviewQueueRow
+            key={entry.id}
+            entry={entry}
+            entityMappings={entityMappings}
+            isSelected={selectedEntry?.id === entry.id}
+            onClick={() => setSelectedEntry(entry)}
+          />
+        ))}
+      </div>
 
-        return (
-          <div key={entry.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <button
-              onClick={() => {
-                const expanding = !isExpanded
-                setExpandedRow(expanding ? entry.id : null)
-                if (expanding && entry.raw_message) {
-                  onPhiAccess(entry.id, entry.message_type)
-                }
-              }}
-              className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
-            >
-              {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-slate-900">{patientName}</span>
-                  <span className="text-xs text-slate-400">{entry.message_type}</span>
-                  <span className="text-xs text-slate-400">{scheduledDate}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">{procedureName}</span>
-                  <UnmatchedBadges reviewNotes={entry.review_notes} />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <StatusBadge status={entry.processing_status} />
-                <span className="text-xs text-slate-400">{formatRelativeTime(entry.created_at)}</span>
-              </div>
-            </button>
-
-            {isExpanded && (
-              <ReviewDetailPanel
-                entry={entry}
-                allSurgeons={getEntitiesForType('surgeon')}
-                allProcedures={getEntitiesForType('procedure')}
-                allRooms={getEntitiesForType('room')}
-                entityMappings={entityMappings}
-                onResolveEntity={onResolveEntity}
-                onRemapCaseOnly={onRemapCaseOnly}
-                onCreateEntity={onCreateEntity}
-                onApprove={onApprove}
-                onReject={onReject}
-                onPhiAccess={onPhiAccess}
-                actionLoading={actionLoading}
-              />
-            )}
-          </div>
-        )
-      })}
+      {/* Slide-over drawer */}
+      <ImportReviewDrawer
+        isOpen={!!selectedEntry}
+        onClose={() => setSelectedEntry(null)}
+        entry={selectedEntry}
+        allSurgeons={getEntitiesForType('surgeon')}
+        allProcedures={getEntitiesForType('procedure')}
+        allRooms={getEntitiesForType('room')}
+        entityMappings={entityMappings}
+        onResolveEntity={onResolveEntity}
+        onRemapCaseOnly={onRemapCaseOnly}
+        onCreateEntity={onCreateEntity}
+        onApprove={async (e) => {
+          await onApprove(e)
+          setSelectedEntry(null)
+        }}
+        onReject={async (e) => {
+          await onReject(e)
+          setSelectedEntry(null)
+        }}
+        onPhiAccess={onPhiAccess}
+        actionLoading={actionLoading}
+      />
     </div>
+  )
+}
+
+// =====================================================
+// REVIEW QUEUE ROW (scannable list format)
+// =====================================================
+
+function ReviewQueueRow({
+  entry,
+  entityMappings,
+  isSelected,
+  onClick,
+}: {
+  entry: EhrIntegrationLog
+  entityMappings: EhrEntityMapping[]
+  isSelected: boolean
+  onClick: () => void
+}) {
+  const parsed = entry.parsed_data as Record<string, unknown> | null
+  const hasUnresolved = computeHasUnresolved(entry, entityMappings)
+
+  // Extract display fields
+  const patient = parsed?.patient as { firstName?: string; lastName?: string } | null
+  const procedure = parsed?.procedure as { name?: string } | null
+  const surgeon = parsed?.surgeon as { name?: string } | null
+
+  // Format date/time: M/D/YYYY h:mmam
+  let dateTimeStr = ''
+  const scheduledStart = parsed?.scheduledStart as string | undefined
+  if (scheduledStart) {
+    const d = new Date(scheduledStart)
+    const dateStr = d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })
+    const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()
+    dateTimeStr = `${dateStr} ${timeStr}`
+  }
+
+  // Procedure name (short)
+  const procedureName = procedure?.name || 'Unknown Procedure'
+
+  // Surgeon last name
+  let surgeonDisplay = ''
+  if (surgeon?.name) {
+    // Names might be "LAST, FIRST" or "First Last" — extract last name
+    const parts = surgeon.name.split(',')
+    if (parts.length > 1) {
+      surgeonDisplay = `Dr ${parts[0].trim()}`
+    } else {
+      const words = surgeon.name.trim().split(/\s+/)
+      surgeonDisplay = `Dr ${words[words.length - 1]}`
+    }
+  }
+
+  // Patient display: FirstName LastName
+  const patientDisplay = patient
+    ? `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || 'Unknown'
+    : 'Unknown'
+
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+        isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'
+      }`}
+    >
+      {/* Status icon */}
+      {hasUnresolved ? (
+        <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+      ) : (
+        <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+      )}
+
+      {/* Row content */}
+      <div className="flex-1 min-w-0">
+        <span className="text-sm text-slate-900">
+          <span className="font-medium">New Case:</span>
+          {dateTimeStr && <> {dateTimeStr}</>}
+          {procedureName && <> {procedureName}</>}
+          {surgeonDisplay && <> {surgeonDisplay}</>}
+          {patientDisplay && <> <span className="text-slate-400">-</span> {patientDisplay}</>}
+        </span>
+      </div>
+
+      {/* Time ago */}
+      <span className="text-xs text-slate-400 flex-shrink-0">
+        {formatRelativeTime(entry.created_at)}
+      </span>
+    </button>
   )
 }
 
