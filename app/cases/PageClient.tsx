@@ -99,11 +99,13 @@ function CasesPageContent() {
     setSurgeonIds,
     setRoomIds,
     setProcedureIds,
+    setStatusFilterIds,
     clearAllFilters,
     hasActiveFilters,
     surgeons,
     rooms,
     procedureTypes,
+    caseStatusOptions,
     // Table
     cases,
     casesLoading,
@@ -218,9 +220,12 @@ function CasesPageContent() {
           onRoomIdsChange={setRoomIds}
           procedureIds={filters.procedureIds}
           onProcedureIdsChange={setProcedureIds}
+          statusFilterIds={filters.statusFilterIds}
+          onStatusFilterIdsChange={setStatusFilterIds}
           surgeons={surgeons}
           rooms={rooms}
           procedureTypes={procedureTypes}
+          caseStatusOptions={caseStatusOptions}
           hasActiveFilters={hasActiveFilters}
           onClearAll={clearAllFilters}
         />

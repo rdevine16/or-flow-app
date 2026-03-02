@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Search, User, Building2, ClipboardList, ChevronDown, Check, X } from 'lucide-react'
+import { Search, User, Building2, ClipboardList, CircleDot, ChevronDown, Check, X } from 'lucide-react'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
 
 // ============================================================================
@@ -29,11 +29,14 @@ interface CasesFilterBarProps {
   onRoomIdsChange: (ids: string[]) => void
   procedureIds: string[]
   onProcedureIdsChange: (ids: string[]) => void
+  statusFilterIds: string[]
+  onStatusFilterIdsChange: (ids: string[]) => void
 
   // Lookup data for dropdowns
   surgeons: Array<{ id: string; first_name: string; last_name: string }>
   rooms: Array<{ id: string; name: string }>
   procedureTypes: Array<{ id: string; name: string }>
+  caseStatusOptions: Array<{ id: string; name: string }>
 
   // Clear all
   hasActiveFilters: boolean
@@ -375,9 +378,12 @@ export default function CasesFilterBar({
   onRoomIdsChange,
   procedureIds,
   onProcedureIdsChange,
+  statusFilterIds,
+  onStatusFilterIdsChange,
   surgeons,
   rooms,
   procedureTypes,
+  caseStatusOptions,
   hasActiveFilters,
   onClearAll,
 }: CasesFilterBarProps) {
@@ -395,6 +401,11 @@ export default function CasesFilterBar({
   const procedureOptions: FilterOption[] = procedureTypes.map(p => ({
     value: p.id,
     label: p.name,
+  }))
+
+  const statusOptions: FilterOption[] = caseStatusOptions.map(s => ({
+    value: s.id,
+    label: s.name.charAt(0).toUpperCase() + s.name.slice(1).replace(/_/g, ' '),
   }))
 
   // Handle adding a filter from search suggestions (avoid duplicates)
@@ -452,6 +463,18 @@ export default function CasesFilterBar({
     }
   })
 
+  statusFilterIds.forEach(id => {
+    const status = caseStatusOptions.find(s => s.id === id)
+    if (status) {
+      const label = status.name.charAt(0).toUpperCase() + status.name.slice(1).replace(/_/g, ' ')
+      activePills.push({
+        key: `status-${id}`,
+        label,
+        onRemove: () => onStatusFilterIdsChange(statusFilterIds.filter(s => s !== id)),
+      })
+    }
+  })
+
   return (
     <div className="space-y-0">
       {/* Main Filter Row */}
@@ -502,6 +525,15 @@ export default function CasesFilterBar({
           options={procedureOptions}
           selected={procedureIds}
           onChange={onProcedureIdsChange}
+        />
+
+        {/* Status Filter */}
+        <FilterDropdown
+          label="Status"
+          icon={<CircleDot className="w-4 h-4" />}
+          options={statusOptions}
+          selected={statusFilterIds}
+          onChange={onStatusFilterIdsChange}
         />
 
         {/* Clear All */}

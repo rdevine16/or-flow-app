@@ -67,6 +67,7 @@ function baseUserData(overrides = {}) {
   return {
     firstName: 'Jane',
     lastName: 'Smith',
+    profileImageUrl: null,
     accessLevel: 'facility_admin',
     facilityId: 'fac-1',
     facilityName: 'General Hospital',

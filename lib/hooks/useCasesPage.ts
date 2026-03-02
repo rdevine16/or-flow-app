@@ -32,6 +32,7 @@ export interface CasesFilterState {
   surgeonIds: string[]
   roomIds: string[]
   procedureIds: string[]
+  statusFilterIds: string[]
 }
 
 export interface UseCasesPageReturn {
@@ -58,6 +59,7 @@ export interface UseCasesPageReturn {
   setSurgeonIds: (ids: string[]) => void
   setRoomIds: (ids: string[]) => void
   setProcedureIds: (ids: string[]) => void
+  setStatusFilterIds: (ids: string[]) => void
   clearAllFilters: () => void
   hasActiveFilters: boolean
 
@@ -65,6 +67,7 @@ export interface UseCasesPageReturn {
   surgeons: Array<{ id: string; first_name: string; last_name: string }>
   rooms: Array<{ id: string; name: string }>
   procedureTypes: Array<{ id: string; name: string }>
+  caseStatusOptions: Array<{ id: string; name: string }>
 
   // Table data
   cases: CaseListItem[]
@@ -196,6 +199,7 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
   const [surgeonIds, setSurgeonIdsState] = useState<string[]>(() => searchParams.getAll('surgeon'))
   const [roomIds, setRoomIdsState] = useState<string[]>(() => searchParams.getAll('room'))
   const [procedureIds, setProcedureIdsState] = useState<string[]>(() => searchParams.getAll('procedure'))
+  const [statusFilterIds, setStatusFilterIdsState] = useState<string[]>(() => searchParams.getAll('status'))
 
   // Debounce search input (300ms)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -235,18 +239,25 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     setSelectedRows(new Set())
   }, [setPage])
 
+  const setStatusFilterIds = useCallback((ids: string[]) => {
+    setStatusFilterIdsState(ids)
+    setPage(1)
+    setSelectedRows(new Set())
+  }, [setPage])
+
   const clearAllFilters = useCallback(() => {
     setSearchInputState('')
     setDebouncedSearch('')
     setSurgeonIdsState([])
     setRoomIdsState([])
     setProcedureIdsState([])
+    setStatusFilterIdsState([])
     setPage(1)
     setSelectedRows(new Set())
     setActiveTabState('today')
   }, [setPage])
 
-  const hasActiveFilters = debouncedSearch !== '' || surgeonIds.length > 0 || roomIds.length > 0 || procedureIds.length > 0
+  const hasActiveFilters = debouncedSearch !== '' || surgeonIds.length > 0 || roomIds.length > 0 || procedureIds.length > 0 || statusFilterIds.length > 0
 
   // Auto-switch to "all" tab when any filter becomes active
   useEffect(() => {
@@ -263,8 +274,9 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
       surgeonIds: surgeonIds.length > 0 ? surgeonIds : undefined,
       roomIds: roomIds.length > 0 ? roomIds : undefined,
       procedureIds: procedureIds.length > 0 ? procedureIds : undefined,
+      statusFilterIds: statusFilterIds.length > 0 ? statusFilterIds : undefined,
     }
-  }, [debouncedSearch, surgeonIds, roomIds, procedureIds, hasActiveFilters])
+  }, [debouncedSearch, surgeonIds, roomIds, procedureIds, statusFilterIds, hasActiveFilters])
 
   // URL sync for tab + filters (single replaceState to avoid race conditions)
   useEffect(() => {
@@ -282,6 +294,7 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     params.delete('surgeon')
     params.delete('room')
     params.delete('procedure')
+    params.delete('status')
     params.delete('page')
 
     // Set new filter params
@@ -289,11 +302,12 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     surgeonIds.forEach(id => params.append('surgeon', id))
     roomIds.forEach(id => params.append('room', id))
     procedureIds.forEach(id => params.append('procedure', id))
+    statusFilterIds.forEach(id => params.append('status', id))
 
     const qs = params.toString()
     const newUrl = qs ? `${pathname}?${qs}` : pathname
     window.history.replaceState(null, '', newUrl)
-  }, [activeTab, debouncedSearch, surgeonIds, roomIds, procedureIds, pathname])
+  }, [activeTab, debouncedSearch, surgeonIds, roomIds, procedureIds, statusFilterIds, pathname])
 
   // Aggregate filter state for the component
   const filters: CasesFilterState = useMemo(() => ({
@@ -301,7 +315,8 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     surgeonIds,
     roomIds,
     procedureIds,
-  }), [debouncedSearch, surgeonIds, roomIds, procedureIds])
+    statusFilterIds,
+  }), [debouncedSearch, surgeonIds, roomIds, procedureIds, statusFilterIds])
 
   // --- Lookup Data (for filter dropdowns) ---
   const { data: surgeonsData } = useSurgeons(facilityId)
@@ -314,6 +329,12 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
 
   // --- Status ID Mapping (case_statuses name → UUID) ---
   const { data: caseStatuses } = useCaseStatuses()
+
+  // Case statuses for filter dropdown (reuse the caseStatuses lookup already fetched for tab mapping)
+  const caseStatusOptions = useMemo(() =>
+    (caseStatuses ?? []).map(s => ({ id: s.id, name: s.name })),
+    [caseStatuses],
+  )
 
   const statusIds = useMemo(() => {
     if (!caseStatuses || caseStatuses.length === 0) return {}
@@ -355,7 +376,7 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
       return data
     },
     {
-      deps: [facilityId, dateRange.start, dateRange.end, statusIdsReady, debouncedSearch, surgeonIds.join(','), roomIds.join(','), procedureIds.join(',')],
+      deps: [facilityId, dateRange.start, dateRange.end, statusIdsReady, debouncedSearch, surgeonIds.join(','), roomIds.join(','), procedureIds.join(','), statusFilterIds.join(',')],
       enabled: !!facilityId && statusIdsReady,
     }
   )
@@ -384,7 +405,7 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
       return { items: data, total: count ?? 0 }
     },
     {
-      deps: [facilityId, dateRange.start, dateRange.end, activeTab, page, sort.sortBy, sort.sortDirection, statusIdsReady, debouncedSearch, surgeonIds.join(','), roomIds.join(','), procedureIds.join(',')],
+      deps: [facilityId, dateRange.start, dateRange.end, activeTab, page, sort.sortBy, sort.sortDirection, statusIdsReady, debouncedSearch, surgeonIds.join(','), roomIds.join(','), procedureIds.join(','), statusFilterIds.join(',')],
       enabled: !!facilityId && statusIdsReady,
     }
   )
@@ -525,11 +546,13 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     setSurgeonIds,
     setRoomIds,
     setProcedureIds,
+    setStatusFilterIds,
     clearAllFilters,
     hasActiveFilters,
     surgeons,
     rooms,
     procedureTypes,
+    caseStatusOptions,
     cases,
     casesLoading,
     casesError,

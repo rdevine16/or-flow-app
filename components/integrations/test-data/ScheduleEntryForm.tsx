@@ -448,12 +448,14 @@ export default function ScheduleEntryForm({
             onChange={setScheduledDate}
             variant="form"
             required
+            disabled={entityFieldsReadOnly && !!referencesScheduleId}
           />
           <TimePicker
             label="Start Time"
             value={startTime}
             onChange={setStartTime}
             required
+            disabled={entityFieldsReadOnly && !!referencesScheduleId}
           />
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -465,10 +467,20 @@ export default function ScheduleEntryForm({
               max={600}
               value={durationMin}
               onChange={(e) => setDurationMin(parseInt(e.target.value, 10) || 60)}
-              className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              disabled={entityFieldsReadOnly && !!referencesScheduleId}
+              className={`w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${
+                entityFieldsReadOnly && referencesScheduleId
+                  ? 'bg-slate-100 text-slate-500 cursor-not-allowed'
+                  : 'bg-white'
+              }`}
             />
           </div>
         </div>
+        {entityFieldsReadOnly && referencesScheduleId && (
+          <p className="text-xs text-slate-500 -mt-3">
+            Date, time, and duration are inherited from the referenced case for {triggerEvent === 'S15' ? 'cancellations' : 'discontinuations'}.
+          </p>
+        )}
 
         {/* External Case ID (read-only) */}
         <div>

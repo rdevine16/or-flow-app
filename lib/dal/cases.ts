@@ -48,10 +48,11 @@ export type CasesPageTab = 'all' | 'today' | 'scheduled' | 'in_progress' | 'comp
 
 /** Filter params for the cases page (search, entity filters) */
 export interface CasesFilterParams {
-  search?: string          // ilike on case_number
-  surgeonIds?: string[]    // in surgeon_id
-  roomIds?: string[]       // in or_room_id
-  procedureIds?: string[]  // in procedure_type_id
+  search?: string              // ilike on case_number
+  surgeonIds?: string[]        // in surgeon_id
+  roomIds?: string[]           // in or_room_id
+  procedureIds?: string[]      // in procedure_type_id
+  statusFilterIds?: string[]   // in status_id (multi-select status filter)
 }
 
 /** Flag severity summary for a single case (used in table flag indicators) */
@@ -434,6 +435,9 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
     if (filters?.procedureIds && filters.procedureIds.length > 0) {
       query = query.in('procedure_type_id', filters.procedureIds)
     }
+    if (filters?.statusFilterIds && filters.statusFilterIds.length > 0) {
+      query = query.in('status_id', filters.statusFilterIds)
+    }
 
     // Sorting
     const sortColumn = sort ? SORT_COLUMN_MAP[sort.sortBy] || 'scheduled_date' : 'scheduled_date'
@@ -502,6 +506,9 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
       }
       if (filters?.procedureIds && filters.procedureIds.length > 0) {
         q = q.in('procedure_type_id', filters.procedureIds)
+      }
+      if (filters?.statusFilterIds && filters.statusFilterIds.length > 0) {
+        q = q.in('status_id', filters.statusFilterIds)
       }
 
       return q
