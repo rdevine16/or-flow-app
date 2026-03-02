@@ -31,6 +31,8 @@ export * as flagRulesDAL from './flag-rules'
 export { epicDAL } from './epic'
 export { ehrDAL } from './ehr'
 export { ehrTestDataDAL } from './ehr-test-data'
+export { notificationsDAL } from './notifications'
+export type { Notification, NotificationWithReadState, NotificationFilter } from './notifications'
 
 // ============================================
 // SHARED TYPES
