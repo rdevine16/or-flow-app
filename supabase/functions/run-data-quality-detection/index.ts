@@ -147,7 +147,8 @@ Deno.serve(async (req) => {
         }
         
         let issuesFound = 0
-        
+        const issueTypesFound = new Set<string>()
+
         // Get issue types
         const issueTypeIds = await getIssueTypeIds(supabase)
         
@@ -185,7 +186,7 @@ Deno.serve(async (req) => {
                   expectedMin: null,
                   expectedMax: null
                 })
-                if (created) issuesFound++
+                if (created) { issuesFound++; issueTypesFound.add('missing_data') }
               }
             }
           }
@@ -217,7 +218,7 @@ Deno.serve(async (req) => {
                   expectedMin: 0,
                   expectedMax: null
                 })
-                if (created) issuesFound++
+                if (created) { issuesFound++; issueTypesFound.add('negative_duration') }
               }
             }
           }
@@ -239,7 +240,7 @@ Deno.serve(async (req) => {
                 expectedMin: null,
                 expectedMax: 1440
               })
-              if (created) issuesFound++
+              if (created) { issuesFound++; issueTypesFound.add('impossible_value') }
             }
           }
         }
@@ -248,6 +249,7 @@ Deno.serve(async (req) => {
         // 4. STALE CASE DETECTION
         // ============================================
         const staleResults = await detectStaleCases(supabase, facility.id)
+        if (staleResults.created > 0) issueTypesFound.add('stale_case')
         console.log(`Stale cases for ${facility.name}: ${staleResults.detected} found, ${staleResults.created} created`)
         
         if (staleResults.errors.length > 0) {
@@ -266,7 +268,20 @@ Deno.serve(async (req) => {
         })
         
         console.log(`Facility ${facility.name}: ${cases?.length || 0} cases, ${issuesFound} issues found, ${expiredCount} expired`)
-        
+
+        // ============================================
+        // 5. CREATE DATA QUALITY NOTIFICATION
+        // ============================================
+        const totalNewIssues = issuesFound + staleResults.created
+        if (totalNewIssues > 0) {
+          await createDataQualityNotification(
+            supabase,
+            facility.id,
+            totalNewIssues,
+            Array.from(issueTypesFound)
+          )
+        }
+
       } catch (facilityError) {
         console.error(`Error processing facility ${facility.name}:`, facilityError)
       }
@@ -405,6 +420,65 @@ async function createIssueIfNotExists(supabase: SupabaseClient, params: {
     })
   
   return !error
+}
+
+// ============================================
+// DATA QUALITY NOTIFICATION
+// ============================================
+
+/**
+ * Create a summary notification for data quality issues found during a detection run.
+ * Dedup: skips if a data_quality_issue notification was created in the last hour for this facility.
+ * Non-blocking: logs but does not throw on failure.
+ */
+async function createDataQualityNotification(
+  supabase: SupabaseClient,
+  facilityId: string,
+  issuesCount: number,
+  issueTypes: string[]
+): Promise<void> {
+  try {
+    // Dedup: check if a data_quality_issue notification was created in the last hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const { data: recentNotification } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('facility_id', facilityId)
+      .eq('type', 'data_quality_issue')
+      .gte('created_at', oneHourAgo)
+      .limit(1)
+
+    if (recentNotification && recentNotification.length > 0) {
+      console.log(`[notification] Skipped data_quality_issue for facility ${facilityId} (dedup: recent notification exists)`)
+      return
+    }
+
+    const title = `Data Quality: ${issuesCount} new issue${issuesCount === 1 ? '' : 's'} detected`
+    const message = issueTypes.length > 0
+      ? `Issue types: ${issueTypes.join(', ')}`
+      : `${issuesCount} issue${issuesCount === 1 ? '' : 's'} found during scheduled detection`
+
+    const { data: notificationId, error } = await supabase.rpc('create_notification_if_enabled', {
+      p_facility_id: facilityId,
+      p_type: 'data_quality_issue',
+      p_title: title,
+      p_message: message,
+      p_category: 'Reports & Summaries',
+      p_metadata: { link_to: '/data-quality', issues_count: issuesCount, issue_types: issueTypes },
+      p_case_id: null,
+      p_sent_by: null,
+    })
+
+    if (error) {
+      console.warn('[notification] Failed to create data_quality_issue notification:', error.message)
+    } else if (notificationId) {
+      console.log('[notification] Created: data_quality_issue', notificationId)
+    } else {
+      console.log('[notification] Skipped (type disabled for facility): data_quality_issue')
+    }
+  } catch (err) {
+    console.warn('[notification] Unexpected error creating data quality notification:', err instanceof Error ? err.message : String(err))
+  }
 }
 
 // ============================================

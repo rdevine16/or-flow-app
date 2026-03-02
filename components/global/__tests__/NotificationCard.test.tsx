@@ -134,4 +134,25 @@ describe('NotificationCard', () => {
     // Should render an icon (AlertTriangle for data_quality_issue)
     expect(container.querySelector('svg')).toBeTruthy()
   })
+
+  it('navigates to /data-quality when data_quality_issue notification clicked', () => {
+    render(
+      <NotificationCard
+        notification={makeNotification({
+          type: 'data_quality_issue',
+          title: 'Data Quality: 5 new issues detected',
+          message: 'Issue types: missing_data, stale_case',
+          category: 'Reports & Summaries',
+          metadata: { link_to: '/data-quality', issues_count: 5, issue_types: ['missing_data', 'stale_case'] },
+          case_id: null,
+        })}
+        onMarkAsRead={mockMarkAsRead}
+        onNavigate={mockNavigate}
+      />
+    )
+    const allButtons = screen.getAllByRole('button')
+    fireEvent.click(allButtons[0])
+    expect(mockPush).toHaveBeenCalledWith('/data-quality')
+    expect(mockMarkAsRead).toHaveBeenCalledWith('notif-1')
+  })
 })
