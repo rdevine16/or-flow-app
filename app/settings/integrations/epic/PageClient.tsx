@@ -41,8 +41,8 @@ import { ehrAudit } from '@/lib/audit-logger'
 import { createClient } from '@/lib/supabase'
 import SetupInstructionsCard from '@/components/integrations/SetupInstructionsCard'
 import HL7MessageViewer from '@/components/integrations/HL7MessageViewer'
-import EntityResolver from '@/components/integrations/EntityResolver'
-import type { CreateEntityData } from '@/components/integrations/EntityResolver'
+import ReviewDetailPanel from '@/components/integrations/ReviewDetailPanel'
+import type { CreateEntityData } from '@/components/integrations/ReviewDetailPanel'
 import type {
   EhrIntegration,
   EhrIntegrationLog,
@@ -255,7 +255,7 @@ export default function EpicHL7v2IntegrationPage() {
     enabled: !!facilityId,
   })
 
-  // Entity lookups for EntityResolver
+  // Entity lookups for ReviewDetailPanel
   const surgeonEntities = useMemo(
     () => (surgeons || []).map(s => ({ id: s.id, label: `${s.last_name}, ${s.first_name}` })),
     [surgeons]
@@ -918,14 +918,6 @@ function ReviewQueueTab({
           ? new Date(parsed.scheduledStart as string).toLocaleDateString()
           : 'Unknown'
 
-        const reviewNotes = entry.review_notes
-        const hasUnmatched = !!(
-          reviewNotes?.unmatched_surgeon ||
-          reviewNotes?.unmatched_procedure ||
-          reviewNotes?.unmatched_room ||
-          reviewNotes?.demographics_mismatch
-        )
-
         return (
           <div key={entry.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             <button
@@ -957,88 +949,18 @@ function ReviewQueueTab({
             </button>
 
             {isExpanded && (
-              <div className="border-t border-slate-200 p-4 space-y-4">
-                <HL7MessageViewer rawMessage={entry.raw_message} parsedData={entry.parsed_data} />
-
-                {reviewNotes?.unmatched_surgeon && (
-                  <EntityResolver
-                    entityType="surgeon"
-                    unmatchedName={reviewNotes.unmatched_surgeon.name}
-                    unmatchedIdentifier={reviewNotes.unmatched_surgeon.npi}
-                    suggestions={reviewNotes.unmatched_surgeon.suggestions || []}
-                    existingEntities={getEntitiesForType('surgeon')}
-                    onMap={async (orbitId, displayName) => {
-                      await onResolveEntity(entry, 'surgeon',
-                        reviewNotes.unmatched_surgeon!.npi || reviewNotes.unmatched_surgeon!.name,
-                        reviewNotes.unmatched_surgeon!.name, orbitId, displayName)
-                    }}
-                    onCreate={onCreateEntity}
-                  />
-                )}
-
-                {reviewNotes?.unmatched_procedure && (
-                  <EntityResolver
-                    entityType="procedure"
-                    unmatchedName={reviewNotes.unmatched_procedure.name}
-                    unmatchedIdentifier={reviewNotes.unmatched_procedure.cpt}
-                    suggestions={reviewNotes.unmatched_procedure.suggestions || []}
-                    existingEntities={getEntitiesForType('procedure')}
-                    onMap={async (orbitId, displayName) => {
-                      await onResolveEntity(entry, 'procedure',
-                        reviewNotes.unmatched_procedure!.cpt || reviewNotes.unmatched_procedure!.name,
-                        reviewNotes.unmatched_procedure!.name, orbitId, displayName)
-                    }}
-                    onCreate={onCreateEntity}
-                  />
-                )}
-
-                {reviewNotes?.unmatched_room && (
-                  <EntityResolver
-                    entityType="room"
-                    unmatchedName={reviewNotes.unmatched_room.name}
-                    suggestions={reviewNotes.unmatched_room.suggestions || []}
-                    existingEntities={getEntitiesForType('room')}
-                    onMap={async (orbitId, displayName) => {
-                      await onResolveEntity(entry, 'room',
-                        reviewNotes.unmatched_room!.name,
-                        reviewNotes.unmatched_room!.name, orbitId, displayName)
-                    }}
-                    onCreate={onCreateEntity}
-                  />
-                )}
-
-                {reviewNotes?.demographics_mismatch && (
-                  <div className="flex items-center gap-2 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                    <AlertCircle className="w-4 h-4 text-purple-600" />
-                    <div>
-                      <p className="text-sm font-medium text-purple-800">Demographics Mismatch</p>
-                      <p className="text-xs text-purple-600">
-                        {reviewNotes.demographics_mismatch.field}: expected &quot;{reviewNotes.demographics_mismatch.expected}&quot;, received &quot;{reviewNotes.demographics_mismatch.received}&quot;
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
-                  <button
-                    onClick={() => onApprove(entry)}
-                    disabled={hasUnmatched || actionLoading === `approve-${entry.id}`}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={hasUnmatched ? 'Resolve all unmatched entities first' : 'Approve and create case'}
-                  >
-                    {actionLoading === `approve-${entry.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    Approve Import
-                  </button>
-                  <button
-                    onClick={() => onReject(entry)}
-                    disabled={actionLoading === `reject-${entry.id}`}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
-                  >
-                    {actionLoading === `reject-${entry.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
-                    Reject
-                  </button>
-                </div>
-              </div>
+              <ReviewDetailPanel
+                entry={entry}
+                allSurgeons={getEntitiesForType('surgeon')}
+                allProcedures={getEntitiesForType('procedure')}
+                allRooms={getEntitiesForType('room')}
+                onResolveEntity={onResolveEntity}
+                onCreateEntity={onCreateEntity}
+                onApprove={onApprove}
+                onReject={onReject}
+                onPhiAccess={onPhiAccess}
+                actionLoading={actionLoading}
+              />
             )}
           </div>
         )
