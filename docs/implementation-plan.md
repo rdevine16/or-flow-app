@@ -5,7 +5,7 @@
 
 ## Summary
 
-Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Replaces the FHIR-based approach (patient-centric, doesn't expose surgical scheduling). **Primary goal:** test harness to validate Epic HL7v2 field mappings without paying $1,900/year for Epic sandbox. Phases 1-7 build the core pipeline. Phases 8-11 add a database-driven Test Data Manager in global admin, replacing hardcoded test data with CRUD-able entity pools and schedule entries so you can hand-craft test cases and validate the import pipeline under different facility mapping states (none, partial, complete). 11 phases, ~14-17 sessions.
+Build an HL7v2 SIU message listener for Epic OpTime surgical scheduling data. Replaces the FHIR-based approach (patient-centric, doesn't expose surgical scheduling). **Primary goal:** test harness to validate Epic HL7v2 field mappings without paying $1,900/year for Epic sandbox. Phases 1-7 build the core pipeline. Phases 8-11 add a database-driven Test Data Manager in global admin, replacing hardcoded test data with CRUD-able entity pools and schedule entries so you can hand-craft test cases and validate the import pipeline under different facility mapping states (none, partial, complete). Phases 12-13 add auto-push behavior — when you create, edit, or delete a schedule entry, the corresponding SIU message (S12/S14/S15) is automatically sent to the facility's HL7v2 listener, mimicking how Epic pushes changes in production. 13 phases, ~16-19 sessions.
 
 ## Interview Notes (Key Decisions)
 
@@ -710,6 +710,96 @@ Replace the current scenario picker with:
 
 ---
 
+## Phase 12: Auto-Push API — Send SIU Messages on Schedule CRUD
+
+**Complexity:** Medium (1 session)
+
+### What it does
+- Adds a new API route (`/api/integrations/test-harness/auto-push`) that accepts a schedule entry ID + action (create/update/delete) and immediately sends the corresponding SIU message to the facility's HL7v2 listener
+- On **create** → sends S12 (new case booked)
+- On **update** → sends S14 (case modified) using the same external_case_id
+- On **delete** → sends S15 (case canceled) using the same external_case_id
+- Returns the send result (ACK code, success/failure) so the UI can show inline feedback
+- Respects the facility's integration config (API key, endpoint URL) — same as existing harness
+- Only works when the facility has an active HL7v2 integration configured; silently skips otherwise
+
+### Files touched
+
+| File | Change |
+|------|--------|
+| `app/api/integrations/test-harness/auto-push/route.ts` | **Create** — New API route: accepts `{ scheduleId, action, facilityId }`, converts schedule to SIU, sends to listener, returns result |
+| `lib/hl7v2/test-harness/auto-push.ts` | **Create** — Core logic: load single schedule by ID, convert to SIU with correct trigger event based on action, send, return result. Reuses `schedule-to-siu.ts` converters and `getIntegrationConfig` |
+| `app/api/integrations/test-harness/route.ts` | **Modify** — Extract `getIntegrationConfig` to a shared module so both routes can use it |
+| `lib/hl7v2/test-harness/shared.ts` | **Create** — Shared `getIntegrationConfig(supabase, facilityId)` extracted from route.ts |
+
+### Key implementation notes
+- The auto-push function takes an `action` parameter that maps to trigger events: `create → S12`, `update → S14`, `delete → S15`
+- For delete: the schedule entry may already be gone from the DB by the time auto-push fires, so the API accepts the full schedule data in the request body as a fallback (captured before deletion)
+- Auth: same global admin check as the existing test harness route
+- Error handling: if the facility has no integration configured, return `{ skipped: true, reason: 'no_integration' }` instead of throwing — this lets the UI silently skip auto-push for facilities without HL7v2 set up
+
+### Commit message
+`feat(hl7v2): phase 12 - auto-push API for sending SIU messages on schedule CRUD`
+
+### 3-stage test gate
+1. **Unit:** Auto-push function correctly maps create→S12, update→S14, delete→S15. Generated message contains correct external_case_id. Delete action works with pre-captured schedule data. Skips gracefully when no integration configured.
+2. **Integration:** Create schedule entry via DAL → call auto-push API → verify SIU message sent to endpoint → verify integration log entry created. Update schedule → auto-push → verify S14 sent with same external_case_id. Delete schedule → auto-push → verify S15 sent.
+3. **Workflow:** Create entity pool data → create schedule entry → auto-push fires → case appears in facility case list → edit schedule entry → auto-push fires → case updated → delete schedule entry → auto-push fires → case canceled.
+
+---
+
+## Phase 13: Auto-Push UI — Wire into Schedule Manager
+
+**Complexity:** Medium (1 session)
+
+### What it does
+- Adds an "Auto-push" toggle to the test harness UI (persisted per-facility in localStorage)
+- When enabled, schedule CRUD operations in the ScheduleManager and ScheduleEntryForm automatically call the auto-push API after saving
+- Shows inline send status feedback (success/error badge) next to each schedule entry after auto-push
+- Adds a "Push" button on each schedule row for manual one-off sends (useful when auto-push is off)
+- When auto-push is disabled, behavior is unchanged — schedule entries are saved to DB only
+
+### Files touched
+
+| File | Change |
+|------|--------|
+| `app/admin/settings/hl7v2-test-harness/PageClient.tsx` | **Modify** — Add auto-push toggle (stored in localStorage per facility), pass `autoPushEnabled` and `onAutoPush` callback to ScheduleManager |
+| `components/integrations/test-data/ScheduleManager.tsx` | **Modify** — After create/delete, call auto-push API if enabled. Add per-row "Push" button. Show inline status badge (sent/failed/pending) per entry |
+| `components/integrations/test-data/ScheduleEntryForm.tsx` | **Modify** — After save (create or update), call auto-push API if enabled via callback prop. Show toast with send result |
+| `lib/hooks/useAutoPush.ts` | **Create** — Custom hook: `useAutoPush(facilityId)` returns `{ enabled, setEnabled, push(scheduleId, action) }`. Manages localStorage toggle + API call + toast feedback |
+
+### UI changes
+
+**Auto-push toggle** (in the Schedules tab header):
+- Toggle switch with label: "Auto-push to listener"
+- Subtitle: "Automatically send SIU messages when schedule entries are created, edited, or deleted"
+- Persisted per-facility in `localStorage` key `hl7v2-auto-push-{facilityId}`
+
+**Per-row push button** (in ScheduleManager table):
+- Small send icon button on each row (next to edit/delete)
+- Shows a brief status indicator after push: green checkmark (success) or red X (failed)
+- Status auto-clears after 5 seconds
+
+**After-save feedback** (in ScheduleEntryForm):
+- When auto-push is enabled and form saves successfully, shows toast: "Schedule saved & S12 sent to [facility name]" (or S14 for edits)
+- If auto-push fails, shows warning toast: "Schedule saved but push failed: [error]" — schedule is still saved, just not pushed
+
+### Key implementation notes
+- Auto-push is fire-and-forget from the user's perspective — the schedule save always succeeds even if the push fails
+- The `useAutoPush` hook handles the API call and error handling, keeping the components clean
+- For delete: capture the schedule data before calling `deleteSchedule`, then pass it to auto-push so the S15 message can be constructed even though the DB row is gone
+- The per-row "Push" button always sends the entry's trigger event (S12 for new, S13 for reschedule, etc.) — it doesn't override the trigger event
+
+### Commit message
+`feat(hl7v2): phase 13 - auto-push UI toggle and inline send feedback in Schedule Manager`
+
+### 3-stage test gate
+1. **Unit:** `useAutoPush` hook reads/writes localStorage toggle correctly. `push()` calls auto-push API with correct params. Toggle state persists across remounts.
+2. **Integration:** Enable auto-push → create schedule entry via form → verify API called with `action: 'create'` → verify success toast shown. Edit entry → verify API called with `action: 'update'`. Delete entry → verify API called with `action: 'delete'` and pre-captured data.
+3. **Workflow:** Admin opens Test Data Manager → enables auto-push → creates new S12 schedule entry → sees "saved & sent" toast → checks integration logs → sees S12 processed → edits the entry (changes time) → sees "saved & S14 sent" toast → deletes entry → sees "deleted & S15 sent" toast → disables auto-push → creates another entry → no push happens → clicks per-row Push button → entry sent manually.
+
+---
+
 ## Dependencies
 
 ```
@@ -725,7 +815,10 @@ Phase 2 (Schema) ──┘                                                      
 Phase 8 (Test Data Schema) ──→ Phase 9 (Entity Pool UI) ──→ Phase 10 (Schedule UI) ──→ Phase 11 (Rewire Harness)
                                                                                               │
                                                                                               ↓
-                                                                                    Phase 5 (Test Harness, modified)
+                                                                                    Phase 12 (Auto-Push API)
+                                                                                              │
+                                                                                              ↓
+                                                                                    Phase 13 (Auto-Push UI)
 ```
 
 - P3 depends on P1 (parser) + P2 (schema/DAL)
@@ -738,6 +831,8 @@ Phase 8 (Test Data Schema) ──→ Phase 9 (Entity Pool UI) ──→ Phase 10
 - P9 depends on P8 (needs test data tables)
 - P10 depends on P9 (schedule entries reference entity pools)
 - P11 depends on P10 (needs schedule data to read) + P5 (modifies existing test harness)
+- P12 depends on P11 (uses schedule-to-siu converter + db-scenario-runner send logic)
+- P13 depends on P12 (wires auto-push API into ScheduleManager and ScheduleEntryForm UI)
 
 ## Environment Variables (New)
 
@@ -758,12 +853,14 @@ Phase 8 (Test Data Schema) ──→ Phase 9 (Entity Pool UI) ──→ Phase 10
 | 5 | Test Harness (generator + UI) | Medium-Heavy | 2 | Done |
 | 6 | Admin UI (tabs, review queue, mappings, logs) | Heavy | 2-3 | Done |
 | 7 | HIPAA Compliance & Audit Trail | Medium | 1 | Done |
-| 8 | Test Data Manager — Schema & DAL | Medium | 1 | Pending |
-| 9 | Global Admin CRUD UI — Entity Pools | Medium-Heavy | 2 | Pending |
-| 10 | Global Admin CRUD UI — Schedule Entries | Medium-Heavy | 2 | Pending |
-| 11 | Rewire Test Harness to Database-Driven Data | Medium | 1-2 | Pending |
+| 8 | Test Data Manager — Schema & DAL | Medium | 1 | Done |
+| 9 | Global Admin CRUD UI — Entity Pools | Medium-Heavy | 2 | Done |
+| 10 | Global Admin CRUD UI — Schedule Entries | Medium-Heavy | 2 | Done |
+| 11 | Rewire Test Harness to Database-Driven Data | Medium | 1-2 | Done |
+| 12 | Auto-Push API — SIU on Schedule CRUD | Medium | 1 | Pending |
+| 13 | Auto-Push UI — Toggle + Inline Feedback | Medium | 1 | Pending |
 
-**Total: ~14-17 Claude Code sessions** (Phases 1-7 complete, Phases 8-11 pending)
+**Total: ~16-19 Claude Code sessions** (Phases 1-11 complete, Phases 12-13 pending)
 
 ## Risk Assessment
 
