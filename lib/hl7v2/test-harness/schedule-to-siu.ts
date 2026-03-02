@@ -196,22 +196,23 @@ function parseName(fullName: string): { firstName: string; lastName: string } {
 /** Convert a date string (YYYY-MM-DD or ISO) to HL7v2 format (YYYYMMDD) */
 function formatDateAsHL7(dateStr: string | null): string {
   if (!dateStr) return '19700101';
-  // Handle ISO dates or YYYY-MM-DD
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '19700101';
-  const y = d.getFullYear().toString();
-  const m = (d.getMonth() + 1).toString().padStart(2, '0');
-  const day = d.getDate().toString().padStart(2, '0');
-  return `${y}${m}${day}`;
+  // Parse date parts manually to avoid UTC misinterpretation.
+  // new Date("2026-03-03") is parsed as UTC midnight, shifting the day
+  // backwards in local time. Splitting the string avoids this.
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length < 3) return '19700101';
+  const [y, m, d] = parts;
+  return `${y}${m}${d}`;
 }
 
 /** Parse schedule_date (YYYY-MM-DD) + start_time (HH:MM:SS) into a Date */
 function parseScheduleDateTime(dateStr: string, timeStr: string): Date {
-  // Combine date + time
+  // Parse date parts manually to avoid UTC misinterpretation.
+  // new Date("2026-03-03") is parsed as UTC midnight, which shifts to the
+  // previous day in local time zones west of UTC.
+  const [year, month, day] = dateStr.split('-').map(Number);
   const [hours, minutes] = timeStr.split(':').map(Number);
-  const d = new Date(dateStr);
-  d.setHours(hours || 7, minutes || 30, 0, 0);
-  return d;
+  return new Date(year, month - 1, day, hours || 7, minutes || 30, 0, 0);
 }
 
 /** Build a human-readable description for the message */
