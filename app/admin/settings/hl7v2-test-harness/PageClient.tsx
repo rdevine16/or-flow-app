@@ -17,6 +17,7 @@ import ProcedurePool from '@/components/integrations/test-data/ProcedurePool'
 import RoomPool from '@/components/integrations/test-data/RoomPool'
 import PatientPool from '@/components/integrations/test-data/PatientPool'
 import DiagnosisPool from '@/components/integrations/test-data/DiagnosisPool'
+import ScheduleManager from '@/components/integrations/test-data/ScheduleManager'
 import {
   Play,
   Eye,
@@ -374,7 +375,7 @@ export default function HL7v2TestHarnessPage() {
           )}
 
           {activeTopTab === 'schedules' && (
-            <SchedulesPlaceholder />
+            <ScheduleManager facilityId={selectedFacilityId} />
           )}
         </div>
       </Container>
@@ -807,20 +808,6 @@ function EntityPoolsTab({ selectedFacilityId, activePoolTab, setActivePoolTab }:
       {activePoolTab === 'patients' && <PatientPool facilityId={selectedFacilityId} />}
       {activePoolTab === 'diagnoses' && <DiagnosisPool facilityId={selectedFacilityId} />}
     </div>
-  )
-}
-
-// -- Schedules Placeholder (Phase 10) ----------------------------------------
-
-function SchedulesPlaceholder() {
-  return (
-    <Card>
-      <div className="py-12 text-center text-slate-500">
-        <CalendarClock className="w-8 h-8 mx-auto mb-3 text-slate-300" />
-        <p className="text-sm font-medium">Schedule Entries</p>
-        <p className="text-xs text-slate-400 mt-1">Coming in Phase 10 — build test case sequences with trigger events</p>
-      </div>
-    </Card>
   )
 }
 
