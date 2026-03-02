@@ -107,6 +107,7 @@ export interface ScheduleToSIUResult {
  */
 export function convertScheduleToSIU(
   schedule: EhrTestScheduleWithEntities,
+  options?: { messageControlId?: string },
 ): ScheduleToSIUResult {
   if (!schedule.surgeon || !schedule.procedure || !schedule.room || !schedule.patient) {
     throw new Error(
@@ -137,6 +138,7 @@ export function convertScheduleToSIU(
     patient,
     room,
     processingId: 'T', // Test mode
+    messageControlId: options?.messageControlId,
   });
 
   const description = buildDescription(triggerEvent, procedure.name, surgeon, room.code, scheduledDateTime);

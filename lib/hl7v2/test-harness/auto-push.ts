@@ -11,7 +11,6 @@ import type { SIUTriggerEvent } from '../types';
 import type { AnySupabaseClient } from '@/lib/dal';
 import type { EhrTestScheduleWithEntities } from '@/lib/integrations/shared/integration-types';
 import { ehrTestDataDAL } from '@/lib/dal/ehr-test-data';
-import { resetMessageCounter } from './siu-generator';
 import { convertScheduleToSIU, type ScheduleToSIUResult } from './schedule-to-siu';
 import { getIntegrationConfigOrNull } from './shared';
 import { logger } from '@/lib/logger';
@@ -97,7 +96,11 @@ export async function executeAutoPush(
   //    otherwise derive from CRUD action (auto-push on save/delete)
   const triggerEvent = triggerEventOverride || ACTION_TO_TRIGGER[action];
 
-  resetMessageCounter();
+  // Generate a unique message control ID so the Edge Function dedup check
+  // doesn't reject this as a duplicate of a previous push for the same schedule.
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 6);
+  const messageControlId = `AP-${ts}-${rand}`.toUpperCase();
 
   let siuResult: ScheduleToSIUResult;
   try {
@@ -105,7 +108,7 @@ export async function executeAutoPush(
     siuResult = convertScheduleToSIU({
       ...schedule,
       trigger_event: triggerEvent,
-    });
+    }, { messageControlId });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'SIU conversion failed';
     log.error('Auto-push SIU conversion failed', { scheduleId, action, error: msg });
