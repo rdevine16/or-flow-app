@@ -44,13 +44,24 @@ function ReviewQueueRow({
   const surgeon = parsed?.surgeon as { name?: string } | null
 
   // Format date/time: M/D/YYYY h:mmam
+  // Parse string components directly — scheduledStart is local time without timezone suffix,
+  // so new Date() would misinterpret it as UTC and shift the date
   let dateTimeStr = ''
   const scheduledStart = parsed?.scheduledStart as string | undefined
   if (scheduledStart) {
-    const d = new Date(scheduledStart)
-    const dateStr = d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })
-    const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()
-    dateTimeStr = `${dateStr} ${timeStr}`
+    const [datePart, timePart] = scheduledStart.split('T')
+    if (datePart) {
+      const [y, m, d] = datePart.split('-').map(Number)
+      dateTimeStr = `${m}/${d}/${y}`
+      if (timePart) {
+        const [hStr, minStr] = timePart.split(':')
+        const h = parseInt(hStr, 10)
+        const min = minStr || '00'
+        const ampm = h >= 12 ? 'pm' : 'am'
+        const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+        dateTimeStr += ` ${h12}:${min}${ampm}`
+      }
+    }
   }
 
   // Procedure name (short)

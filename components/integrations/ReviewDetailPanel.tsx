@@ -264,9 +264,24 @@ export default function ReviewDetailPanel({
   const patientName = epicPatient
     ? `${epicPatient.lastName}, ${epicPatient.firstName}`
     : 'Unknown Patient'
-  const scheduledDate = parsed?.scheduledStart
-    ? new Date(parsed.scheduledStart as string).toLocaleString()
-    : 'Unknown'
+  // Parse date/time directly from string to avoid UTC misinterpretation
+  const scheduledDate = (() => {
+    const raw = parsed?.scheduledStart as string | undefined
+    if (!raw) return 'Unknown'
+    const [datePart, timePart] = raw.split('T')
+    if (!datePart) return 'Unknown'
+    const [y, m, d] = datePart.split('-').map(Number)
+    let result = `${m}/${d}/${y}`
+    if (timePart) {
+      const [hStr, minStr] = timePart.split(':')
+      const h = parseInt(hStr, 10)
+      const min = minStr || '00'
+      const ampm = h >= 12 ? 'pm' : 'am'
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+      result += ` ${h12}:${min}${ampm}`
+    }
+    return result
+  })()
   const caseId = (parsed?.externalCaseId as string) || 'N/A'
 
   // Map handler (global mapping — upserts ehr_entity_mappings)

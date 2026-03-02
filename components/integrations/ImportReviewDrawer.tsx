@@ -51,12 +51,23 @@ function formatSummaryLine(entry: EhrIntegrationLog): string {
 
   const parts: string[] = []
 
-  // Date/time
+  // Date/time — parse string components directly to avoid UTC misinterpretation
+  // (scheduledStart is local time without timezone suffix)
   const scheduledStart = parsed.scheduledStart as string | undefined
   if (scheduledStart) {
-    const d = new Date(scheduledStart)
-    parts.push(d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }))
-    parts.push(d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase())
+    const [datePart, timePart] = scheduledStart.split('T')
+    if (datePart) {
+      const [y, m, d] = datePart.split('-').map(Number)
+      parts.push(`${m}/${d}/${y}`)
+      if (timePart) {
+        const [hStr, minStr] = timePart.split(':')
+        const h = parseInt(hStr, 10)
+        const min = minStr || '00'
+        const ampm = h >= 12 ? 'pm' : 'am'
+        const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+        parts.push(`${h12}:${min}${ampm}`)
+      }
+    }
   }
 
   // Procedure
