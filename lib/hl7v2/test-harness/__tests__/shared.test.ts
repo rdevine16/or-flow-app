@@ -17,7 +17,7 @@ function createMockSupabase(integration: { id: string; config: Record<string, un
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({
             single: vi.fn().mockResolvedValue({
               data: integration,
               error: integration ? null : { message: 'Not found' },

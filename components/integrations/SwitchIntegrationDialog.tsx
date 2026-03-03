@@ -4,7 +4,6 @@
 
 'use client'
 
-import { useState } from 'react'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ArrowRightLeft } from 'lucide-react'
 import type { EhrIntegrationType } from '@/lib/integrations/shared/integration-types'

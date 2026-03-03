@@ -8,7 +8,7 @@
 
 import type { AnySupabaseClient } from '@/lib/dal'
 import { ehrDAL } from '@/lib/dal/ehr'
-import type { SIUMessage, SIUTriggerEvent } from '@/lib/hl7v2/types'
+import type { SIUMessage } from '@/lib/hl7v2/types'
 import type { EhrIntegration, EhrIntegrationLog, EhrIntegrationType } from '@/lib/integrations/shared/integration-types'
 import { matchOrCreatePatient, type PatientData } from './patient-matcher'
 import { matchSurgeon, type ProviderMatchResult } from './provider-matcher'
@@ -174,7 +174,7 @@ async function routeByTriggerEvent(
   siu: SIUMessage,
   integration: EhrIntegration,
   logEntry: EhrIntegrationLog,
-  rawMessage: string,
+  _rawMessage: string,
 ): Promise<ImportResult> {
   switch (siu.triggerEvent) {
     case 'S12':

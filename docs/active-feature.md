@@ -63,16 +63,16 @@ Expand ORbit's HL7v2 SIU surgical scheduling integration beyond Epic to support 
 - Any changes to existing Epic integration behavior
 
 ## Acceptance Criteria
-- [ ] Oracle Cerner HL7v2 SIU messages are parsed and create cases identically to Epic
-- [ ] MEDITECH HL7v2 SIU messages are parsed and create cases identically to Epic
-- [ ] Global admin settings allow selecting EHR system type per facility
-- [ ] System-specific setup instructions are shown for each EHR type
-- [ ] Review queue works for all three systems with source system badge
-- [ ] Entity mapping (surgeon, procedure, room) works across all systems
-- [ ] Test message panel works for all three systems
-- [ ] Existing Epic integration is unaffected (no regression)
-- [ ] All tests pass (`npm run typecheck && npm run lint && npm run test`)
-- [ ] No TypeScript `any` types introduced
+- [x] Oracle Cerner HL7v2 SIU messages are parsed and create cases identically to Epic
+- [x] MEDITECH HL7v2 SIU messages are parsed and create cases identically to Epic
+- [x] Global admin settings allow selecting EHR system type per facility
+- [x] System-specific setup instructions are shown for each EHR type
+- [x] Review queue works for all three systems with source system badge
+- [x] Entity mapping (surgeon, procedure, room) works across all systems
+- [x] Test message panel works for all three systems
+- [x] Existing Epic integration is unaffected (no regression)
+- [x] All tests pass (`npm run typecheck && npm run lint && npm run test`)
+- [x] No TypeScript `any` types introduced
 
 ## Research Reference
 - Full research document: `docs/research/2026-03-02_multi-ehr-integration-research.md`

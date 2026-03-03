@@ -16,7 +16,6 @@ import { computeHasUnresolved } from '@/components/integrations/ReviewDetailPane
 import type { CreateEntityData, ReviewDetailPanelProps } from '@/components/integrations/ReviewDetailPanel'
 import type {
   EhrIntegrationLog,
-  EhrEntityType,
   EhrEntityMapping,
 } from '@/lib/integrations/shared/integration-types'
 
@@ -79,7 +78,9 @@ function formatSummaryLine(entry: EhrIntegrationLog): string {
   // Surgeon
   const surgeon = parsed.surgeon as { name?: string } | null
   if (surgeon?.name) {
-    const lastName = surgeon.name.split(',')[0]?.trim() || surgeon.name.split(' ').pop() || surgeon.name
+    const lastName = surgeon.name.includes(',')
+      ? surgeon.name.split(',')[0]?.trim()
+      : surgeon.name.split(' ').pop() || surgeon.name
     parts.push(`Dr ${lastName}`)
   }
 

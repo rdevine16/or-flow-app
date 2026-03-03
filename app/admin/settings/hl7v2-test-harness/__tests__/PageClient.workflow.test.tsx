@@ -9,12 +9,24 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(),
   }),
+  usePathname: () => '/admin/settings/hl7v2-test-harness',
 }))
 
 vi.mock('@/lib/UserContext', () => ({
   useUser: () => ({
     isGlobalAdmin: true,
+    isAdmin: true,
     loading: false,
+    userData: { firstName: 'Test', lastName: 'User', facilityId: 'fac-1', role: 'global_admin', email: 'test@example.com' },
+    can: () => true,
+  }),
+}))
+
+vi.mock('@/lib/SubNavContext', () => ({
+  useSubNav: () => ({
+    items: [],
+    title: '',
+    isVisible: false,
   }),
 }))
 

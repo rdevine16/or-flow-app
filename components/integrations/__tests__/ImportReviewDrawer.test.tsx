@@ -110,13 +110,13 @@ describe('ImportReviewDrawer', () => {
     })
 
     it('displays formatted summary line with date, time, procedure, and surgeon', () => {
-      const { container } = render(<ImportReviewDrawer {...defaultProps} />)
-      const drawerContent = container.querySelector('[data-testid="import-review-drawer"]')
+      render(<ImportReviewDrawer {...defaultProps} />)
+      const drawerContent = screen.getByTestId('import-review-drawer')
       expect(drawerContent).toBeInTheDocument()
-      expect(drawerContent?.textContent).toContain('3/1/2026')
-      expect(drawerContent?.textContent).toContain('8:00')
-      expect(drawerContent?.textContent).toContain('Total knee arthroplasty')
-      expect(drawerContent?.textContent).toContain('Dr JONES')
+      expect(drawerContent.textContent).toContain('3/1/2026')
+      expect(drawerContent.textContent).toContain('8:00')
+      expect(drawerContent.textContent).toContain('Total knee arthroplasty')
+      expect(drawerContent.textContent).toContain('Dr JONES')
     })
 
     it('extracts surgeon last name from comma-separated format', () => {
@@ -128,9 +128,9 @@ describe('ImportReviewDrawer', () => {
           surgeon: { name: 'JONES, EMILY A', npi: '1234567890' },
         },
       }
-      const { container } = render(<ImportReviewDrawer {...defaultProps} entry={entry} />)
-      const drawerContent = container.querySelector('[data-testid="import-review-drawer"]')
-      expect(drawerContent?.textContent).toContain('Dr JONES')
+      render(<ImportReviewDrawer {...defaultProps} entry={entry} />)
+      const drawerContent = screen.getByTestId('import-review-drawer')
+      expect(drawerContent.textContent).toContain('Dr JONES')
     })
 
     it('extracts surgeon last name from space-separated format', () => {
@@ -142,9 +142,9 @@ describe('ImportReviewDrawer', () => {
           surgeon: { name: 'Emily Ann Jones', npi: '1234567890' },
         },
       }
-      const { container } = render(<ImportReviewDrawer {...defaultProps} entry={entry} />)
-      const drawerContent = container.querySelector('[data-testid="import-review-drawer"]')
-      expect(drawerContent?.textContent).toContain('Dr Jones')
+      render(<ImportReviewDrawer {...defaultProps} entry={entry} />)
+      const drawerContent = screen.getByTestId('import-review-drawer')
+      expect(drawerContent.textContent).toContain('Dr Jones')
     })
   })
 
@@ -257,11 +257,11 @@ describe('ImportReviewDrawer', () => {
           surgeon: { name: 'Smith, John', npi: '1234567890' },
         },
       }
-      const { container } = render(<ImportReviewDrawer {...defaultProps} entry={entry} />)
-      const drawerContent = container.querySelector('[data-testid="import-review-drawer"]')
-      expect(drawerContent?.textContent).toContain('3/1/2026')
-      expect(drawerContent?.textContent).toContain('8:00')
-      expect(drawerContent?.textContent).toContain('Dr Smith')
+      render(<ImportReviewDrawer {...defaultProps} entry={entry} />)
+      const drawerContent = screen.getByTestId('import-review-drawer')
+      expect(drawerContent.textContent).toContain('3/1/2026')
+      expect(drawerContent.textContent).toContain('8:00')
+      expect(drawerContent.textContent).toContain('Dr Smith')
     })
 
     it('handles missing surgeon gracefully', () => {
@@ -274,11 +274,11 @@ describe('ImportReviewDrawer', () => {
           procedure: { name: 'Total Hip Replacement' },
         },
       }
-      const { container } = render(<ImportReviewDrawer {...defaultProps} entry={entry} />)
-      const drawerContent = container.querySelector('[data-testid="import-review-drawer"]')
-      expect(drawerContent?.textContent).toContain('3/1/2026')
-      expect(drawerContent?.textContent).toContain('8:00')
-      expect(drawerContent?.textContent).toContain('Total Hip Replacement')
+      render(<ImportReviewDrawer {...defaultProps} entry={entry} />)
+      const drawerContent = screen.getByTestId('import-review-drawer')
+      expect(drawerContent.textContent).toContain('3/1/2026')
+      expect(drawerContent.textContent).toContain('8:00')
+      expect(drawerContent.textContent).toContain('Total Hip Replacement')
     })
 
     it('returns "Unknown import" when parsed_data is null', () => {

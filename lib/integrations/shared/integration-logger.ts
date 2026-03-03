@@ -10,7 +10,6 @@ import { ehrDAL } from '@/lib/dal/ehr'
 import { logger } from '@/lib/logger'
 import type {
   EhrIntegrationLog,
-  EhrProcessingStatus,
   ReviewNotes,
   EntitySuggestion,
 } from './integration-types'

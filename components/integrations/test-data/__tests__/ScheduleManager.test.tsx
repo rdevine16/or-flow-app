@@ -507,7 +507,8 @@ describe('ScheduleManager - Auto-Push Integration Tests', () => {
     expect(mockOnAutoPush).toHaveBeenCalledWith(
       'sched-1',
       'create',
-      expect.objectContaining({ id: 'sched-1', trigger_event: 'S12' })
+      expect.objectContaining({ id: 'sched-1', trigger_event: 'S12' }),
+      'S12',
     )
   })
 
@@ -530,7 +531,8 @@ describe('ScheduleManager - Auto-Push Integration Tests', () => {
     expect(mockOnAutoPush).toHaveBeenCalledWith(
       'sched-3',
       'delete',
-      expect.objectContaining({ id: 'sched-3', trigger_event: 'S15' })
+      expect.objectContaining({ id: 'sched-3', trigger_event: 'S15' }),
+      'S15',
     )
   })
 

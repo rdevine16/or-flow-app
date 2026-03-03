@@ -263,7 +263,7 @@ export default function IntegrationsPage() {
   const facilityId = currentUser?.facilityId
 
   // Fetch all HL7v2 integrations for this facility
-  const { data: allIntegrations, loading: integrationsLoading, refetch } = useSupabaseQuery<EhrIntegration[]>(
+  const { data: allIntegrations, loading: integrationsLoading } = useSupabaseQuery<EhrIntegration[]>(
     async (supabase) => {
       const { data } = await ehrDAL.listIntegrations(supabase, facilityId!)
       // Filter to only HL7v2 types

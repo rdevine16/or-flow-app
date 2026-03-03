@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { matchOrCreatePatient, type PatientData } from '../patient-matcher'
 
 vi.mock('@/lib/logger', () => ({

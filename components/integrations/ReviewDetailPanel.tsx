@@ -190,16 +190,12 @@ export function computeHasUnresolved(
 
   const ehrSurgeon = parsed?.surgeon as { npi?: string; name?: string } | null
   const ehrProcedure = parsed?.procedure as { cptCode?: string; name?: string } | null
-  const ehrRoom = parsed?.room as { code?: string; name?: string } | null
 
   const surgeonMapping = ehrSurgeon
     ? findEntityMapping('surgeon', [ehrSurgeon.npi || '', ehrSurgeon.name || ''], entityMappings)
     : undefined
   const procedureMapping = ehrProcedure
     ? findEntityMapping('procedure', [ehrProcedure.cptCode || '', ehrProcedure.name || ''], entityMappings)
-    : undefined
-  const roomMapping = ehrRoom
-    ? findEntityMapping('room', [ehrRoom.code || '', ehrRoom.name || ''], entityMappings)
     : undefined
 
   const surgeonState = getEntityMatchState('surgeon', reviewNotes, surgeonMapping)
