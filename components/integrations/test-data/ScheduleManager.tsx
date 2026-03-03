@@ -22,10 +22,16 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  Activity,
 } from 'lucide-react'
 import type {
   EhrTestScheduleWithEntities,
   EhrTestTriggerEvent,
+  EhrIntegrationType,
+} from '@/lib/integrations/shared/integration-types'
+import {
+  HL7V2_INTEGRATION_TYPES,
+  EHR_SYSTEM_DISPLAY_NAMES,
 } from '@/lib/integrations/shared/integration-types'
 import type { AutoPushAction } from '@/lib/hl7v2/test-harness/auto-push'
 import type { AutoPushStatus } from '@/hooks/useAutoPush'
@@ -120,6 +126,21 @@ export default function ScheduleManager({
   const [searchTerm, setSearchTerm] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<EhrTestScheduleWithEntities | null>(null)
+
+  // System type: fetch the facility's active HL7v2 integration type
+  const { data: activeIntegrationType } = useSupabaseQuery<EhrIntegrationType | null>(
+    async (sb) => {
+      const { data } = await sb
+        .from('ehr_integrations')
+        .select('integration_type')
+        .eq('facility_id', facilityId)
+        .in('integration_type', HL7V2_INTEGRATION_TYPES)
+        .eq('is_active', true)
+        .maybeSingle()
+      return (data?.integration_type as EhrIntegrationType) || null
+    },
+    { enabled: !!facilityId, deps: [facilityId] }
+  )
 
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<EhrTestScheduleWithEntities | null>(null)
@@ -296,6 +317,26 @@ export default function ScheduleManager({
               Add Entry
             </button>
           </div>
+
+          {/* System type indicator */}
+          {facilityId && (
+            <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <Activity className="w-4 h-4 text-slate-400" />
+              <span className="text-sm text-slate-600">System Type:</span>
+              {activeIntegrationType ? (
+                <Badge variant="info" size="sm">
+                  {EHR_SYSTEM_DISPLAY_NAMES[activeIntegrationType]} HL7v2
+                </Badge>
+              ) : (
+                <span className="text-sm text-slate-400">No HL7v2 integration configured</span>
+              )}
+              {activeIntegrationType && (
+                <span className="text-xs text-slate-400 ml-auto">
+                  MSH-3: {activeIntegrationType === 'epic_hl7v2' ? 'EPIC' : activeIntegrationType === 'cerner_hl7v2' ? 'CERNER' : 'MEDITECH'}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Auto-push toggle */}
           {onAutoPushToggle && (

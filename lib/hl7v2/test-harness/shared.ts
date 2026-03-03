@@ -7,6 +7,7 @@
 
 import { ValidationError } from '@/lib/errorHandling';
 import type { createClient } from '@/lib/supabase-server';
+import { HL7V2_INTEGRATION_TYPES, type EhrIntegrationType } from '@/lib/integrations/shared/integration-types';
 
 /**
  * Look up the HL7v2 integration config (endpoint URL + API key)
@@ -16,12 +17,12 @@ import type { createClient } from '@/lib/supabase-server';
 export async function getIntegrationConfig(
   supabase: Awaited<ReturnType<typeof createClient>>,
   facilityId: string,
-): Promise<{ endpointUrl: string; apiKey: string }> {
+): Promise<{ endpointUrl: string; apiKey: string; integrationType: EhrIntegrationType }> {
   const { data: integration } = await supabase
     .from('ehr_integrations')
-    .select('id, config')
+    .select('id, config, integration_type')
     .eq('facility_id', facilityId)
-    .eq('integration_type', 'epic_hl7v2')
+    .in('integration_type', HL7V2_INTEGRATION_TYPES)
     .single();
 
   if (!integration) {
@@ -45,6 +46,7 @@ export async function getIntegrationConfig(
   return {
     endpointUrl: `${supabaseUrl}/functions/v1/hl7v2-listener`,
     apiKey,
+    integrationType: integration.integration_type as EhrIntegrationType,
   };
 }
 
@@ -56,12 +58,12 @@ export async function getIntegrationConfig(
 export async function getIntegrationConfigOrNull(
   supabase: Awaited<ReturnType<typeof createClient>>,
   facilityId: string,
-): Promise<{ endpointUrl: string; apiKey: string } | null> {
+): Promise<{ endpointUrl: string; apiKey: string; integrationType: EhrIntegrationType } | null> {
   const { data: integration } = await supabase
     .from('ehr_integrations')
-    .select('id, config')
+    .select('id, config, integration_type')
     .eq('facility_id', facilityId)
-    .eq('integration_type', 'epic_hl7v2')
+    .in('integration_type', HL7V2_INTEGRATION_TYPES)
     .single();
 
   if (!integration) return null;
@@ -76,5 +78,6 @@ export async function getIntegrationConfigOrNull(
   return {
     endpointUrl: `${supabaseUrl}/functions/v1/hl7v2-listener`,
     apiKey,
+    integrationType: integration.integration_type as EhrIntegrationType,
   };
 }

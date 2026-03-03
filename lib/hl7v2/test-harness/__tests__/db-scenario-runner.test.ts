@@ -31,6 +31,7 @@ vi.mock('../siu-generator', () => ({
       durationMinutes: params.durationMinutes,
       messageControlId: `MSG-${Math.random().toString(36).slice(2, 8)}`,
       raw: `MSH|...|SIU^${params.triggerEvent}|...\rPID|...\r`,
+      systemType: params.systemType || 'epic_hl7v2',
     };
     return mockMessage;
   }),

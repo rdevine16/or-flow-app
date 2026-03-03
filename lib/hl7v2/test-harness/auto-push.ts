@@ -76,6 +76,8 @@ export async function executeAutoPush(
     return { success: false, skipped: true, reason: 'no_integration' };
   }
 
+  const { integrationType } = config;
+
   // 2. Load or use pre-captured schedule data
   let schedule: EhrTestScheduleWithEntities;
 
@@ -108,7 +110,7 @@ export async function executeAutoPush(
     siuResult = convertScheduleToSIU({
       ...schedule,
       trigger_event: triggerEvent,
-    }, { messageControlId });
+    }, { messageControlId, systemType: integrationType });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'SIU conversion failed';
     log.error('Auto-push SIU conversion failed', { scheduleId, action, error: msg });

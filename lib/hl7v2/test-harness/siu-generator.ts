@@ -6,6 +6,7 @@
  */
 
 import type { SIUTriggerEvent } from '../types';
+import type { EhrIntegrationType } from '@/lib/integrations/shared/integration-types';
 import type {
   ProcedureData,
   SurgeonData,
@@ -22,6 +23,25 @@ import {
   getSurgeonsBySpecialty,
   pickRandom,
 } from './surgical-data';
+
+// ── Per-System MSH Configuration ──────────────────────────────────────────────
+
+interface SystemMSHConfig {
+  sendingApplication: string;
+  sendingFacility: string;
+  hl7Version: string;
+}
+
+const SYSTEM_MSH_CONFIG: Record<string, SystemMSHConfig> = {
+  epic_hl7v2: { sendingApplication: 'EPIC', sendingFacility: 'SURGERY_CENTER', hl7Version: '2.3' },
+  cerner_hl7v2: { sendingApplication: 'CERNER', sendingFacility: 'SURGERY_CENTER', hl7Version: '2.3' },
+  meditech_hl7v2: { sendingApplication: 'MEDITECH', sendingFacility: 'SURGERY_CENTER', hl7Version: '2.4' },
+};
+
+/** Get MSH config for a system type, defaulting to Epic */
+export function getSystemMSHConfig(systemType?: EhrIntegrationType): SystemMSHConfig {
+  return SYSTEM_MSH_CONFIG[systemType || 'epic_hl7v2'] || SYSTEM_MSH_CONFIG.epic_hl7v2;
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,6 +70,8 @@ export interface GenerateSIUOptions {
   fillerStatusCode?: string;
   /** Processing ID: P=production, T=test */
   processingId?: string;
+  /** EHR system type — controls MSH-3 (sending application) and HL7 version */
+  systemType?: EhrIntegrationType;
 }
 
 export interface GeneratedSIUMessage {
@@ -63,6 +85,8 @@ export interface GeneratedSIUMessage {
   room: ORRoomData;
   scheduledDateTime: Date;
   durationMinutes: number;
+  /** EHR system type used to generate this message */
+  systemType: EhrIntegrationType;
 }
 
 // ── Message ID Counter ───────────────────────────────────────────────────────
@@ -92,6 +116,7 @@ export function generateSIUMessage(options: GenerateSIUOptions): GeneratedSIUMes
     scheduledDateTime,
     processingId = 'P',
     specialties,
+    systemType = 'epic_hl7v2',
   } = options;
 
   // Select data elements (use provided or pick from pools)
@@ -118,12 +143,16 @@ export function generateSIUMessage(options: GenerateSIUOptions): GeneratedSIUMes
   // Build segments
   const segments: string[] = [];
 
-  // MSH
+  // MSH (system-specific sending application and HL7 version)
+  const mshConfig = getSystemMSHConfig(systemType);
   segments.push(buildMSH({
     dateTime: now,
     triggerEvent,
     messageControlId,
     processingId,
+    sendingApplication: mshConfig.sendingApplication,
+    sendingFacility: mshConfig.sendingFacility,
+    hl7Version: mshConfig.hl7Version,
   }));
 
   // SCH
@@ -192,6 +221,7 @@ export function generateSIUMessage(options: GenerateSIUOptions): GeneratedSIUMes
     room,
     scheduledDateTime,
     durationMinutes,
+    systemType,
   };
 }
 
@@ -202,12 +232,15 @@ function buildMSH(opts: {
   triggerEvent: SIUTriggerEvent;
   messageControlId: string;
   processingId: string;
+  sendingApplication: string;
+  sendingFacility: string;
+  hl7Version: string;
 }): string {
   const fields = [
     'MSH',
     '^~\\&',
-    'EPIC',
-    'SURGERY_CENTER',
+    opts.sendingApplication,
+    opts.sendingFacility,
     '',  // MSH-5: receiving application
     '',  // MSH-6: receiving facility
     formatHL7DateTime(opts.dateTime),
@@ -215,7 +248,7 @@ function buildMSH(opts: {
     `SIU^${opts.triggerEvent}`,
     opts.messageControlId,
     opts.processingId,
-    '2.3',
+    opts.hl7Version,
     '',  // MSH-13 through end
     '',
     '',

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseSIUMessage } from '../siu-parser';
+import { generateSIUMessage } from '../test-harness/siu-generator';
+import type { EhrIntegrationType } from '@/lib/integrations/shared/integration-types';
 
 // ── Test Messages ───────────────────────────────────────────────────────────
 
@@ -447,5 +449,214 @@ describe('parseSIUMessage — multiple diagnoses', () => {
     expect(result.message!.dg1[0].diagnosisCode).toBe('M17.11');
     expect(result.message!.dg1[1].diagnosisCode).toBe('E11.9');
     expect(result.message!.dg1[2].diagnosisCode).toBe('I10');
+  });
+});
+
+// ── Oracle Cerner Message Variants ─────────────────────────────────────────
+
+describe('parseSIUMessage — Oracle Cerner messages', () => {
+  /** Cerner SIU^S12 with MSH-3=CERNER and custom ZSG Z-segment */
+  const CERNER_SIU_S12 = [
+    'MSH|^~\\&|CERNER|SURGERY_CENTER|||20260301143022||SIU^S12|CMSG001|P|2.3||||||',
+    'SCH|CSE5001^CSE5001|FLC5001^FLC5001|||CSE5001|SURGERY^Surgical Case|Laparoscopic cholecystectomy|SURGERY|90|min|^^90^20260320090000^20260320103000|||||2001^CHEN^DAVID^L^MD^^^^NPI^9876543210||||2001^CHEN^DAVID^L^MD^^^^|||||Booked',
+    'PID|1||MRN55001^^^^MR||GARCIA^MARIA^R^^||19720918|F|||456 Oak Ave^^Chicago^IL^60601^US||(312)555-0199^HOME||||ACCT55001||',
+    'PV1|1|O|OR7^^^SURGERY_CENTER^^^^^||||2001^CHEN^DAVID^L^MD^^^^|||GI||||||||||||67890||||||||||||||||||||||||||||V',
+    'ZSG|1|CERNER_CUSTOM|SurgiNet scheduling data|Additional Cerner-specific metadata',
+    'DG1|1|I10|K80.20^Calculus of gallbladder without cholecystitis^I10|Calculus of gallbladder||',
+    'RGS|1|A|RG002',
+    'AIS|1|A|47562^Laparoscopic cholecystectomy^CPT|20260320090000|15|min|90|min|Booked||',
+    'AIL|1|A|OR7^^^SURGERY_CENTER|^Operating Room 7||20260320090000|||90|min||Booked',
+    'AIP|1|A|2001^CHEN^DAVID^L^MD^^^^|SURGEON||20260320090000|||90|min||Booked',
+  ].join('\r');
+
+  it('parses Cerner SIU^S12 with MSH-3=CERNER', () => {
+    const result = parseSIUMessage(CERNER_SIU_S12);
+    expect(result.success).toBe(true);
+    expect(result.message!.msh.sendingApplication).toBe('CERNER');
+    expect(result.message!.triggerEvent).toBe('S12');
+  });
+
+  it('gracefully ignores custom Z-segments (ZSG)', () => {
+    const result = parseSIUMessage(CERNER_SIU_S12);
+    expect(result.success).toBe(true);
+    // Z-segments should not cause parsing errors
+    expect(result.errors).toHaveLength(0);
+    // All standard segments parsed correctly
+    expect(result.message!.sch.placerAppointmentId).toBe('CSE5001');
+    expect(result.message!.pid.patientId).toBe('MRN55001');
+    expect(result.message!.aip).toHaveLength(1);
+  });
+
+  it('parses Cerner patient and procedure data correctly', () => {
+    const result = parseSIUMessage(CERNER_SIU_S12);
+    const m = result.message!;
+    expect(m.pid.lastName).toBe('GARCIA');
+    expect(m.pid.firstName).toBe('MARIA');
+    expect(m.ais!.procedureCode).toBe('47562');
+    expect(m.ais!.procedureDescription).toBe('Laparoscopic cholecystectomy');
+    expect(m.aip[0].personnelLastName).toBe('CHEN');
+    expect(m.aip[0].role).toBe('SURGEON');
+  });
+
+  it('handles Cerner message with multiple Z-segments', () => {
+    const msg = [
+      'MSH|^~\\&|CERNER|SURGERY_CENTER|||20260301143022||SIU^S12|CMSG002|P|2.3',
+      'SCH|CSE5002^CSE5002|FLC5002^FLC5002|||CSE5002|SURGERY^Surgical Case|Appendectomy|SURGERY|60|min|^^60^20260320100000^20260320110000|||||||||||||Booked',
+      'PID|1||MRN55002^^^^MR||JOHNSON^ROBERT^T^^||19850301|M',
+      'PV1|1|O|OR2^^^SURGERY_CENTER||||3001^PATEL^ANIL^K^MD^^^^||GENSURG',
+      'ZSG|1|SURGINET_REF|ref-12345',
+      'ZCS|1|CUSTOM_STATUS|scheduled|normal',
+      'ZDT|1|20260320|MORNING_BLOCK',
+      'RGS|1|A|RG003',
+      'AIS|1|A|44950^Appendectomy^CPT|20260320100000|10|min|60|min|Booked||',
+      'AIP|1|A|3001^PATEL^ANIL^K^MD^^^^|SURGEON||20260320100000|||60|min||Booked',
+    ].join('\r');
+
+    const result = parseSIUMessage(msg);
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.message!.sch.placerAppointmentId).toBe('CSE5002');
+    expect(result.message!.ais!.procedureCode).toBe('44950');
+  });
+});
+
+// ── MEDITECH Message Variants ──────────────────────────────────────────────
+
+describe('parseSIUMessage — MEDITECH messages', () => {
+  /** MEDITECH SIU^S12 with MSH-3=MEDITECH, HL7 v2.4, PV1-7 primary surgeon, no AIP */
+  const MEDITECH_SIU_S12 = [
+    'MSH|^~\\&|MEDITECH|SURGERY_CENTER|||20260301143022||SIU^S12|MMSG001|P|2.4||||||',
+    'SCH|MSE7001^MSE7001|FLM7001^FLM7001|||MSE7001|SURGERY^Surgical Case|Total hip arthroplasty|SURGERY|150|min|^^150^20260322070000^20260322093000|||||4001^WILSON^SARAH^J^MD^^^^NPI^5556667777||||4001^WILSON^SARAH^J^MD^^^^|||||Booked',
+    'PID|1||MRN77001^^^^MR||THOMPSON^JAMES^W^^||19580612|M|||789 Elm St^^Boston^MA^02101^US||(617)555-0333^HOME||||ACCT77001||',
+    'PV1|1|O|OR1^^^SURGERY_CENTER^^^^^||||4001^WILSON^SARAH^J^MD^^^^NPI^5556667777|||ORTHO||||||||||||11111||||||||||||||||||||||||||||V',
+    'DG1|1|I10|M16.11^Primary osteoarthritis, right hip^I10|Primary osteoarthritis, right hip||',
+    'RGS|1|A|RG004',
+    'AIS|1|A|27130^Total hip arthroplasty^CPT|20260322070000|15|min|150|min|Booked||',
+    'AIL|1|A|OR1^^^SURGERY_CENTER|^Operating Room 1||20260322070000|||150|min||Booked',
+  ].join('\r');
+
+  it('parses MEDITECH SIU^S12 with MSH-3=MEDITECH and HL7 v2.4', () => {
+    const result = parseSIUMessage(MEDITECH_SIU_S12);
+    expect(result.success).toBe(true);
+    expect(result.message!.msh.sendingApplication).toBe('MEDITECH');
+    expect(result.message!.msh.versionId).toBe('2.4');
+  });
+
+  it('extracts surgeon from PV1-7 when no AIP segments present', () => {
+    const result = parseSIUMessage(MEDITECH_SIU_S12);
+    const m = result.message!;
+    // No AIP segments in MEDITECH message
+    expect(m.aip).toHaveLength(0);
+    // Surgeon available via PV1-7 attending doctor
+    expect(m.pv1.attendingDoctor).not.toBeNull();
+    expect(m.pv1.attendingDoctor!.lastName).toBe('WILSON');
+    expect(m.pv1.attendingDoctor!.firstName).toBe('SARAH');
+    expect(m.pv1.attendingDoctor!.npi).toBe('5556667777');
+  });
+
+  it('parses MEDITECH patient and procedure data correctly', () => {
+    const result = parseSIUMessage(MEDITECH_SIU_S12);
+    const m = result.message!;
+    expect(m.pid.lastName).toBe('THOMPSON');
+    expect(m.pid.firstName).toBe('JAMES');
+    expect(m.pid.dateOfBirth).toBe('1958-06-12');
+    expect(m.ais!.procedureCode).toBe('27130');
+    expect(m.ais!.procedureDescription).toBe('Total hip arthroplasty');
+    expect(m.ais!.duration).toBe(150);
+  });
+
+  it('parses MEDITECH message with both PV1-7 and AIP (fallback test)', () => {
+    const msg = [
+      'MSH|^~\\&|MEDITECH|SURGERY_CENTER|||20260301143022||SIU^S12|MMSG002|P|2.4',
+      'SCH|MSE7002^MSE7002|FLM7002^FLM7002|||MSE7002|SURGERY^Surgical Case|Cataract surgery|SURGERY|45|min|^^45^20260322100000^20260322104500|||||||||||||Booked',
+      'PID|1||MRN77002^^^^MR||LEE^SUSAN^K^^||19450320|F',
+      'PV1|1|O|OR4^^^SURGERY_CENTER||||5001^NGUYEN^TRAN^H^MD^^^^NPI^8889990000||OPHTH',
+      'RGS|1|A|RG005',
+      'AIS|1|A|66984^Cataract extraction^CPT|20260322100000|10|min|45|min|Booked||',
+      'AIP|1|A|5001^NGUYEN^TRAN^H^MD^^^^|SURGEON||20260322100000|||45|min||Booked',
+    ].join('\r');
+
+    const result = parseSIUMessage(msg);
+    expect(result.success).toBe(true);
+    // Both PV1-7 and AIP present
+    expect(result.message!.pv1.attendingDoctor!.lastName).toBe('NGUYEN');
+    expect(result.message!.aip).toHaveLength(1);
+    expect(result.message!.aip[0].personnelLastName).toBe('NGUYEN');
+  });
+});
+
+// ── Round-Trip: Generate → Parse for Each System Type ──────────────────────
+
+describe('parseSIUMessage — round-trip generate→parse per system type', () => {
+  const systemTypes: EhrIntegrationType[] = ['epic_hl7v2', 'cerner_hl7v2', 'meditech_hl7v2'];
+  const expectedMSH3: Record<string, string> = {
+    epic_hl7v2: 'EPIC',
+    cerner_hl7v2: 'CERNER',
+    meditech_hl7v2: 'MEDITECH',
+  };
+  const expectedVersion: Record<string, string> = {
+    epic_hl7v2: '2.3',
+    cerner_hl7v2: '2.3',
+    meditech_hl7v2: '2.4',
+  };
+
+  systemTypes.forEach((systemType) => {
+    describe(`${systemType}`, () => {
+      it(`generates and parses with correct MSH-3 (${expectedMSH3[systemType]})`, () => {
+        const generated = generateSIUMessage({
+          triggerEvent: 'S12',
+          caseId: `RT-${systemType}`,
+          scheduledDateTime: new Date(2026, 2, 15, 8, 0, 0),
+          systemType,
+        });
+
+        const parsed = parseSIUMessage(generated.raw);
+        expect(parsed.success).toBe(true);
+        expect(parsed.message!.msh.sendingApplication).toBe(expectedMSH3[systemType]);
+        expect(parsed.message!.msh.versionId).toBe(expectedVersion[systemType]);
+      });
+
+      it(`preserves case ID through generate→parse round-trip`, () => {
+        const caseId = `ROUNDTRIP-${systemType}-001`;
+        const generated = generateSIUMessage({
+          triggerEvent: 'S12',
+          caseId,
+          scheduledDateTime: new Date(2026, 2, 15, 8, 0, 0),
+          systemType,
+        });
+
+        const parsed = parseSIUMessage(generated.raw);
+        expect(parsed.success).toBe(true);
+        expect(parsed.message!.sch.placerAppointmentId).toBe(caseId);
+      });
+
+      it(`preserves trigger event through generate→parse round-trip`, () => {
+        const generated = generateSIUMessage({
+          triggerEvent: 'S15',
+          caseId: `CANCEL-${systemType}`,
+          scheduledDateTime: new Date(2026, 2, 15, 8, 0, 0),
+          systemType,
+        });
+
+        const parsed = parseSIUMessage(generated.raw);
+        expect(parsed.success).toBe(true);
+        expect(parsed.message!.triggerEvent).toBe('S15');
+      });
+
+      it(`preserves patient data through generate→parse round-trip`, () => {
+        const generated = generateSIUMessage({
+          triggerEvent: 'S12',
+          caseId: `PAT-${systemType}`,
+          scheduledDateTime: new Date(2026, 2, 15, 8, 0, 0),
+          systemType,
+        });
+
+        const parsed = parseSIUMessage(generated.raw);
+        expect(parsed.success).toBe(true);
+        // Patient name from generator should survive round-trip
+        expect(parsed.message!.pid.lastName).toBe(generated.patient.lastName);
+        expect(parsed.message!.pid.firstName).toBe(generated.patient.firstName);
+      });
+    });
   });
 });
