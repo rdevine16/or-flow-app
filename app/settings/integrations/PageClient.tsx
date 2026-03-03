@@ -1,56 +1,132 @@
 // app/settings/integrations/PageClient.tsx
-// Integrations page with active Epic card and future integration placeholders
+// Integrations landing page — HL7v2 system cards + future integrations
 
 'use client'
 
+import { useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Code, Mail, Plus, Zap, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
 import { useCurrentUser } from '@/hooks'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { ehrDAL } from '@/lib/dal/ehr'
-import type { EhrIntegration } from '@/lib/integrations/shared/integration-types'
+import { createClient } from '@/lib/supabase'
+import { useToast } from '@/components/ui/Toast'
+import { logger } from '@/lib/logger'
+import SwitchIntegrationDialog from '@/components/integrations/SwitchIntegrationDialog'
+import {
+  HL7V2_INTEGRATION_TYPES,
+  EHR_SYSTEM_DISPLAY_NAMES,
+} from '@/lib/integrations/shared/integration-types'
+import type { EhrIntegration, EhrIntegrationType } from '@/lib/integrations/shared/integration-types'
+
+const log = logger('integrations-page')
 
 // =====================================================
 // TYPES
 // =====================================================
 
-interface Integration {
+interface FutureIntegration {
   id: string
   name: string
   description: string
   icon: React.ReactNode
   category: 'ehr' | 'scheduling' | 'communication' | 'analytics'
-  status: 'coming' | 'beta' | 'available'
   comingSoon?: string
 }
 
-// (EHR integration status is now read directly from ehr_integrations table)
-
 // =====================================================
-// INTEGRATION DATA (non-Epic — still coming soon)
+// HL7v2 SYSTEM CARD METADATA
 // =====================================================
 
-const futureIntegrations: Integration[] = [
+interface Hl7v2SystemCard {
+  integrationType: EhrIntegrationType
+  displayName: string
+  description: string
+  route: string
+  iconGradientFrom: string
+  iconGradientTo: string
+  iconBorder: string
+  iconColor: string
+  buttonColor: string
+  buttonBg: string
+  buttonHover: string
+  hoverBorder: string
+  icon: React.ReactNode
+}
+
+const HL7V2_SYSTEM_CARDS: Hl7v2SystemCard[] = [
   {
-    id: 'cerner',
-    name: 'Cerner',
-    description: 'Connect to Cerner for real-time case synchronization',
-    category: 'ehr',
-    status: 'coming',
-    comingSoon: 'Q3 2026',
+    integrationType: 'epic_hl7v2',
+    displayName: 'Epic',
+    description: 'Receive surgical scheduling data via HL7v2 SIU messages from Epic OpTime',
+    route: '/settings/integrations/epic',
+    iconGradientFrom: 'from-blue-50',
+    iconGradientTo: 'to-indigo-50',
+    iconBorder: 'border-blue-100',
+    iconColor: 'text-blue-600',
+    buttonColor: 'text-blue-600',
+    buttonBg: 'bg-blue-50',
+    buttonHover: 'hover:bg-blue-100',
+    hoverBorder: 'hover:border-blue-200',
     icon: (
-      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth={1.5} />
-        <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth={1.5} />
+        <path d="M7 8h10M7 12h10M7 16h6" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
       </svg>
     ),
   },
+  {
+    integrationType: 'cerner_hl7v2',
+    displayName: 'Oracle Cerner',
+    description: 'Receive surgical scheduling data via HL7v2 SIU messages from Cerner SurgiNet',
+    route: '/settings/integrations/cerner',
+    iconGradientFrom: 'from-red-50',
+    iconGradientTo: 'to-orange-50',
+    iconBorder: 'border-red-100',
+    iconColor: 'text-red-600',
+    buttonColor: 'text-red-600',
+    buttonBg: 'bg-red-50',
+    buttonHover: 'hover:bg-red-100',
+    hoverBorder: 'hover:border-red-200',
+    icon: (
+      <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth={1.5} />
+        <path d="M8 12h8M12 8v8" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    integrationType: 'meditech_hl7v2',
+    displayName: 'MEDITECH',
+    description: 'Receive surgical scheduling data via HL7v2 SIU messages from MEDITECH Expanse',
+    route: '/settings/integrations/meditech',
+    iconGradientFrom: 'from-emerald-50',
+    iconGradientTo: 'to-teal-50',
+    iconBorder: 'border-emerald-100',
+    iconColor: 'text-emerald-600',
+    buttonColor: 'text-emerald-600',
+    buttonBg: 'bg-emerald-50',
+    buttonHover: 'hover:bg-emerald-100',
+    hoverBorder: 'hover:border-emerald-200',
+    icon: (
+      <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth={1.5} />
+        <path d="M7 12h4l2-4 2 8 2-4h3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+]
+
+// =====================================================
+// FUTURE INTEGRATIONS (non-HL7v2)
+// =====================================================
+
+const futureIntegrations: FutureIntegration[] = [
   {
     id: 'athena',
     name: 'athenahealth',
     description: 'Integrate with athenahealth for scheduling and billing',
     category: 'ehr',
-    status: 'coming',
     comingSoon: 'Q3 2026',
     icon: (
       <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24">
@@ -64,7 +140,6 @@ const futureIntegrations: Integration[] = [
     name: 'Google Calendar',
     description: 'Sync block schedules and OR availability with Google Calendar',
     category: 'scheduling',
-    status: 'coming',
     comingSoon: 'Q1 2026',
     icon: (
       <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
@@ -80,7 +155,6 @@ const futureIntegrations: Integration[] = [
     name: 'Microsoft Outlook',
     description: 'Calendar sync and email notifications via Outlook',
     category: 'scheduling',
-    status: 'coming',
     comingSoon: 'Q1 2026',
     icon: (
       <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
@@ -94,7 +168,6 @@ const futureIntegrations: Integration[] = [
     name: 'Slack',
     description: 'Send case alerts and notifications to Slack channels',
     category: 'communication',
-    status: 'coming',
     comingSoon: 'Q2 2026',
     icon: (
       <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
@@ -110,7 +183,6 @@ const futureIntegrations: Integration[] = [
     name: 'Microsoft Teams',
     description: 'Push notifications and alerts to Teams channels',
     category: 'communication',
-    status: 'coming',
     comingSoon: 'Q2 2026',
     icon: (
       <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
@@ -125,7 +197,6 @@ const futureIntegrations: Integration[] = [
     name: 'Power BI',
     description: 'Export OR efficiency data to Power BI dashboards',
     category: 'analytics',
-    status: 'coming',
     comingSoon: 'Q4 2026',
     icon: (
       <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
@@ -140,7 +211,6 @@ const futureIntegrations: Integration[] = [
     name: 'Tableau',
     description: 'Connect ORbit data to Tableau for advanced analytics',
     category: 'analytics',
-    status: 'coming',
     comingSoon: 'Q4 2026',
     icon: (
       <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
@@ -152,10 +222,10 @@ const futureIntegrations: Integration[] = [
 ]
 
 // =====================================================
-// EPIC STATUS INDICATOR
+// STATUS BADGE
 // =====================================================
 
-function EpicStatusBadge({ integration }: { integration: EhrIntegration | null | undefined; loading?: boolean }) {
+function IntegrationStatusBadge({ integration }: { integration: EhrIntegration | null | undefined }) {
   if (!integration) {
     return (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-600 bg-slate-100 rounded-full">
@@ -189,93 +259,205 @@ function EpicStatusBadge({ integration }: { integration: EhrIntegration | null |
 export default function IntegrationsPage() {
   const router = useRouter()
   const { data: currentUser } = useCurrentUser()
+  const { showToast } = useToast()
   const facilityId = currentUser?.facilityId
 
-  // Check HL7v2 integration status from ehr_integrations table
-  const { data: hl7v2Integration, loading: epicLoading } = useSupabaseQuery<EhrIntegration | null>(
+  // Fetch all HL7v2 integrations for this facility
+  const { data: allIntegrations, loading: integrationsLoading, refetch } = useSupabaseQuery<EhrIntegration[]>(
     async (supabase) => {
-      const { data } = await ehrDAL.getIntegrationByFacility(supabase, facilityId!, 'epic_hl7v2')
-      return data
+      const { data } = await ehrDAL.listIntegrations(supabase, facilityId!)
+      // Filter to only HL7v2 types
+      return (data || []).filter((i) =>
+        HL7V2_INTEGRATION_TYPES.includes(i.integration_type)
+      )
     },
     { deps: [facilityId], enabled: !!facilityId }
   )
 
-  const isConnected = !!hl7v2Integration?.is_active
+  // Build a lookup map: integrationType → EhrIntegration | null
+  const integrationMap = useMemo(() => {
+    const map: Partial<Record<EhrIntegrationType, EhrIntegration>> = {}
+    for (const integration of allIntegrations || []) {
+      map[integration.integration_type] = integration
+    }
+    return map
+  }, [allIntegrations])
+
+  // Find the currently active HL7v2 integration (if any)
+  const activeHl7v2 = useMemo(
+    () => (allIntegrations || []).find((i) => i.is_active) ?? null,
+    [allIntegrations]
+  )
+
+  // Switch dialog state
+  const [switchTarget, setSwitchTarget] = useState<EhrIntegrationType | null>(null)
+  const [switching, setSwitching] = useState(false)
+
+  const handleSwitch = useCallback(async () => {
+    if (!activeHl7v2 || !switchTarget || !facilityId) return
+
+    try {
+      setSwitching(true)
+      const supabase = createClient()
+
+      // Deactivate current integration
+      const { error } = await supabase
+        .from('ehr_integrations')
+        .update({ is_active: false })
+        .eq('id', activeHl7v2.id)
+
+      if (error) {
+        log.error('Failed to deactivate integration', { error })
+        showToast({
+          type: 'error',
+          title: 'Switch Failed',
+          message: 'Could not deactivate the current integration. Please try again.',
+        })
+        return
+      }
+
+      log.info('Integration switched', {
+        from: activeHl7v2.integration_type,
+        to: switchTarget,
+        facilityId,
+      })
+
+      showToast({
+        type: 'success',
+        title: 'Integration Switched',
+        message: `Disconnected ${EHR_SYSTEM_DISPLAY_NAMES[activeHl7v2.integration_type]}. Redirecting to ${EHR_SYSTEM_DISPLAY_NAMES[switchTarget]} setup...`,
+      })
+
+      setSwitchTarget(null)
+
+      // Navigate to the new system's config page
+      const targetCard = HL7V2_SYSTEM_CARDS.find((c) => c.integrationType === switchTarget)
+      if (targetCard) {
+        router.push(targetCard.route)
+      }
+    } catch (err) {
+      log.error('Switch integration error', { error: err })
+      showToast({
+        type: 'error',
+        title: 'Switch Failed',
+        message: 'An unexpected error occurred. Please try again.',
+      })
+    } finally {
+      setSwitching(false)
+    }
+  }, [activeHl7v2, switchTarget, facilityId, router, showToast])
+
+  const handleCardClick = useCallback(
+    (card: Hl7v2SystemCard) => {
+      // If there's an active integration for a DIFFERENT system, show switch dialog
+      if (activeHl7v2 && activeHl7v2.integration_type !== card.integrationType) {
+        setSwitchTarget(card.integrationType)
+        return
+      }
+      // Otherwise navigate directly
+      router.push(card.route)
+    },
+    [activeHl7v2, router]
+  )
 
   return (
     <>
       <h1 className="text-2xl font-semibold text-slate-900 mb-1">Integrations</h1>
       <p className="text-slate-500 mb-6">Connect ORbit to your existing systems</p>
 
-      {/* Active Integrations */}
+      {/* Active Integrations — HL7v2 Systems */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-6">
         <div className="px-6 py-4 border-b border-slate-200">
-          <h3 className="font-medium text-slate-900">Active Integrations</h3>
-          <p className="text-sm text-slate-500 mt-0.5">Integrations available for your facility</p>
+          <h3 className="font-medium text-slate-900">EHR Integrations</h3>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Connect to your hospital&apos;s EHR system via HL7v2 SIU messages.
+            One HL7v2 integration per facility.
+          </p>
         </div>
 
-        <div className="p-6">
-          {/* Epic Card — Active */}
-          <div
-            className="relative p-5 bg-white border border-slate-200 rounded-xl hover:border-blue-200 hover:shadow-sm transition-all cursor-pointer"
-            onClick={() => router.push('/settings/integrations/epic')}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-4">
-                {/* Epic Icon */}
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-xl flex items-center justify-center text-blue-600 flex-shrink-0">
-                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24">
-                    <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth={1.5} />
-                    <path d="M7 8h10M7 12h10M7 16h6" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
-                  </svg>
-                </div>
+        <div className="p-6 space-y-4">
+          {HL7V2_SYSTEM_CARDS.map((card) => {
+            const integration = integrationMap[card.integrationType] ?? null
+            const isActive = !!integration?.is_active
+            const hasOtherActive = !!activeHl7v2 && activeHl7v2.integration_type !== card.integrationType
+            const isCurrentActive = !!activeHl7v2 && activeHl7v2.integration_type === card.integrationType
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-1">
-                    <h4 className="font-semibold text-slate-900">Epic</h4>
-                    {epicLoading ? (
-                      <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium text-slate-400 bg-slate-50 rounded-full">
-                        Loading...
-                      </span>
+            return (
+              <div
+                key={card.integrationType}
+                className={`relative p-5 bg-white border rounded-xl hover:shadow-sm transition-all cursor-pointer ${
+                  isCurrentActive
+                    ? `border-emerald-200 ${card.hoverBorder}`
+                    : `border-slate-200 ${card.hoverBorder}`
+                }`}
+                onClick={() => handleCardClick(card)}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-4">
+                    {/* System Icon */}
+                    <div className={`w-12 h-12 bg-gradient-to-br ${card.iconGradientFrom} ${card.iconGradientTo} border ${card.iconBorder} rounded-xl flex items-center justify-center ${card.iconColor} flex-shrink-0`}>
+                      {card.icon}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1">
+                        <h4 className="font-semibold text-slate-900">{card.displayName}</h4>
+                        {integrationsLoading ? (
+                          <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium text-slate-400 bg-slate-50 rounded-full">
+                            Loading...
+                          </span>
+                        ) : (
+                          <IntegrationStatusBadge integration={integration} />
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-500">{card.description}</p>
+
+                      {/* Last message indicator when connected */}
+                      {isActive && integration?.last_message_at && (
+                        <p className="text-xs text-slate-400 mt-2">
+                          Last message: {new Date(integration.last_message_at).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action button */}
+                  <div className="flex-shrink-0 ml-4">
+                    {hasOtherActive ? (
+                      <button
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSwitchTarget(card.integrationType)
+                        }}
+                      >
+                        Switch
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
                     ) : (
-                      <EpicStatusBadge integration={hl7v2Integration} />
+                      <button
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium ${card.buttonColor} ${card.buttonBg} rounded-lg ${card.buttonHover} transition-colors`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          router.push(card.route)
+                        }}
+                      >
+                        {isActive ? 'Manage' : 'Set Up'}
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
                     )}
                   </div>
-                  <p className="text-sm text-slate-500">
-                    Receive surgical scheduling data via HL7v2 SIU messages from Epic OpTime
-                  </p>
+                </div>
 
-                  {/* Last message indicator when connected */}
-                  {isConnected && hl7v2Integration?.last_message_at && (
-                    <p className="text-xs text-slate-400 mt-2">
-                      Last message: {new Date(hl7v2Integration.last_message_at).toLocaleString()}
-                    </p>
-                  )}
+                {/* Category tag */}
+                <div className="mt-4">
+                  <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700">
+                    HL7v2 SIU
+                  </span>
                 </div>
               </div>
-
-              {/* Action button */}
-              <div className="flex-shrink-0 ml-4">
-                <button
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    router.push('/settings/integrations/epic')
-                  }}
-                >
-                  {isConnected ? 'Manage' : 'Set Up'}
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Category tag */}
-            <div className="mt-4">
-              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700">
-                EHR Systems
-              </span>
-            </div>
-          </div>
+            )
+          })}
         </div>
       </div>
 
@@ -376,6 +558,18 @@ export default function IntegrationsPage() {
           </div>
         </div>
       </div>
+
+      {/* Switch Integration Dialog */}
+      {activeHl7v2 && switchTarget && (
+        <SwitchIntegrationDialog
+          open={!!switchTarget}
+          onClose={() => setSwitchTarget(null)}
+          onConfirm={handleSwitch}
+          currentType={activeHl7v2.integration_type}
+          targetType={switchTarget}
+          loading={switching}
+        />
+      )}
     </>
   )
 }
