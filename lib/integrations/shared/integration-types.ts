@@ -8,7 +8,23 @@
 // Enums / Union types
 // =====================================================
 
-export type EhrIntegrationType = 'epic_hl7v2' | 'modmed_fhir' | 'csv_import'
+export type EhrIntegrationType = 'epic_hl7v2' | 'cerner_hl7v2' | 'meditech_hl7v2' | 'modmed_fhir' | 'csv_import'
+
+/** HL7v2-based integration types (one active per facility) */
+export const HL7V2_INTEGRATION_TYPES: EhrIntegrationType[] = [
+  'epic_hl7v2',
+  'cerner_hl7v2',
+  'meditech_hl7v2',
+]
+
+/** Human-readable display names for each EHR system */
+export const EHR_SYSTEM_DISPLAY_NAMES: Record<EhrIntegrationType, string> = {
+  epic_hl7v2: 'Epic',
+  cerner_hl7v2: 'Oracle Cerner',
+  meditech_hl7v2: 'MEDITECH',
+  modmed_fhir: 'ModMed',
+  csv_import: 'CSV Import',
+}
 
 export type EhrProcessingStatus =
   | 'received'
@@ -381,7 +397,7 @@ export interface EhrTestScheduleInsert {
 
 export type CaseHistoryChangeType = 'created' | 'updated' | 'cancelled' | 'status_change'
 
-export type CaseHistoryChangeSource = 'manual' | 'epic_hl7v2' | 'system'
+export type CaseHistoryChangeSource = 'manual' | 'epic_hl7v2' | 'cerner_hl7v2' | 'meditech_hl7v2' | 'system'
 
 /** Shape of changed_fields JSONB — each key is a column name, value has old/new */
 export interface CaseHistoryChangedField {

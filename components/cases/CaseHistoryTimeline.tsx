@@ -72,6 +72,16 @@ const SOURCE_CONFIG: Record<CaseHistoryChangeSource, {
     badgeBg: 'bg-purple-50',
     badgeText: 'text-purple-700',
   },
+  cerner_hl7v2: {
+    label: 'Cerner HL7v2',
+    badgeBg: 'bg-blue-50',
+    badgeText: 'text-blue-700',
+  },
+  meditech_hl7v2: {
+    label: 'MEDITECH HL7v2',
+    badgeBg: 'bg-teal-50',
+    badgeText: 'text-teal-700',
+  },
   system: {
     label: 'System',
     badgeBg: 'bg-slate-100',
