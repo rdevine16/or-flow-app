@@ -7,7 +7,8 @@
  */
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import type { SIUMessage } from './types.ts';
+import type { SIUMessage, EhrIntegrationType } from './types.ts';
+import { EHR_SYSTEM_DISPLAY_NAMES } from './types.ts';
 
 interface NotificationData {
   type: string;
@@ -26,18 +27,20 @@ export function buildNotificationFromSIU(
   siu: SIUMessage,
   action: 'created' | 'updated' | 'cancelled',
   caseId: string | null,
+  integrationType: EhrIntegrationType = 'epic_hl7v2',
 ): NotificationData | null {
   if (!caseId || caseId.trim() === '') return null;
 
   const patientName = [siu.pid.firstName, siu.pid.lastName].filter(Boolean).join(' ').trim() || 'Unknown Patient';
   const procedureName = siu.ais?.procedureDescription || 'Unknown Procedure';
+  const displayName = EHR_SYSTEM_DISPLAY_NAMES[integrationType] || integrationType;
 
   switch (action) {
     case 'created':
       return {
         type: 'case_auto_created',
         title: `Case Auto-Created: ${patientName}`,
-        message: `${procedureName} via Epic HL7v2`,
+        message: `${procedureName} via ${displayName} HL7v2`,
         category: 'Case Alerts',
         caseId,
         metadata: {
@@ -45,14 +48,14 @@ export function buildNotificationFromSIU(
           case_id: caseId,
           patient_name: patientName,
           procedure_name: procedureName,
-          source: 'epic_hl7v2',
+          source: integrationType,
         },
       };
 
     case 'updated':
       return {
         type: 'case_auto_updated',
-        title: `Case Updated via Epic: ${patientName}`,
+        title: `Case Updated via ${displayName}: ${patientName}`,
         message: `${procedureName} — ${siu.triggerEvent === 'S13' ? 'rescheduled' : 'modified'} via HL7v2`,
         category: 'Case Alerts',
         caseId,
@@ -62,7 +65,7 @@ export function buildNotificationFromSIU(
           patient_name: patientName,
           procedure_name: procedureName,
           trigger_event: siu.triggerEvent,
-          source: 'epic_hl7v2',
+          source: integrationType,
         },
       };
 
@@ -70,7 +73,7 @@ export function buildNotificationFromSIU(
       const reason = siu.sch.appointmentReason || 'no reason provided';
       return {
         type: 'case_auto_cancelled',
-        title: `Case Cancelled via Epic: ${patientName}`,
+        title: `Case Cancelled via ${displayName}: ${patientName}`,
         message: `Cancelled (${siu.triggerEvent}) — ${reason}`,
         category: 'Case Alerts',
         caseId,
@@ -79,7 +82,7 @@ export function buildNotificationFromSIU(
           case_id: caseId,
           patient_name: patientName,
           reason,
-          source: 'epic_hl7v2',
+          source: integrationType,
         },
       };
     }

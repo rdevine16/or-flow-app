@@ -1,7 +1,7 @@
 /**
  * HL7v2 Listener — Supabase Edge Function
  *
- * Receives HTTP POST with HL7v2 SIU messages from Epic integration engines
+ * Receives HTTP POST with HL7v2 SIU messages from EHR integration engines
  * (Mirth Connect, Rhapsody). Full processing pipeline:
  *   auth → parse → match entities → create/update case → log → return ACK
  *

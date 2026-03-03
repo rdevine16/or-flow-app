@@ -30,10 +30,19 @@ type SIUMessage = {
 /**
  * buildNotificationFromSIU implementation (inline for testing)
  */
+
+// EHR system display names (matching types.ts)
+const EHR_SYSTEM_DISPLAY_NAMES: Record<string, string> = {
+  epic_hl7v2: 'Epic',
+  cerner_hl7v2: 'Cerner',
+  meditech_hl7v2: 'MEDITECH',
+};
+
 function buildNotificationFromSIU(
   siu: SIUMessage,
   action: 'created' | 'updated' | 'cancelled',
   caseId: string | null,
+  integrationType: string = 'epic_hl7v2',
 ): {
   type: string;
   title: string;
@@ -46,13 +55,14 @@ function buildNotificationFromSIU(
 
   const patientName = [siu.pid.firstName, siu.pid.lastName].filter(Boolean).join(' ').trim() || 'Unknown Patient';
   const procedureName = siu.ais?.procedureDescription || 'Unknown Procedure';
+  const displayName = EHR_SYSTEM_DISPLAY_NAMES[integrationType] || integrationType;
 
   switch (action) {
     case 'created':
       return {
         type: 'case_auto_created',
         title: `Case Auto-Created: ${patientName}`,
-        message: `${procedureName} via Epic HL7v2`,
+        message: `${procedureName} via ${displayName} HL7v2`,
         category: 'Case Alerts',
         caseId,
         metadata: {
@@ -60,14 +70,14 @@ function buildNotificationFromSIU(
           case_id: caseId,
           patient_name: patientName,
           procedure_name: procedureName,
-          source: 'epic_hl7v2',
+          source: integrationType,
         },
       };
 
     case 'updated':
       return {
         type: 'case_auto_updated',
-        title: `Case Updated via Epic: ${patientName}`,
+        title: `Case Updated via ${displayName}: ${patientName}`,
         message: `${procedureName} — ${siu.triggerEvent === 'S13' ? 'rescheduled' : 'modified'} via HL7v2`,
         category: 'Case Alerts',
         caseId,
@@ -77,7 +87,7 @@ function buildNotificationFromSIU(
           patient_name: patientName,
           procedure_name: procedureName,
           trigger_event: siu.triggerEvent,
-          source: 'epic_hl7v2',
+          source: integrationType,
         },
       };
 
@@ -85,7 +95,7 @@ function buildNotificationFromSIU(
       const reason = siu.sch.appointmentReason || 'no reason provided';
       return {
         type: 'case_auto_cancelled',
-        title: `Case Cancelled via Epic: ${patientName}`,
+        title: `Case Cancelled via ${displayName}: ${patientName}`,
         message: `Cancelled (${siu.triggerEvent}) — ${reason}`,
         category: 'Case Alerts',
         caseId,
@@ -94,7 +104,7 @@ function buildNotificationFromSIU(
           case_id: caseId,
           patient_name: patientName,
           reason,
-          source: 'epic_hl7v2',
+          source: integrationType,
         },
       };
     }
@@ -315,6 +325,59 @@ describe('buildNotificationFromSIU', () => {
     it('returns null when caseId is null', () => {
       const result = buildNotificationFromSIU(mockSIU, 'cancelled', null);
       expect(result).toBeNull();
+    });
+  });
+
+  describe('integrationType parameter (multi-EHR support)', () => {
+    it('uses Cerner display name when integrationType=cerner_hl7v2', () => {
+      const result = buildNotificationFromSIU(mockSIU, 'created', 'case-cerner-1', 'cerner_hl7v2');
+
+      expect(result?.message).toBe('Total Knee Replacement via Cerner HL7v2');
+      expect(result?.metadata.source).toBe('cerner_hl7v2');
+    });
+
+    it('uses MEDITECH display name when integrationType=meditech_hl7v2', () => {
+      const result = buildNotificationFromSIU(mockSIU, 'created', 'case-meditech-1', 'meditech_hl7v2');
+
+      expect(result?.message).toBe('Total Knee Replacement via MEDITECH HL7v2');
+      expect(result?.metadata.source).toBe('meditech_hl7v2');
+    });
+
+    it('uses Epic display name when integrationType=epic_hl7v2 (default)', () => {
+      const result = buildNotificationFromSIU(mockSIU, 'created', 'case-epic-1', 'epic_hl7v2');
+
+      expect(result?.message).toBe('Total Knee Replacement via Epic HL7v2');
+      expect(result?.metadata.source).toBe('epic_hl7v2');
+    });
+
+    it('defaults to epic_hl7v2 when integrationType parameter omitted', () => {
+      const result = buildNotificationFromSIU(mockSIU, 'created', 'case-default-1');
+
+      expect(result?.message).toBe('Total Knee Replacement via Epic HL7v2');
+      expect(result?.metadata.source).toBe('epic_hl7v2');
+    });
+
+    it('uses Cerner display name for update notifications', () => {
+      const siu = { ...mockSIU, triggerEvent: 'S13' };
+      const result = buildNotificationFromSIU(siu, 'updated', 'case-cerner-2', 'cerner_hl7v2');
+
+      expect(result?.title).toBe('Case Updated via Cerner: John Doe');
+      expect(result?.metadata.source).toBe('cerner_hl7v2');
+    });
+
+    it('uses MEDITECH display name for cancel notifications', () => {
+      const siu = { ...mockSIU, sch: { appointmentReason: 'Patient request' } };
+      const result = buildNotificationFromSIU(siu, 'cancelled', 'case-meditech-2', 'meditech_hl7v2');
+
+      expect(result?.title).toBe('Case Cancelled via MEDITECH: John Doe');
+      expect(result?.metadata.source).toBe('meditech_hl7v2');
+    });
+
+    it('handles unknown integrationType by using raw value as display name', () => {
+      const result = buildNotificationFromSIU(mockSIU, 'created', 'case-unknown-1', 'unknown_system' as any);
+
+      expect(result?.message).toBe('Total Knee Replacement via unknown_system HL7v2');
+      expect(result?.metadata.source).toBe('unknown_system');
     });
   });
 });

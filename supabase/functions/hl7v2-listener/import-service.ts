@@ -1,7 +1,7 @@
 /**
  * Case Import Service — Deno Edge Function Version
  *
- * Adapted from lib/integrations/epic/case-import-service.ts for Deno runtime.
+ * Adapted from lib/integrations/ehr/case-import-service.ts for Deno runtime.
  * Inlines all dependencies: matchers, DAL operations, logger, similarity scoring.
  *
  * Main orchestrator for processing SIU messages into ORbit cases.
@@ -13,6 +13,7 @@ import type {
   SIUMessage,
   EhrIntegration,
   EhrIntegrationLog,
+  EhrIntegrationType,
   EntitySuggestion,
   ReviewNotes,
 } from './types.ts';
@@ -24,6 +25,13 @@ import { buildNotificationFromSIU, createNotificationForCase } from './notificat
 
 const AUTO_MAP_THRESHOLD = 0.90;
 const SUGGEST_THRESHOLD = 0.70;
+
+/** Map integration_type to the short source name used in the cases.source column */
+const INTEGRATION_SOURCE_NAMES: Record<string, string> = {
+  epic_hl7v2: 'epic',
+  cerner_hl7v2: 'cerner',
+  meditech_hl7v2: 'meditech',
+};
 
 // =====================================================
 // CHANGE TRACKING
@@ -38,10 +46,11 @@ async function tagCaseHistoryEntry(
   supabase: SupabaseClient,
   caseId: string,
   logEntryId: string,
+  integrationType: EhrIntegrationType,
 ): Promise<void> {
   const { error } = await supabase.rpc('tag_latest_case_history', {
     p_case_id: caseId,
-    p_change_source: 'epic_hl7v2',
+    p_change_source: integrationType,
     p_ehr_log_id: logEntryId,
   });
   if (error) {
@@ -235,9 +244,10 @@ async function handleCreate(
 ): Promise<ImportResult> {
   const facilityId = integration.facility_id;
   const integrationId = integration.id;
+  const integrationType = integration.integration_type;
 
   try {
-    const caseData = extractCaseData(siu);
+    const caseData = extractCaseData(siu, integrationType);
 
     // Check case-level dedup
     const { data: existingCase } = await supabase
@@ -245,7 +255,7 @@ async function handleCreate(
       .select('id')
       .eq('facility_id', facilityId)
       .eq('external_case_id', caseData.externalCaseId)
-      .eq('external_system', 'epic_hl7v2')
+      .eq('external_system', integrationType)
       .maybeSingle();
 
     if (existingCase) {
@@ -266,10 +276,10 @@ async function handleCreate(
     }
 
     // Create case
-    const caseId = await createCase(supabase, facilityId, caseData, matchResults);
+    const caseId = await createCase(supabase, facilityId, integrationType, caseData, matchResults);
 
     // Tag case_history entries with HL7v2 attribution
-    await tagCaseHistoryEntry(supabase, caseId, logEntry.id);
+    await tagCaseHistoryEntry(supabase, caseId, logEntry.id, integrationType);
 
     // Auto-save high-confidence mappings
     await saveAutoMappings(supabase, integrationId, facilityId, caseData, matchResults);
@@ -278,7 +288,7 @@ async function handleCreate(
     console.log('[import] Case created:', caseId);
 
     // Create notification for case auto-created (non-blocking)
-    const notifData = buildNotificationFromSIU(siu, 'created', caseId);
+    const notifData = buildNotificationFromSIU(siu, 'created', caseId, integrationType);
     if (notifData) {
       await createNotificationForCase(supabase, facilityId, notifData);
     }
@@ -303,6 +313,7 @@ async function handleUpdate(
 ): Promise<ImportResult> {
   const facilityId = integration.facility_id;
   const integrationId = integration.id;
+  const integrationType = integration.integration_type;
   const externalCaseId = siu.sch.placerAppointmentId;
 
   try {
@@ -311,7 +322,7 @@ async function handleUpdate(
       .select('id')
       .eq('facility_id', facilityId)
       .eq('external_case_id', externalCaseId)
-      .eq('external_system', 'epic_hl7v2')
+      .eq('external_system', integrationType)
       .maybeSingle();
 
     if (!existingCase) {
@@ -319,7 +330,7 @@ async function handleUpdate(
       return handleCreate(supabase, siu, integration, logEntry);
     }
 
-    const caseData = extractCaseData(siu);
+    const caseData = extractCaseData(siu, integrationType);
     const matchResults = await matchAllEntities(supabase, integrationId, facilityId, caseData);
 
     const unmatched = collectUnmatched(caseData, matchResults);
@@ -352,13 +363,13 @@ async function handleUpdate(
     }
 
     // Tag case_history entry with HL7v2 attribution
-    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id);
+    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id, integrationType);
 
     await saveAutoMappings(supabase, integrationId, facilityId, caseData, matchResults);
     await updateLogProcessed(supabase, logEntry.id, existingCase.id);
 
     // Create notification for case auto-updated (non-blocking)
-    const notifData = buildNotificationFromSIU(siu, 'updated', existingCase.id);
+    const notifData = buildNotificationFromSIU(siu, 'updated', existingCase.id, integrationType);
     if (notifData) {
       await createNotificationForCase(supabase, facilityId, notifData);
     }
@@ -382,6 +393,7 @@ async function handleCancel(
   logEntry: EhrIntegrationLog,
 ): Promise<ImportResult> {
   const facilityId = integration.facility_id;
+  const integrationType = integration.integration_type;
   const externalCaseId = siu.sch.placerAppointmentId;
 
   try {
@@ -390,7 +402,7 @@ async function handleCancel(
       .select('id')
       .eq('facility_id', facilityId)
       .eq('external_case_id', externalCaseId)
-      .eq('external_system', 'epic_hl7v2')
+      .eq('external_system', integrationType)
       .maybeSingle();
 
     if (!existingCase) {
@@ -439,12 +451,12 @@ async function handleCancel(
     }
 
     // Tag case_history entry with HL7v2 attribution
-    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id);
+    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id, integrationType);
 
     await updateLogProcessed(supabase, logEntry.id, existingCase.id);
 
     // Create notification for case auto-cancelled (non-blocking)
-    const cancelNotifData = buildNotificationFromSIU(siu, 'cancelled', existingCase.id);
+    const cancelNotifData = buildNotificationFromSIU(siu, 'cancelled', existingCase.id, integrationType);
     if (cancelNotifData) {
       await createNotificationForCase(supabase, facilityId, cancelNotifData);
     }
@@ -757,6 +769,7 @@ async function matchRoom(
 async function createCase(
   supabase: SupabaseClient,
   facilityId: string,
+  integrationType: EhrIntegrationType,
   caseData: ExtractedCaseData,
   matchResults: AllMatchResults,
 ): Promise<string> {
@@ -787,7 +800,7 @@ async function createCase(
     p_is_draft: false,
     p_staff_assignments: null,
     p_patient_id: matchResults.patient.patientId,
-    p_source: 'epic',
+    p_source: INTEGRATION_SOURCE_NAMES[integrationType] || integrationType,
   });
 
   if (rpcError || !caseId) {
@@ -799,7 +812,7 @@ async function createCase(
     .from('cases')
     .update({
       external_case_id: caseData.externalCaseId,
-      external_system: 'epic_hl7v2',
+      external_system: integrationType,
       import_source: 'hl7v2',
       primary_diagnosis_code: caseData.diagnosisCode,
       primary_diagnosis_desc: caseData.diagnosisDesc,
@@ -929,17 +942,36 @@ function collectUnmatched(caseData: ExtractedCaseData, results: AllMatchResults)
 // DATA EXTRACTION
 // =====================================================
 
-function extractCaseData(siu: SIUMessage): ExtractedCaseData {
+/**
+ * Extract surgeon info using system-specific field priority.
+ * Epic/Cerner: AIP segment (role=SURGEON) first, PV1-7 fallback
+ * MEDITECH: PV1-7 (attending doctor) first, AIP fallback
+ */
+function extractSurgeonInfo(
+  siu: SIUMessage,
+  integrationType: EhrIntegrationType,
+): { npi: string; lastName: string; firstName: string; middleName: string } {
   const surgeonAip = siu.aip.find(a => a.role.toUpperCase() === 'SURGEON');
 
-  let surgeonInfo: ExtractedCaseData['surgeonInfo'];
-  if (surgeonAip) {
-    surgeonInfo = { npi: surgeonAip.personnelNPI, lastName: surgeonAip.personnelLastName, firstName: surgeonAip.personnelFirstName, middleName: surgeonAip.personnelMiddleName };
-  } else if (siu.pv1.attendingDoctor) {
-    surgeonInfo = { npi: siu.pv1.attendingDoctor.npi, lastName: siu.pv1.attendingDoctor.lastName, firstName: siu.pv1.attendingDoctor.firstName, middleName: siu.pv1.attendingDoctor.middleName };
-  } else {
-    surgeonInfo = { npi: '', lastName: '', firstName: '', middleName: '' };
+  const fromAip = surgeonAip
+    ? { npi: surgeonAip.personnelNPI, lastName: surgeonAip.personnelLastName, firstName: surgeonAip.personnelFirstName, middleName: surgeonAip.personnelMiddleName }
+    : null;
+
+  const fromPv1 = siu.pv1.attendingDoctor
+    ? { npi: siu.pv1.attendingDoctor.npi, lastName: siu.pv1.attendingDoctor.lastName, firstName: siu.pv1.attendingDoctor.firstName, middleName: siu.pv1.attendingDoctor.middleName }
+    : null;
+
+  // MEDITECH prefers PV1-7 as primary surgeon field
+  if (integrationType === 'meditech_hl7v2') {
+    return fromPv1 ?? fromAip ?? { npi: '', lastName: '', firstName: '', middleName: '' };
   }
+
+  // Epic and Cerner prefer AIP segment
+  return fromAip ?? fromPv1 ?? { npi: '', lastName: '', firstName: '', middleName: '' };
+}
+
+function extractCaseData(siu: SIUMessage, integrationType: EhrIntegrationType): ExtractedCaseData {
+  const surgeonInfo = extractSurgeonInfo(siu, integrationType);
 
   const startDateTimeIso = siu.sch.startDateTime || siu.ais?.startDateTime || null;
   let scheduledDate = '';
