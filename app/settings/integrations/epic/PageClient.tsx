@@ -1,6 +1,6 @@
 // app/settings/integrations/epic/PageClient.tsx
 // Epic HL7v2 Integration hub — Overview | Review Queue | Mappings | Logs
-// Replaces FHIR connection UI with HL7v2 integration management
+// Uses shared integration components with Epic-specific config
 
 'use client'
 
@@ -12,21 +12,6 @@ import {
   ClipboardCheck,
   Link2,
   ScrollText,
-  Activity,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  RefreshCw,
-  Loader2,
-  Power,
-  RotateCw,
-  ChevronDown,
-  ChevronRight,
-  Users,
-  LayoutGrid,
-  ClipboardList,
-  Clock,
-  Save,
 } from 'lucide-react'
 import { useCurrentUser, useSurgeons, useRooms, useProcedureTypes } from '@/hooks'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
@@ -36,22 +21,24 @@ import { ehrDAL } from '@/lib/dal/ehr'
 import { ehrAudit } from '@/lib/audit-logger'
 import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast'
-import SetupInstructionsCard from '@/components/integrations/SetupInstructionsCard'
-import HL7MessageViewer from '@/components/integrations/HL7MessageViewer'
-import { computeHasUnresolved } from '@/components/integrations/ReviewDetailPanel'
-import ImportReviewDrawer from '@/components/integrations/ImportReviewDrawer'
+import { getSystemConfig } from '@/components/integrations/system-config'
+import IntegrationOverviewTab from '@/components/integrations/IntegrationOverviewTab'
+import IntegrationReviewQueueTab from '@/components/integrations/IntegrationReviewQueueTab'
+import IntegrationMappingsTab from '@/components/integrations/IntegrationMappingsTab'
+import IntegrationLogsTab from '@/components/integrations/IntegrationLogsTab'
 import type { CreateEntityData } from '@/components/integrations/ReviewDetailPanel'
 import type {
   EhrIntegration,
   EhrIntegrationLog,
   EhrProcessingStatus,
   EhrEntityType,
-  EhrEntityMapping,
   ReviewNotes,
 } from '@/lib/integrations/shared/integration-types'
 import { logger } from '@/lib/logger'
 
 const log = logger('epic-integration-page')
+
+const systemConfig = getSystemConfig('epic_hl7v2')
 
 // =====================================================
 // TYPES
@@ -81,39 +68,6 @@ const SUPABASE_PROJECT_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const PAGE_SIZE = 25
 
 // =====================================================
-// HELPERS
-// =====================================================
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Never'
-  return new Date(dateStr).toLocaleString()
-}
-
-function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return 'Never'
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return 'Just now'
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
-function StatusBadge({ status }: { status: EhrProcessingStatus }) {
-  const config: Record<EhrProcessingStatus, { color: string; label: string }> = {
-    received: { color: 'bg-blue-100 text-blue-700', label: 'Received' },
-    pending_review: { color: 'bg-amber-100 text-amber-700', label: 'Pending Review' },
-    processed: { color: 'bg-emerald-100 text-emerald-700', label: 'Processed' },
-    error: { color: 'bg-red-100 text-red-700', label: 'Error' },
-    ignored: { color: 'bg-slate-100 text-slate-600', label: 'Ignored' },
-  }
-  const c = config[status]
-  return <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${c.color}`}>{c.label}</span>
-}
-
-// =====================================================
 // MAIN COMPONENT
 // =====================================================
 
@@ -134,7 +88,7 @@ export default function EpicHL7v2IntegrationPage() {
     setData: setIntegration,
   } = useSupabaseQuery<EhrIntegration | null>(
     async (supabase) => {
-      const { data } = await ehrDAL.getIntegrationByFacility(supabase, facilityId!, 'epic_hl7v2')
+      const { data } = await ehrDAL.getIntegrationByFacility(supabase, facilityId!, systemConfig.integrationType)
       return data
     },
     { deps: [facilityId], enabled: !!facilityId }
@@ -278,8 +232,8 @@ export default function EpicHL7v2IntegrationPage() {
 
       const { data, error } = await ehrDAL.upsertIntegration(supabase, {
         facility_id: facilityId,
-        integration_type: 'epic_hl7v2',
-        display_name: 'Epic HL7v2',
+        integration_type: systemConfig.integrationType,
+        display_name: systemConfig.integrationDisplayName,
         config: {
           api_key: apiKey,
           endpoint_url: endpointUrl,
@@ -309,7 +263,7 @@ export default function EpicHL7v2IntegrationPage() {
       const newActive = !integration.is_active
       const { data, error } = await ehrDAL.upsertIntegration(supabase, {
         facility_id: integration.facility_id,
-        integration_type: 'epic_hl7v2',
+        integration_type: systemConfig.integrationType,
         is_active: newActive,
       })
       if (!error && data) {
@@ -333,7 +287,7 @@ export default function EpicHL7v2IntegrationPage() {
 
       const { data, error } = await ehrDAL.upsertIntegration(supabase, {
         facility_id: integration.facility_id,
-        integration_type: 'epic_hl7v2',
+        integration_type: systemConfig.integrationType,
         config: updatedConfig,
       })
       if (!error && data) {
@@ -368,10 +322,10 @@ export default function EpicHL7v2IntegrationPage() {
     }
 
     // 2. Resolve entity IDs from case overrides → global mappings
-    const epicSurgeon = parsed.surgeon as { npi?: string; name?: string } | null
-    const epicProcedure = parsed.procedure as { cptCode?: string; name?: string } | null
-    const epicRoom = parsed.room as { code?: string; name?: string } | null
-    const epicPatient = parsed.patient as { mrn: string; firstName: string; lastName: string; dateOfBirth?: string; gender?: string } | null
+    const ehrSurgeon = parsed.surgeon as { npi?: string; name?: string } | null
+    const ehrProcedure = parsed.procedure as { cptCode?: string; name?: string } | null
+    const ehrRoom = parsed.room as { code?: string; name?: string } | null
+    const ehrPatient = parsed.patient as { mrn: string; firstName: string; lastName: string; dateOfBirth?: string; gender?: string } | null
 
     // Fetch fresh entity mappings for this integration
     const { data: currentMappings } = await ehrDAL.listEntityMappings(supabase, integration.id)
@@ -395,9 +349,9 @@ export default function EpicHL7v2IntegrationPage() {
       return null
     }
 
-    const surgeonId = resolveEntityId('surgeon', [epicSurgeon?.npi, epicSurgeon?.name].filter(Boolean) as string[])
-    const procedureId = resolveEntityId('procedure', [epicProcedure?.cptCode, epicProcedure?.name].filter(Boolean) as string[])
-    const roomId = resolveEntityId('room', [epicRoom?.code, epicRoom?.name].filter(Boolean) as string[])
+    const surgeonId = resolveEntityId('surgeon', [ehrSurgeon?.npi, ehrSurgeon?.name].filter(Boolean) as string[])
+    const procedureId = resolveEntityId('procedure', [ehrProcedure?.cptCode, ehrProcedure?.name].filter(Boolean) as string[])
+    const roomId = resolveEntityId('room', [ehrRoom?.code, ehrRoom?.name].filter(Boolean) as string[])
 
     if (!surgeonId || !procedureId) {
       return { success: false, error: 'Surgeon and procedure must be resolved before approving' }
@@ -405,15 +359,15 @@ export default function EpicHL7v2IntegrationPage() {
 
     // 3. Match/create patient
     let patientId: string | null = null
-    if (epicPatient?.mrn) {
+    if (ehrPatient?.mrn) {
       const { matchOrCreatePatient } = await import('@/lib/integrations/ehr/patient-matcher')
       const patientResult = await matchOrCreatePatient(supabase, facilityId, {
-        mrn: epicPatient.mrn,
-        firstName: epicPatient.firstName,
-        lastName: epicPatient.lastName,
-        dateOfBirth: epicPatient.dateOfBirth || null,
-        gender: epicPatient.gender || '',
-        externalPatientId: epicPatient.mrn,
+        mrn: ehrPatient.mrn,
+        firstName: ehrPatient.firstName,
+        lastName: ehrPatient.lastName,
+        dateOfBirth: ehrPatient.dateOfBirth || null,
+        gender: ehrPatient.gender || '',
+        externalPatientId: ehrPatient.mrn,
       })
       patientId = patientResult.patientId
     }
@@ -428,7 +382,7 @@ export default function EpicHL7v2IntegrationPage() {
         .select('id')
         .eq('facility_id', facilityId)
         .eq('external_case_id', externalCaseId)
-        .eq('external_system', 'epic_hl7v2')
+        .eq('external_system', systemConfig.integrationType)
         .maybeSingle()
 
       if (existingCase) {
@@ -477,7 +431,7 @@ export default function EpicHL7v2IntegrationPage() {
         p_is_draft: false,
         p_staff_assignments: null,
         p_patient_id: patientId,
-        p_source: 'epic',
+        p_source: systemConfig.sourceName,
       })
 
       if (rpcError || !newCaseId) {
@@ -490,7 +444,7 @@ export default function EpicHL7v2IntegrationPage() {
       if (externalCaseId) {
         await supabase.from('cases').update({
           external_case_id: externalCaseId,
-          external_system: 'epic_hl7v2',
+          external_system: systemConfig.integrationType,
           import_source: 'hl7v2',
         }).eq('id', caseId)
       }
@@ -691,8 +645,8 @@ export default function EpicHL7v2IntegrationPage() {
   const handleDeleteMapping = async (mappingId: string) => {
     const supabase = createClient()
     // Get mapping details for audit before deleting
-    const { data: mappings } = await ehrDAL.listEntityMappings(supabase, integration!.id)
-    const mapping = mappings?.find(m => m.id === mappingId)
+    const { data: mappingsList } = await ehrDAL.listEntityMappings(supabase, integration!.id)
+    const mapping = mappingsList?.find(m => m.id === mappingId)
     await ehrDAL.deleteEntityMapping(supabase, mappingId)
     if (mapping && facilityId) {
       await ehrAudit.entityMappingDeleted(supabase, facilityId, mapping.entity_type, mapping.external_display_name || mapping.external_identifier)
@@ -712,7 +666,7 @@ export default function EpicHL7v2IntegrationPage() {
             <ArrowLeft className="w-5 h-5 text-slate-500" />
           </button>
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Epic HL7v2 Integration</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">{systemConfig.pageTitle}</h1>
             <p className="text-slate-500 text-sm">Loading...</p>
           </div>
         </div>
@@ -735,8 +689,8 @@ export default function EpicHL7v2IntegrationPage() {
           <ArrowLeft className="w-5 h-5 text-slate-500" />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-slate-900">Epic HL7v2 Integration</h1>
-          <p className="text-slate-500 text-sm">Receive surgical scheduling data via HL7v2 SIU messages</p>
+          <h1 className="text-2xl font-semibold text-slate-900">{systemConfig.pageTitle}</h1>
+          <p className="text-slate-500 text-sm">{systemConfig.pageSubtitle}</p>
         </div>
         {integration && (
           <div className="flex items-center gap-2">
@@ -775,7 +729,8 @@ export default function EpicHL7v2IntegrationPage() {
 
       {/* TAB: OVERVIEW */}
       {activeTab === 'overview' && (
-        <OverviewTab
+        <IntegrationOverviewTab
+          systemConfig={systemConfig}
           integration={integration}
           stats={stats}
           endpointUrl={endpointUrl}
@@ -791,13 +746,14 @@ export default function EpicHL7v2IntegrationPage() {
 
       {/* TAB: REVIEW QUEUE */}
       {activeTab === 'review' && (
-        <ReviewQueueTab
+        <IntegrationReviewQueueTab
           pendingReviews={pendingReviews || []}
           loading={reviewsLoading}
           actionLoading={actionLoading}
           approveAllLoading={approveAllLoading}
           getEntitiesForType={getEntitiesForType}
           entityMappings={allMappings || []}
+          incomingColumnLabel={systemConfig.incomingColumnLabel}
           onApprove={handleApproveImport}
           onApproveAll={handleApproveAll}
           onReject={handleRejectImport}
@@ -810,7 +766,7 @@ export default function EpicHL7v2IntegrationPage() {
 
       {/* TAB: MAPPINGS */}
       {activeTab === 'mappings' && (
-        <MappingsTab
+        <IntegrationMappingsTab
           integration={integration}
           mappingTab={mappingTab}
           setMappingTab={setMappingTab}
@@ -822,7 +778,7 @@ export default function EpicHL7v2IntegrationPage() {
 
       {/* TAB: LOGS */}
       {activeTab === 'logs' && (
-        <LogsTab
+        <IntegrationLogsTab
           logEntries={logEntries || []}
           loading={logsLoading}
           statusFilter={logStatusFilter}
@@ -834,705 +790,6 @@ export default function EpicHL7v2IntegrationPage() {
           onPhiAccess={logPhiAccess}
         />
       )}
-    </div>
-  )
-}
-
-// =====================================================
-// OVERVIEW TAB
-// =====================================================
-
-function OverviewTab({
-  integration,
-  stats,
-  endpointUrl,
-  actionLoading,
-  onSetup,
-  onToggleActive,
-  onRotateKey,
-  onUpdateRetention,
-  onNavigateTab,
-  onNavigateLogsWithFilter,
-}: {
-  integration: EhrIntegration | null
-  stats: IntegrationStats | null
-  endpointUrl: string
-  actionLoading: string | null
-  onSetup: () => Promise<void>
-  onToggleActive: () => Promise<void>
-  onRotateKey: () => Promise<void>
-  onUpdateRetention: (days: number) => Promise<void>
-  onNavigateTab: (tab: TabId) => void
-  onNavigateLogsWithFilter: (filter: EhrProcessingStatus) => void
-}) {
-  if (!integration) {
-    return (
-      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
-        <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <Activity className="w-8 h-8 text-blue-600" />
-        </div>
-        <h2 className="text-xl font-semibold text-slate-900 mb-2">Set Up HL7v2 Integration</h2>
-        <p className="text-slate-500 max-w-md mx-auto mb-6">
-          Generate an API key to start receiving surgical scheduling messages from your Epic integration engine.
-        </p>
-        <button
-          onClick={onSetup}
-          disabled={actionLoading === 'setup'}
-          className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-        >
-          {actionLoading === 'setup' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-          Initialize Integration
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-6">
-      <SetupInstructionsCard endpointUrl={endpointUrl} apiKey={integration.config?.api_key} isActive={integration.is_active} />
-
-      {/* Quick Actions */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onToggleActive}
-          disabled={actionLoading === 'toggle'}
-          className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 ${
-            integration.is_active
-              ? 'text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100'
-              : 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'
-          }`}
-        >
-          {actionLoading === 'toggle' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
-          {integration.is_active ? 'Disable' : 'Enable'}
-        </button>
-        <button
-          onClick={onRotateKey}
-          disabled={actionLoading === 'rotate'}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
-        >
-          {actionLoading === 'rotate' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
-          Rotate API Key
-        </button>
-      </div>
-
-      {/* Status Card */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6">
-        <h3 className="font-medium text-slate-900 mb-4">Connection Status</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
-          <div>
-            <p className="text-slate-500 mb-0.5">Status</p>
-            <div className="flex items-center gap-2">
-              <div className={`w-2.5 h-2.5 rounded-full ${integration.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-              <p className="font-medium text-slate-900">{integration.is_active ? 'Active' : 'Inactive'}</p>
-            </div>
-          </div>
-          <div>
-            <p className="text-slate-500 mb-0.5">Last Message</p>
-            <p className="font-medium text-slate-900">{formatRelativeTime(integration.last_message_at)}</p>
-          </div>
-          <div>
-            <p className="text-slate-500 mb-0.5">Messages Today</p>
-            <p className="font-medium text-slate-900">{stats?.messagesToday ?? 0}</p>
-          </div>
-          <div>
-            <p className="text-slate-500 mb-0.5">Last Error</p>
-            <p className={`font-medium ${integration.last_error ? 'text-red-600' : 'text-slate-900'}`}>
-              {integration.last_error || 'None'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-            <span className="text-sm text-slate-500">Total Imported</span>
-          </div>
-          <p className="text-2xl font-semibold text-slate-900">{stats?.totalProcessed ?? 0}</p>
-        </div>
-        <button
-          className="bg-white border border-slate-200 rounded-xl p-5 text-left hover:border-amber-300 transition-colors"
-          onClick={() => onNavigateTab('review')}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <AlertCircle className="w-4 h-4 text-amber-500" />
-            <span className="text-sm text-slate-500">Pending Review</span>
-          </div>
-          <p className="text-2xl font-semibold text-amber-600">{stats?.pendingReview ?? 0}</p>
-        </button>
-        <button
-          className="bg-white border border-slate-200 rounded-xl p-5 text-left hover:border-red-300 transition-colors"
-          onClick={() => onNavigateLogsWithFilter('error')}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <XCircle className="w-4 h-4 text-red-400" />
-            <span className="text-sm text-slate-500">Errors</span>
-          </div>
-          <p className="text-2xl font-semibold text-red-600">{stats?.errors ?? 0}</p>
-        </button>
-      </div>
-
-      {/* Retention Policy Card */}
-      <RetentionPolicyCard
-        retentionDays={integration.config?.retention_days ?? 90}
-        actionLoading={actionLoading}
-        onUpdate={onUpdateRetention}
-      />
-    </div>
-  )
-}
-
-// =====================================================
-// RETENTION POLICY CARD
-// =====================================================
-
-const RETENTION_OPTIONS = [
-  { value: 30, label: '30 days' },
-  { value: 60, label: '60 days' },
-  { value: 90, label: '90 days (default)' },
-  { value: 180, label: '180 days' },
-  { value: 365, label: '1 year' },
-]
-
-function RetentionPolicyCard({
-  retentionDays,
-  actionLoading,
-  onUpdate,
-}: {
-  retentionDays: number
-  actionLoading: string | null
-  onUpdate: (days: number) => Promise<void>
-}) {
-  const [selectedDays, setSelectedDays] = useState(retentionDays)
-
-  const hasChanged = selectedDays !== retentionDays
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl p-6">
-      <div className="flex items-center gap-2 mb-1">
-        <Clock className="w-4 h-4 text-slate-500" />
-        <h3 className="font-medium text-slate-900">Raw Message Retention</h3>
-      </div>
-      <p className="text-xs text-slate-500 mb-4">
-        Raw HL7v2 messages contain PHI. They are automatically purged after the retention period.
-        Parsed data and audit logs are preserved indefinitely.
-      </p>
-      <div className="flex items-center gap-3">
-        <select
-          value={selectedDays}
-          onChange={(e) => setSelectedDays(Number(e.target.value))}
-          className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          {RETENTION_OPTIONS.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-        {hasChanged && (
-          <button
-            onClick={() => onUpdate(selectedDays)}
-            disabled={actionLoading === 'retention'}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            {actionLoading === 'retention' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// =====================================================
-// REVIEW QUEUE TAB
-// =====================================================
-
-function ReviewQueueTab({
-  pendingReviews,
-  loading,
-  actionLoading,
-  approveAllLoading,
-  getEntitiesForType,
-  entityMappings,
-  onApprove,
-  onApproveAll,
-  onReject,
-  onResolveEntity,
-  onRemapCaseOnly,
-  onCreateEntity,
-  onPhiAccess,
-}: {
-  pendingReviews: EhrIntegrationLog[]
-  loading: boolean
-  actionLoading: string | null
-  approveAllLoading: boolean
-  getEntitiesForType: (type: EhrEntityType) => Array<{ id: string; label: string }>
-  entityMappings: EhrEntityMapping[]
-  onApprove: (entry: EhrIntegrationLog) => Promise<void>
-  onApproveAll: (entries: EhrIntegrationLog[]) => Promise<void>
-  onReject: (entry: EhrIntegrationLog) => Promise<void>
-  onResolveEntity: (
-    entry: EhrIntegrationLog, entityType: EhrEntityType,
-    extId: string, extName: string, orbitId: string, orbitName: string,
-  ) => Promise<void>
-  onRemapCaseOnly: (
-    entry: EhrIntegrationLog, entityType: EhrEntityType,
-    orbitId: string, orbitName: string,
-  ) => Promise<void>
-  onCreateEntity: (formData: CreateEntityData) => Promise<string | null>
-  onPhiAccess: (logEntryId: string, messageType: string) => void
-}) {
-  const [selectedEntry, setSelectedEntry] = useState<EhrIntegrationLog | null>(null)
-
-  const approvableEntries = useMemo(
-    () => pendingReviews.filter(entry => !computeHasUnresolved(entry, entityMappings)),
-    [pendingReviews, entityMappings]
-  )
-
-  if (loading) {
-    return (
-      <div className="animate-pulse space-y-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-12 bg-slate-100 rounded-lg" />
-        ))}
-      </div>
-    )
-  }
-
-  if (pendingReviews.length === 0) {
-    return (
-      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
-        <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
-        <p className="text-slate-500">No pending reviews. All imports are up to date.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">
-          {pendingReviews.length} import{pendingReviews.length !== 1 ? 's' : ''} pending review
-        </p>
-        {approvableEntries.length > 0 && (
-          <button
-            onClick={() => onApproveAll(approvableEntries)}
-            disabled={approveAllLoading}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
-          >
-            {approveAllLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            Approve All ({approvableEntries.length})
-          </button>
-        )}
-      </div>
-
-      {/* Scannable list */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
-        {pendingReviews.map(entry => (
-          <ReviewQueueRow
-            key={entry.id}
-            entry={entry}
-            entityMappings={entityMappings}
-            isSelected={selectedEntry?.id === entry.id}
-            onClick={() => setSelectedEntry(entry)}
-          />
-        ))}
-      </div>
-
-      {/* Slide-over drawer */}
-      <ImportReviewDrawer
-        isOpen={!!selectedEntry}
-        onClose={() => setSelectedEntry(null)}
-        entry={selectedEntry}
-        allSurgeons={getEntitiesForType('surgeon')}
-        allProcedures={getEntitiesForType('procedure')}
-        allRooms={getEntitiesForType('room')}
-        entityMappings={entityMappings}
-        onResolveEntity={onResolveEntity}
-        onRemapCaseOnly={onRemapCaseOnly}
-        onCreateEntity={onCreateEntity}
-        onApprove={async (e) => {
-          await onApprove(e)
-          setSelectedEntry(null)
-        }}
-        onReject={async (e) => {
-          await onReject(e)
-          setSelectedEntry(null)
-        }}
-        onPhiAccess={onPhiAccess}
-        actionLoading={actionLoading}
-      />
-    </div>
-  )
-}
-
-// =====================================================
-// REVIEW QUEUE ROW (scannable list format)
-// =====================================================
-
-function ReviewQueueRow({
-  entry,
-  entityMappings,
-  isSelected,
-  onClick,
-}: {
-  entry: EhrIntegrationLog
-  entityMappings: EhrEntityMapping[]
-  isSelected: boolean
-  onClick: () => void
-}) {
-  const parsed = entry.parsed_data as Record<string, unknown> | null
-  const hasUnresolved = computeHasUnresolved(entry, entityMappings)
-
-  // Extract display fields
-  const patient = parsed?.patient as { firstName?: string; lastName?: string } | null
-  const procedure = parsed?.procedure as { name?: string } | null
-  const surgeon = parsed?.surgeon as { name?: string } | null
-
-  // Format date/time: M/D/YYYY h:mmam
-  // Parse string components directly — scheduledStart is local time without timezone suffix,
-  // so new Date() would misinterpret it as UTC and shift the date
-  let dateTimeStr = ''
-  const scheduledStart = parsed?.scheduledStart as string | undefined
-  if (scheduledStart) {
-    const [datePart, timePart] = scheduledStart.split('T')
-    if (datePart) {
-      const [y, m, d] = datePart.split('-').map(Number)
-      dateTimeStr = `${m}/${d}/${y}`
-      if (timePart) {
-        const [hStr, minStr] = timePart.split(':')
-        const h = parseInt(hStr, 10)
-        const min = minStr || '00'
-        const ampm = h >= 12 ? 'pm' : 'am'
-        const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
-        dateTimeStr += ` ${h12}:${min}${ampm}`
-      }
-    }
-  }
-
-  // Procedure name (short)
-  const procedureName = procedure?.name || 'Unknown Procedure'
-
-  // Surgeon last name
-  let surgeonDisplay = ''
-  if (surgeon?.name) {
-    // Names might be "LAST, FIRST" or "First Last" — extract last name
-    const parts = surgeon.name.split(',')
-    if (parts.length > 1) {
-      surgeonDisplay = `Dr ${parts[0].trim()}`
-    } else {
-      const words = surgeon.name.trim().split(/\s+/)
-      surgeonDisplay = `Dr ${words[words.length - 1]}`
-    }
-  }
-
-  // Patient display: FirstName LastName
-  const patientDisplay = patient
-    ? `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || 'Unknown'
-    : 'Unknown'
-
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-        isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'
-      }`}
-    >
-      {/* Status icon */}
-      {hasUnresolved ? (
-        <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-      ) : (
-        <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-      )}
-
-      {/* Row content */}
-      <div className="flex-1 min-w-0">
-        <span className="text-sm text-slate-900">
-          <span className="font-medium">New Case:</span>
-          {dateTimeStr && <> {dateTimeStr}</>}
-          {procedureName && <> {procedureName}</>}
-          {surgeonDisplay && <> {surgeonDisplay}</>}
-          {patientDisplay && <> <span className="text-slate-400">-</span> {patientDisplay}</>}
-        </span>
-      </div>
-
-      {/* Time ago */}
-      <span className="text-xs text-slate-400 flex-shrink-0">
-        {formatRelativeTime(entry.created_at)}
-      </span>
-    </button>
-  )
-}
-
-// =====================================================
-// MAPPINGS TAB
-// =====================================================
-
-function MappingsTab({
-  integration,
-  mappingTab,
-  setMappingTab,
-  entityMappings,
-  loading,
-  onDelete,
-}: {
-  integration: EhrIntegration | null
-  mappingTab: EhrEntityType
-  setMappingTab: (tab: EhrEntityType) => void
-  entityMappings: Array<{
-    id: string; entity_type: string; external_identifier: string
-    external_display_name: string | null; orbit_entity_id: string | null
-    orbit_display_name: string | null; match_method: string; match_confidence: number | null
-  }>
-  loading: boolean
-  onDelete: (mappingId: string) => Promise<void>
-}) {
-  const [deleting, setDeleting] = useState<string | null>(null)
-
-  if (!integration) {
-    return (
-      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
-        <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-        <p className="text-slate-500">Set up the integration first to manage entity mappings.</p>
-      </div>
-    )
-  }
-
-  const tabConfig: Array<{ type: EhrEntityType; icon: React.ComponentType<{ className?: string }>; label: string }> = [
-    { type: 'surgeon', icon: Users, label: 'Surgeons' },
-    { type: 'room', icon: LayoutGrid, label: 'Rooms' },
-    { type: 'procedure', icon: ClipboardList, label: 'Procedures' },
-  ]
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        {tabConfig.map(({ type, icon: Icon, label }) => (
-          <button
-            key={type}
-            onClick={() => setMappingTab(type)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-              mappingTab === type
-                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                : 'text-slate-600 hover:bg-slate-50 border border-transparent'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="p-6 animate-pulse space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 bg-slate-100 rounded-lg" />)}
-          </div>
-        ) : entityMappings.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-sm text-slate-400">No {mappingTab} mappings yet. Mappings are created when messages are processed or entities are resolved.</p>
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">External</th>
-                <th className="px-2 py-2.5 w-10" />
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ORbit Entity</th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-24">Match</th>
-                <th className="px-4 py-2.5 w-16" />
-              </tr>
-            </thead>
-            <tbody>
-              {entityMappings.map(mapping => (
-                <tr key={mapping.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-3">
-                    <p className="text-sm font-medium text-slate-900">{mapping.external_display_name || mapping.external_identifier}</p>
-                    <p className="text-xs text-slate-400">{mapping.external_identifier}</p>
-                  </td>
-                  <td className="px-2 py-3 text-center"><span className="text-slate-300">&rarr;</span></td>
-                  <td className="px-4 py-3"><p className="text-sm text-slate-900">{mapping.orbit_display_name || '\u2014'}</p></td>
-                  <td className="px-4 py-3">
-                    {mapping.match_method === 'auto' && mapping.match_confidence !== null && (
-                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-full">
-                        Auto {Math.round(mapping.match_confidence * 100)}%
-                      </span>
-                    )}
-                    {mapping.match_method === 'manual' && (
-                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">Manual</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={async () => { setDeleting(mapping.id); await onDelete(mapping.id); setDeleting(null) }}
-                      disabled={deleting === mapping.id}
-                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
-                      title="Remove mapping"
-                    >
-                      {deleting === mapping.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// =====================================================
-// LOGS TAB
-// =====================================================
-
-function LogsTab({
-  logEntries,
-  loading,
-  statusFilter,
-  setStatusFilter,
-  page,
-  setPage,
-  pageSize,
-  onRefresh,
-  onPhiAccess,
-}: {
-  logEntries: EhrIntegrationLog[]
-  loading: boolean
-  statusFilter: EhrProcessingStatus | ''
-  setStatusFilter: (f: EhrProcessingStatus | '') => void
-  page: number
-  setPage: (p: number) => void
-  pageSize: number
-  onRefresh: () => void
-  onPhiAccess: (logEntryId: string, messageType: string) => void
-}) {
-  const [expandedRow, setExpandedRow] = useState<string | null>(null)
-
-  const filterOptions: Array<{ value: EhrProcessingStatus | ''; label: string }> = [
-    { value: '', label: 'All' },
-    { value: 'processed', label: 'Processed' },
-    { value: 'pending_review', label: 'Pending' },
-    { value: 'error', label: 'Errors' },
-    { value: 'ignored', label: 'Ignored' },
-  ]
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          {filterOptions.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => setStatusFilter(opt.value)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                statusFilter === opt.value ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={onRefresh}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Refresh
-        </button>
-      </div>
-
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="p-6 animate-pulse space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-12 bg-slate-100 rounded-lg" />)}
-          </div>
-        ) : logEntries.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-sm text-slate-400">
-              {statusFilter ? `No ${statusFilter.replace('_', ' ')} messages found.` : 'No messages received yet.'}
-            </p>
-          </div>
-        ) : (
-          <>
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-4 py-2.5 w-8" />
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Time</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Type</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">External ID</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logEntries.map(entry => {
-                  const isExpanded = expandedRow === entry.id
-                  return (
-                    <React.Fragment key={entry.id}>
-                      <tr
-                        className={`border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${
-                          entry.processing_status === 'error' ? 'bg-red-50/50' : ''
-                        }`}
-                        onClick={() => {
-                          const expanding = !isExpanded
-                          setExpandedRow(expanding ? entry.id : null)
-                          if (expanding && entry.raw_message) {
-                            onPhiAccess(entry.id, entry.message_type)
-                          }
-                        }}
-                      >
-                        <td className="px-4 py-3">
-                          {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDate(entry.created_at)}</td>
-                        <td className="px-4 py-3 text-sm font-mono text-slate-700">{entry.message_type}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700">{entry.external_case_id || '\u2014'}</td>
-                        <td className="px-4 py-3"><StatusBadge status={entry.processing_status} /></td>
-                        <td className="px-4 py-3 text-xs text-slate-500 truncate max-w-xs">
-                          {entry.error_message || (entry.case_id ? `Case: ${entry.case_id.substring(0, 8)}...` : '\u2014')}
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={6} className="px-4 py-4 bg-slate-50/50 border-b border-slate-200">
-                            <HL7MessageViewer rawMessage={entry.raw_message} parsedData={entry.parsed_data} />
-                            {entry.error_message && (
-                              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                                <p className="text-sm text-red-700">{entry.error_message}</p>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-
-            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
-              <button
-                onClick={() => setPage(Math.max(0, page - 1))}
-                disabled={page === 0}
-                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <span className="text-xs text-slate-400">Page {page + 1}</span>
-              <button
-                onClick={() => setPage(page + 1)}
-                disabled={logEntries.length < pageSize}
-                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
-          </>
-        )}
-      </div>
     </div>
   )
 }

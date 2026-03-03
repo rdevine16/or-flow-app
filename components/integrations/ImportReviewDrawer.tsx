@@ -39,6 +39,8 @@ interface ImportReviewDrawerProps {
   onReject: (entry: EhrIntegrationLog) => Promise<void>
   onPhiAccess: (logEntryId: string, messageType: string) => void
   actionLoading: string | null
+  /** Column header for incoming data (e.g. "Epic (Incoming)") — passed to ReviewDetailPanel */
+  incomingColumnLabel?: string
 }
 
 // ============================================
@@ -103,6 +105,7 @@ export default function ImportReviewDrawer({
   onReject,
   onPhiAccess,
   actionLoading,
+  incomingColumnLabel,
 }: ImportReviewDrawerProps) {
   if (!entry) return null
 
@@ -194,6 +197,7 @@ export default function ImportReviewDrawer({
               onRemapCaseOnly={onRemapCaseOnly}
               onCreateEntity={onCreateEntity}
               onPhiAccess={onPhiAccess}
+              incomingColumnLabel={incomingColumnLabel}
             />
           </div>
         </Dialog.Content>

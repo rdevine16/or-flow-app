@@ -23,6 +23,10 @@ interface SetupInstructionsCardProps {
   endpointUrl: string
   apiKey: string | undefined
   isActive: boolean
+  /** System-specific description (e.g. "Configure your integration engine...") */
+  setupDescription?: string
+  /** MSH sending app/facility placeholder for curl example (e.g. 'EPIC|FACILITY') */
+  curlMshPlaceholder?: string
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -50,6 +54,8 @@ export default function SetupInstructionsCard({
   endpointUrl,
   apiKey,
   isActive,
+  setupDescription = 'Configure your integration engine (Mirth Connect, Rhapsody) with these settings',
+  curlMshPlaceholder = 'EPIC|FACILITY',
 }: SetupInstructionsCardProps) {
   const [showKey, setShowKey] = useState(false)
 
@@ -60,7 +66,7 @@ export default function SetupInstructionsCard({
   const curlExample = `curl -X POST "${endpointUrl}" \\
   -H "Content-Type: application/hl7-v2" \\
   -H "X-Integration-Key: ${apiKey || '<YOUR_API_KEY>'}" \\
-  -d 'MSH|^~\\&|EPIC|FACILITY|||...'`
+  -d 'MSH|^~\\&|${curlMshPlaceholder}|||...'`
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-6">
@@ -71,7 +77,7 @@ export default function SetupInstructionsCard({
         <div>
           <h3 className="font-medium text-slate-900">Setup Instructions</h3>
           <p className="text-sm text-slate-500">
-            Configure your integration engine (Mirth Connect, Rhapsody) with these settings
+            {setupDescription}
           </p>
         </div>
       </div>

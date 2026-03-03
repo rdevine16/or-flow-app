@@ -58,6 +58,8 @@ export interface ReviewDetailPanelProps {
   allProcedures: Array<{ id: string; label: string }>
   allRooms: Array<{ id: string; label: string }>
   entityMappings: EhrEntityMapping[]
+  /** Column header for incoming data (e.g. "Epic (Incoming)", "Cerner (Incoming)") */
+  incomingColumnLabel?: string
   onResolveEntity: (
     entry: EhrIntegrationLog,
     entityType: EhrEntityType,
@@ -186,18 +188,18 @@ export function computeHasUnresolved(
   const parsed = entry.parsed_data as Record<string, unknown> | null
   const reviewNotes = entry.review_notes as ReviewNotes | null
 
-  const epicSurgeon = parsed?.surgeon as { npi?: string; name?: string } | null
-  const epicProcedure = parsed?.procedure as { cptCode?: string; name?: string } | null
-  const epicRoom = parsed?.room as { code?: string; name?: string } | null
+  const ehrSurgeon = parsed?.surgeon as { npi?: string; name?: string } | null
+  const ehrProcedure = parsed?.procedure as { cptCode?: string; name?: string } | null
+  const ehrRoom = parsed?.room as { code?: string; name?: string } | null
 
-  const surgeonMapping = epicSurgeon
-    ? findEntityMapping('surgeon', [epicSurgeon.npi || '', epicSurgeon.name || ''], entityMappings)
+  const surgeonMapping = ehrSurgeon
+    ? findEntityMapping('surgeon', [ehrSurgeon.npi || '', ehrSurgeon.name || ''], entityMappings)
     : undefined
-  const procedureMapping = epicProcedure
-    ? findEntityMapping('procedure', [epicProcedure.cptCode || '', epicProcedure.name || ''], entityMappings)
+  const procedureMapping = ehrProcedure
+    ? findEntityMapping('procedure', [ehrProcedure.cptCode || '', ehrProcedure.name || ''], entityMappings)
     : undefined
-  const roomMapping = epicRoom
-    ? findEntityMapping('room', [epicRoom.code || '', epicRoom.name || ''], entityMappings)
+  const roomMapping = ehrRoom
+    ? findEntityMapping('room', [ehrRoom.code || '', ehrRoom.name || ''], entityMappings)
     : undefined
 
   const surgeonState = getEntityMatchState('surgeon', reviewNotes, surgeonMapping)
@@ -218,6 +220,7 @@ export default function ReviewDetailPanel({
   allProcedures,
   allRooms,
   entityMappings,
+  incomingColumnLabel = 'Epic (Incoming)',
   onResolveEntity,
   onRemapCaseOnly,
   onCreateEntity,
@@ -230,10 +233,10 @@ export default function ReviewDetailPanel({
   const reviewNotes = entry.review_notes as ReviewNotes | null
 
   // Extract parsed entity data
-  const epicSurgeon = parsed?.surgeon as ParsedSurgeon | null
-  const epicProcedure = parsed?.procedure as ParsedProcedure | null
-  const epicRoom = parsed?.room as ParsedRoom | null
-  const epicPatient = parsed?.patient as ParsedPatient | null
+  const ehrSurgeon = parsed?.surgeon as ParsedSurgeon | null
+  const ehrProcedure = parsed?.procedure as ParsedProcedure | null
+  const ehrRoom = parsed?.room as ParsedRoom | null
+  const ehrPatient = parsed?.patient as ParsedPatient | null
 
   // Build mapping lookup: Map<"entityType:externalIdentifier", EhrEntityMapping>
   const mappingLookup = useMemo(() => {
@@ -245,14 +248,14 @@ export default function ReviewDetailPanel({
   }, [entityMappings])
 
   // Lookup mapping for each entity
-  const surgeonMapping = epicSurgeon
-    ? mappingLookup.get(`surgeon:${epicSurgeon.npi}`) || mappingLookup.get(`surgeon:${epicSurgeon.name}`)
+  const surgeonMapping = ehrSurgeon
+    ? mappingLookup.get(`surgeon:${ehrSurgeon.npi}`) || mappingLookup.get(`surgeon:${ehrSurgeon.name}`)
     : undefined
-  const procedureMapping = epicProcedure
-    ? mappingLookup.get(`procedure:${epicProcedure.cptCode}`) || mappingLookup.get(`procedure:${epicProcedure.name}`)
+  const procedureMapping = ehrProcedure
+    ? mappingLookup.get(`procedure:${ehrProcedure.cptCode}`) || mappingLookup.get(`procedure:${ehrProcedure.name}`)
     : undefined
-  const roomMapping = epicRoom
-    ? mappingLookup.get(`room:${epicRoom.code}`) || mappingLookup.get(`room:${epicRoom.name}`)
+  const roomMapping = ehrRoom
+    ? mappingLookup.get(`room:${ehrRoom.code}`) || mappingLookup.get(`room:${ehrRoom.name}`)
     : undefined
 
   // Determine match state for each entity (uses exported helper)
@@ -261,8 +264,8 @@ export default function ReviewDetailPanel({
   const roomState = getEntityMatchState('room', reviewNotes, roomMapping)
 
   // Header data
-  const patientName = epicPatient
-    ? `${epicPatient.lastName}, ${epicPatient.firstName}`
+  const patientName = ehrPatient
+    ? `${ehrPatient.lastName}, ${ehrPatient.firstName}`
     : 'Unknown Patient'
   // Parse date/time directly from string to avoid UTC misinterpretation
   const scheduledDate = (() => {
@@ -376,7 +379,7 @@ export default function ReviewDetailPanel({
       <div className="border border-slate-200 rounded-lg overflow-hidden">
         {/* Table Header */}
         <div className="grid grid-cols-[1fr_40px_1fr] bg-slate-50 border-b border-slate-200 px-4 py-2">
-          <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Epic (Incoming)</span>
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">{incomingColumnLabel}</span>
           <span />
           <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">ORbit (Maps To)</span>
         </div>
@@ -384,9 +387,9 @@ export default function ReviewDetailPanel({
         {/* Surgeon Row */}
         <EntityMappingRow
           entityType="surgeon"
-          epicName={epicSurgeon?.name || 'Unknown'}
-          epicIdentifier={epicSurgeon?.npi}
-          epicIdentifierLabel="NPI"
+          ehrName={ehrSurgeon?.name || 'Unknown'}
+          ehrIdentifier={ehrSurgeon?.npi}
+          ehrIdentifierLabel="NPI"
           matchState={surgeonState}
           orbitDisplayName={getOrbitDisplayName('surgeon', surgeonState, surgeonMapping)}
           suggestions={reviewNotes?.unmatched_surgeon?.suggestions || []}
@@ -395,8 +398,8 @@ export default function ReviewDetailPanel({
           onMap={(orbitId, orbitName) =>
             handleMap(
               'surgeon',
-              epicSurgeon?.npi || epicSurgeon?.name || '',
-              epicSurgeon?.name || '',
+              ehrSurgeon?.npi || ehrSurgeon?.name || '',
+              ehrSurgeon?.name || '',
               orbitId,
               orbitName,
             )
@@ -407,8 +410,8 @@ export default function ReviewDetailPanel({
           onRemapAllFuture={(orbitId, orbitName) =>
             handleMap(
               'surgeon',
-              epicSurgeon?.npi || epicSurgeon?.name || '',
-              epicSurgeon?.name || '',
+              ehrSurgeon?.npi || ehrSurgeon?.name || '',
+              ehrSurgeon?.name || '',
               orbitId,
               orbitName,
             )
@@ -416,24 +419,24 @@ export default function ReviewDetailPanel({
           onCreateAndMap={(formData) =>
             handleCreateAndMap(
               'surgeon',
-              epicSurgeon?.npi || epicSurgeon?.name || '',
-              epicSurgeon?.name || '',
+              ehrSurgeon?.npi || ehrSurgeon?.name || '',
+              ehrSurgeon?.name || '',
               formData,
             )
           }
           defaultCreateData={{
             entityType: 'surgeon',
-            name: epicSurgeon?.name || '',
-            npi: epicSurgeon?.npi,
+            name: ehrSurgeon?.name || '',
+            npi: ehrSurgeon?.npi,
           }}
         />
 
         {/* Procedure Row */}
         <EntityMappingRow
           entityType="procedure"
-          epicName={epicProcedure?.name || 'Unknown'}
-          epicIdentifier={epicProcedure?.cptCode}
-          epicIdentifierLabel="CPT"
+          ehrName={ehrProcedure?.name || 'Unknown'}
+          ehrIdentifier={ehrProcedure?.cptCode}
+          ehrIdentifierLabel="CPT"
           matchState={procedureState}
           orbitDisplayName={getOrbitDisplayName('procedure', procedureState, procedureMapping)}
           suggestions={reviewNotes?.unmatched_procedure?.suggestions || []}
@@ -442,8 +445,8 @@ export default function ReviewDetailPanel({
           onMap={(orbitId, orbitName) =>
             handleMap(
               'procedure',
-              epicProcedure?.cptCode || epicProcedure?.name || '',
-              epicProcedure?.name || '',
+              ehrProcedure?.cptCode || ehrProcedure?.name || '',
+              ehrProcedure?.name || '',
               orbitId,
               orbitName,
             )
@@ -454,8 +457,8 @@ export default function ReviewDetailPanel({
           onRemapAllFuture={(orbitId, orbitName) =>
             handleMap(
               'procedure',
-              epicProcedure?.cptCode || epicProcedure?.name || '',
-              epicProcedure?.name || '',
+              ehrProcedure?.cptCode || ehrProcedure?.name || '',
+              ehrProcedure?.name || '',
               orbitId,
               orbitName,
             )
@@ -463,24 +466,24 @@ export default function ReviewDetailPanel({
           onCreateAndMap={(formData) =>
             handleCreateAndMap(
               'procedure',
-              epicProcedure?.cptCode || epicProcedure?.name || '',
-              epicProcedure?.name || '',
+              ehrProcedure?.cptCode || ehrProcedure?.name || '',
+              ehrProcedure?.name || '',
               formData,
             )
           }
           defaultCreateData={{
             entityType: 'procedure',
-            name: epicProcedure?.name || '',
-            cptCode: epicProcedure?.cptCode,
+            name: ehrProcedure?.name || '',
+            cptCode: ehrProcedure?.cptCode,
           }}
         />
 
         {/* Room Row */}
         <EntityMappingRow
           entityType="room"
-          epicName={epicRoom?.name || epicRoom?.code || 'Unknown'}
-          epicIdentifier={epicRoom?.code && epicRoom?.name ? epicRoom.code : undefined}
-          epicIdentifierLabel="Code"
+          ehrName={ehrRoom?.name || ehrRoom?.code || 'Unknown'}
+          ehrIdentifier={ehrRoom?.code && ehrRoom?.name ? ehrRoom.code : undefined}
+          ehrIdentifierLabel="Code"
           matchState={roomState}
           orbitDisplayName={getOrbitDisplayName('room', roomState, roomMapping)}
           suggestions={reviewNotes?.unmatched_room?.suggestions || []}
@@ -489,8 +492,8 @@ export default function ReviewDetailPanel({
           onMap={(orbitId, orbitName) =>
             handleMap(
               'room',
-              epicRoom?.code || epicRoom?.name || '',
-              epicRoom?.name || epicRoom?.code || '',
+              ehrRoom?.code || ehrRoom?.name || '',
+              ehrRoom?.name || ehrRoom?.code || '',
               orbitId,
               orbitName,
             )
@@ -501,8 +504,8 @@ export default function ReviewDetailPanel({
           onRemapAllFuture={(orbitId, orbitName) =>
             handleMap(
               'room',
-              epicRoom?.code || epicRoom?.name || '',
-              epicRoom?.name || epicRoom?.code || '',
+              ehrRoom?.code || ehrRoom?.name || '',
+              ehrRoom?.name || ehrRoom?.code || '',
               orbitId,
               orbitName,
             )
@@ -510,14 +513,14 @@ export default function ReviewDetailPanel({
           onCreateAndMap={(formData) =>
             handleCreateAndMap(
               'room',
-              epicRoom?.code || epicRoom?.name || '',
-              epicRoom?.name || epicRoom?.code || '',
+              ehrRoom?.code || ehrRoom?.name || '',
+              ehrRoom?.name || ehrRoom?.code || '',
               formData,
             )
           }
           defaultCreateData={{
             entityType: 'room',
-            name: epicRoom?.name || epicRoom?.code || '',
+            name: ehrRoom?.name || ehrRoom?.code || '',
           }}
         />
 
@@ -530,10 +533,10 @@ export default function ReviewDetailPanel({
             </span>
             <div>
               <p className="text-sm font-medium text-slate-900">
-                {epicPatient ? `${epicPatient.lastName}, ${epicPatient.firstName}` : 'Unknown'}
+                {ehrPatient ? `${ehrPatient.lastName}, ${ehrPatient.firstName}` : 'Unknown'}
               </p>
-              {epicPatient?.mrn && (
-                <p className="text-xs text-slate-400">MRN: {epicPatient.mrn}</p>
+              {ehrPatient?.mrn && (
+                <p className="text-xs text-slate-400">MRN: {ehrPatient.mrn}</p>
               )}
             </div>
           </div>
@@ -543,7 +546,7 @@ export default function ReviewDetailPanel({
           <div className="flex items-center gap-2">
             <UserCircle className="w-4 h-4 text-slate-400 flex-shrink-0" />
             <span className="text-sm text-slate-700">
-              {epicPatient ? `${epicPatient.firstName} ${epicPatient.lastName}` : 'Unknown'}
+              {ehrPatient ? `${ehrPatient.firstName} ${ehrPatient.lastName}` : 'Unknown'}
             </span>
             <span className="text-xs text-slate-400">Matched by MRN on import</span>
           </div>
@@ -599,9 +602,9 @@ export default function ReviewDetailPanel({
 
 interface EntityMappingRowProps {
   entityType: EhrEntityType
-  epicName: string
-  epicIdentifier?: string
-  epicIdentifierLabel?: string
+  ehrName: string
+  ehrIdentifier?: string
+  ehrIdentifierLabel?: string
   matchState: EntityMatchState
   orbitDisplayName: string
   suggestions: EntitySuggestion[]
@@ -616,9 +619,9 @@ interface EntityMappingRowProps {
 
 function EntityMappingRow({
   entityType,
-  epicName,
-  epicIdentifier,
-  epicIdentifierLabel,
+  ehrName,
+  ehrIdentifier,
+  ehrIdentifierLabel,
   matchState,
   orbitDisplayName,
   suggestions,
@@ -649,10 +652,10 @@ function EntityMappingRow({
           {config.label}
         </span>
         <div>
-          <p className="text-sm font-medium text-slate-900">{epicName}</p>
-          {epicIdentifier && (
+          <p className="text-sm font-medium text-slate-900">{ehrName}</p>
+          {ehrIdentifier && (
             <p className="text-xs text-slate-400">
-              {epicIdentifierLabel}: {epicIdentifier}
+              {ehrIdentifierLabel}: {ehrIdentifier}
             </p>
           )}
           {matchState === 'unmatched' && (
