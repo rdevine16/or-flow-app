@@ -94,32 +94,32 @@ export default function CernerHL7v2IntegrationPage() {
     { deps: [facilityId], enabled: !!facilityId }
   )
 
-  // Stats
+  // Stats — scoped to this integration
   const {
     data: stats,
     refetch: refetchStats,
   } = useSupabaseQuery<IntegrationStats>(
     async (supabase) => {
-      const { data } = await ehrDAL.getIntegrationStats(supabase, facilityId!)
+      const { data } = await ehrDAL.getIntegrationStats(supabase, facilityId!, integration!.id)
       return data!
     },
-    { deps: [facilityId], enabled: !!facilityId }
+    { deps: [facilityId, integration?.id], enabled: !!facilityId && !!integration }
   )
 
-  // Review queue
+  // Review queue — scoped to this integration
   const {
     data: pendingReviews,
     loading: reviewsLoading,
     setData: setPendingReviews,
   } = useSupabaseQuery<EhrIntegrationLog[]>(
     async (supabase) => {
-      const { data } = await ehrDAL.listPendingReviews(supabase, facilityId!, { limit: 50 })
+      const { data } = await ehrDAL.listPendingReviews(supabase, facilityId!, { integrationId: integration!.id, limit: 50 })
       return data
     },
-    { deps: [facilityId], enabled: !!facilityId }
+    { deps: [facilityId, integration?.id], enabled: !!facilityId && !!integration }
   )
 
-  // Log entries
+  // Log entries — scoped to this integration
   const [logStatusFilter, setLogStatusFilter] = useState<EhrProcessingStatus | ''>('')
   const [logPage, setLogPage] = useState(0)
 
@@ -131,13 +131,14 @@ export default function CernerHL7v2IntegrationPage() {
   } = useSupabaseQuery<EhrIntegrationLog[]>(
     async (supabase) => {
       const { data } = await ehrDAL.listLogEntries(supabase, facilityId!, {
+        integrationId: integration!.id,
         status: logStatusFilter || undefined,
         limit: PAGE_SIZE,
         offset: logPage * PAGE_SIZE,
       })
       return data
     },
-    { deps: [facilityId, logStatusFilter, logPage], enabled: !!facilityId }
+    { deps: [facilityId, integration?.id, logStatusFilter, logPage], enabled: !!facilityId && !!integration }
   )
 
   // Entity mappings (filtered by tab — for MappingsTab display)
@@ -184,8 +185,9 @@ export default function CernerHL7v2IntegrationPage() {
 
   useIntegrationRealtime({
     facilityId,
+    integrationId: integration?.id,
     onInsert: handleRealtimeInsert,
-    enabled: !!facilityId,
+    enabled: !!facilityId && !!integration,
   })
 
   // Entity lookups for ReviewDetailPanel

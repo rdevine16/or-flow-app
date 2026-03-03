@@ -151,6 +151,7 @@ async function listLogEntries(
   supabase: AnySupabaseClient,
   facilityId: string,
   options?: {
+    integrationId?: string
     status?: EhrProcessingStatus
     messageType?: string
     limit?: number
@@ -163,6 +164,9 @@ async function listLogEntries(
     .eq('facility_id', facilityId)
     .order('created_at', { ascending: false })
 
+  if (options?.integrationId) {
+    q = q.eq('integration_id', options.integrationId)
+  }
   if (options?.status) {
     q = q.eq('processing_status', options.status)
   }
@@ -188,9 +192,10 @@ async function listLogEntries(
 async function listPendingReviews(
   supabase: AnySupabaseClient,
   facilityId: string,
-  options?: { limit?: number; offset?: number }
+  options?: { integrationId?: string; limit?: number; offset?: number }
 ): Promise<DALListResult<EhrIntegrationLog>> {
   return listLogEntries(supabase, facilityId, {
+    integrationId: options?.integrationId,
     status: 'pending_review',
     limit: options?.limit,
     offset: options?.offset,
@@ -405,7 +410,8 @@ async function resolveEntityCaseOnly(
 /** Get integration stats (total imported, pending review, errors) */
 async function getIntegrationStats(
   supabase: AnySupabaseClient,
-  facilityId: string
+  facilityId: string,
+  integrationId?: string
 ): Promise<DALResult<{
   totalProcessed: number
   pendingReview: number
@@ -414,27 +420,30 @@ async function getIntegrationStats(
 }>> {
   const today = new Date().toISOString().substring(0, 10)
 
+  // Helper to build a scoped count query
+  const countQuery = (status?: EhrProcessingStatus) => {
+    let q = supabase
+      .from('ehr_integration_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('facility_id', facilityId)
+    if (integrationId) q = q.eq('integration_id', integrationId)
+    if (status) q = q.eq('processing_status', status)
+    return q
+  }
+
   const [processedRes, pendingRes, errorRes, todayRes] = await Promise.all([
-    supabase
-      .from('ehr_integration_log')
-      .select('id', { count: 'exact', head: true })
-      .eq('facility_id', facilityId)
-      .eq('processing_status', 'processed'),
-    supabase
-      .from('ehr_integration_log')
-      .select('id', { count: 'exact', head: true })
-      .eq('facility_id', facilityId)
-      .eq('processing_status', 'pending_review'),
-    supabase
-      .from('ehr_integration_log')
-      .select('id', { count: 'exact', head: true })
-      .eq('facility_id', facilityId)
-      .eq('processing_status', 'error'),
-    supabase
-      .from('ehr_integration_log')
-      .select('id', { count: 'exact', head: true })
-      .eq('facility_id', facilityId)
-      .gte('created_at', `${today}T00:00:00`),
+    countQuery('processed'),
+    countQuery('pending_review'),
+    countQuery('error'),
+    (() => {
+      let q = supabase
+        .from('ehr_integration_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('facility_id', facilityId)
+        .gte('created_at', `${today}T00:00:00`)
+      if (integrationId) q = q.eq('integration_id', integrationId)
+      return q
+    })(),
   ])
 
   return {

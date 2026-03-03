@@ -12,6 +12,8 @@ import type { EhrIntegrationLog } from '@/lib/integrations/shared/integration-ty
 
 interface UseIntegrationRealtimeOptions {
   facilityId: string | undefined
+  /** Only receive entries for this specific integration */
+  integrationId?: string
   /** Only subscribe to entries with these statuses */
   statusFilter?: string[]
   /** Called when a new log entry is inserted */
@@ -22,6 +24,7 @@ interface UseIntegrationRealtimeOptions {
 
 export function useIntegrationRealtime({
   facilityId,
+  integrationId,
   statusFilter,
   onInsert,
   enabled = true,
@@ -35,6 +38,8 @@ export function useIntegrationRealtime({
   onInsertRef.current = onInsert
   const statusFilterRef = useRef(statusFilter)
   statusFilterRef.current = statusFilter
+  const integrationIdRef = useRef(integrationId)
+  integrationIdRef.current = integrationId
 
   useEffect(() => {
     if (!enabled || !facilityId) {
@@ -58,6 +63,10 @@ export function useIntegrationRealtime({
         },
         (payload) => {
           const newEntry = payload.new as EhrIntegrationLog
+          // Filter by integration ID if specified (only show entries for this system)
+          if (integrationIdRef.current && newEntry.integration_id !== integrationIdRef.current) {
+            return
+          }
           const filter = statusFilterRef.current
           if (filter && !filter.includes(newEntry.processing_status)) {
             return
