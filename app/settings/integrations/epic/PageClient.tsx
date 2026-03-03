@@ -406,7 +406,7 @@ export default function EpicHL7v2IntegrationPage() {
     // 3. Match/create patient
     let patientId: string | null = null
     if (epicPatient?.mrn) {
-      const { matchOrCreatePatient } = await import('@/lib/integrations/epic/patient-matcher')
+      const { matchOrCreatePatient } = await import('@/lib/integrations/ehr/patient-matcher')
       const patientResult = await matchOrCreatePatient(supabase, facilityId, {
         mrn: epicPatient.mrn,
         firstName: epicPatient.firstName,

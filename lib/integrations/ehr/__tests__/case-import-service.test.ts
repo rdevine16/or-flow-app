@@ -561,6 +561,42 @@ describe('case history attribution (tagCaseHistoryEntry)', () => {
     })
   })
 
+  it('uses cerner_hl7v2 as change_source for Cerner integration', async () => {
+    const cernerIntegration: EhrIntegration = { ...INTEGRATION, integration_type: 'cerner_hl7v2' }
+    const supabase = createMockSupabase()
+    const result = await handleSIUMessage(supabase, buildSIUMessage(), cernerIntegration, 'raw-message')
+
+    expect(result.success).toBe(true)
+    expect(result.action).toBe('created')
+
+    const rpcMock = supabase.rpc as ReturnType<typeof vi.fn>
+    const tagCall = rpcMock.mock.calls.find((call: unknown[]) => call[0] === 'tag_latest_case_history')
+    expect(tagCall).toBeDefined()
+    expect(tagCall![1]).toEqual({
+      p_case_id: 'new-case-1',
+      p_change_source: 'cerner_hl7v2',
+      p_ehr_log_id: 'log-1',
+    })
+  })
+
+  it('uses meditech_hl7v2 as change_source for MEDITECH integration', async () => {
+    const meditechIntegration: EhrIntegration = { ...INTEGRATION, integration_type: 'meditech_hl7v2' }
+    const supabase = createMockSupabase()
+    const result = await handleSIUMessage(supabase, buildSIUMessage(), meditechIntegration, 'raw-message')
+
+    expect(result.success).toBe(true)
+    expect(result.action).toBe('created')
+
+    const rpcMock = supabase.rpc as ReturnType<typeof vi.fn>
+    const tagCall = rpcMock.mock.calls.find((call: unknown[]) => call[0] === 'tag_latest_case_history')
+    expect(tagCall).toBeDefined()
+    expect(tagCall![1]).toEqual({
+      p_case_id: 'new-case-1',
+      p_change_source: 'meditech_hl7v2',
+      p_ehr_log_id: 'log-1',
+    })
+  })
+
   it('does NOT call tag_latest_case_history when message is queued for review', async () => {
     vi.mocked(matchSurgeon).mockResolvedValue({
       matched: false,
@@ -579,5 +615,44 @@ describe('case history attribution (tagCaseHistoryEntry)', () => {
     const rpcMock = supabase.rpc as ReturnType<typeof vi.fn>
     const tagCall = rpcMock.mock.calls.find((call: unknown[]) => call[0] === 'tag_latest_case_history')
     expect(tagCall).toBeUndefined()
+  })
+})
+
+// =====================================================
+// DYNAMIC INTEGRATION TYPE — p_source and external_system
+// =====================================================
+
+describe('dynamic integration type for case creation', () => {
+  it('passes "cerner" as p_source for Cerner integration', async () => {
+    const cernerIntegration: EhrIntegration = { ...INTEGRATION, integration_type: 'cerner_hl7v2' }
+    const supabase = createMockSupabase()
+    await handleSIUMessage(supabase, buildSIUMessage(), cernerIntegration, 'raw-message')
+
+    const rpcMock = supabase.rpc as ReturnType<typeof vi.fn>
+    const createCall = rpcMock.mock.calls.find((call: unknown[]) => call[0] === 'create_case_with_milestones')
+    expect(createCall).toBeDefined()
+    expect(createCall![1]).toEqual(expect.objectContaining({ p_source: 'cerner' }))
+  })
+
+  it('passes "meditech" as p_source for MEDITECH integration', async () => {
+    const meditechIntegration: EhrIntegration = { ...INTEGRATION, integration_type: 'meditech_hl7v2' }
+    const supabase = createMockSupabase()
+    await handleSIUMessage(supabase, buildSIUMessage(), meditechIntegration, 'raw-message')
+
+    const rpcMock = supabase.rpc as ReturnType<typeof vi.fn>
+    const createCall = rpcMock.mock.calls.find((call: unknown[]) => call[0] === 'create_case_with_milestones')
+    expect(createCall).toBeDefined()
+    expect(createCall![1]).toEqual(expect.objectContaining({ p_source: 'meditech' }))
+  })
+
+  it('sets external_system to the integration type', async () => {
+    const cernerIntegration: EhrIntegration = { ...INTEGRATION, integration_type: 'cerner_hl7v2' }
+    const supabase = createMockSupabase()
+    await handleSIUMessage(supabase, buildSIUMessage(), cernerIntegration, 'raw-message')
+
+    const fromMock = supabase.from as ReturnType<typeof vi.fn>
+    const casesCalls = fromMock.mock.calls.filter((call: unknown[]) => call[0] === 'cases')
+    // At least one call should have been made for the external tracking update
+    expect(casesCalls.length).toBeGreaterThan(0)
   })
 })

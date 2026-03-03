@@ -9,11 +9,12 @@
 import type { AnySupabaseClient } from '@/lib/dal'
 import { ehrDAL } from '@/lib/dal/ehr'
 import type { SIUMessage, SIUTriggerEvent } from '@/lib/hl7v2/types'
-import type { EhrIntegration, EhrIntegrationLog } from '@/lib/integrations/shared/integration-types'
+import type { EhrIntegration, EhrIntegrationLog, EhrIntegrationType } from '@/lib/integrations/shared/integration-types'
 import { matchOrCreatePatient, type PatientData } from './patient-matcher'
 import { matchSurgeon, type ProviderMatchResult } from './provider-matcher'
 import { matchProcedure, type ProcedureMatchResult } from './procedure-matcher'
 import { matchRoom, type RoomMatchResult } from './room-matcher'
+import { extractSurgeonInfo } from './field-preferences'
 import {
   logMessageReceived,
   logMessageProcessed,
@@ -28,6 +29,13 @@ import { logger } from '@/lib/logger'
 const log = logger('case-import-service')
 
 const AUTO_MAP_THRESHOLD = 0.90
+
+/** Map integration_type to the short source name used in the cases.source column */
+const INTEGRATION_SOURCE_NAMES: Record<string, string> = {
+  epic_hl7v2: 'epic',
+  cerner_hl7v2: 'cerner',
+  meditech_hl7v2: 'meditech',
+}
 
 // =====================================================
 // CHANGE TRACKING
@@ -46,10 +54,11 @@ async function tagCaseHistoryEntry(
   supabase: AnySupabaseClient,
   caseId: string,
   logEntryId: string,
+  integrationType: EhrIntegrationType,
 ): Promise<void> {
   await supabase.rpc('tag_latest_case_history', {
     p_case_id: caseId,
-    p_change_source: 'epic_hl7v2',
+    p_change_source: integrationType,
     p_ehr_log_id: logEntryId,
   })
 }
@@ -195,9 +204,11 @@ async function handleCreate(
   const facilityId = integration.facility_id
   const integrationId = integration.id
 
+  const integrationType = integration.integration_type
+
   try {
     // Extract case data from SIU message
-    const caseData = extractCaseData(siu)
+    const caseData = extractCaseData(siu, integrationType)
 
     // Check case-level dedup (external_case_id + facility_id)
     const { data: existingCase } = await supabase
@@ -205,7 +216,7 @@ async function handleCreate(
       .select('id')
       .eq('facility_id', facilityId)
       .eq('external_case_id', caseData.externalCaseId)
-      .eq('external_system', 'epic_hl7v2')
+      .eq('external_system', integrationType)
       .maybeSingle()
 
     if (existingCase) {
@@ -230,10 +241,10 @@ async function handleCreate(
     }
 
     // All entities matched — create the case
-    const caseId = await createCase(supabase, facilityId, caseData, matchResults)
+    const caseId = await createCase(supabase, facilityId, integrationType, caseData, matchResults)
 
     // Tag case_history entries (created + external tracking update) with HL7v2 attribution
-    await tagCaseHistoryEntry(supabase, caseId, logEntry.id)
+    await tagCaseHistoryEntry(supabase, caseId, logEntry.id, integrationType)
 
     // Auto-save high-confidence fuzzy matches to entity mappings for future auto-resolution
     await saveAutoMappings(supabase, integrationId, facilityId, caseData, matchResults)
@@ -262,6 +273,7 @@ async function handleUpdate(
 ): Promise<ImportResult> {
   const facilityId = integration.facility_id
   const integrationId = integration.id
+  const integrationType = integration.integration_type
   const externalCaseId = siu.sch.placerAppointmentId
 
   try {
@@ -271,7 +283,7 @@ async function handleUpdate(
       .select('id')
       .eq('facility_id', facilityId)
       .eq('external_case_id', externalCaseId)
-      .eq('external_system', 'epic_hl7v2')
+      .eq('external_system', integrationType)
       .maybeSingle()
 
     if (!existingCase) {
@@ -281,7 +293,7 @@ async function handleUpdate(
     }
 
     // Extract and match entities
-    const caseData = extractCaseData(siu)
+    const caseData = extractCaseData(siu, integrationType)
     const matchResults = await matchAllEntities(supabase, integrationId, facilityId, caseData)
 
     // Check for unmatched entities
@@ -320,7 +332,7 @@ async function handleUpdate(
     }
 
     // Tag case_history entry with HL7v2 attribution
-    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id)
+    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id, integrationType)
 
     await saveAutoMappings(supabase, integrationId, facilityId, caseData, matchResults)
     await logMessageProcessed(supabase, logEntry.id, existingCase.id)
@@ -345,6 +357,7 @@ async function handleCancel(
   logEntry: EhrIntegrationLog,
 ): Promise<ImportResult> {
   const facilityId = integration.facility_id
+  const integrationType = integration.integration_type
   const externalCaseId = siu.sch.placerAppointmentId
 
   try {
@@ -354,7 +367,7 @@ async function handleCancel(
       .select('id')
       .eq('facility_id', facilityId)
       .eq('external_case_id', externalCaseId)
-      .eq('external_system', 'epic_hl7v2')
+      .eq('external_system', integrationType)
       .maybeSingle()
 
     if (!existingCase) {
@@ -384,7 +397,7 @@ async function handleCancel(
     }
 
     // Tag case_history entry with HL7v2 attribution
-    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id)
+    await tagCaseHistoryEntry(supabase, existingCase.id, logEntry.id, integrationType)
 
     await logMessageProcessed(supabase, logEntry.id, existingCase.id)
 
@@ -493,6 +506,7 @@ function collectUnmatched(
 async function createCase(
   supabase: AnySupabaseClient,
   facilityId: string,
+  integrationType: EhrIntegrationType,
   caseData: ExtractedCaseData,
   matchResults: AllMatchResults,
 ): Promise<string> {
@@ -527,7 +541,7 @@ async function createCase(
     p_is_draft: false,
     p_staff_assignments: null,
     p_patient_id: matchResults.patient.patientId,
-    p_source: 'epic',
+    p_source: INTEGRATION_SOURCE_NAMES[integrationType] || integrationType,
   })
 
   if (rpcError || !caseId) {
@@ -539,7 +553,7 @@ async function createCase(
     .from('cases')
     .update({
       external_case_id: caseData.externalCaseId,
-      external_system: 'epic_hl7v2',
+      external_system: integrationType,
       import_source: 'hl7v2',
       primary_diagnosis_code: caseData.diagnosisCode,
       primary_diagnosis_desc: caseData.diagnosisDesc,
@@ -658,29 +672,11 @@ async function saveAutoMappings(
 
 /**
  * Extract case data from a parsed SIU message.
+ * Uses system-specific field preferences for surgeon extraction.
  */
-function extractCaseData(siu: SIUMessage): ExtractedCaseData {
-  // Find the surgeon from AIP segments (role = SURGEON) or fall back to PV1 attending
-  const surgeonAip = siu.aip.find(a => a.role.toUpperCase() === 'SURGEON')
-
-  let surgeonInfo: ExtractedCaseData['surgeonInfo']
-  if (surgeonAip) {
-    surgeonInfo = {
-      npi: surgeonAip.personnelNPI,
-      lastName: surgeonAip.personnelLastName,
-      firstName: surgeonAip.personnelFirstName,
-      middleName: surgeonAip.personnelMiddleName,
-    }
-  } else if (siu.pv1.attendingDoctor) {
-    surgeonInfo = {
-      npi: siu.pv1.attendingDoctor.npi,
-      lastName: siu.pv1.attendingDoctor.lastName,
-      firstName: siu.pv1.attendingDoctor.firstName,
-      middleName: siu.pv1.attendingDoctor.middleName,
-    }
-  } else {
-    surgeonInfo = { npi: '', lastName: '', firstName: '', middleName: '' }
-  }
+function extractCaseData(siu: SIUMessage, integrationType: EhrIntegrationType): ExtractedCaseData {
+  // Extract surgeon using system-specific field priority
+  const surgeonInfo = extractSurgeonInfo(siu, integrationType)
 
   // Extract scheduled date and time from SCH-11 or AIS
   const startDateTimeIso = siu.sch.startDateTime || siu.ais?.startDateTime || null
