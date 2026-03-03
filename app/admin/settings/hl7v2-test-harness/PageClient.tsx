@@ -38,8 +38,19 @@ import {
 } from 'lucide-react'
 import type { ScenarioType } from '@/lib/hl7v2/test-harness/scenario-runner'
 import type { Specialty } from '@/lib/hl7v2/test-harness/surgical-data'
-import type { EhrTestScheduleWithEntities } from '@/lib/integrations/shared/integration-types'
+import type { EhrTestScheduleWithEntities, EhrIntegrationType } from '@/lib/integrations/shared/integration-types'
+import {
+  HL7V2_INTEGRATION_TYPES,
+  EHR_SYSTEM_DISPLAY_NAMES,
+} from '@/lib/integrations/shared/integration-types'
 import { ALL_SPECIALTIES } from '@/lib/hl7v2/test-harness/surgical-data'
+
+// HL7v2 integration type → route mapping
+const INTEGRATION_ROUTES: Record<string, string> = {
+  epic_hl7v2: '/settings/integrations/epic',
+  cerner_hl7v2: '/settings/integrations/cerner',
+  meditech_hl7v2: '/settings/integrations/meditech',
+}
 
 // -- Types --------------------------------------------------------------------
 
@@ -185,6 +196,9 @@ export default function HL7v2TestHarnessPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
+  // Active integration type for the selected facility
+  const [activeIntegrationType, setActiveIntegrationType] = useState<EhrIntegrationType | null>(null)
+
   // Load facilities
   const { data: facilities, loading: facilitiesLoading, error: facilitiesError } = useSupabaseQuery<Facility[]>(
     async (sb) => {
@@ -197,6 +211,31 @@ export default function HL7v2TestHarnessPage() {
     },
     { enabled: isGlobalAdmin }
   )
+
+  // Fetch the active HL7v2 integration type for the selected facility
+  const { data: fetchedIntegrationType } = useSupabaseQuery<EhrIntegrationType | null>(
+    async (sb) => {
+      const { data } = await sb
+        .from('ehr_integrations')
+        .select('integration_type')
+        .eq('facility_id', selectedFacilityId)
+        .in('integration_type', HL7V2_INTEGRATION_TYPES)
+        .eq('is_active', true)
+        .maybeSingle()
+      return (data?.integration_type as EhrIntegrationType) || null
+    },
+    { enabled: !!selectedFacilityId, deps: [selectedFacilityId] }
+  )
+
+  // Sync fetched integration type into state
+  useEffect(() => {
+    setActiveIntegrationType(fetchedIntegrationType ?? null)
+  }, [fetchedIntegrationType])
+
+  // Derive the integration logs route
+  const integrationLogsRoute = activeIntegrationType
+    ? INTEGRATION_ROUTES[activeIntegrationType] || '/settings/integrations'
+    : '/settings/integrations'
 
   // Load schedule entries for database mode
   const {
@@ -356,25 +395,56 @@ export default function HL7v2TestHarnessPage() {
 
           {facilitiesError && <ErrorBanner message={facilitiesError} />}
 
-          {/* Facility Selector (shared across all tabs) */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Facility
-            </label>
-            <select
-              value={selectedFacilityId}
-              onChange={(e) => setSelectedFacilityId(e.target.value)}
-              className="w-full max-w-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              disabled={facilitiesLoading}
-            >
-              <option value="">Select a facility...</option>
-              {facilities?.map((f) => (
-                <option key={f.id} value={f.id}>{f.name}</option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-slate-500">
-              All test data is scoped to the selected facility
-            </p>
+          {/* Facility Selector + Active Integration Badge */}
+          <div className="flex items-end gap-4">
+            <div className="flex-1 max-w-sm">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Facility
+              </label>
+              <select
+                value={selectedFacilityId}
+                onChange={(e) => setSelectedFacilityId(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                disabled={facilitiesLoading}
+              >
+                <option value="">Select a facility...</option>
+                {facilities?.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                All test data is scoped to the selected facility
+              </p>
+            </div>
+
+            {/* Active Integration Type Badge */}
+            {selectedFacilityId && (
+              <div className="pb-5">
+                {activeIntegrationType ? (
+                  <a
+                    href={integrationLogsRoute}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-sm font-medium text-emerald-800">
+                      {EHR_SYSTEM_DISPLAY_NAMES[activeIntegrationType]}
+                    </span>
+                    <span className="text-xs text-emerald-600">Active</span>
+                    <ExternalLink className="w-3 h-3 text-emerald-500" />
+                  </a>
+                ) : (
+                  <a
+                    href="/settings/integrations"
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 transition-colors"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    <span className="text-sm font-medium text-amber-800">No HL7v2 Integration</span>
+                    <span className="text-xs text-amber-600">Set up</span>
+                    <ExternalLink className="w-3 h-3 text-amber-500" />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Top-level Tabs */}
@@ -401,6 +471,7 @@ export default function HL7v2TestHarnessPage() {
           {activeTopTab === 'scenarios' && (
             <ScenarioTab
               selectedFacilityId={selectedFacilityId}
+              integrationLogsRoute={integrationLogsRoute}
               dataSource={dataSource}
               setDataSource={setDataSource}
               scheduleEntries={scheduleEntries || []}
@@ -459,6 +530,7 @@ export default function HL7v2TestHarnessPage() {
 
 interface ScenarioTabProps {
   selectedFacilityId: string
+  integrationLogsRoute: string
   dataSource: DataSource
   setDataSource: (ds: DataSource) => void
   scheduleEntries: EhrTestScheduleWithEntities[]
@@ -491,6 +563,7 @@ interface ScenarioTabProps {
 
 function ScenarioTab({
   selectedFacilityId,
+  integrationLogsRoute,
   dataSource,
   setDataSource,
   scheduleEntries,
@@ -573,6 +646,7 @@ function ScenarioTab({
       {dataSource === 'database' && (
         <DatabaseScenarioPanel
           selectedFacilityId={selectedFacilityId}
+          integrationLogsRoute={integrationLogsRoute}
           scheduleEntries={scheduleEntries}
           schedulesLoading={schedulesLoading}
           schedulesError={schedulesError}
@@ -590,6 +664,7 @@ function ScenarioTab({
       {dataSource === 'algorithmic' && (
         <AlgorithmicScenarioPanel
           selectedFacilityId={selectedFacilityId}
+          integrationLogsRoute={integrationLogsRoute}
           scenarioType={scenarioType}
           setScenarioType={setScenarioType}
           showAdvanced={showAdvanced}
@@ -636,7 +711,7 @@ function ScenarioTab({
       )}
 
       {/* Send Results */}
-      {results && <ResultsPanel results={results} />}
+      {results && <ResultsPanel results={results} integrationLogsRoute={integrationLogsRoute} />}
     </>
   )
 }
@@ -645,6 +720,7 @@ function ScenarioTab({
 
 interface DatabaseScenarioPanelProps {
   selectedFacilityId: string
+  integrationLogsRoute: string
   scheduleEntries: EhrTestScheduleWithEntities[]
   schedulesLoading: boolean
   schedulesError: string | null
@@ -659,6 +735,7 @@ interface DatabaseScenarioPanelProps {
 
 function DatabaseScenarioPanel({
   selectedFacilityId,
+  integrationLogsRoute,
   scheduleEntries,
   schedulesLoading,
   schedulesError,
@@ -838,7 +915,7 @@ function DatabaseScenarioPanel({
             </button>
             {selectedFacilityId && (
               <a
-                href="/settings/integrations/epic"
+                href={integrationLogsRoute}
                 className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
               >
                 View Integration Logs
@@ -856,6 +933,7 @@ function DatabaseScenarioPanel({
 
 interface AlgorithmicScenarioPanelProps {
   selectedFacilityId: string
+  integrationLogsRoute: string
   scenarioType: ScenarioType
   setScenarioType: (t: ScenarioType) => void
   showAdvanced: boolean
@@ -876,6 +954,7 @@ interface AlgorithmicScenarioPanelProps {
 
 function AlgorithmicScenarioPanel({
   selectedFacilityId,
+  integrationLogsRoute,
   scenarioType,
   setScenarioType,
   showAdvanced,
@@ -1031,7 +1110,7 @@ function AlgorithmicScenarioPanel({
 
           {selectedFacilityId && (
             <a
-              href="/settings/integrations/epic"
+              href={integrationLogsRoute}
               className="ml-auto text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
             >
               View Integration Logs
@@ -1154,9 +1233,10 @@ function PreviewPanel({ preview, expandedMessage, setExpandedMessage }: PreviewP
 
 interface ResultsPanelProps {
   results: SendResponse
+  integrationLogsRoute: string
 }
 
-function ResultsPanel({ results }: ResultsPanelProps) {
+function ResultsPanel({ results, integrationLogsRoute }: ResultsPanelProps) {
   return (
     <Card>
       <div className="space-y-4">
@@ -1232,7 +1312,7 @@ function ResultsPanel({ results }: ResultsPanelProps) {
 
         <div className="pt-3 border-t border-slate-100 flex items-center gap-4 text-sm">
           <a
-            href="/settings/integrations/epic"
+            href={integrationLogsRoute}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
           >
             View Integration Logs
