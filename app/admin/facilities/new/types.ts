@@ -31,6 +31,7 @@ export interface FacilityData {
   timezone: string
   subscriptionStatus: 'trial' | 'active'
   trialDays: number
+  subscriptionPlanId: string
 }
 
 export const DEFAULT_FACILITY_DATA: FacilityData = {
@@ -45,6 +46,7 @@ export const DEFAULT_FACILITY_DATA: FacilityData = {
   timezone: 'America/New_York',
   subscriptionStatus: 'trial',
   trialDays: 30,
+  subscriptionPlanId: '',
 }
 
 // ============================================================================
@@ -138,9 +140,18 @@ export const DEFAULT_TEMPLATE_COUNTS: TemplateCounts = {
 // STEP COMPONENT PROPS
 // ============================================================================
 
+export interface SubscriptionPlanOption {
+  id: string
+  slug: string
+  name: string
+  description: string
+  price_monthly_cents: number
+}
+
 export interface FacilityStepProps {
   data: FacilityData
   onChange: (data: FacilityData) => void
+  subscriptionPlans: SubscriptionPlanOption[]
 }
 
 export interface AdminStepProps {
@@ -170,6 +181,7 @@ export interface ReviewStepProps {
   templateConfig: TemplateConfig
   templateCounts: TemplateCounts
   sendWelcomeEmail: boolean
+  subscriptionPlanName: string
   onEditStep: (step: WizardStep) => void
 }
 

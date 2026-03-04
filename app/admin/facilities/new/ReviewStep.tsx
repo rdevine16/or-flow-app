@@ -57,6 +57,7 @@ export default function ReviewStep({
   templateConfig,
   templateCounts,
   sendWelcomeEmail,
+  subscriptionPlanName,
   onEditStep,
 }: ReviewStepProps) {
   const facilityTypeLabel =
@@ -106,6 +107,7 @@ export default function ReviewStep({
           <ReviewField label="Address" value={buildFullAddress(facilityData) || undefined} />
           {facilityData.phone && <ReviewField label="Phone" value={facilityData.phone} />}
           <ReviewField label="Timezone" value={timezoneLabel} />
+          <ReviewField label="Plan" value={subscriptionPlanName || 'Not selected'} />
           <ReviewField
             label="Status"
             value={facilityData.subscriptionStatus === 'trial' ? 'Trial' : 'Active'}

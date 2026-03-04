@@ -12,7 +12,8 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { formatAuditAction } from '@/lib/audit'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { AlertTriangle, Building2, CheckCircle2, ClipboardList, Clock, FileText, FlaskConical, Plus, Users, Zap } from 'lucide-react'
+import { AlertTriangle, Building2, CheckCircle2, ClipboardList, Clock, FileText, FlaskConical, Plus, Users, Zap, Crown } from 'lucide-react'
+import { TIER_DEFINITIONS, type TierSlug } from '@/lib/tier-config'
 
 interface FacilityMetrics {
   total: number
@@ -20,6 +21,13 @@ interface FacilityMetrics {
   trial: number
   pastDue: number
   disabled: number
+}
+
+interface TierMetrics {
+  essential: number
+  professional: number
+  enterprise: number
+  unassigned: number
 }
 
 interface UserMetrics {
@@ -57,6 +65,7 @@ const { showToast } = useToast()
   })
   const [userMetrics, setUserMetrics] = useState<UserMetrics>({ total: 0 })
   const [caseMetrics, setCaseMetrics] = useState<CaseMetrics>({ thisMonth: 0 })
+  const [tierMetrics, setTierMetrics] = useState<TierMetrics>({ essential: 0, professional: 0, enterprise: 0, unassigned: 0 })
   const [recentActivity, setRecentActivity] = useState<AuditEntry[]>([])
 
   // Redirect non-admins
@@ -74,10 +83,10 @@ const { showToast } = useToast()
       setLoading(true)
 
       try {
-        // Fetch facility metrics
+        // Fetch facility metrics with plan data
         const { data: facilities } = await supabase
           .from('facilities')
-          .select('subscription_status')
+          .select('subscription_status, subscription_plans:subscription_plan_id(slug)')
 
         if (facilities) {
           setFacilityMetrics({
@@ -87,6 +96,19 @@ const { showToast } = useToast()
             pastDue: facilities.filter(f => f.subscription_status === 'past_due').length,
             disabled: facilities.filter(f => f.subscription_status === 'disabled').length,
           })
+
+          // Tier distribution
+          const tierCounts: TierMetrics = { essential: 0, professional: 0, enterprise: 0, unassigned: 0 }
+          for (const f of facilities) {
+            const planData = f.subscription_plans as unknown as { slug: string } | null
+            const slug = planData?.slug as TierSlug | undefined
+            if (slug && slug in tierCounts) {
+              tierCounts[slug]++
+            } else {
+              tierCounts.unassigned++
+            }
+          }
+          setTierMetrics(tierCounts)
         }
 
         // Fetch user count
@@ -246,6 +268,36 @@ const { showToast } = useToast()
               <p className="text-sm text-slate-500">Cases This Month</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Tier Distribution */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm mb-8">
+        <div className="flex items-center gap-2 mb-3">
+          <Crown className="w-4 h-4 text-purple-600" />
+          <h3 className="text-sm font-semibold text-slate-900">Plan Distribution</h3>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {([
+            { slug: 'essential' as TierSlug, count: tierMetrics.essential, color: 'bg-slate-100 text-slate-700' },
+            { slug: 'professional' as TierSlug, count: tierMetrics.professional, color: 'bg-blue-100 text-blue-700' },
+            { slug: 'enterprise' as TierSlug, count: tierMetrics.enterprise, color: 'bg-purple-100 text-purple-700' },
+          ]).map(({ slug, count, color }) => (
+            <div key={slug} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
+                {TIER_DEFINITIONS[slug].name}
+              </span>
+              <span className="text-lg font-bold text-slate-900">{count}</span>
+            </div>
+          ))}
+          {tierMetrics.unassigned > 0 && (
+            <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg">
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                No Plan
+              </span>
+              <span className="text-lg font-bold text-slate-900">{tierMetrics.unassigned}</span>
+            </div>
+          )}
         </div>
       </div>
 

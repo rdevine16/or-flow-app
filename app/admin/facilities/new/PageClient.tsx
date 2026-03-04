@@ -48,6 +48,7 @@ import type {
   AdminData,
   TemplateConfig,
   TemplateCounts,
+  SubscriptionPlanOption,
 } from './types'
 
 // ============================================================================
@@ -99,6 +100,9 @@ export default function CreateFacilityPage() {
   const [templateCounts, setTemplateCounts] = useState<TemplateCounts>(DEFAULT_TEMPLATE_COUNTS)
   const [loadingCounts, setLoadingCounts] = useState(true)
 
+  // Subscription plans
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlanOption[]>([])
+
   // Welcome email toggle
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true)
 
@@ -125,6 +129,24 @@ export default function CreateFacilityPage() {
 
     async function fetchTemplateCounts() {
       setLoadingCounts(true)
+
+      // Fetch subscription plans
+      const { data: plansData } = await supabase
+        .from('subscription_plans')
+        .select('id, slug, name, description, price_monthly_cents')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+
+      if (plansData) {
+        setSubscriptionPlans(plansData as SubscriptionPlanOption[])
+        // Default to enterprise plan if not yet selected
+        if (!facilityData.subscriptionPlanId && plansData.length > 0) {
+          const enterprisePlan = plansData.find(p => p.slug === 'enterprise')
+          if (enterprisePlan) {
+            setFacilityData(prev => ({ ...prev, subscriptionPlanId: enterprisePlan.id }))
+          }
+        }
+      }
 
       const [
         { count: milestoneCount },
@@ -176,6 +198,7 @@ export default function CreateFacilityPage() {
     }
 
     fetchTemplateCounts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, isGlobalAdmin])
 
   // ============================================================================
@@ -434,6 +457,10 @@ export default function CreateFacilityPage() {
                 </p>
                 <div className="flex flex-col gap-1.5">
                   <SummaryRow
+                    label="Plan"
+                    value={subscriptionPlans.find(p => p.id === facilityData.subscriptionPlanId)?.name ?? '—'}
+                  />
+                  <SummaryRow
                     label="Clinical templates"
                     value={`${clinicalEnabled}/${CLINICAL_CONFIG_KEYS.length}`}
                   />
@@ -460,6 +487,7 @@ export default function CreateFacilityPage() {
                 <FacilityStep
                   data={facilityData}
                   onChange={setFacilityData}
+                  subscriptionPlans={subscriptionPlans}
                 />
               )}
               {currentStep === 2 && (
@@ -493,6 +521,7 @@ export default function CreateFacilityPage() {
                   templateConfig={templateConfig}
                   templateCounts={templateCounts}
                   sendWelcomeEmail={sendWelcomeEmail}
+                  subscriptionPlanName={subscriptionPlans.find(p => p.id === facilityData.subscriptionPlanId)?.name ?? ''}
                   onEditStep={goToStep}
                 />
               )}

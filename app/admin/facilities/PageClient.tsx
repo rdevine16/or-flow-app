@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Building2, Eye, Plus, Search, Trash2, User } from 'lucide-react'
+import { TIER_DEFINITIONS, type TierSlug } from '@/lib/tier-config'
 
 
 interface Facility {
@@ -28,9 +29,11 @@ interface Facility {
   created_at: string
   user_count: number
   case_count: number
+  subscription_plan_slug: TierSlug | null
 }
 
 type StatusFilter = 'all' | 'active' | 'trial' | 'past_due' | 'disabled' | 'demo'
+type TierFilter = 'all' | TierSlug
 
 export default function FacilitiesListPage() {
   const router = useRouter()
@@ -40,6 +43,7 @@ export default function FacilitiesListPage() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [tierFilter, setTierFilter] = useState<TierFilter>('all')
   const [facilityToDelete, setFacilityToDelete] = useState<Facility | null>(null)
 
   // Redirect non-admins
@@ -53,7 +57,7 @@ export default function FacilitiesListPage() {
     async (sb) => {
       const { data: facilitiesData, error } = await sb
         .from('facilities')
-        .select('*')
+        .select('*, subscription_plans:subscription_plan_id(slug)')
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -70,11 +74,15 @@ export default function FacilitiesListPage() {
         .select('facility_id, created_at')
         .gte('created_at', thirtyDaysAgo.toISOString())
 
-      return (facilitiesData || []).map(facility => ({
-        ...facility,
-        user_count: (userCounts || []).filter(u => u.facility_id === facility.id).length,
-        case_count: (caseCounts || []).filter(c => c.facility_id === facility.id).length,
-      }))
+      return (facilitiesData || []).map(facility => {
+        const planData = facility.subscription_plans as unknown as { slug: string } | null
+        return {
+          ...facility,
+          subscription_plan_slug: (planData?.slug as TierSlug) ?? null,
+          user_count: (userCounts || []).filter(u => u.facility_id === facility.id).length,
+          case_count: (caseCounts || []).filter(c => c.facility_id === facility.id).length,
+        }
+      })
     },
     { enabled: isGlobalAdmin }
   )
@@ -131,9 +139,15 @@ export default function FacilitiesListPage() {
     // Status filter
     if (statusFilter !== 'all') {
       if (statusFilter === 'demo') {
-        return facility.is_demo
+        if (!facility.is_demo) return false
+      } else if (facility.subscription_status !== statusFilter) {
+        return false
       }
-      return facility.subscription_status === statusFilter
+    }
+
+    // Tier filter
+    if (tierFilter !== 'all') {
+      if (facility.subscription_plan_slug !== tierFilter) return false
     }
 
     return true
@@ -187,6 +201,24 @@ export default function FacilitiesListPage() {
     return (
       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${styles[status] || styles.disabled}`}>
         {labels[status] || status}
+      </span>
+    )
+  }
+
+  // Tier badge component
+  const TierBadge = ({ slug }: { slug: TierSlug | null }) => {
+    if (!slug) return <span className="text-slate-400">—</span>
+
+    const tier = TIER_DEFINITIONS[slug]
+    const styles: Record<TierSlug, string> = {
+      essential: 'bg-slate-100 text-slate-700',
+      professional: 'bg-blue-100 text-blue-700',
+      enterprise: 'bg-purple-100 text-purple-700',
+    }
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${styles[slug]}`}>
+        {tier.name}
       </span>
     )
   }
@@ -260,6 +292,18 @@ export default function FacilitiesListPage() {
               </button>
             ))}
           </div>
+
+          {/* Tier Filter */}
+          <select
+            value={tierFilter}
+            onChange={(e) => setTierFilter(e.target.value as TierFilter)}
+            className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+          >
+            <option value="all">All Plans</option>
+            <option value="essential">Essential</option>
+            <option value="professional">Professional</option>
+            <option value="enterprise">Enterprise</option>
+          </select>
         </div>
       </div>
 
@@ -271,6 +315,9 @@ export default function FacilitiesListPage() {
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                   Facility
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  Plan
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                   Status
@@ -295,7 +342,7 @@ export default function FacilitiesListPage() {
             <tbody className="divide-y divide-slate-100">
               {filteredFacilities.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                     <p className="text-slate-500">No facilities found</p>
                   </td>
@@ -313,6 +360,9 @@ export default function FacilitiesListPage() {
                             <p className="text-sm text-slate-500 mt-0.5">{facility.address}</p>
                           )}
                         </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <TierBadge slug={facility.subscription_plan_slug} />
                       </td>
                       <td className="px-6 py-4">
                         <StatusBadge status={facility.subscription_status} isDemo={facility.is_demo} />

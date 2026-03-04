@@ -54,6 +54,7 @@ describe('ReviewStep', () => {
     templateConfig?: Partial<TemplateConfig>
     templateCounts?: TemplateCounts
     sendWelcomeEmail?: boolean
+    subscriptionPlanName?: string
   } = {}) {
     return render(
       <ReviewStep
@@ -62,6 +63,7 @@ describe('ReviewStep', () => {
         templateConfig={{ ...DEFAULT_TEMPLATE_CONFIG, ...overrides.templateConfig }}
         templateCounts={overrides.templateCounts ?? TEMPLATE_COUNTS}
         sendWelcomeEmail={overrides.sendWelcomeEmail ?? true}
+        subscriptionPlanName={overrides.subscriptionPlanName ?? 'Professional'}
         onEditStep={mockOnEditStep}
       />,
     )

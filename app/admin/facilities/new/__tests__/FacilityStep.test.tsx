@@ -10,11 +10,39 @@ import { DEFAULT_FACILITY_DATA } from '../types'
 describe('FacilityStep', () => {
   const mockOnChange = vi.fn()
 
+  const MOCK_SUBSCRIPTION_PLANS = [
+    {
+      id: 'plan-1',
+      slug: 'starter',
+      name: 'Starter',
+      description: 'For small facilities',
+      price_monthly_cents: 29900,
+      tier: 1,
+    },
+    {
+      id: 'plan-2',
+      slug: 'professional',
+      name: 'Professional',
+      description: 'For growing facilities',
+      price_monthly_cents: 79900,
+      tier: 2,
+    },
+    {
+      id: 'plan-3',
+      slug: 'enterprise',
+      name: 'Enterprise',
+      description: 'For large facilities',
+      price_monthly_cents: 199900,
+      tier: 3,
+    },
+  ]
+
   function setup(data: Partial<FacilityData> = {}) {
     const facilityData: FacilityData = { ...DEFAULT_FACILITY_DATA, ...data }
     const props = {
       data: facilityData,
       onChange: mockOnChange,
+      subscriptionPlans: MOCK_SUBSCRIPTION_PLANS,
     }
     return render(<FacilityStep {...props} />)
   }
@@ -304,6 +332,7 @@ describe('FacilityStep', () => {
         <FacilityStep
           data={{ ...DEFAULT_FACILITY_DATA, subscriptionStatus: 'trial' }}
           onChange={mockOnChange}
+          subscriptionPlans={MOCK_SUBSCRIPTION_PLANS}
         />
       )
       expect(screen.getByTestId('trial-length-select')).toBeTruthy()

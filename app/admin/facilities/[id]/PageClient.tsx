@@ -24,6 +24,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Building2, CheckCircle2, ChevronLeft, ClipboardList, Clock, Eye, FlaskConical, Plus, Trash2, TrendingUp, UserPlus, Users } from 'lucide-react'
 import { getLocalDateString } from '@/lib/date-utils'
+import { TIER_DEFINITIONS, type TierSlug } from '@/lib/tier-config'
 
 type TabType = 'overview' | 'users' | 'rooms' | 'procedures' | 'subscription' | 'audit'
 
@@ -37,10 +38,18 @@ interface Facility {
   address: string | null
   logo_url: string | null
   subscription_status: string
+  subscription_plan_id: string | null
   trial_ends_at: string | null
   subscription_started_at: string | null
   is_demo: boolean
   created_at: string
+}
+
+interface SubscriptionPlan {
+  id: string
+  slug: TierSlug
+  name: string
+  price_monthly_cents: number
 }
 
 interface User {
@@ -98,29 +107,25 @@ interface FacilityStats {
 }
 
 // =====================================================
-// PLAN DATA
+// TIER BADGE (local to this page)
 // =====================================================
 
-const plans = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    price: 750,
-    limits: { casesPerMonth: 100, users: 5 },
-  },
-  {
-    id: 'professional',
-    name: 'Professional',
-    price: 1500,
-    limits: { casesPerMonth: 300, users: 20 },
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    price: 2500,
-    limits: { casesPerMonth: Infinity, users: Infinity },
-  },
-]
+function TierBadge({ slug }: { slug: TierSlug | null }) {
+  if (!slug) return <span className="text-slate-400">No plan</span>
+
+  const tier = TIER_DEFINITIONS[slug]
+  const styles: Record<TierSlug, string> = {
+    essential: 'bg-slate-100 text-slate-700',
+    professional: 'bg-blue-100 text-blue-700',
+    enterprise: 'bg-purple-100 text-purple-700',
+  }
+
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${styles[slug]}`}>
+      {tier.name}
+    </span>
+  )
+}
 
 // =====================================================
 // SKELETON COMPONENTS
@@ -267,12 +272,14 @@ export default function FacilityDetailPage() {
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([])
   const [roles, setRoles] = useState<UserRole[]>([])
   const [stats, setStats] = useState<FacilityStats | null>(null)
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([])
 
   // Edit states
   const [editName, setEditName] = useState('')
   const [editAddress, setEditAddress] = useState('')
   const [editStatus, setEditStatus] = useState('')
   const [editTrialDays, setEditTrialDays] = useState(30)
+  const [editPlanId, setEditPlanId] = useState<string | null>(null)
 
   // Modal states
   const [showInviteModal, setShowInviteModal] = useState(false)
@@ -288,8 +295,9 @@ export default function FacilityDetailPage() {
   const [newRoomName, setNewRoomName] = useState('')
   const [newProcedureName, setNewProcedureName] = useState('')
 
-  // Determine current plan (would come from database in production)
-  const currentPlan = plans[1] // Professional
+  // Derive current plan from facility's subscription_plan_id
+  const currentPlan = subscriptionPlans.find(p => p.id === facility?.subscription_plan_id) ?? null
+  const currentTierSlug = currentPlan?.slug ?? null
 
   // Redirect non-admins
   useEffect(() => {
@@ -425,7 +433,17 @@ export default function FacilityDetailPage() {
           setEditName(facilityData.name)
           setEditAddress(facilityData.address || '')
           setEditStatus(facilityData.subscription_status)
+          setEditPlanId(facilityData.subscription_plan_id ?? null)
         }
+
+        // Fetch subscription plans
+        const { data: plansData } = await supabase
+          .from('subscription_plans')
+          .select('id, slug, name, price_monthly_cents')
+          .eq('is_active', true)
+          .order('sort_order')
+
+        if (plansData) setSubscriptionPlans(plansData as SubscriptionPlan[])
 
         // Fetch users
         const { data: usersData } = await supabase
@@ -501,10 +519,15 @@ export default function FacilityDetailPage() {
     setSaving(true)
 
     try {
-      const updates: Partial<Facility> = {
+      const updates: Record<string, unknown> = {
         name: editName.trim(),
         address: editAddress.trim() || null,
         subscription_status: editStatus,
+      }
+
+      // Include plan change if modified
+      if (editPlanId !== facility.subscription_plan_id) {
+        updates.subscription_plan_id = editPlanId
       }
 
       // If changing to trial, set trial end date
@@ -523,8 +546,15 @@ export default function FacilityDetailPage() {
       await facilityAudit.updated(supabase, facility.name, facility.id, updates)
 
       // Update local state
-      setFacility({ ...facility, ...updates })
-      alert('Facility updated successfully!')
+      setFacility({
+        ...facility,
+        name: updates.name as string,
+        address: updates.address as string | null,
+        subscription_status: updates.subscription_status as string,
+        subscription_plan_id: (updates.subscription_plan_id as string | undefined) ?? facility.subscription_plan_id,
+        trial_ends_at: (updates.trial_ends_at as string | undefined) ?? facility.trial_ends_at,
+      })
+      showToast({ type: 'success', title: 'Facility updated successfully' })
     } catch (error) {
       showToast({
   type: 'error',
@@ -936,13 +966,13 @@ export default function FacilityDetailPage() {
                 <div className="relative flex items-start justify-between">
                   <div>
                     <p className="text-slate-400 text-sm mb-1">Current Plan</p>
-                    <h2 className="text-3xl font-bold mb-1">{currentPlan.name}</h2>
+                    <h2 className="text-3xl font-bold mb-1">{currentPlan?.name ?? 'No Plan'}</h2>
                     <p className="text-slate-400">
                       Member since {formatDate(facility.created_at)}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-4xl font-bold">${currentPlan.price}</p>
+                    <p className="text-4xl font-bold">${currentPlan ? Math.round(currentPlan.price_monthly_cents / 100) : '—'}</p>
                     <p className="text-slate-400 text-sm">/month</p>
                   </div>
                 </div>
@@ -1016,24 +1046,24 @@ export default function FacilityDetailPage() {
                 />
               </div>
 
-              {/* Usage Metrics */}
+              {/* Plan Info */}
               <div className="bg-slate-50 rounded-xl p-6 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-900">Plan Usage</h3>
-                  <span className="text-xs text-slate-500">Resets monthly</span>
+                  <h3 className="font-semibold text-slate-900">Plan Details</h3>
+                  <TierBadge slug={currentTierSlug} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <UsageBar
                     label="Cases This Month"
                     used={stats?.casesThisMonth || 0}
-                    limit={currentPlan.limits.casesPerMonth}
-                    subtext={currentPlan.limits.casesPerMonth === Infinity ? 'Unlimited plan' : `${currentPlan.limits.casesPerMonth - (stats?.casesThisMonth || 0)} remaining`}
+                    limit={Infinity}
+                    subtext="Unlimited"
                   />
                   <UsageBar
                     label="Active Users"
                     used={stats?.activeUsers || 0}
-                    limit={currentPlan.limits.users}
-                    subtext={currentPlan.limits.users === Infinity ? 'Unlimited plan' : `${currentPlan.limits.users - (stats?.activeUsers || 0)} seats available`}
+                    limit={Infinity}
+                    subtext="Unlimited"
                   />
                 </div>
               </div>
@@ -1383,10 +1413,10 @@ export default function FacilityDetailPage() {
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <p className="text-slate-400 text-sm mb-1">Current Plan</p>
-                  <h2 className="text-2xl font-bold">{currentPlan.name}</h2>
+                  <h2 className="text-2xl font-bold">{currentPlan?.name ?? 'No Plan'}</h2>
                 </div>
                 <div className="text-right">
-                  <p className="text-3xl font-bold">${currentPlan.price}</p>
+                  <p className="text-3xl font-bold">${currentPlan ? Math.round(currentPlan.price_monthly_cents / 100) : '—'}</p>
                   <p className="text-slate-400 text-sm">per month</p>
                 </div>
               </div>
@@ -1407,6 +1437,59 @@ export default function FacilityDetailPage() {
                   </>
                 )}
               </div>
+            </div>
+
+            {/* Plan Assignment */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <h3 className="font-semibold text-slate-900 mb-4">Subscription Plan</h3>
+              <p className="text-sm text-slate-500 mb-4">
+                Changing the plan will automatically update facility permissions via the sync trigger.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {subscriptionPlans.map((plan) => {
+                  const isSelected = editPlanId === plan.id
+                  const tierDef = TIER_DEFINITIONS[plan.slug]
+                  const tierStyles: Record<TierSlug, { border: string; bg: string }> = {
+                    essential: { border: 'border-slate-300', bg: 'bg-slate-50' },
+                    professional: { border: 'border-blue-400', bg: 'bg-blue-50' },
+                    enterprise: { border: 'border-purple-400', bg: 'bg-purple-50' },
+                  }
+                  const style = tierStyles[plan.slug]
+
+                  return (
+                    <button
+                      key={plan.id}
+                      type="button"
+                      onClick={() => setEditPlanId(plan.id)}
+                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                        isSelected
+                          ? `${style.border} ${style.bg} ring-2 ring-offset-1 ring-blue-500/30`
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-semibold text-slate-900">{plan.name}</span>
+                        {isSelected && (
+                          <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                        )}
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900 mb-1">
+                        ${Math.round(plan.price_monthly_cents / 100)}
+                        <span className="text-sm font-normal text-slate-500">/mo</span>
+                      </p>
+                      <p className="text-xs text-slate-500">{tierDef.description}</p>
+                    </button>
+                  )
+                })}
+              </div>
+              {editPlanId !== facility.subscription_plan_id && (
+                <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                  <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <p className="text-sm text-amber-800">
+                    Plan change will auto-sync facility permissions.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Status Management */}

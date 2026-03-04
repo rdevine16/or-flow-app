@@ -3,6 +3,7 @@
 
 'use client'
 
+import { CheckCircle2 } from 'lucide-react'
 import type { FacilityStepProps, FacilityData } from './types'
 import {
   FACILITY_TYPES,
@@ -12,7 +13,7 @@ import {
   formatPhone,
 } from './types'
 
-export default function FacilityStep({ data, onChange }: FacilityStepProps) {
+export default function FacilityStep({ data, onChange, subscriptionPlans }: FacilityStepProps) {
   function update(partial: Partial<FacilityData>) {
     onChange({ ...data, ...partial })
   }
@@ -188,7 +189,69 @@ export default function FacilityStep({ data, onChange }: FacilityStepProps) {
                 ))}
               </select>
             </div>
+          </div>
+        </div>
+      </div>
 
+      {/* ================================================================ */}
+      {/* SUBSCRIPTION PLAN CARD                                           */}
+      {/* ================================================================ */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-7 pt-6">
+          <h3 className="text-base font-semibold text-slate-900">Subscription Plan</h3>
+          <p className="text-sm text-slate-500 mt-0.5">Select the tier that determines feature access and permissions</p>
+        </div>
+        <div className="px-7 pt-5 pb-7">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="plan-selection">
+            {subscriptionPlans.map((plan) => {
+              const isSelected = data.subscriptionPlanId === plan.id
+              const slugStyles: Record<string, { border: string; bg: string; ring: string }> = {
+                essential: { border: 'border-slate-300', bg: 'bg-slate-50', ring: 'ring-slate-400/30' },
+                professional: { border: 'border-blue-400', bg: 'bg-blue-50', ring: 'ring-blue-500/30' },
+                enterprise: { border: 'border-purple-400', bg: 'bg-purple-50', ring: 'ring-purple-500/30' },
+              }
+              const style = slugStyles[plan.slug] ?? slugStyles.essential
+
+              return (
+                <button
+                  key={plan.id}
+                  type="button"
+                  onClick={() => update({ subscriptionPlanId: plan.id })}
+                  className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    isSelected
+                      ? `${style.border} ${style.bg} ring-2 ring-offset-1 ${style.ring}`
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                  data-testid={`plan-card-${plan.slug}`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-slate-900">{plan.name}</span>
+                    {isSelected && (
+                      <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                    )}
+                  </div>
+                  <p className="text-xl font-bold text-slate-900 mb-1">
+                    ${Math.round(plan.price_monthly_cents / 100)}
+                    <span className="text-sm font-normal text-slate-500">/mo</span>
+                  </p>
+                  <p className="text-xs text-slate-500">{plan.description}</p>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ================================================================ */}
+      {/* SUBSCRIPTION STATUS CARD                                         */}
+      {/* ================================================================ */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-7 pt-6">
+          <h3 className="text-base font-semibold text-slate-900">Subscription Status</h3>
+          <p className="text-sm text-slate-500 mt-0.5">Trial or active subscription</p>
+        </div>
+        <div className="px-7 pt-5 pb-7">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Subscription Status */}
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-2">

@@ -48,23 +48,30 @@ export async function createFacilityWithTemplates(
     const fullAddress = buildFullAddress(facilityData)
 
     // Step 1: Create facility
+    const insertData: Record<string, unknown> = {
+      name: facilityData.name.trim(),
+      address: fullAddress || null,
+      street_address: facilityData.streetAddress.trim() || null,
+      street_address_2: facilityData.streetAddress2.trim() || null,
+      city: facilityData.city.trim() || null,
+      state: facilityData.state || null,
+      zip_code: facilityData.zipCode.trim() || null,
+      phone: facilityData.phone.replace(/\D/g, '') || null,
+      facility_type: facilityData.facilityType || null,
+      timezone: facilityData.timezone,
+      subscription_status: facilityData.subscriptionStatus,
+      trial_ends_at: trialEndsAt,
+      subscription_started_at: new Date().toISOString(),
+    }
+
+    // Include subscription plan if selected
+    if (facilityData.subscriptionPlanId) {
+      insertData.subscription_plan_id = facilityData.subscriptionPlanId
+    }
+
     const { data: facility, error: facilityError } = await supabase
       .from('facilities')
-      .insert({
-        name: facilityData.name.trim(),
-        address: fullAddress || null,
-        street_address: facilityData.streetAddress.trim() || null,
-        street_address_2: facilityData.streetAddress2.trim() || null,
-        city: facilityData.city.trim() || null,
-        state: facilityData.state || null,
-        zip_code: facilityData.zipCode.trim() || null,
-        phone: facilityData.phone.replace(/\D/g, '') || null,
-        facility_type: facilityData.facilityType || null,
-        timezone: facilityData.timezone,
-        subscription_status: facilityData.subscriptionStatus,
-        trial_ends_at: trialEndsAt,
-        subscription_started_at: new Date().toISOString(),
-      })
+      .insert(insertData)
       .select('id')
       .single()
 
