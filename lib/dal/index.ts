@@ -33,6 +33,8 @@ export { ehrDAL } from './ehr'
 export { ehrTestDataDAL } from './ehr-test-data'
 export { notificationsDAL } from './notifications'
 export type { Notification, NotificationWithReadState, NotificationFilter } from './notifications'
+export { voiceCommandsDAL } from './voice-commands'
+export type { VoiceCommandAlias, VoiceAliasInsert } from './voice-commands'
 
 // ============================================
 // SHARED TYPES
