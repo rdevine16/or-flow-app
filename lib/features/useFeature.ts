@@ -1,5 +1,10 @@
 // lib/features/useFeature.ts
-// Hook to check if a feature is enabled for the current facility
+// Hook to check if a feature is enabled for the current facility.
+//
+// NOTE: For tier-based feature gating (analytics, financials, flags, etc.),
+// prefer using <FeatureGate requires="professional" mode="blur"> which checks
+// the subscription tier via UserContext. This hook is retained for legacy
+// per-feature toggles (e.g. PATIENT_CHECKIN) that use the facility_features table.
 
 'use client'
 

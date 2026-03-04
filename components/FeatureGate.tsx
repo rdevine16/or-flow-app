@@ -1,78 +1,224 @@
 // components/FeatureGate.tsx
-// Conditionally renders children based on feature access
+// Conditionally renders children based on feature access and/or subscription tier.
+//
+// Supports two independent gating mechanisms (can be combined):
+//   1. `feature` — checks facility_features via useFeature (legacy per-feature toggle)
+//   2. `requires` — checks subscription tier via UserContext (new tier system)
+//
+// When both are provided, BOTH must pass for children to render.
 
 'use client'
 
-import { useFeature, FeatureName, FEATURES } from '@/lib/features/useFeature'
+import { type ReactNode } from 'react'
+import { Lock } from 'lucide-react'
+import { useFeature, type FeatureName, FEATURES } from '@/lib/features/useFeature'
+import { useUser } from '@/lib/UserContext'
+import { UpgradePrompt } from '@/components/ui/UpgradePrompt'
+import { type TierSlug, getTierName } from '@/lib/tier-config'
 import Link from 'next/link'
 
+// ============================================
+// Types
+// ============================================
+
+type GateMode = 'hide' | 'lock' | 'blur' | 'locked-tab'
+
 interface FeatureGateProps {
-  feature: FeatureName
-  children: React.ReactNode
-  /** Content to show if feature is disabled (default: nothing) */
-  fallback?: React.ReactNode
-  /** Show upgrade prompt instead of hiding content */
-  showUpgrade?: boolean
-  /** Custom upgrade message */
+  children: ReactNode
+  /** Legacy per-feature gate (checks facility_features table) */
+  feature?: FeatureName
+  /** Minimum subscription tier required */
+  requires?: TierSlug
+  /** How to render when access is denied (default: 'hide') */
+  mode?: GateMode
+  /** Content to show if feature is disabled (only used when mode='hide') */
+  fallback?: ReactNode
+  /** Custom upgrade message for blur/lock overlays */
   upgradeMessage?: string
+  /** Show legacy upgrade prompt (feature-based, not tier-based) */
+  showUpgrade?: boolean
 }
 
+// ============================================
+// Component
+// ============================================
+
 /**
- * Conditionally render content based on feature access
- * 
- * Usage:
+ * Conditionally render content based on feature access and/or subscription tier.
+ *
+ * Tier-based gating (new):
+ *   <FeatureGate requires="professional" mode="blur">
+ *     <ScoreRing />
+ *   </FeatureGate>
+ *
+ * Feature-based gating (legacy):
  *   <FeatureGate feature={FEATURES.PATIENT_CHECKIN}>
  *     <NavItem href="/checkin">Check-In</NavItem>
  *   </FeatureGate>
- * 
- * With fallback:
- *   <FeatureGate 
- *     feature={FEATURES.PATIENT_CHECKIN} 
- *     fallback={<DisabledNavItem />}
- *   >
- *     <NavItem href="/checkin">Check-In</NavItem>
- *   </FeatureGate>
- * 
- * With upgrade prompt:
- *   <FeatureGate 
- *     feature={FEATURES.PATIENT_CHECKIN} 
- *     showUpgrade 
- *     upgradeMessage="Enable Patient Check-In to track arrivals"
- *   >
+ *
+ * Combined (both must pass):
+ *   <FeatureGate feature={FEATURES.PATIENT_CHECKIN} requires="professional" mode="blur">
  *     <CheckInContent />
  *   </FeatureGate>
  */
-export function FeatureGate({ 
-  feature, 
-  children, 
+export function FeatureGate({
+  children,
+  feature,
+  requires,
+  mode = 'hide',
   fallback = null,
-  showUpgrade = false,
   upgradeMessage,
+  showUpgrade = false,
 }: FeatureGateProps) {
-  const { isEnabled, isLoading } = useFeature(feature)
+  // --- Feature-level check (legacy) ---
+  const featureCheck = useFeatureCheck(feature)
 
-  // While loading, show nothing (or could show skeleton)
-  if (isLoading) {
+  // --- Tier-level check ---
+  const { isTierAtLeast, tierLoading } = useUser()
+
+  // Loading state
+  if (featureCheck.isLoading || (requires && tierLoading)) {
     return null
   }
 
-  // Feature is enabled - show children
-  if (isEnabled) {
+  // Determine access
+  const featureAllowed = feature ? featureCheck.isEnabled : true
+  const tierAllowed = requires ? isTierAtLeast(requires) : true
+  const isAllowed = featureAllowed && tierAllowed
+
+  if (isAllowed) {
     return <>{children}</>
   }
 
-  // Feature is disabled
-  if (showUpgrade) {
-    return <UpgradePrompt feature={feature} message={upgradeMessage} />
+  // --- Denied: render based on mode ---
+
+  // If tier is the blocker, use tier-aware rendering
+  if (requires && !tierAllowed) {
+    return renderTierDenied(mode, requires, children, upgradeMessage, fallback)
+  }
+
+  // Feature-level denial (legacy path)
+  if (showUpgrade && feature) {
+    return <LegacyUpgradePrompt feature={feature} message={upgradeMessage} />
   }
 
   return <>{fallback}</>
 }
 
-/**
- * Small upgrade prompt component
- */
-function UpgradePrompt({ feature, message }: { feature: FeatureName; message?: string }) {
+// ============================================
+// Mode renderers
+// ============================================
+
+function renderTierDenied(
+  mode: GateMode,
+  requiredTier: TierSlug,
+  children: ReactNode,
+  upgradeMessage?: string,
+  fallback?: ReactNode,
+): ReactNode {
+  switch (mode) {
+    case 'hide':
+      return <>{fallback ?? null}</>
+
+    case 'lock':
+      return <LockedContent requiredTier={requiredTier}>{children}</LockedContent>
+
+    case 'blur':
+      return (
+        <BlurredContent requiredTier={requiredTier} upgradeMessage={upgradeMessage}>
+          {children}
+        </BlurredContent>
+      )
+
+    case 'locked-tab':
+      return <LockedTab requiredTier={requiredTier} />
+
+    default:
+      return <>{fallback ?? null}</>
+  }
+}
+
+// ============================================
+// Lock mode — greyed out with lock icon + tier badge
+// ============================================
+
+function LockedContent({
+  requiredTier,
+  children,
+}: {
+  requiredTier: TierSlug
+  children: ReactNode
+}) {
+  const tierName = getTierName(requiredTier)
+
+  return (
+    <div className="relative opacity-50 pointer-events-none select-none" aria-hidden="true">
+      {children}
+      <div className="absolute inset-0 flex items-center justify-end gap-1.5 pr-2">
+        <Lock className="h-3.5 w-3.5 text-slate-400" />
+        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+          {tierName === 'Professional' ? 'Pro' : tierName}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// Blur mode — blurred preview with UpgradePrompt overlay
+// ============================================
+
+function BlurredContent({
+  requiredTier,
+  upgradeMessage,
+  children,
+}: {
+  requiredTier: TierSlug
+  upgradeMessage?: string
+  children: ReactNode
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-xl">
+      {/* Blurred content preview */}
+      <div
+        className="pointer-events-none select-none blur-[6px]"
+        aria-hidden="true"
+      >
+        {children}
+      </div>
+      {/* Overlay */}
+      <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-[1px]">
+        <UpgradePrompt requiredTier={requiredTier} message={upgradeMessage} />
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// Locked-tab mode — disabled tab with tooltip-style hint
+// ============================================
+
+function LockedTab({ requiredTier }: { requiredTier: TierSlug }) {
+  const tierName = getTierName(requiredTier)
+
+  return (
+    <span
+      className="inline-flex cursor-not-allowed items-center gap-1.5 text-sm text-slate-400"
+      title={`Upgrade to ${tierName} to access this tab`}
+    >
+      <Lock className="h-3.5 w-3.5" />
+      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        {tierName === 'Professional' ? 'Pro' : tierName}
+      </span>
+    </span>
+  )
+}
+
+// ============================================
+// Legacy feature-based upgrade prompt (preserved from v1)
+// ============================================
+
+function LegacyUpgradePrompt({ feature, message }: { feature: FeatureName; message?: string }) {
   const featureLabels: Record<FeatureName, string> = {
     [FEATURES.PATIENT_CHECKIN]: 'Patient Check-In',
   }
@@ -80,80 +226,50 @@ function UpgradePrompt({ feature, message }: { feature: FeatureName; message?: s
   const featureLabel = featureLabels[feature] || feature
 
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
-      <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center mx-auto mb-4">
-        <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
+      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-200">
+        <Lock className="h-6 w-6 text-slate-400" />
       </div>
-      <h3 className="font-semibold text-slate-900 mb-1">{featureLabel}</h3>
-      <p className="text-sm text-slate-500 mb-4">
+      <h3 className="mb-1 font-semibold text-slate-900">{featureLabel}</h3>
+      <p className="mb-4 text-sm text-slate-500">
         {message || `This feature is not enabled for your facility.`}
       </p>
-      <Link 
+      <Link
         href="/settings/subscription"
-        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
+        className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800"
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
         View Available Add-Ons
       </Link>
     </div>
   )
 }
 
+// ============================================
+// Internal: conditional feature hook
+// ============================================
+
 /**
- * Trial banner component - shows countdown when feature is on trial
- * 
- * Usage:
- *   <TrialBanner feature={FEATURES.PATIENT_CHECKIN} />
+ * Wraps useFeature so it returns a pass-through when no feature is specified.
+ * This avoids calling the hook conditionally.
  */
-export function TrialBanner({ feature }: { feature: FeatureName }) {
-  const { isEnabled, isTrialing, trialDaysRemaining } = useFeature(feature)
+function useFeatureCheck(feature?: FeatureName) {
+  // Always call the hook (Rules of Hooks) — use a dummy feature name if not needed
+  const hookResult = useFeature((feature ?? FEATURES.PATIENT_CHECKIN) as FeatureName)
 
-  if (!isEnabled || !isTrialing || trialDaysRemaining === null) {
-    return null
+  if (!feature) {
+    return { isEnabled: true, isLoading: false }
   }
 
-  const featureLabels: Record<FeatureName, string> = {
-    [FEATURES.PATIENT_CHECKIN]: 'Patient Check-In',
-  }
-
-  const featureLabel = featureLabels[feature] || feature
-  const isUrgent = trialDaysRemaining <= 3
-
-  return (
-    <div className={`rounded-lg px-4 py-3 flex items-center justify-between ${
-      isUrgent 
-        ? 'bg-amber-50 border border-amber-200' 
-        : 'bg-blue-50 border border-blue-200'
-    }`}>
-      <div className="flex items-center gap-3">
-        <div className={`p-1.5 rounded-lg ${isUrgent ? 'bg-amber-100' : 'bg-blue-100'}`}>
-          <svg className={`w-4 h-4 ${isUrgent ? 'text-amber-600' : 'text-blue-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <div>
-          <span className={`text-sm font-medium ${isUrgent ? 'text-amber-900' : 'text-blue-900'}`}>
-            {featureLabel} trial: {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''} remaining
-          </span>
-        </div>
-      </div>
-      <Link 
-        href="/settings/subscription"
-        className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
-          isUrgent
-            ? 'bg-amber-600 text-white hover:bg-amber-700'
-            : 'bg-blue-600 text-white hover:bg-blue-700'
-        }`}
-      >
-        Upgrade Now
-      </Link>
-    </div>
-  )
+  return hookResult
 }
 
-// Re-export FEATURES for convenience
+// ============================================
+// Re-exports for convenience
+// ============================================
+
 export { FEATURES }
+
+/**
+ * Trial banner component - shows countdown when feature is on trial
+ */
+export { TrialBanner } from '@/components/TrialBanner'
