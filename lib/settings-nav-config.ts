@@ -26,6 +26,7 @@ import {
   Users,
   Zap,
 } from 'lucide-react'
+import type { TierSlug } from '@/lib/tier-config'
 
 // =====================================================
 // TYPES
@@ -44,6 +45,8 @@ export interface SettingsNavItem {
   permission?: string
   /** Show a notification dot indicator (e.g., amber dot for active overrides) */
   notificationDot?: boolean
+  /** Minimum subscription tier required. Item is hidden if user's tier is lower. */
+  requiredTier?: TierSlug
 }
 
 export interface SettingsCategory {
@@ -52,6 +55,8 @@ export interface SettingsCategory {
   /** Abbreviated label for the horizontal tab bar */
   tabLabel: string
   items: SettingsNavItem[]
+  /** Minimum subscription tier required. Entire category is hidden if user's tier is lower. */
+  requiredTier?: TierSlug
 }
 
 // =====================================================
@@ -218,6 +223,7 @@ export const settingsCategories: SettingsCategory[] = [
         description: 'FCOTS, utilization & metric targets',
         badge: 'new',
         permission: 'settings.manage',
+        requiredTier: 'professional',
       },
       {
         id: 'flags',
@@ -227,6 +233,7 @@ export const settingsCategories: SettingsCategory[] = [
         description: 'Auto-detection rules & delay types',
         badge: 'new',
         permission: 'settings.manage',
+        requiredTier: 'professional',
       },
       {
         id: 'integrations',
@@ -235,6 +242,7 @@ export const settingsCategories: SettingsCategory[] = [
         icon: Puzzle,
         description: 'Connect external systems',
         permission: 'settings.manage',
+        requiredTier: 'enterprise',
       },
     ],
   },
@@ -265,6 +273,7 @@ export const settingsCategories: SettingsCategory[] = [
     id: 'financials',
     label: 'Financials',
     tabLabel: 'Financials',
+    requiredTier: 'enterprise',
     items: [
       {
         id: 'financials-overview',
@@ -360,16 +369,25 @@ export function getNavItemForPath(pathname: string): SettingsNavItem | undefined
   return undefined
 }
 
-/** Filter categories based on user permissions. Returns only categories with visible items. */
+/** Filter categories based on user permissions and subscription tier. Returns only categories with visible items. */
 export function getVisibleCategories(
-  can: (key: string) => boolean
+  can: (key: string) => boolean,
+  isTierAtLeast?: (requiredTier: TierSlug) => boolean
 ): SettingsCategory[] {
   return settingsCategories
+    // Filter out entire categories that require a higher tier
+    .filter(category => {
+      if (!category.requiredTier || !isTierAtLeast) return true
+      return isTierAtLeast(category.requiredTier)
+    })
     .map(category => ({
       ...category,
       items: category.items.filter(item => {
-        if (!item.permission) return true
-        return can(item.permission)
+        // Permission check
+        if (item.permission && !can(item.permission)) return false
+        // Tier check — hide items requiring a higher tier
+        if (item.requiredTier && isTierAtLeast && !isTierAtLeast(item.requiredTier)) return false
+        return true
       }),
     }))
     .filter(category => category.items.length > 0)

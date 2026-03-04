@@ -134,9 +134,9 @@ interface SettingsTabLayoutProps {
 
 export default function SettingsTabLayout({ children }: SettingsTabLayoutProps) {
   const pathname = usePathname()
-  const { can } = useUser()
+  const { can, isTierAtLeast } = useUser()
 
-  const visibleCategories = getVisibleCategories(can)
+  const visibleCategories = getVisibleCategories(can, isTierAtLeast)
   const activeCategoryId = getCategoryForPath(pathname)
   const activeCategory = visibleCategories.find(c => c.id === activeCategoryId)
   return (

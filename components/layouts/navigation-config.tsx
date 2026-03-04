@@ -3,6 +3,7 @@
 
 import { ReactNode } from 'react'
 import { AlertTriangle, Ban, BarChart3, Bell, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, CreditCard, Database, FileText, Flag, FlaskConical, Home, KeyRound, LayoutGrid, Package, Plug, Settings, ShieldCheck, User } from 'lucide-react'
+import type { TierSlug } from '@/lib/tier-config'
 
 // ============================================
 // Types
@@ -15,6 +16,8 @@ export interface NavItem {
   allowedRoles: string[]
   /** Permission key for can() gating. When set, takes precedence over allowedRoles. */
   permission?: string
+  /** Minimum subscription tier required. Item shows as locked if user's tier is lower. */
+  requiredTier?: TierSlug
 }
 
 export interface NavGroup {
@@ -273,6 +276,7 @@ export const facilityNavigation: NavItem[] = [
     href: '/spd',
     icon: navIcons.spd,
     allowedRoles: ['global_admin', 'facility_admin'],
+    requiredTier: 'professional',
   },
   {
     name: 'Analytics',
@@ -280,12 +284,14 @@ export const facilityNavigation: NavItem[] = [
     icon: navIcons.analytics,
     allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
     permission: 'analytics.view',
+    requiredTier: 'professional',
   },
   {
     name: 'Data Quality',
     href: '/data-quality',
     icon: navIcons.dataQuality,
     allowedRoles: ['global_admin', 'facility_admin'],
+    requiredTier: 'professional',
   },
   {
     name: 'Settings',
@@ -310,6 +316,9 @@ export function getFilteredNavigation(
     // Fallback to role-based filtering
     return item.allowedRoles.includes(accessLevel)
   })
+  // Note: tier-locked items are NOT filtered out here.
+  // They remain in the list and are rendered as locked in the Sidebar.
+  // The NavLink component checks requiredTier and renders the locked state.
 }
 
 export function isNavItemActive(href: string, pathname: string): boolean {

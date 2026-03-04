@@ -35,9 +35,9 @@ function ItemBadge({ type }: { type: BadgeType }) {
 
 export default function SettingsLanding() {
   const router = useRouter()
-  const { can } = useUser()
+  const { can, isTierAtLeast } = useUser()
 
-  const visibleCategories = getVisibleCategories(can)
+  const visibleCategories = getVisibleCategories(can, isTierAtLeast)
 
   return (
     <div className="animate-fade-in">

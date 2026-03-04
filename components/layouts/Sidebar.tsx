@@ -4,9 +4,12 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Bookmark } from 'lucide-react'
+import { Bookmark, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { OrbitLogoFull } from '../icons/OrbitLogo'
+import { useUser } from '@/lib/UserContext'
+import { getTierName } from '@/lib/tier-config'
+import type { TierSlug } from '@/lib/tier-config'
 import {
   NavItem,
   NavGroup,
@@ -183,16 +186,23 @@ function FacilityNavigation({
   pathname: string
   isExpanded: boolean
 }) {
+  const { isTierAtLeast } = useUser()
+
   return (
     <div className="space-y-1 px-2">
-      {items.map((item) => (
-        <NavLink
-          key={item.name}
-          item={item}
-          isActive={isNavItemActive(item.href, pathname)}
-          isExpanded={isExpanded}
-        />
-      ))}
+      {items.map((item) => {
+        const isLocked = item.requiredTier ? !isTierAtLeast(item.requiredTier) : false
+        return (
+          <NavLink
+            key={item.name}
+            item={item}
+            isActive={!isLocked && isNavItemActive(item.href, pathname)}
+            isExpanded={isExpanded}
+            isLocked={isLocked}
+            requiredTier={isLocked ? item.requiredTier : undefined}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -201,15 +211,49 @@ function FacilityNavigation({
 // Single Nav Link
 // ============================================
 
+/** Short badge label for each tier */
+function getTierBadgeLabel(tier: TierSlug): string {
+  return tier === 'enterprise' ? 'Ent' : 'Pro'
+}
+
 function NavLink({
   item,
   isActive,
   isExpanded,
+  isLocked = false,
+  requiredTier,
 }: {
   item: NavItem
   isActive: boolean
   isExpanded: boolean
+  isLocked?: boolean
+  requiredTier?: TierSlug
 }) {
+  if (isLocked) {
+    return (
+      <Link
+        href={item.href}
+        className="flex items-center h-10 rounded-xl text-sm font-medium transition-colors duration-200 text-slate-600 hover:text-slate-500 hover:bg-slate-800/50"
+        title={!isExpanded ? `${item.name} (${getTierName(requiredTier!)} required)` : undefined}
+      >
+        {/* Icon with lock overlay */}
+        <div className="w-12 flex items-center justify-center flex-shrink-0 relative">
+          {item.icon}
+          <Lock className="w-2.5 h-2.5 absolute bottom-1 right-1.5 text-slate-500" />
+        </div>
+        {/* Text + tier badge - only rendered when expanded */}
+        {isExpanded && (
+          <div className="flex items-center gap-2 pr-3 flex-1 min-w-0">
+            <span className="whitespace-nowrap text-slate-600">{item.name}</span>
+            <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 whitespace-nowrap">
+              {getTierBadgeLabel(requiredTier!)}
+            </span>
+          </div>
+        )}
+      </Link>
+    )
+  }
+
   return (
     <Link
       href={item.href}
