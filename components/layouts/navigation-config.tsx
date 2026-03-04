@@ -251,12 +251,13 @@ export const facilityNavigation: NavItem[] = [
     icon: navIcons.dashboard,
     allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
   },
-  {
-    name: 'Check-In',
-    href: '/checkin',
-    icon: navIcons.checklist,
-    allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
-  },
+  // Check-In hidden — not production-ready
+  // {
+  //   name: 'Check-In',
+  //   href: '/checkin',
+  //   icon: navIcons.checklist,
+  //   allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
+  // },
   {
     name: 'Block Schedule',
     href: '/block-schedule',

@@ -14,12 +14,14 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { Lock } from 'lucide-react'
 import {
   useTrendData,
   TREND_METRIC_OPTIONS,
   type TrendMetric,
   type TrendDataPoint,
 } from '@/lib/hooks/useTrendData'
+import { useUser } from '@/lib/UserContext'
 
 // ============================================
 // Helpers
@@ -103,7 +105,11 @@ function TrendChartSkeleton() {
 
 export function TrendChart() {
   const [metric, setMetric] = useState<TrendMetric>('utilization')
+  const { isTierAtLeast } = useUser()
   const { data: trendData, loading } = useTrendData(metric)
+
+  // Facility Score metric requires Professional tier
+  const isScoreLocked = !isTierAtLeast('professional')
 
   const color = getMetricColor(metric)
   const gradientId = `trendGradient-${metric}`
@@ -123,19 +129,26 @@ export function TrendChart() {
 
         {/* Segmented metric toggle */}
         <div className="flex items-center border border-slate-200 rounded-md p-0.5">
-          {TREND_METRIC_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => setMetric(option.value)}
-              className={`px-3 py-1 text-xs font-medium rounded transition-colors duration-150 ${
-                option.value === metric
-                  ? 'bg-slate-800 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
+          {TREND_METRIC_OPTIONS.map((option) => {
+            const locked = option.value === 'facilityScore' && isScoreLocked
+            return (
+              <button
+                key={option.value}
+                onClick={() => !locked && setMetric(option.value)}
+                disabled={locked}
+                className={`px-3 py-1 text-xs font-medium rounded transition-colors duration-150 inline-flex items-center gap-1 ${
+                  locked
+                    ? 'text-slate-400 cursor-not-allowed'
+                    : option.value === metric
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                {option.label}
+                {locked && <Lock className="w-3 h-3" />}
+              </button>
+            )
+          })}
         </div>
       </div>
 

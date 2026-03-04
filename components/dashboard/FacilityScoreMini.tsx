@@ -1,10 +1,13 @@
 // components/dashboard/FacilityScoreMini.tsx
 // Compact facility score card for the dashboard KPI row.
 // Shows ScoreRing at 52px + grade badge + trend.
+// When tier-locked, shows header clearly with blurred content + lock icon.
 
 'use client'
 
+import { Lock } from 'lucide-react'
 import { ScoreRing } from '@/components/ui/ScoreRing'
+import { useUser } from '@/lib/UserContext'
 import type { FacilityScoreResult } from '@/lib/facilityScoreStub'
 
 interface FacilityScoreMiniProps {
@@ -18,6 +21,9 @@ export function FacilityScoreMini({
   loading = false,
   trendLabel = 'vs prior period',
 }: FacilityScoreMiniProps) {
+  const { isTierAtLeast } = useUser()
+  const isLocked = !isTierAtLeast('professional')
+
   if (loading) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4">
@@ -27,6 +33,30 @@ export function FacilityScoreMini({
             <div className="h-3.5 w-24 bg-slate-200 rounded mb-2" />
             <div className="h-5 w-12 bg-slate-200 rounded mb-1" />
             <div className="h-3 w-16 bg-slate-100 rounded" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLocked) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-shrink-0">
+            <div className="h-[52px] w-[52px] rounded-full bg-slate-100 blur-[4px]" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Lock className="h-4 w-4 text-slate-400" />
+            </div>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">ORbit Score</p>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-400 blur-[3px]">
+                A+
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-0.5">Upgrade to unlock</p>
           </div>
         </div>
       </div>

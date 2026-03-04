@@ -34,7 +34,6 @@ import {
   getTimeDiffMinutes,
   formatMinutes,
   type CaseWithMilestones,
-  type FlipRoomAnalysis,
   type RoomHoursMap,
 } from '@/lib/analyticsV2'
 import { useAnalyticsConfig } from '@/lib/hooks/useAnalyticsConfig'
@@ -48,19 +47,13 @@ import RecentCasesTable, { type RecentCaseRow } from '@/components/analytics/Rec
 import CaseDrawer from '@/components/cases/CaseDrawer'
 import { useProcedureCategories } from '@/hooks/useLookups'
 
-import { ArrowRight, BarChart3, CalendarDays, DollarSign, Flag, Presentation, Sparkles, Star, User, X } from 'lucide-react'
+import { ArrowRight, BarChart3, CalendarDays, DollarSign, Flag, Presentation, Star, User } from 'lucide-react'
 
 // ============================================
 // TYPES
 // ============================================
 
 interface ProcedureCategory {
-  id: string
-  name: string
-  display_name: string
-}
-
-interface ProcedureTechnique {
   id: string
   name: string
   display_name: string
@@ -312,153 +305,6 @@ function CaseVolumeTooltip({ active, payload, label }: { active?: boolean; paylo
 }
 
 
-function ComparisonTooltip({ active, payload, label }: { active?: boolean; payload?: ChartTooltipPayload[]; label?: string }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 shadow-lg">
-      <p className="text-[11px] font-semibold text-slate-500 mb-1.5">{label}</p>
-      {payload.map(entry => (
-        <div key={entry.name} className="flex items-center gap-1.5 mb-0.5 last:mb-0">
-          <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: entry.color || entry.fill }} />
-          <span className="text-xs text-slate-700">
-            {entry.name}: <span className="font-semibold">{entry.value} min</span>
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ============================================
-// FLIP ROOM MODAL (kept for surgeon idle time)
-// ============================================
-
-function FlipRoomModal({ 
-  isOpen, 
-  onClose, 
-  data 
-}: { 
-  isOpen: boolean
-  onClose: () => void
-  data: FlipRoomAnalysis[]
-}) {
-  if (!isOpen) return null
-  
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-        
-        <div className="relative bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-100">
-                <Sparkles className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Flip Room Analysis</h2>
-                <p className="text-sm text-slate-500">Surgeon idle time between room transitions</p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          
-          <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
-            {data.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                  <CalendarDays className="w-8 h-8 text-slate-400" />
-                </div>
-                <h3 className="text-base font-semibold text-slate-900 mb-1">No flip room patterns detected</h3>
-                <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                  Flip rooms occur when a surgeon operates in multiple rooms on the same day.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {data.map((analysis, idx) => (
-                  <div key={idx} className="bg-slate-50 rounded-xl border border-slate-200 p-4">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-700">
-                          {analysis.surgeonName.replace('Dr. ', '').charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-slate-900">{analysis.surgeonName}</p>
-                          <p className="text-sm text-slate-500">{analysis.date}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Idle</p>
-                        <p className="text-2xl font-semibold text-amber-700">{Math.round(analysis.totalIdleTime)} min</p>
-                      </div>
-                    </div>
-                    
-                    <div className="mb-4">
-                      <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Room Sequence</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {analysis.cases.map((c, i) => (
-                          <div key={c.caseId} className="flex items-center">
-                            <div className="px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm">
-                              <span className="font-semibold text-slate-900">{c.roomName}</span>
-                              <span className="text-slate-400 ml-2 text-sm">{c.scheduledStart}</span>
-                            </div>
-                            {i < analysis.cases.length - 1 && (
-                              <ArrowRight className="w-4 h-4 mx-2 text-slate-300" />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    {analysis.idleGaps.length > 0 && (
-                      <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Transition Gaps</p>
-                        <div className="space-y-2">
-                          {analysis.idleGaps.map((gap, i) => (
-                            <div key={i} className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-700">{gap.fromCase}</span>
-                                <ArrowRight className="w-4 h-4 text-slate-300" />
-                                <span className="font-medium text-slate-700">{gap.toCase}</span>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <div className="text-right">
-                                  <p className="text-xs text-slate-400">Idle</p>
-                                  <p className={`font-semibold ${gap.idleMinutes > 10 ? 'text-rose-600' : 'text-amber-700'}`}>
-                                    {Math.round(gap.idleMinutes)} min
-                                  </p>
-                                </div>
-                                {gap.optimalCallDelta > 0 && (
-                                  <div className="text-right pl-4 border-l border-slate-200">
-                                    <p className="text-xs text-blue-600">Call earlier</p>
-                                    <p className="font-semibold text-blue-600">
-                                      {Math.round(gap.optimalCallDelta)} min
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ============================================
 // MAIN PAGE COMPONENT
 // ============================================
@@ -470,13 +316,11 @@ export default function AnalyticsHubPage() {
   const [cases, setCases] = useState<CaseWithMilestones[]>([])
   const [previousPeriodCases, setPreviousPeriodCases] = useState<CaseWithMilestones[]>([])
   const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
-  const [procedureTechniques, setProcedureTechniques] = useState<ProcedureTechnique[]>([])
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState('month')
   const [currentStartDate, setCurrentStartDate] = useState<string | undefined>()
   const [currentEndDate, setCurrentEndDate] = useState<string | undefined>()
   
-  const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
   const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
   const { config } = useAnalyticsConfig()
 
@@ -523,19 +367,13 @@ export default function AnalyticsHubPage() {
     setDrawerCaseId(null)
   }, [])
 
-  // Fetch procedure categories and techniques
+  // Fetch procedure categories
   useEffect(() => {
     async function fetchLookups() {
-      const [categoriesRes, techniquesRes] = await Promise.all([
-        supabase.from('procedure_categories').select('id, name, display_name').order('display_order'),
-        supabase.from('procedure_techniques').select('id, name, display_name').order('display_order'),
-      ])
-
-      if (categoriesRes.data) setProcedureCategories(categoriesRes.data)
-      if (techniquesRes.data) setProcedureTechniques(techniquesRes.data)
+      const { data } = await supabase.from('procedure_categories').select('id, name, display_name').order('display_order')
+      if (data) setProcedureCategories(data)
     }
     fetchLookups()
-
   }, [supabase])
 
   // Fetch data
@@ -751,128 +589,6 @@ export default function AnalyticsHubPage() {
 
   const categoryChartColors = ['#3b82f6', '#06b6d4', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#22c55e', '#f59e0b', '#ef4444', '#64748b']
 
-  // Helper to get surgical time from milestones
-  const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
-    const milestones = caseData.case_milestones || []
-    let incisionTimestamp: number | null = null
-    let closingTimestamp: number | null = null
-
-    milestones.forEach(m => {
-const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
-      if (mType?.name === 'incision') {
-        incisionTimestamp = new Date(m.recorded_at).getTime()
-      } else if (mType?.name === 'closing' || mType?.name === 'closing_complete') {
-        closingTimestamp = new Date(m.recorded_at).getTime()
-      }
-    })
-
-    if (incisionTimestamp !== null && closingTimestamp !== null) {
-      return Math.round((closingTimestamp - incisionTimestamp) / (1000 * 60))
-    }
-    return null
-  }
-
-  // Robotic vs Traditional Comparison Data for Total Knee
-  const kneeComparisonData = useMemo(() => {
-    const totalKneeCategoryId = procedureCategories.find(c => c.name === 'total_knee')?.id
-    const roboticTechniqueId = procedureTechniques.find(t => t.name === 'robotic')?.id
-    const manualTechniqueId = procedureTechniques.find(t => t.name === 'manual')?.id
-
-    if (!totalKneeCategoryId) return []
-
-    const byDate: { [key: string]: { robotic: number[]; traditional: number[] } } = {}
-
-    cases.forEach(c => {
-      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
-      if (status?.name !== 'completed') return
-
-      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-      if (!procType) return
-
-      const category = procType.procedure_categories
-      const catData = Array.isArray(category) ? category[0] : category
-      if (catData?.id !== totalKneeCategoryId) return
-
-      const surgicalTime = getSurgicalTimeMinutes(c)
-      if (!surgicalTime || surgicalTime <= 0 || surgicalTime > 600) return // Filter outliers
-
-      const date = c.scheduled_date
-      if (!byDate[date]) {
-        byDate[date] = { robotic: [], traditional: [] }
-      }
-
-      if (procType.technique_id === roboticTechniqueId) {
-        byDate[date].robotic.push(surgicalTime)
-      } else if (procType.technique_id === manualTechniqueId) {
-        byDate[date].traditional.push(surgicalTime)
-      }
-    })
-
-    return Object.entries(byDate)
-      .map(([date, times]) => ({
-        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        rawDate: date,
-        'Robotic (Mako)': times.robotic.length > 0 
-          ? Math.round(times.robotic.reduce((a, b) => a + b, 0) / times.robotic.length) 
-          : null,
-        'Traditional': times.traditional.length > 0 
-          ? Math.round(times.traditional.reduce((a, b) => a + b, 0) / times.traditional.length) 
-          : null,
-      }))
-      .filter(d => d['Robotic (Mako)'] !== null || d['Traditional'] !== null)
-      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
-  }, [cases, procedureCategories, procedureTechniques])
-
-  // Robotic vs Traditional Comparison Data for Total Hip
-  const hipComparisonData = useMemo(() => {
-    const totalHipCategoryId = procedureCategories.find(c => c.name === 'total_hip')?.id
-    const roboticTechniqueId = procedureTechniques.find(t => t.name === 'robotic')?.id
-    const manualTechniqueId = procedureTechniques.find(t => t.name === 'manual')?.id
-
-    if (!totalHipCategoryId) return []
-
-    const byDate: { [key: string]: { robotic: number[]; traditional: number[] } } = {}
-
-    cases.forEach(c => {
-      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
-      if (status?.name !== 'completed') return
-
-      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-      if (!procType) return
-
-      const category = procType.procedure_categories
-      const catData = Array.isArray(category) ? category[0] : category
-      if (catData?.id !== totalHipCategoryId) return
-
-      const surgicalTime = getSurgicalTimeMinutes(c)
-      if (!surgicalTime || surgicalTime <= 0 || surgicalTime > 600) return
-
-      const date = c.scheduled_date
-      if (!byDate[date]) {
-        byDate[date] = { robotic: [], traditional: [] }
-      }
-
-      if (procType.technique_id === roboticTechniqueId) {
-        byDate[date].robotic.push(surgicalTime)
-      } else if (procType.technique_id === manualTechniqueId) {
-        byDate[date].traditional.push(surgicalTime)
-      }
-    })
-
-    return Object.entries(byDate)
-      .map(([date, times]) => ({
-        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        rawDate: date,
-        'Robotic (Mako)': times.robotic.length > 0 
-          ? Math.round(times.robotic.reduce((a, b) => a + b, 0) / times.robotic.length) 
-          : null,
-        'Traditional': times.traditional.length > 0 
-          ? Math.round(times.traditional.reduce((a, b) => a + b, 0) / times.traditional.length) 
-          : null,
-      }))
-      .filter(d => d['Robotic (Mako)'] !== null || d['Traditional'] !== null)
-      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
-  }, [cases, procedureCategories, procedureTechniques])
 
   // Report cards configuration
   const reportCards: ReportCardProps[] = [
@@ -1118,168 +834,19 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                 </div>
               </section>
 
-              {/* ROBOTIC VS TRADITIONAL COMPARISON */}
-              {(kneeComparisonData.length > 0 || hipComparisonData.length > 0) && (
-                <section>
-                  <SectionHeader
-                    title="Robotic vs Traditional Surgical Time"
-                    subtitle="Average surgical time comparison by technique"
-                  />
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Total Knee Comparison */}
-                    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-                      <div className="px-6 py-4 border-b border-slate-100">
-                        <h3 className="text-base font-semibold text-slate-900">Total Knee Arthroplasty</h3>
-                        <p className="text-sm text-slate-500 mt-0.5">Surgical time by technique (minutes)</p>
-                      </div>
-                      <div className="p-6">
-                        {kneeComparisonData.length > 0 ? (
-                          <div>
-                            <ResponsiveContainer width="100%" height={224}>
-                              <AreaChart data={kneeComparisonData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
-                                <defs>
-                                  <linearGradient id="gradCyanKnee" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.15} />
-                                    <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.02} />
-                                  </linearGradient>
-                                  <linearGradient id="gradSlateKnee" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#64748b" stopOpacity={0.15} />
-                                    <stop offset="100%" stopColor="#64748b" stopOpacity={0.02} />
-                                  </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                <Tooltip content={<ComparisonTooltip />} />
-                                <Area type="monotone" dataKey="Robotic (Mako)" stroke="#06b6d4" fill="url(#gradCyanKnee)" strokeWidth={2} connectNulls />
-                                <Area type="monotone" dataKey="Traditional" stroke="#64748b" fill="url(#gradSlateKnee)" strokeWidth={2} connectNulls />
-                              </AreaChart>
-                            </ResponsiveContainer>
-                            <div className="flex gap-4 mt-2 justify-center">
-                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#06b6d4' }} />
-                                Robotic (Mako)
-                              </span>
-                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#64748b' }} />
-                                Traditional
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center h-56 text-slate-400">
-                            <div className="text-center">
-                              <BarChart3 className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                              <p className="text-sm">No TKA data available</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Total Hip Comparison */}
-                    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-                      <div className="px-6 py-4 border-b border-slate-100">
-                        <h3 className="text-base font-semibold text-slate-900">Total Hip Arthroplasty</h3>
-                        <p className="text-sm text-slate-500 mt-0.5">Surgical time by technique (minutes)</p>
-                      </div>
-                      <div className="p-6">
-                        {hipComparisonData.length > 0 ? (
-                          <div>
-                            <ResponsiveContainer width="100%" height={224}>
-                              <AreaChart data={hipComparisonData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
-                                <defs>
-                                  <linearGradient id="gradCyanHip" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.15} />
-                                    <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.02} />
-                                  </linearGradient>
-                                  <linearGradient id="gradSlateHip" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#64748b" stopOpacity={0.15} />
-                                    <stop offset="100%" stopColor="#64748b" stopOpacity={0.02} />
-                                  </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                <Tooltip content={<ComparisonTooltip />} />
-                                <Area type="monotone" dataKey="Robotic (Mako)" stroke="#06b6d4" fill="url(#gradCyanHip)" strokeWidth={2} connectNulls />
-                                <Area type="monotone" dataKey="Traditional" stroke="#64748b" fill="url(#gradSlateHip)" strokeWidth={2} connectNulls />
-                              </AreaChart>
-                            </ResponsiveContainer>
-                            <div className="flex gap-4 mt-2 justify-center">
-                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#06b6d4' }} />
-                                Robotic (Mako)
-                              </span>
-                              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                                <span className="w-2.5 h-[3px] rounded-sm" style={{ backgroundColor: '#64748b' }} />
-                                Traditional
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center h-56 text-slate-400">
-                            <div className="text-center">
-                              <BarChart3 className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                              <p className="text-sm">No THA data available</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              )}
-
-              {/* AI INSIGHT CARD */}
-              {analytics.surgeonIdleTime.value > 0 && (
-                <section>
-                  <button
-                    onClick={() => setShowFlipRoomModal(true)}
-                    className="w-full text-left bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
-                  >
-                    <div className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-blue-100">
-                            <Sparkles className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-slate-900">Optimization Opportunity</h3>
-                              <span className="px-2 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full">
-                                AI Insight
-                              </span>
-                            </div>
-                            <p className="text-sm text-slate-600 mt-1">
-                              Surgeons are waiting an average of <span className="font-semibold text-blue-700">{analytics.surgeonIdleTime.displayValue}</span> between rooms.
-                              {analytics.surgeonIdleTime.subtitle !== 'No optimization needed' && (
-                                <span className="text-blue-700"> {analytics.surgeonIdleTime.subtitle}</span>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                        <ArrowRight className="w-5 h-5 text-blue-600" />
-                      </div>
-                    </div>
-                  </button>
-                </section>
-              )}
 
               {/* RECENT CASES TABLE */}
-              {recentCases.length > 0 && (
-                <section>
-                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-                    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
-                      <div>
-                        <h3 className="text-sm font-semibold text-slate-900">Recent Cases</h3>
-                        <p className="text-xs text-slate-400 mt-0.5">Latest completed cases</p>
-                      </div>
+              <section>
+                <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                  <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">Recent Cases</h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Latest completed cases</p>
                     </div>
-                    <RecentCasesTable cases={recentCases} onCaseClick={handleCaseClick} />
                   </div>
-                </section>
-              )}
+                  <RecentCasesTable cases={recentCases} onCaseClick={handleCaseClick} />
+                </div>
+              </section>
 
               {/* REPORTS GRID */}
               <section>
@@ -1293,13 +860,6 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                   ))}
                 </div>
               </section>
-
-              {/* FLIP ROOM MODAL */}
-              <FlipRoomModal
-                isOpen={showFlipRoomModal}
-                onClose={() => setShowFlipRoomModal(false)}
-                data={analytics.flipRoomAnalysis}
-              />
 
               {/* CASE DRAWER */}
               <CaseDrawer

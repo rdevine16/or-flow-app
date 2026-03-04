@@ -1,11 +1,13 @@
 // components/dashboard/TodaysSurgeons.tsx
 // Mini-list of surgeons operating today with case counts and ORbit Score grade badges.
+// Score column is blurred for Essential tier with lock icon.
 
 'use client'
 
 import Link from 'next/link'
-import { Stethoscope } from 'lucide-react'
+import { Lock, Stethoscope } from 'lucide-react'
 import { ScoreRing } from '@/components/ui/ScoreRing'
+import { useUser } from '@/lib/UserContext'
 import type { TodaySurgeonData } from '@/lib/hooks/useTodayStatus'
 
 // ============================================
@@ -18,6 +20,9 @@ interface TodaysSurgeonsProps {
 }
 
 export function TodaysSurgeons({ surgeons, loading = false }: TodaysSurgeonsProps) {
+  const { isTierAtLeast } = useUser()
+  const isScoreLocked = !isTierAtLeast('professional')
+
   if (loading) {
     return (
       <div>
@@ -45,10 +50,18 @@ export function TodaysSurgeons({ surgeons, loading = false }: TodaysSurgeonsProp
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-slate-900 mb-3">Today&apos;s Surgeons</h3>
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-slate-900">Today&apos;s Surgeons</h3>
+        <div className="flex items-center gap-1 text-[10px] font-medium text-slate-400 uppercase tracking-wide">
+          ORbit Score
+          {isScoreLocked && <Lock className="w-3 h-3 text-slate-300" />}
+        </div>
+      </div>
+
       <div className="space-y-1">
         {surgeons.map((surgeon) => (
-          <SurgeonRow key={surgeon.surgeonId} surgeon={surgeon} />
+          <SurgeonRow key={surgeon.surgeonId} surgeon={surgeon} scoreLocked={isScoreLocked} />
         ))}
       </div>
     </div>
@@ -59,7 +72,7 @@ export function TodaysSurgeons({ surgeons, loading = false }: TodaysSurgeonsProp
 // Surgeon row
 // ============================================
 
-function SurgeonRow({ surgeon }: { surgeon: TodaySurgeonData }) {
+function SurgeonRow({ surgeon, scoreLocked }: { surgeon: TodaySurgeonData; scoreLocked: boolean }) {
   return (
     <Link
       href="/analytics/surgeons"
@@ -75,8 +88,15 @@ function SurgeonRow({ surgeon }: { surgeon: TodaySurgeonData }) {
         </p>
       </div>
 
-      {/* Score ring */}
-      {surgeon.compositeScore != null ? (
+      {/* Score ring — blurred when locked */}
+      {scoreLocked ? (
+        <div className="relative shrink-0">
+          <div className="w-9 h-9 rounded-full bg-slate-100 blur-[3px]" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Lock className="w-3 h-3 text-slate-400" />
+          </div>
+        </div>
+      ) : surgeon.compositeScore != null ? (
         <div className="shrink-0">
           <ScoreRing score={Math.round(surgeon.compositeScore)} size={36} ringWidth={4} />
         </div>

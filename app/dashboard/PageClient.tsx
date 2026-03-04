@@ -191,13 +191,11 @@ export default function DashboardPage() {
             } : undefined}
             loading={loading}
           />
-          <FeatureGate requires="professional" mode="blur">
-            <FacilityScoreMini
-              score={kpis?.facilityScore ?? null}
-              loading={loading}
-              trendLabel={trendLabel}
-            />
-          </FeatureGate>
+          <FacilityScoreMini
+            score={kpis?.facilityScore ?? null}
+            loading={loading}
+            trendLabel={trendLabel}
+          />
         </div>
 
         {/* Schedule Adherence Timeline (Gantt) — full width, 60s polling */}
@@ -209,7 +207,7 @@ export default function DashboardPage() {
             alerts={filteredAlerts}
             loading={alertsLoading}
           />
-          <FeatureGate requires="professional" mode="blur">
+          <FeatureGate requires="professional" mode="blur-compact">
             <InsightsSection timeRange={timeRange} />
           </FeatureGate>
         </div>
