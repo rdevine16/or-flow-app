@@ -64,22 +64,39 @@ export interface FlagBaselines {
 /**
  * Extract a metric value from a case's milestone map.
  * Returns the duration in minutes for the given metric key.
- * 
+ *
  * For milestone-pair metrics (total_case_time, surgical_time, etc.),
  * uses the start/end milestone names from the flag rule.
- * 
+ *
  * For cross-case metrics (turnover_time, fcots_delay),
  * these require context beyond a single case and are handled separately.
+ *
+ * When expectedMilestones is provided, metrics whose prerequisite milestones
+ * are not in the template return null (skipped). Quality metrics
+ * (missing_milestones, milestone_out_of_order) use the expected list
+ * instead of the hardcoded CORE_MILESTONE_SEQUENCE.
  */
 export function extractMetricValue(
   milestones: MilestoneMap,
   metric: string,
   startMilestone?: string | null,
   endMilestone?: string | null,
-  caseData?: CaseWithFinancials
+  caseData?: CaseWithFinancials,
+  expectedMilestones?: string[]
 ): number | null {
+  // Guard: skip metrics whose prerequisite milestones aren't in the template
+  if (expectedMilestones && !canEvaluateMetric(metric, expectedMilestones)) {
+    return null
+  }
+
   // Direct milestone-pair metrics
   if (startMilestone && endMilestone) {
+    // If template is specified, skip if either milestone is not in the template
+    if (expectedMilestones) {
+      if (!expectedMilestones.includes(startMilestone) || !expectedMilestones.includes(endMilestone)) {
+        return null
+      }
+    }
     const start = milestones[startMilestone as keyof MilestoneMap]
     const end = milestones[endMilestone as keyof MilestoneMap]
     return getTimeDiffMinutes(start, end)
@@ -139,9 +156,9 @@ export function extractMetricValue(
 
     // ---- Quality ----
     case 'missing_milestones':
-      return countMissingMilestones(milestones)
+      return countMissingMilestones(milestones, expectedMilestones)
     case 'milestone_out_of_order':
-      return countSequenceViolations(milestones)
+      return countSequenceViolations(milestones, expectedMilestones)
 
     default:
       return null
@@ -173,6 +190,7 @@ function extractFCOTSDelay(
 
 /**
  * Core milestones expected in every case, in correct sequence order.
+ * Used as the default when no template-specific milestones are provided.
  */
 const CORE_MILESTONE_SEQUENCE: (keyof MilestoneMap)[] = [
   'patient_in',
@@ -186,12 +204,43 @@ const CORE_MILESTONE_SEQUENCE: (keyof MilestoneMap)[] = [
 ]
 
 /**
- * Count the number of core milestones missing from a case.
+ * Prerequisite milestones for each metric.
+ * A metric can only be evaluated if ALL its prerequisite milestones
+ * are present in the case's template.
  */
-function countMissingMilestones(milestones: MilestoneMap): number {
+const METRIC_PREREQUISITE_MILESTONES: Record<string, string[]> = {
+  total_case_time: ['patient_in', 'patient_out'],
+  surgical_time: ['incision', 'closing'],
+  pre_op_time: ['patient_in', 'incision'],
+  anesthesia_time: ['anes_start', 'anes_end'],
+  closing_time: ['closing', 'closing_complete'],
+  emergence_time: ['closing_complete', 'patient_out'],
+  prep_to_incision: ['prep_drape_complete', 'incision'],
+  surgeon_readiness_gap: ['prep_drape_complete', 'incision'],
+  fcots_delay: ['patient_in'],
+}
+
+/**
+ * Check whether a metric can be evaluated given the milestones in a case's template.
+ * Returns true if the metric has no prerequisite milestones, or if ALL prerequisites
+ * are present in the template. When no template is provided, assumes all milestones available.
+ */
+export function canEvaluateMetric(metric: string, templateMilestones?: string[]): boolean {
+  const prerequisites = METRIC_PREREQUISITE_MILESTONES[metric]
+  if (!prerequisites) return true // No milestone prerequisites (financial, quality, cross-case)
+  if (!templateMilestones) return true // No template = assume full milestone set
+  return prerequisites.every(m => templateMilestones.includes(m))
+}
+
+/**
+ * Count the number of expected milestones missing from a case.
+ * When expectedMilestones is provided, only counts those; otherwise uses CORE_MILESTONE_SEQUENCE.
+ */
+function countMissingMilestones(milestones: MilestoneMap, expectedMilestones?: string[]): number {
+  const expected = expectedMilestones ?? CORE_MILESTONE_SEQUENCE
   let missing = 0
-  for (const key of CORE_MILESTONE_SEQUENCE) {
-    if (!milestones[key]) missing++
+  for (const key of expected) {
+    if (!milestones[key as keyof MilestoneMap]) missing++
   }
   return missing
 }
@@ -200,10 +249,12 @@ function countMissingMilestones(milestones: MilestoneMap): number {
  * Count the number of milestone sequence violations.
  * A violation occurs when a later milestone has an earlier timestamp
  * than a preceding milestone in the expected sequence.
+ * When expectedMilestones is provided, only checks order of those milestones.
  */
-function countSequenceViolations(milestones: MilestoneMap): number {
+function countSequenceViolations(milestones: MilestoneMap, expectedMilestones?: string[]): number {
+  const expected = (expectedMilestones ?? CORE_MILESTONE_SEQUENCE) as (keyof MilestoneMap)[]
   let violations = 0
-  const recorded = CORE_MILESTONE_SEQUENCE
+  const recorded = expected
     .filter(key => milestones[key] != null)
     .map(key => ({ key, time: milestones[key]! }))
 
@@ -592,6 +643,7 @@ function buildFlag(
  * @param turnoverBaseline - Pre-computed turnover baseline
  * @param firstCaseIds - Set of case IDs that are first in their room for the day
  * @param turnoverForCase - Turnover/idle gap time before this specific case (if applicable)
+ * @param expectedMilestones - Milestone names expected by this case's template (optional; falls back to CORE_MILESTONE_SEQUENCE)
  */
 export function evaluateCase(
   caseData: CaseWithFinancials,
@@ -599,7 +651,8 @@ export function evaluateCase(
   baselines: FlagBaselines,
   turnoverBaseline: { median: number; stdDev: number } | null,
   firstCaseIds: Set<string>,
-  turnoverForCase?: number | null
+  turnoverForCase?: number | null,
+  expectedMilestones?: string[]
 ): CaseFlag[] {
   const flags: CaseFlag[] = []
   const milestones = getMilestoneMap(caseData)
@@ -611,6 +664,11 @@ export function evaluateCase(
 
   for (const rule of rules) {
     if (!rule.is_enabled) continue
+
+    // --- Template guard: skip metrics whose prerequisites aren't in the template ---
+    if (expectedMilestones && !canEvaluateMetric(rule.metric, expectedMilestones)) {
+      continue
+    }
 
     // --- Cross-case metrics (turnover_time, room_idle_gap) ---
     if (rule.metric === 'turnover_time' || rule.metric === 'room_idle_gap') {
@@ -679,7 +737,7 @@ export function evaluateCase(
 
     // --- Standard metrics (milestone-pair, financial, quality) ---
     const metricValue = extractMetricValue(
-      milestones, rule.metric, rule.start_milestone, rule.end_milestone, caseData
+      milestones, rule.metric, rule.start_milestone, rule.end_milestone, caseData, expectedMilestones
     )
     if (metricValue === null) continue
     // For timing/efficiency metrics, skip zero/negative (bad milestone data)
@@ -704,17 +762,22 @@ export function evaluateCase(
 /**
  * Evaluate multiple cases against flag rules.
  * Builds baselines from all provided cases, then evaluates each.
- * 
+ *
  * This is the main entry point for the flag evaluation pipeline.
  * Call this from your analytics API route after fetching cases.
- * 
+ *
  * @param cases - All cases to evaluate (also used as historical baseline)
  * @param rules - Active flag rules for the facility
+ * @param templateMilestonesByCase - Optional map of case ID → expected milestone names from the case's template.
+ *   When provided, metrics whose prerequisite milestones aren't in the template are skipped,
+ *   and quality metrics (missing_milestones, milestone_out_of_order) evaluate against
+ *   the template's milestones instead of the hardcoded CORE_MILESTONE_SEQUENCE.
  * @returns Array of CaseFlag objects ready for bulk insert
  */
 export function evaluateCasesBatch(
   cases: CaseWithFinancials[],
-  rules: FlagRule[]
+  rules: FlagRule[],
+  templateMilestonesByCase?: Map<string, string[]>
 ): CaseFlag[] {
   if (cases.length === 0 || rules.length === 0) return []
 
@@ -745,8 +808,9 @@ export function evaluateCasesBatch(
 
   for (const caseData of cases) {
     const turnover = turnoverByCase.get(caseData.id) ?? null
+    const expectedMilestones = templateMilestonesByCase?.get(caseData.id)
     const caseFlags = evaluateCase(
-      caseData, rules, baselines, turnoverBaseline, firstCaseIds, turnover
+      caseData, rules, baselines, turnoverBaseline, firstCaseIds, turnover, expectedMilestones
     )
     allFlags.push(...caseFlags)
   }

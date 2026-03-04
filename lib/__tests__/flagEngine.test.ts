@@ -1,12 +1,13 @@
 // lib/__tests__/flagEngine.test.ts
-// Comprehensive tests for Phase 5: Financial and quality metrics in flag engine
+// Comprehensive tests for flag engine: financial, quality, and template-driven metrics
 
 import { describe, it, expect } from 'vitest'
 import {
   extractMetricValue,
   evaluateCase,
+  evaluateCasesBatch,
   buildBaselines,
-  type CaseFlag,
+  canEvaluateMetric,
   type FlagBaselines,
 } from '../flagEngine'
 import type { MilestoneMap } from '../analyticsV2'
@@ -18,14 +19,14 @@ import type { FlagRule, CaseWithFinancials, CaseCompletionStats } from '@/types/
 
 function createMilestoneMap(overrides: Partial<MilestoneMap> = {}): MilestoneMap {
   return {
-    patient_in: '2026-02-15T07:30:00Z',
-    anes_start: '2026-02-15T07:35:00Z',
-    anes_end: '2026-02-15T07:45:00Z',
-    prep_drape_complete: '2026-02-15T07:55:00Z',
-    incision: '2026-02-15T08:00:00Z',
-    closing: '2026-02-15T09:00:00Z',
-    closing_complete: '2026-02-15T09:10:00Z',
-    patient_out: '2026-02-15T09:30:00Z',
+    patient_in: new Date('2026-02-15T07:30:00Z'),
+    anes_start: new Date('2026-02-15T07:35:00Z'),
+    anes_end: new Date('2026-02-15T07:45:00Z'),
+    prep_drape_complete: new Date('2026-02-15T07:55:00Z'),
+    incision: new Date('2026-02-15T08:00:00Z'),
+    closing: new Date('2026-02-15T09:00:00Z'),
+    closing_complete: new Date('2026-02-15T09:10:00Z'),
+    patient_out: new Date('2026-02-15T09:30:00Z'),
     ...overrides,
   }
 }
@@ -231,13 +232,13 @@ describe('extractMetricValue - Financial Metrics', () => {
 describe('extractMetricValue - Quality Metrics', () => {
   it('counts missing milestones', () => {
     const milestones = createMilestoneMap({
-      patient_in: '2026-02-15T07:30:00Z',
-      anes_start: null,
-      anes_end: null,
-      prep_drape_complete: '2026-02-15T07:55:00Z',
-      incision: '2026-02-15T08:00:00Z',
-      closing: null,
-      patient_out: '2026-02-15T09:30:00Z',
+      patient_in: new Date('2026-02-15T07:30:00Z'),
+      anes_start: undefined,
+      anes_end: undefined,
+      prep_drape_complete: new Date('2026-02-15T07:55:00Z'),
+      incision: new Date('2026-02-15T08:00:00Z'),
+      closing: undefined,
+      patient_out: new Date('2026-02-15T09:30:00Z'),
     })
     const value = extractMetricValue(milestones, 'missing_milestones', null, null)
     expect(value).toBe(3) // anes_start, anes_end, closing, closing_complete missing, but prep_drape_complete present
@@ -251,14 +252,14 @@ describe('extractMetricValue - Quality Metrics', () => {
 
   it('counts sequence violations when milestones are out of order', () => {
     const milestones = createMilestoneMap({
-      patient_in: '2026-02-15T07:30:00Z',
-      anes_start: '2026-02-15T07:35:00Z',
-      anes_end: '2026-02-15T07:45:00Z',
-      prep_drape_complete: '2026-02-15T07:55:00Z',
-      incision: '2026-02-15T08:00:00Z',
-      closing: '2026-02-15T07:50:00Z', // BEFORE incision - violation!
-      closing_complete: '2026-02-15T09:10:00Z',
-      patient_out: '2026-02-15T09:30:00Z',
+      patient_in: new Date('2026-02-15T07:30:00Z'),
+      anes_start: new Date('2026-02-15T07:35:00Z'),
+      anes_end: new Date('2026-02-15T07:45:00Z'),
+      prep_drape_complete: new Date('2026-02-15T07:55:00Z'),
+      incision: new Date('2026-02-15T08:00:00Z'),
+      closing: new Date('2026-02-15T07:50:00Z'), // BEFORE incision - violation!
+      closing_complete: new Date('2026-02-15T09:10:00Z'),
+      patient_out: new Date('2026-02-15T09:30:00Z'),
     })
     const value = extractMetricValue(milestones, 'milestone_out_of_order', null, null)
     expect(value).toBe(1)
@@ -272,14 +273,14 @@ describe('extractMetricValue - Quality Metrics', () => {
 
   it('counts multiple sequence violations', () => {
     const milestones = createMilestoneMap({
-      patient_in: '2026-02-15T07:30:00Z',
-      anes_start: '2026-02-15T07:25:00Z', // BEFORE patient_in - violation 1
-      anes_end: '2026-02-15T07:45:00Z',
-      prep_drape_complete: '2026-02-15T07:40:00Z', // BEFORE anes_end - violation 2
-      incision: '2026-02-15T08:00:00Z',
-      closing: '2026-02-15T09:00:00Z',
-      closing_complete: '2026-02-15T09:10:00Z',
-      patient_out: '2026-02-15T09:30:00Z',
+      patient_in: new Date('2026-02-15T07:30:00Z'),
+      anes_start: new Date('2026-02-15T07:25:00Z'), // BEFORE patient_in - violation 1
+      anes_end: new Date('2026-02-15T07:45:00Z'),
+      prep_drape_complete: new Date('2026-02-15T07:40:00Z'), // BEFORE anes_end - violation 2
+      incision: new Date('2026-02-15T08:00:00Z'),
+      closing: new Date('2026-02-15T09:00:00Z'),
+      closing_complete: new Date('2026-02-15T09:10:00Z'),
+      patient_out: new Date('2026-02-15T09:30:00Z'),
     })
     const value = extractMetricValue(milestones, 'milestone_out_of_order', null, null)
     expect(value).toBe(2)
@@ -287,14 +288,14 @@ describe('extractMetricValue - Quality Metrics', () => {
 
   it('handles missing milestones when checking sequence violations', () => {
     const milestones = createMilestoneMap({
-      patient_in: '2026-02-15T07:30:00Z',
-      anes_start: null,
-      anes_end: null,
-      prep_drape_complete: '2026-02-15T07:55:00Z',
-      incision: '2026-02-15T08:00:00Z',
-      closing: '2026-02-15T07:50:00Z', // BEFORE prep_drape - violation
-      closing_complete: '2026-02-15T09:10:00Z',
-      patient_out: '2026-02-15T09:30:00Z',
+      patient_in: new Date('2026-02-15T07:30:00Z'),
+      anes_start: undefined,
+      anes_end: undefined,
+      prep_drape_complete: new Date('2026-02-15T07:55:00Z'),
+      incision: new Date('2026-02-15T08:00:00Z'),
+      closing: new Date('2026-02-15T07:50:00Z'), // BEFORE prep_drape - violation
+      closing_complete: new Date('2026-02-15T09:10:00Z'),
+      patient_out: new Date('2026-02-15T09:30:00Z'),
     })
     const value = extractMetricValue(milestones, 'milestone_out_of_order', null, null)
     expect(value).toBe(1)
@@ -984,5 +985,313 @@ describe('evaluateCase - Zero and Negative Value Handling', () => {
 
     // Timing metrics with value <= 0 should be skipped (bad milestone data)
     expect(flags).toHaveLength(0)
+  })
+})
+
+// =====================================================
+// TEMPLATE-DRIVEN FLAG ENGINE (Phase 6)
+// =====================================================
+
+describe('canEvaluateMetric', () => {
+  const essentialTemplate = ['patient_in', 'patient_out']
+  const fullTemplate = ['patient_in', 'anes_start', 'anes_end', 'prep_drape_complete', 'incision', 'closing', 'closing_complete', 'patient_out']
+
+  it('returns true for total_case_time with Essential template (has patient_in + patient_out)', () => {
+    expect(canEvaluateMetric('total_case_time', essentialTemplate)).toBe(true)
+  })
+
+  it('returns false for surgical_time with Essential template (missing incision + closing)', () => {
+    expect(canEvaluateMetric('surgical_time', essentialTemplate)).toBe(false)
+  })
+
+  it('returns false for anesthesia_time with Essential template', () => {
+    expect(canEvaluateMetric('anesthesia_time', essentialTemplate)).toBe(false)
+  })
+
+  it('returns false for pre_op_time with Essential template (missing incision)', () => {
+    expect(canEvaluateMetric('pre_op_time', essentialTemplate)).toBe(false)
+  })
+
+  it('returns false for closing_time with Essential template', () => {
+    expect(canEvaluateMetric('closing_time', essentialTemplate)).toBe(false)
+  })
+
+  it('returns false for emergence_time with Essential template', () => {
+    expect(canEvaluateMetric('emergence_time', essentialTemplate)).toBe(false)
+  })
+
+  it('returns false for prep_to_incision with Essential template', () => {
+    expect(canEvaluateMetric('prep_to_incision', essentialTemplate)).toBe(false)
+  })
+
+  it('returns true for fcots_delay with Essential template (has patient_in)', () => {
+    expect(canEvaluateMetric('fcots_delay', essentialTemplate)).toBe(true)
+  })
+
+  it('returns true for all timing metrics with full template', () => {
+    expect(canEvaluateMetric('total_case_time', fullTemplate)).toBe(true)
+    expect(canEvaluateMetric('surgical_time', fullTemplate)).toBe(true)
+    expect(canEvaluateMetric('anesthesia_time', fullTemplate)).toBe(true)
+    expect(canEvaluateMetric('pre_op_time', fullTemplate)).toBe(true)
+    expect(canEvaluateMetric('closing_time', fullTemplate)).toBe(true)
+    expect(canEvaluateMetric('emergence_time', fullTemplate)).toBe(true)
+    expect(canEvaluateMetric('prep_to_incision', fullTemplate)).toBe(true)
+  })
+
+  it('returns true for financial metrics regardless of template', () => {
+    expect(canEvaluateMetric('case_profit', essentialTemplate)).toBe(true)
+    expect(canEvaluateMetric('case_margin', essentialTemplate)).toBe(true)
+    expect(canEvaluateMetric('total_case_cost', essentialTemplate)).toBe(true)
+  })
+
+  it('returns true for quality metrics regardless of template', () => {
+    expect(canEvaluateMetric('missing_milestones', essentialTemplate)).toBe(true)
+    expect(canEvaluateMetric('milestone_out_of_order', essentialTemplate)).toBe(true)
+  })
+
+  it('returns true for cross-case metrics regardless of template', () => {
+    expect(canEvaluateMetric('turnover_time', essentialTemplate)).toBe(true)
+    expect(canEvaluateMetric('room_idle_gap', essentialTemplate)).toBe(true)
+  })
+
+  it('returns true for any metric when no template is provided', () => {
+    expect(canEvaluateMetric('surgical_time')).toBe(true)
+    expect(canEvaluateMetric('anesthesia_time')).toBe(true)
+    expect(canEvaluateMetric('closing_time')).toBe(true)
+  })
+})
+
+describe('extractMetricValue - Template-Driven', () => {
+  const essentialTemplate = ['patient_in', 'patient_out']
+  const milestones = createMilestoneMap()
+
+  it('returns null for surgical_time with Essential template', () => {
+    const value = extractMetricValue(milestones, 'surgical_time', null, null, undefined, essentialTemplate)
+    expect(value).toBeNull()
+  })
+
+  it('returns total_case_time with Essential template', () => {
+    const value = extractMetricValue(milestones, 'total_case_time', null, null, undefined, essentialTemplate)
+    expect(value).toBe(120) // patient_in to patient_out = 120 min
+  })
+
+  it('returns null for custom milestone pair when start milestone not in template', () => {
+    const value = extractMetricValue(milestones, 'custom_metric', 'incision', 'closing', undefined, essentialTemplate)
+    expect(value).toBeNull()
+  })
+
+  it('returns value for custom milestone pair when both milestones are in template', () => {
+    const fullTemplate = ['patient_in', 'incision', 'closing', 'patient_out']
+    const value = extractMetricValue(milestones, 'custom_metric', 'incision', 'closing', undefined, fullTemplate)
+    expect(value).toBe(60) // incision to closing = 60 min
+  })
+
+  it('counts missing milestones against Essential template (only patient_in + patient_out)', () => {
+    const sparseMap = createMilestoneMap({ patient_in: new Date('2026-02-15T07:30:00Z'), patient_out: undefined })
+    const value = extractMetricValue(sparseMap, 'missing_milestones', null, null, undefined, essentialTemplate)
+    expect(value).toBe(1) // Only patient_out is missing from template
+  })
+
+  it('counts 0 missing milestones for Essential case with both present', () => {
+    const value = extractMetricValue(milestones, 'missing_milestones', null, null, undefined, essentialTemplate)
+    expect(value).toBe(0)
+  })
+
+  it('counts sequence violations only for template milestones', () => {
+    // patient_out before patient_in
+    const badMilestones = createMilestoneMap({
+      patient_in: new Date('2026-02-15T09:30:00Z'),
+      patient_out: new Date('2026-02-15T07:30:00Z'),
+      incision: new Date('2026-02-15T08:00:00Z'),
+      closing: new Date('2026-02-15T07:50:00Z'), // out of order, but not in Essential template
+    })
+    const value = extractMetricValue(badMilestones, 'milestone_out_of_order', null, null, undefined, essentialTemplate)
+    expect(value).toBe(1) // Only patient_in > patient_out counts as violation
+  })
+})
+
+describe('evaluateCase - Template-Driven Skipping', () => {
+  const essentialTemplate = ['patient_in', 'patient_out']
+
+  it('skips surgical_time rule for Essential template case', () => {
+    const rule = createFlagRule({
+      metric: 'surgical_time',
+      threshold_type: 'absolute',
+      threshold_value: 30,
+      operator: 'gt',
+    })
+
+    const caseData = createCaseWithFinancials()
+
+    const flags = evaluateCase(
+      caseData, [rule], { facility: new Map(), personal: new Map() },
+      null, new Set(), null, essentialTemplate
+    )
+
+    expect(flags).toHaveLength(0) // surgical_time skipped for Essential
+  })
+
+  it('evaluates total_case_time rule for Essential template case', () => {
+    const rule = createFlagRule({
+      metric: 'total_case_time',
+      threshold_type: 'absolute',
+      threshold_value: 60,
+      operator: 'gt',
+    })
+
+    const caseData = createCaseWithFinancials()
+
+    const flags = evaluateCase(
+      caseData, [rule], { facility: new Map(), personal: new Map() },
+      null, new Set(), null, essentialTemplate
+    )
+
+    expect(flags).toHaveLength(1)
+    expect(flags[0].metric_value).toBe(120) // patient_in → patient_out = 120 min
+  })
+
+  it('evaluates financial rules for Essential template case', () => {
+    const rule = createFlagRule({
+      metric: 'case_profit',
+      threshold_type: 'absolute',
+      threshold_value: 2000,
+      operator: 'lt',
+    })
+
+    const caseData = createCaseWithFinancials({
+      completion_stats: { profit: 1500 } as CaseCompletionStats,
+    })
+
+    const flags = evaluateCase(
+      caseData, [rule], { facility: new Map(), personal: new Map() },
+      null, new Set(), null, essentialTemplate
+    )
+
+    expect(flags).toHaveLength(1)
+  })
+
+  it('evaluates missing_milestones against Essential template', () => {
+    const rule = createFlagRule({
+      metric: 'missing_milestones',
+      threshold_type: 'absolute',
+      threshold_value: 0,
+      operator: 'gt',
+      category: 'quality',
+    })
+
+    // Case has patient_in and patient_out — 0 missing from Essential template
+    const caseData = createCaseWithFinancials()
+
+    const flags = evaluateCase(
+      caseData, [rule], { facility: new Map(), personal: new Map() },
+      null, new Set(), null, essentialTemplate
+    )
+
+    expect(flags).toHaveLength(0) // 0 missing is NOT > 0
+  })
+
+  it('does not produce false-positive missing milestone flags for Essential case', () => {
+    const rule = createFlagRule({
+      metric: 'missing_milestones',
+      threshold_type: 'absolute',
+      threshold_value: 2,
+      operator: 'gt',
+      category: 'quality',
+    })
+
+    // Case has only patient_in and patient_out (matching Essential template)
+    const caseData = createCaseWithFinancials({
+      case_milestones: [
+        { facility_milestone_id: 'patient_in', recorded_at: '2026-02-15T07:30:00Z', facility_milestones: { name: 'patient_in' } },
+        { facility_milestone_id: 'patient_out', recorded_at: '2026-02-15T09:30:00Z', facility_milestones: { name: 'patient_out' } },
+      ],
+    })
+
+    // Without template: would count 6 missing milestones (> 2 threshold) → flag
+    const flagsWithoutTemplate = evaluateCase(
+      caseData, [rule], { facility: new Map(), personal: new Map() },
+      null, new Set(), null
+    )
+    expect(flagsWithoutTemplate).toHaveLength(1) // False positive without template
+
+    // With template: only 0 missing (both template milestones present) → no flag
+    const flagsWithTemplate = evaluateCase(
+      caseData, [rule], { facility: new Map(), personal: new Map() },
+      null, new Set(), null, essentialTemplate
+    )
+    expect(flagsWithTemplate).toHaveLength(0) // Correct: no false positive
+  })
+
+  it('skips multiple non-evaluable rules at once', () => {
+    const rules = [
+      createFlagRule({ id: 'r1', metric: 'surgical_time', threshold_type: 'absolute', threshold_value: 30, operator: 'gt' }),
+      createFlagRule({ id: 'r2', metric: 'anesthesia_time', threshold_type: 'absolute', threshold_value: 10, operator: 'gt' }),
+      createFlagRule({ id: 'r3', metric: 'closing_time', threshold_type: 'absolute', threshold_value: 5, operator: 'gt' }),
+      createFlagRule({ id: 'r4', metric: 'total_case_time', threshold_type: 'absolute', threshold_value: 60, operator: 'gt' }),
+      createFlagRule({ id: 'r5', metric: 'case_profit', threshold_type: 'absolute', threshold_value: 2000, operator: 'lt' }),
+    ]
+
+    const caseData = createCaseWithFinancials({
+      completion_stats: { profit: 1500 } as CaseCompletionStats,
+    })
+
+    const flags = evaluateCase(
+      caseData, rules, { facility: new Map(), personal: new Map() },
+      null, new Set(), null, essentialTemplate
+    )
+
+    // r1 (surgical_time), r2 (anesthesia_time), r3 (closing_time) skipped
+    // r4 (total_case_time): 120 > 60 → flagged
+    // r5 (case_profit): 1500 < 2000 → flagged
+    expect(flags).toHaveLength(2)
+    expect(flags.map(f => f.flag_rule_id).sort()).toEqual(['r4', 'r5'])
+  })
+})
+
+describe('evaluateCasesBatch - Template Milestones Map', () => {
+  it('passes template milestones per case', () => {
+    const essentialTemplate = ['patient_in', 'patient_out']
+
+    const rule = createFlagRule({
+      metric: 'surgical_time',
+      threshold_type: 'absolute',
+      threshold_value: 30,
+      operator: 'gt',
+    })
+
+    const case1 = createCaseWithFinancials({ id: 'case-essential' })
+    const case2 = createCaseWithFinancials({ id: 'case-full' })
+
+    const templateMap = new Map<string, string[]>()
+    templateMap.set('case-essential', essentialTemplate)
+    // case-full has no entry → falls back to CORE_MILESTONE_SEQUENCE
+
+    const flags = evaluateCasesBatch([case1, case2], [rule], templateMap)
+
+    // case-essential: surgical_time skipped (not in template)
+    // case-full: surgical_time = 60 > 30 → flagged
+    expect(flags).toHaveLength(1)
+    expect(flags[0].case_id).toBe('case-full')
+  })
+
+  it('works without template map (backward compatible)', () => {
+    const rule = createFlagRule({
+      metric: 'missing_milestones',
+      threshold_type: 'absolute',
+      threshold_value: 2,
+      operator: 'gt',
+    })
+
+    const caseData = createCaseWithFinancials({
+      case_milestones: [
+        { facility_milestone_id: 'patient_in', recorded_at: '2026-02-15T07:30:00Z', facility_milestones: { name: 'patient_in' } },
+        { facility_milestone_id: 'patient_out', recorded_at: '2026-02-15T09:30:00Z', facility_milestones: { name: 'patient_out' } },
+      ],
+    })
+
+    // No template map → uses CORE_MILESTONE_SEQUENCE → 6 missing > 2
+    const flags = evaluateCasesBatch([caseData], [rule])
+    expect(flags).toHaveLength(1)
+    expect(flags[0].metric_value).toBe(6) // 8 core - 2 present = 6
   })
 })
