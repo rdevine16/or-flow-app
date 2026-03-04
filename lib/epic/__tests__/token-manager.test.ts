@@ -111,7 +111,7 @@ describe('epicFhirRequest', () => {
   })
 
   it('retries on 429 rate limit with exponential backoff', async () => {
-    const mockSupabase = createMockSupabase('2026-03-02T12:00:00Z') // Valid token
+    const mockSupabase = createMockSupabase('2026-12-02T12:00:00Z') // Valid token
 
     // First call: 429, second call: 200
     vi.mocked(global.fetch)
@@ -136,7 +136,7 @@ describe('epicFhirRequest', () => {
 
   it('gives up after MAX_RETRIES on persistent 429', async () => {
     vi.useFakeTimers()
-    const mockSupabase = createMockSupabase('2026-03-02T12:00:00Z')
+    const mockSupabase = createMockSupabase('2026-12-02T12:00:00Z')
 
     // Always return 429
     vi.mocked(global.fetch).mockResolvedValue({
@@ -164,7 +164,7 @@ describe('epicFhirRequest', () => {
 
   it('handles timeout with AbortController', async () => {
     vi.useFakeTimers()
-    const mockSupabase = createMockSupabase('2026-03-02T12:00:00Z')
+    const mockSupabase = createMockSupabase('2026-12-02T12:00:00Z')
 
     // Simulate timeout by throwing AbortError
     vi.mocked(global.fetch).mockRejectedValue(
@@ -188,7 +188,7 @@ describe('epicFhirRequest', () => {
   })
 
   it('succeeds after timeout then success', async () => {
-    const mockSupabase = createMockSupabase('2026-03-02T12:00:00Z')
+    const mockSupabase = createMockSupabase('2026-12-02T12:00:00Z')
 
     // First call: timeout, second call: success
     vi.mocked(global.fetch)
@@ -209,7 +209,7 @@ describe('epicFhirRequest', () => {
   })
 
   it('passes correct timeout signal to fetch', async () => {
-    const mockSupabase = createMockSupabase('2026-03-02T12:00:00Z')
+    const mockSupabase = createMockSupabase('2026-12-02T12:00:00Z')
 
     vi.mocked(global.fetch).mockResolvedValue({
       ok: true,
@@ -226,7 +226,7 @@ describe('epicFhirRequest', () => {
   })
 
   it('handles 401 by marking token as expired', async () => {
-    const mockSupabase = createMockSupabase('2026-03-02T12:00:00Z')
+    const mockSupabase = createMockSupabase('2026-12-02T12:00:00Z')
 
     vi.mocked(global.fetch).mockResolvedValue({
       ok: false,

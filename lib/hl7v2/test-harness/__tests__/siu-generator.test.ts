@@ -268,7 +268,7 @@ describe('generateSIUMessage', () => {
     expect(parsed.message!.dg1[0].diagnosisCode).toBe('M17.11');
   });
 
-  it('includes anesthesiologist as second AIP', () => {
+  it('includes surgeon as AIP', () => {
     const result = generateSIUMessage({
       triggerEvent: 'S12',
       caseId: 'SC10001',
@@ -276,9 +276,9 @@ describe('generateSIUMessage', () => {
     });
 
     const parsed = parseSIUMessage(result.raw);
-    expect(parsed.message!.aip.length).toBe(2);
+    // Only surgeon AIP is generated (anesthesiologist omitted from generator)
+    expect(parsed.message!.aip.length).toBe(1);
     expect(parsed.message!.aip[0].role).toBe('SURGEON');
-    expect(parsed.message!.aip[1].role).toBe('ANESTHESIOLOGIST');
   });
 
   it('generates unique message control IDs', () => {
@@ -574,15 +574,13 @@ describe('round-trip: generate → parse → verify field mapping', () => {
     expect(msg.ail!.locationFacility).toBe(room.facility);
 
     // AIP fields → ORbit: surgeon_id + staff
-    expect(msg.aip.length).toBe(2);
+    // Only surgeon AIP is generated (anesthesiologist omitted from generator)
+    expect(msg.aip.length).toBe(1);
     const surgeonAip = msg.aip[0];
     expect(surgeonAip.role).toBe('SURGEON');
     expect(surgeonAip.personnelLastName).toBe(surgeon.lastName);
     expect(surgeonAip.personnelFirstName).toBe(surgeon.firstName);
     expect(surgeonAip.personnelNPI).toBe(surgeon.npi);
-
-    const anesthAip = msg.aip[1];
-    expect(anesthAip.role).toBe('ANESTHESIOLOGIST');
   });
 
   it('generates correct full-day scenario with verifiable case data', () => {

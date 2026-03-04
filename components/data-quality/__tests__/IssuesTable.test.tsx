@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, within } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import IssuesTable from '../IssuesTable'
 import type { MetricIssue, IssueType } from '@/lib/dataQuality'
 
@@ -207,6 +207,15 @@ describe('IssuesTable', () => {
   })
 
   describe('expiration display', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-03-01T10:00:00Z'))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
     it('shows days until expiration in monospace', () => {
       const now = new Date('2026-03-01T10:00:00Z')
       const expires = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000) // 10 days from now

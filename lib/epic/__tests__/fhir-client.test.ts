@@ -107,6 +107,7 @@ describe('searchSurgicalAppointments', () => {
     const result = await searchSurgicalAppointments(mockSupabase, mockFacilityId, {
       dateFrom: '2026-03-05',
       dateTo: '2026-03-12',
+      patientId: 'pat-001',
     })
 
     expect(result.error).toBeNull()
@@ -125,6 +126,7 @@ describe('searchSurgicalAppointments', () => {
     await searchSurgicalAppointments(mockSupabase, mockFacilityId, {
       dateFrom: '2026-03-05',
       dateTo: '2026-03-12',
+      patientId: 'pat-001',
       practitionerId: 'pract-001',
     })
 
@@ -142,6 +144,7 @@ describe('searchSurgicalAppointments', () => {
     const result = await searchSurgicalAppointments(mockSupabase, mockFacilityId, {
       dateFrom: '2026-03-05',
       dateTo: '2026-03-12',
+      patientId: 'pat-001',
     })
 
     expect(result.data).toEqual([])
@@ -157,6 +160,7 @@ describe('searchSurgicalAppointments', () => {
     const result = await searchSurgicalAppointments(mockSupabase, mockFacilityId, {
       dateFrom: '2026-03-05',
       dateTo: '2026-03-12',
+      patientId: 'pat-001',
     })
 
     expect(result.data).toEqual([])

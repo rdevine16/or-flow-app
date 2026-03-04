@@ -29,10 +29,11 @@ describe('TodaysSurgeons', () => {
     expect(screen.getByText('No surgeons scheduled today')).toBeTruthy()
   })
 
-  it('renders surgeon name and grade badge', () => {
+  it('renders surgeon name and score ring', () => {
     render(<TodaysSurgeons surgeons={[makeSurgeon()]} />)
     expect(screen.getByText('Dr. Smith')).toBeTruthy()
-    expect(screen.getByText('B')).toBeTruthy()
+    // ScoreRing renders the numeric score, not the grade letter
+    expect(screen.getByText('72')).toBeTruthy()
   })
 
   it('displays cases remaining count', () => {

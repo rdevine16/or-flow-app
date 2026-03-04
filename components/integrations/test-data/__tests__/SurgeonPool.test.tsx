@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import SurgeonPool from '../SurgeonPool'
 import { ehrTestDataDAL } from '@/lib/dal/ehr-test-data'
@@ -217,7 +217,7 @@ describe('SurgeonPool - Integration Tests', () => {
       facility_id: 'fac-1',
       name: 'Dr. Carol White',
       npi: '1111111111',
-      specialty: 'Cardiology',
+      specialty: 'Cardiothoracic',
       external_provider_id: null,
       created_at: '2026-03-01T12:00:00Z',
       updated_at: '2026-03-01T12:00:00Z',
@@ -252,12 +252,13 @@ describe('SurgeonPool - Integration Tests', () => {
     const npiInput = screen.getByPlaceholderText('1234567890')
     await user.type(npiInput, '1111111111')
 
-    const specialtySelect = screen.getByRole('combobox')
-    await user.selectOptions(specialtySelect, 'Cardiology')
+    // Scope within dialog to avoid ambiguity with page-level elements
+    const dialog = screen.getByRole('dialog')
+    const specialtySelect = within(dialog).getByRole('combobox')
+    await user.selectOptions(specialtySelect, 'Cardiothoracic')
 
-    const saveButtons = screen.getAllByText('Add Surgeon')
-    const saveButton = saveButtons.find((el) => el.closest('button'))
-    await user.click(saveButton!)
+    const saveButton = within(dialog).getByRole('button', { name: /Add Surgeon/i })
+    await user.click(saveButton)
 
     await waitFor(() => {
       expect(ehrTestDataDAL.createSurgeon).toHaveBeenCalledWith(
@@ -266,7 +267,7 @@ describe('SurgeonPool - Integration Tests', () => {
           facility_id: 'fac-1',
           name: 'Dr. Carol White',
           npi: '1111111111',
-          specialty: 'Cardiology',
+          specialty: 'Cardiothoracic',
         })
       )
     })
@@ -334,7 +335,9 @@ describe('SurgeonPool - Integration Tests', () => {
       expect(screen.getByText(/Delete surgeon?/i)).toBeInTheDocument()
     })
 
-    const confirmButton = screen.getByRole('button', { name: /confirm|delete/i })
+    // Scope to the dialog to avoid matching delete icon buttons in the table
+    const dialog = screen.getByRole('dialog')
+    const confirmButton = within(dialog).getByRole('button', { name: /delete/i })
     await user.click(confirmButton)
 
     await waitFor(() => {
@@ -387,9 +390,10 @@ describe('SurgeonPool - Workflow Tests', () => {
     const nameInput = screen.getByPlaceholderText(/SMITH, JOHN A/i)
     await user.type(nameInput, 'Dr. Test Surgeon')
 
-    const saveButtons = screen.getAllByText('Add Surgeon')
-    const saveButton = saveButtons.find((el) => el.closest('button'))
-    await user.click(saveButton!)
+    // Scope save button within dialog to avoid clicking the page-level Add button
+    const createDialog = screen.getByRole('dialog')
+    const saveButton = within(createDialog).getByRole('button', { name: /Add Surgeon/i })
+    await user.click(saveButton)
 
     // Trigger refetch by remounting
     rerender(<SurgeonPool facilityId="fac-1" />)
@@ -436,7 +440,9 @@ describe('SurgeonPool - Workflow Tests', () => {
       expect(screen.getByText(/Delete surgeon?/i)).toBeInTheDocument()
     })
 
-    const confirmButton = screen.getByRole('button', { name: /confirm|delete/i })
+    // Scope to dialog to avoid matching delete icon buttons
+    const dialog = screen.getByRole('dialog')
+    const confirmButton = within(dialog).getByRole('button', { name: /delete/i })
     await user.click(confirmButton)
 
     await waitFor(() => {

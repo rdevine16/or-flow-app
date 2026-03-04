@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import HL7v2TestHarnessPage from '../PageClient'
 import { ehrTestDataDAL } from '@/lib/dal/ehr-test-data'
@@ -122,15 +122,20 @@ describe('HL7v2TestHarnessPage - Workflow Tests', () => {
       expect(screen.getByText('Entity Pools')).toBeInTheDocument()
     })
 
+    // Select a facility first — sub-tabs only render when a facility is selected
+    const facilitySelector = screen.getByRole('combobox')
+    await user.selectOptions(facilitySelector, 'fac-1')
+
     const entityPoolsTab = screen.getByText('Entity Pools')
     await user.click(entityPoolsTab)
 
     await waitFor(() => {
-      expect(screen.getByText('Surgeons')).toBeInTheDocument()
-      expect(screen.getByText('Procedures')).toBeInTheDocument()
-      expect(screen.getByText('Rooms')).toBeInTheDocument()
-      expect(screen.getByText('Patients')).toBeInTheDocument()
-      expect(screen.getByText('Diagnoses')).toBeInTheDocument()
+      // Use getAllByText because sub-tab button AND pool heading both contain these labels
+      expect(screen.getAllByText('Surgeons').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Procedures').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Rooms').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Patients').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Diagnoses').length).toBeGreaterThanOrEqual(1)
     })
   })
 
@@ -142,11 +147,15 @@ describe('HL7v2TestHarnessPage - Workflow Tests', () => {
       expect(screen.getByText('Entity Pools')).toBeInTheDocument()
     })
 
+    // Select a facility first — sub-tabs only render when a facility is selected
+    const facilitySelector = screen.getByRole('combobox')
+    await user.selectOptions(facilitySelector, 'fac-1')
+
     const entityPoolsTab = screen.getByText('Entity Pools')
     await user.click(entityPoolsTab)
 
     await waitFor(() => {
-      expect(screen.getByText('Surgeons')).toBeInTheDocument()
+      expect(screen.getAllByText('Surgeons').length).toBeGreaterThanOrEqual(1)
     })
 
     // Default should show Surgeons pool
@@ -362,12 +371,13 @@ describe('HL7v2TestHarnessPage - Workflow Tests', () => {
     const npiInput = screen.getByPlaceholderText('1234567890')
     await user.type(npiInput, '1234567890')
 
-    const specialtySelect = screen.getByRole('combobox', { name: '' })
+    // Scope within dialog to avoid matching the facility selector combobox
+    const dialog = screen.getByRole('dialog')
+    const specialtySelect = within(dialog).getByRole('combobox')
     await user.selectOptions(specialtySelect, 'Orthopedics')
 
-    const saveButtons = screen.getAllByText('Add Surgeon')
-    const saveButton = saveButtons.find((el) => el.closest('button'))
-    await user.click(saveButton!)
+    const saveButton = within(dialog).getByRole('button', { name: /Add Surgeon/i })
+    await user.click(saveButton)
 
     await waitFor(() => {
       expect(ehrTestDataDAL.createSurgeon).toHaveBeenCalledWith(
