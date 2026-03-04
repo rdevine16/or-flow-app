@@ -15,10 +15,9 @@ import type { TierSlug } from '@/lib/tier-config'
 // UNIT TESTS: Settings category structure
 // ============================================
 describe('settingsCategories structure', () => {
-  it('has 8 categories with correct IDs', () => {
+  it('has 7 categories with correct IDs', () => {
     const expectedCategories = [
       'general',
-      'checkin',
       'organization',
       'case-management',
       'operations',
@@ -73,16 +72,17 @@ describe('getVisibleCategories - tier filtering', () => {
 
     const visible = getVisibleCategories(canAll, isTierAtLeast)
 
-    // Should have all categories (8 total)
-    expect(visible.length).toBe(8)
+    // Should have all categories (7 total)
+    expect(visible.length).toBe(7)
     expect(visible.find(c => c.id === 'financials')).toBeDefined()
     expect(visible.find(c => c.id === 'operations')).toBeDefined()
 
-    // Operations category should have all 5 items (rooms, closures, analytics, flags, integrations)
+    // Operations category should have all 6 items (rooms, closures, analytics, flags, voice-commands, integrations)
     const operations = visible.find(c => c.id === 'operations')
-    expect(operations?.items.length).toBe(5)
+    expect(operations?.items.length).toBe(6)
     expect(operations?.items.find(i => i.id === 'analytics')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'flags')).toBeDefined()
+    expect(operations?.items.find(i => i.id === 'voice-commands')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'integrations')).toBeDefined()
   })
 
@@ -94,15 +94,16 @@ describe('getVisibleCategories - tier filtering', () => {
 
     const visible = getVisibleCategories(canAll, isTierAtLeast)
 
-    // Should have 7 categories (no financials)
-    expect(visible.length).toBe(7)
+    // Should have 6 categories (no financials)
+    expect(visible.length).toBe(6)
     expect(visible.find(c => c.id === 'financials')).toBeUndefined()
 
-    // Operations category should have 4 items (rooms, closures, analytics, flags — no integrations)
+    // Operations category should have 5 items (rooms, closures, analytics, flags, voice-commands — no integrations)
     const operations = visible.find(c => c.id === 'operations')
-    expect(operations?.items.length).toBe(4)
+    expect(operations?.items.length).toBe(5)
     expect(operations?.items.find(i => i.id === 'analytics')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'flags')).toBeDefined()
+    expect(operations?.items.find(i => i.id === 'voice-commands')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'integrations')).toBeUndefined()
   })
 
@@ -114,15 +115,16 @@ describe('getVisibleCategories - tier filtering', () => {
 
     const visible = getVisibleCategories(canAll, isTierAtLeast)
 
-    // Should have 7 categories (no financials)
-    expect(visible.length).toBe(7)
+    // Should have 6 categories (no financials)
+    expect(visible.length).toBe(6)
     expect(visible.find(c => c.id === 'financials')).toBeUndefined()
 
-    // Operations category should have 2 items (rooms, closures — no analytics, flags, integrations)
+    // Operations category should have 3 items (rooms, closures, voice-commands — no analytics, flags, integrations)
     const operations = visible.find(c => c.id === 'operations')
-    expect(operations?.items.length).toBe(2)
+    expect(operations?.items.length).toBe(3)
     expect(operations?.items.find(i => i.id === 'rooms')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'closures')).toBeDefined()
+    expect(operations?.items.find(i => i.id === 'voice-commands')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'analytics')).toBeUndefined()
     expect(operations?.items.find(i => i.id === 'flags')).toBeUndefined()
     expect(operations?.items.find(i => i.id === 'integrations')).toBeUndefined()
@@ -134,7 +136,7 @@ describe('getVisibleCategories - tier filtering', () => {
     const visible = getVisibleCategories(canAll)
 
     // Should have all categories since tier filtering is skipped when isTierAtLeast is undefined
-    expect(visible.length).toBe(8)
+    expect(visible.length).toBe(7)
     expect(visible.find(c => c.id === 'financials')).toBeDefined()
   })
 })
@@ -170,9 +172,9 @@ describe('getVisibleCategories - permission filtering', () => {
     const general = visible.find(c => c.id === 'general')
     expect(general?.items.length).toBe(3)
 
-    // Operations category should have 5 items
+    // Operations category should have 6 items
     const operations = visible.find(c => c.id === 'operations')
-    expect(operations?.items.length).toBe(5)
+    expect(operations?.items.length).toBe(6)
   })
 
   it('filters categories that become empty after permission filtering', () => {
