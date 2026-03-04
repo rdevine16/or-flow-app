@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -503,7 +504,7 @@ if (error) {
   // Loading state
   if (userLoading || loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout><AdminConfigTabLayout>
         <div className="p-6">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-slate-200 rounded w-1/3"></div>
@@ -515,7 +516,7 @@ if (error) {
             </div>
           </div>
         </div>
-      </DashboardLayout>
+      </AdminConfigTabLayout></DashboardLayout>
     )
   }
 
@@ -528,7 +529,7 @@ if (error) {
   const inactiveCount = (fields || []).filter(f => !f.is_active).length
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <ErrorBanner message={error} />
       <div className="p-6 max-w-4xl mx-auto">
         {/* Header */}
@@ -670,6 +671,6 @@ if (error) {
           />
         )}
       </div>
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }

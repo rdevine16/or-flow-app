@@ -141,7 +141,7 @@ describe('resolveBreadcrumbs', () => {
       const result = resolveBreadcrumbs('/admin/settings/milestones', emptyLabels, adminOptions)
       expect(result).toEqual([
         { label: 'Admin', href: '/admin' },
-        { label: 'Settings', href: null },
+        { label: 'Configuration', href: '/admin/configuration' },
         { label: 'Milestones', href: null },
       ])
     })

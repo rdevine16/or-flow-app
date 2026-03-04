@@ -14,6 +14,7 @@ import { useUser } from '@/lib/UserContext'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import { PermissionMatrix, Permission } from '@/components/permissions/PermissionMatrix'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -237,9 +238,9 @@ export default function PermissionTemplatesPage() {
   // Loading state
   if (userLoading || (!isGlobalAdmin && !userLoading)) {
     return (
-      <DashboardLayout>
+      <DashboardLayout><AdminConfigTabLayout>
         <PageLoader />
-      </DashboardLayout>
+      </AdminConfigTabLayout></DashboardLayout>
     )
   }
 
@@ -247,7 +248,7 @@ export default function PermissionTemplatesPage() {
   const error = permsError || templatesError
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
         {/* Header */}
         <div>
@@ -320,7 +321,7 @@ export default function PermissionTemplatesPage() {
           />
         ) : null}
       </div>
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }
 

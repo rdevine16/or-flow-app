@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import Container from '@/components/ui/Container'
 import { useUser } from '@/lib/UserContext'
 import { delayTypeAudit } from '@/lib/audit-logger'
@@ -142,14 +143,14 @@ export default function AdminDelayTypesPage() {
 
   if (userLoading || loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout><AdminConfigTabLayout>
         <Container className="py-8">
           <ErrorBanner message={error} />
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         </Container>
-      </DashboardLayout>
+      </AdminConfigTabLayout></DashboardLayout>
     )
   }
 
@@ -158,7 +159,7 @@ export default function AdminDelayTypesPage() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <Container className="py-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
@@ -352,6 +353,6 @@ export default function AdminDelayTypesPage() {
         itemName={deleteTarget?.display_name || ''}
         itemType="delay type"
       />
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }

@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import Container from '@/components/ui/Container'
 import { Info } from 'lucide-react'
 
@@ -399,7 +400,7 @@ export default function AdminAnalyticsSettingsPage() {
   // ── Loading state ──
   if (userLoading || loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout><AdminConfigTabLayout>
         <Container className="py-8">
           <h1 className="text-2xl font-semibold text-slate-900 mb-1">Analytics Settings Template</h1>
           <p className="text-slate-500 mb-6">
@@ -407,14 +408,14 @@ export default function AdminAnalyticsSettingsPage() {
           </p>
           <PageLoader message="Loading template settings..." />
         </Container>
-      </DashboardLayout>
+      </AdminConfigTabLayout></DashboardLayout>
     )
   }
 
   if (!isGlobalAdmin) return null
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <Container className="py-8">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-2xl font-semibold text-slate-900 mb-1">Analytics Settings Template</h1>
@@ -949,6 +950,6 @@ export default function AdminAnalyticsSettingsPage() {
           </div>
         </div>
       </Container>
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }

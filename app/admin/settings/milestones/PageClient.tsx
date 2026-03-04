@@ -8,6 +8,7 @@ import { useState, useMemo, useCallback, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import Container from '@/components/ui/Container'
 import { milestoneTypeAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -63,7 +64,7 @@ export default function AdminMilestonesSettingsPage() {
 
 function AdminPageSkeleton() {
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <Container className="py-8">
         <div className="max-w-5xl mx-auto">
           <Skeleton className="h-8 w-64 mb-2" />
@@ -76,7 +77,7 @@ function AdminPageSkeleton() {
           <Skeleton className="h-96 w-full rounded-lg" />
         </div>
       </Container>
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }
 
@@ -120,7 +121,7 @@ function AdminMilestonesContent() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <Container className="py-8">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-between mb-1">
@@ -161,7 +162,7 @@ function AdminMilestonesContent() {
           {activeTab === 'procedures' && <AdminProcedureTypeAssignment />}
         </div>
       </Container>
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }
 

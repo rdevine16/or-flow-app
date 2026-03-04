@@ -13,6 +13,7 @@ import type { VoiceCommandAlias } from '@/lib/dal/voice-commands'
 import { AliasGroupSection } from '@/components/settings/voice-commands/AliasGroupSection'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 
 // ============================================
 // TYPES
@@ -201,7 +202,7 @@ export default function PageClient() {
   const actionCount = actionItems.length
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <div>
         {/* Wake word info banner */}
         <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-4 py-3">
@@ -365,6 +366,6 @@ export default function PageClient() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }

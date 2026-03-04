@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import Container from '@/components/ui/Container'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -325,7 +326,7 @@ export default function AdminNotificationTemplatesPage() {
 
   if (userLoading || !isGlobalAdmin) {
     return (
-      <DashboardLayout>
+      <DashboardLayout><AdminConfigTabLayout>
         <Container>
           <ErrorBanner message={error} />
           <div className="py-8">
@@ -336,12 +337,12 @@ export default function AdminNotificationTemplatesPage() {
             <PageLoader message="Loading notification templates..." />
           </div>
         </Container>
-      </DashboardLayout>
+      </AdminConfigTabLayout></DashboardLayout>
     )
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <Container>
         <div className="py-8">
           {/* Header */}
@@ -663,6 +664,6 @@ export default function AdminNotificationTemplatesPage() {
         itemName={archiveTarget?.display_label || ''}
         itemType="notification template"
       />
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }

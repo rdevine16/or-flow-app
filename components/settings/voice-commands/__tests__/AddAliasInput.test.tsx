@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AddAliasInput } from '../AddAliasInput'
-import { voiceCommandsDAL } from '@/lib/dal/voice-commands'
+import { voiceCommandsDAL, type VoiceCommandAlias } from '@/lib/dal/voice-commands'
 
 // Mock dependencies
 vi.mock('@/lib/supabase', () => ({
@@ -76,7 +76,7 @@ describe('AddAliasInput', () => {
       })
 
       const { useToast } = await import('@/components/ui/Toast/ToastProvider')
-      vi.mocked(useToast).mockReturnValue({ showToast: mockShowToast })
+      vi.mocked(useToast).mockReturnValue({ toasts: [], showToast: mockShowToast, dismissToast: vi.fn(), dismissAll: vi.fn() })
 
       render(<AddAliasInput {...defaultProps} />)
 
@@ -154,7 +154,7 @@ describe('AddAliasInput', () => {
       vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as VoiceCommandAlias, error: null })
 
       const { useToast } = await import('@/components/ui/Toast/ToastProvider')
-      vi.mocked(useToast).mockReturnValue({ showToast: mockShowToast })
+      vi.mocked(useToast).mockReturnValue({ toasts: [], showToast: mockShowToast, dismissToast: vi.fn(), dismissAll: vi.fn() })
 
       render(<AddAliasInput {...defaultProps} />)
 
@@ -208,7 +208,7 @@ describe('AddAliasInput', () => {
       })
 
       const { useToast } = await import('@/components/ui/Toast/ToastProvider')
-      vi.mocked(useToast).mockReturnValue({ showToast: mockShowToast })
+      vi.mocked(useToast).mockReturnValue({ toasts: [], showToast: mockShowToast, dismissToast: vi.fn(), dismissAll: vi.fn() })
 
       render(<AddAliasInput {...defaultProps} />)
 
@@ -237,7 +237,7 @@ describe('AddAliasInput', () => {
       })
 
       const { useToast } = await import('@/components/ui/Toast/ToastProvider')
-      vi.mocked(useToast).mockReturnValue({ showToast: mockShowToast })
+      vi.mocked(useToast).mockReturnValue({ toasts: [], showToast: mockShowToast, dismissToast: vi.fn(), dismissAll: vi.fn() })
 
       render(<AddAliasInput {...defaultProps} />)
 
@@ -294,11 +294,11 @@ describe('AddAliasInput', () => {
   describe('Loading States', () => {
     it('disables input and button while saving', async () => {
       const user = userEvent.setup()
-      let resolveAdd: any
-      const addPromise = new Promise((resolve) => { resolveAdd = resolve })
+      let resolveAdd: (value: { data: VoiceCommandAlias | null; error: null }) => void
+      const addPromise = new Promise<{ data: VoiceCommandAlias | null; error: null }>((resolve) => { resolveAdd = resolve })
 
       vi.mocked(voiceCommandsDAL.checkDuplicate).mockResolvedValue({ data: null, error: null })
-      vi.mocked(voiceCommandsDAL.addAlias).mockReturnValue(addPromise as any)
+      vi.mocked(voiceCommandsDAL.addAlias).mockReturnValue(addPromise)
 
       render(<AddAliasInput {...defaultProps} />)
 
@@ -321,11 +321,11 @@ describe('AddAliasInput', () => {
 
     it('shows spinner icon while saving', async () => {
       const user = userEvent.setup()
-      let resolveAdd: any
-      const addPromise = new Promise((resolve) => { resolveAdd = resolve })
+      let resolveAdd: (value: { data: VoiceCommandAlias | null; error: null }) => void
+      const addPromise = new Promise<{ data: VoiceCommandAlias | null; error: null }>((resolve) => { resolveAdd = resolve })
 
       vi.mocked(voiceCommandsDAL.checkDuplicate).mockResolvedValue({ data: null, error: null })
-      vi.mocked(voiceCommandsDAL.addAlias).mockReturnValue(addPromise as any)
+      vi.mocked(voiceCommandsDAL.addAlias).mockReturnValue(addPromise)
 
       render(<AddAliasInput {...defaultProps} />)
 

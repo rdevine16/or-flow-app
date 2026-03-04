@@ -14,6 +14,7 @@ import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import Container from '@/components/ui/Container'
 import { CategoryFilter } from '@/components/settings/flags/CategoryFilter'
 import { FlagRuleTable } from '@/components/settings/flags/FlagRuleTable'
@@ -503,7 +504,7 @@ export default function AdminFlagRulesPage() {
 
   if (userLoading || loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout><AdminConfigTabLayout>
         <Container className="py-8">
           <ErrorBanner message={error} />
           <h1 className="text-2xl font-semibold text-slate-900 mb-1">Flag Rule Templates</h1>
@@ -512,7 +513,7 @@ export default function AdminFlagRulesPage() {
           </p>
           <PageLoader message="Loading flag rule templates..." />
         </Container>
-      </DashboardLayout>
+      </AdminConfigTabLayout></DashboardLayout>
     )
   }
 
@@ -525,7 +526,7 @@ export default function AdminFlagRulesPage() {
   // =====================================================
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <Container className="py-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
@@ -774,6 +775,6 @@ export default function AdminFlagRulesPage() {
           dynamicMetrics={dynamicMetrics}
         />
       </Container>
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }

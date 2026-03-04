@@ -193,6 +193,23 @@ export const adminConfigCategories: AdminConfigCategory[] = [
 // LOOKUP UTILITIES
 // =====================================================
 
+/** Map a path to its admin config category ID. */
+export function getAdminCategoryForPath(pathname: string): string | null {
+  for (const category of adminConfigCategories) {
+    for (const item of category.items) {
+      if (pathname === item.href || pathname.startsWith(item.href + '/')) {
+        return category.id
+      }
+    }
+  }
+  return null
+}
+
+/** Check if a path belongs to an admin config page. */
+export function isAdminConfigPath(pathname: string): boolean {
+  return getAdminCategoryForPath(pathname) !== null
+}
+
 /** Filter categories based on user permissions and subscription tier. */
 export function getVisibleAdminCategories(
   can: (key: string) => boolean,

@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import Container from '@/components/ui/Container'
 import { useUser } from '@/lib/UserContext'
 import { genericAuditLog } from '@/lib/audit-logger'
@@ -202,14 +203,14 @@ const handleDelete = async (id: string) => {
 
   if (userLoading || loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout><AdminConfigTabLayout>
         <Container className="py-8">
           <ErrorBanner message={error} />
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         </Container>
-      </DashboardLayout>
+      </AdminConfigTabLayout></DashboardLayout>
     )
   }
 
@@ -218,7 +219,7 @@ const handleDelete = async (id: string) => {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <Container className="py-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
@@ -421,6 +422,6 @@ const handleDelete = async (id: string) => {
         itemName={archiveTarget?.name || ''}
         itemType="implant company"
       />
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }

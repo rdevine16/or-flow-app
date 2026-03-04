@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import Container from '@/components/ui/Container'
 import { procedureCategoryAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -316,7 +317,7 @@ export default function AdminProcedureCategoriesPage() {
   })
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <Container className="py-8">
           <ErrorBanner message={error} />
         <div className="max-w-4xl mx-auto">
@@ -598,6 +599,6 @@ export default function AdminProcedureCategoriesPage() {
         confirmText={confirmModal.confirmLabel}
         loading={saving}
       />
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }

@@ -77,13 +77,12 @@ describe('getVisibleCategories - tier filtering', () => {
     expect(visible.find(c => c.id === 'financials')).toBeDefined()
     expect(visible.find(c => c.id === 'operations')).toBeDefined()
 
-    // Operations category should have all 7 items (rooms, closures, analytics, flags, voice-commands, voice-commands-global, integrations)
+    // Operations category should have all 6 items (rooms, closures, analytics, flags, voice-commands, integrations)
     const operations = visible.find(c => c.id === 'operations')
-    expect(operations?.items.length).toBe(7)
+    expect(operations?.items.length).toBe(6)
     expect(operations?.items.find(i => i.id === 'analytics')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'flags')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'voice-commands')).toBeDefined()
-    expect(operations?.items.find(i => i.id === 'voice-commands-global')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'integrations')).toBeDefined()
   })
 
@@ -99,13 +98,12 @@ describe('getVisibleCategories - tier filtering', () => {
     expect(visible.length).toBe(6)
     expect(visible.find(c => c.id === 'financials')).toBeUndefined()
 
-    // Operations category should have 6 items (rooms, closures, analytics, flags, voice-commands, voice-commands-global — no integrations)
+    // Operations category should have 5 items (rooms, closures, analytics, flags, voice-commands — no integrations)
     const operations = visible.find(c => c.id === 'operations')
-    expect(operations?.items.length).toBe(6)
+    expect(operations?.items.length).toBe(5)
     expect(operations?.items.find(i => i.id === 'analytics')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'flags')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'voice-commands')).toBeDefined()
-    expect(operations?.items.find(i => i.id === 'voice-commands-global')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'integrations')).toBeUndefined()
   })
 
@@ -121,13 +119,12 @@ describe('getVisibleCategories - tier filtering', () => {
     expect(visible.length).toBe(6)
     expect(visible.find(c => c.id === 'financials')).toBeUndefined()
 
-    // Operations category should have 4 items (rooms, closures, voice-commands, voice-commands-global — no analytics, flags, integrations)
+    // Operations category should have 3 items (rooms, closures, voice-commands — no analytics, flags, integrations)
     const operations = visible.find(c => c.id === 'operations')
-    expect(operations?.items.length).toBe(4)
+    expect(operations?.items.length).toBe(3)
     expect(operations?.items.find(i => i.id === 'rooms')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'closures')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'voice-commands')).toBeDefined()
-    expect(operations?.items.find(i => i.id === 'voice-commands-global')).toBeDefined()
     expect(operations?.items.find(i => i.id === 'analytics')).toBeUndefined()
     expect(operations?.items.find(i => i.id === 'flags')).toBeUndefined()
     expect(operations?.items.find(i => i.id === 'integrations')).toBeUndefined()
@@ -175,9 +172,9 @@ describe('getVisibleCategories - permission filtering', () => {
     const general = visible.find(c => c.id === 'general')
     expect(general?.items.length).toBe(3)
 
-    // Operations category should have 7 items
+    // Operations category should have 6 items
     const operations = visible.find(c => c.id === 'operations')
-    expect(operations?.items.length).toBe(7)
+    expect(operations?.items.length).toBe(6)
   })
 
   it('filters categories that become empty after permission filtering', () => {

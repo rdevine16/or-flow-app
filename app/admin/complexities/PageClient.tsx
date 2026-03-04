@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import Container from '@/components/ui/Container'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Modal } from '@/components/ui/Modal'
@@ -247,19 +248,19 @@ const { data, error } = await supabase
 
   if (userLoading || !isGlobalAdmin) {
     return (
-      <DashboardLayout>
+      <DashboardLayout><AdminConfigTabLayout>
         <Container>
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
           </div>
         </Container>
-      </DashboardLayout>
+      </AdminConfigTabLayout></DashboardLayout>
     )
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <Container>
         <div className="py-8">
           {/* Page Header */}
@@ -498,6 +499,6 @@ const { data, error } = await supabase
         itemName={deleteTarget?.display_name || ''}
         itemType="complexity"
       />
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }

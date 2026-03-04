@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import Container from '@/components/ui/Container'
 import { cancellationReasonAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -244,7 +245,7 @@ export default function AdminCancellationReasonsPage() {
 
   if (!userLoading && !isGlobalAdmin) {
     return (
-      <DashboardLayout>
+      <DashboardLayout><AdminConfigTabLayout>
         <Container className="py-8">
           <ErrorBanner message={error} />
           <div className="text-center py-12">
@@ -252,7 +253,7 @@ export default function AdminCancellationReasonsPage() {
             <p className="text-slate-500 mt-2">You need global admin privileges to access this page.</p>
           </div>
         </Container>
-      </DashboardLayout>
+      </AdminConfigTabLayout></DashboardLayout>
     )
   }
 
@@ -261,7 +262,7 @@ export default function AdminCancellationReasonsPage() {
   // ============================================================================
 
   return (
-    <DashboardLayout>
+    <DashboardLayout><AdminConfigTabLayout>
       <Container className="py-8">
         {/* Page Header */}
         <div className="mb-8">
@@ -504,6 +505,6 @@ export default function AdminCancellationReasonsPage() {
         itemName={archiveTarget?.display_name || ''}
         itemType="cancellation reason"
       />
-    </DashboardLayout>
+    </AdminConfigTabLayout></DashboardLayout>
   )
 }
