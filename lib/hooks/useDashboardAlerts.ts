@@ -84,7 +84,65 @@ async function queryUnvalidatedCases(
   }
 }
 
-/** Cases from today/yesterday missing milestone data */
+/** Supabase returns belongs-to joins as object or single-element array */
+function normalizeJoin<T>(data: T | T[] | null): T | null {
+  if (Array.isArray(data)) return data[0] || null
+  return data
+}
+
+/** Batch-fetch facility templates → Map<template_id, Set<milestone_name>> */
+async function fetchTemplateMap(
+  supabase: SupabaseClient,
+  facilityId: string
+): Promise<{ templateMap: Map<string, Set<string>>; defaultTemplateId: string | null }> {
+  const { data: templates, error } = await supabase
+    .from('milestone_templates')
+    .select(`
+      id,
+      is_default,
+      milestone_template_items (
+        facility_milestones (name)
+      )
+    `)
+    .eq('facility_id', facilityId)
+    .eq('is_active', true)
+
+  if (error || !templates) {
+    log.error('Failed to fetch facility templates', { error: error?.message })
+    return { templateMap: new Map(), defaultTemplateId: null }
+  }
+
+  const templateMap = new Map<string, Set<string>>()
+  let defaultTemplateId: string | null = null
+
+  for (const template of templates) {
+    const milestoneNames = new Set<string>()
+    const items = template.milestone_template_items as Array<{
+      facility_milestones: { name: string } | { name: string }[] | null
+    }> | null
+    for (const item of items ?? []) {
+      const fm = normalizeJoin(item.facility_milestones)
+      if (fm?.name) milestoneNames.add(fm.name)
+    }
+    templateMap.set(template.id, milestoneNames)
+    if (template.is_default) defaultTemplateId = template.id
+  }
+
+  return { templateMap, defaultTemplateId }
+}
+
+/** Resolve expected milestone names for a case, falling back to facility default */
+function getExpectedMilestones(
+  caseTemplateId: string | null,
+  templateMap: Map<string, Set<string>>,
+  defaultTemplateId: string | null
+): Set<string> {
+  const templateId = caseTemplateId || defaultTemplateId
+  if (!templateId) return new Set()
+  return templateMap.get(templateId) ?? new Set()
+}
+
+/** Cases from today/yesterday missing milestone data (template-scoped) */
 async function queryMissingMilestones(
   supabase: SupabaseClient,
   facilityId: string
@@ -96,40 +154,70 @@ async function queryMissingMilestones(
   const todayStr = getLocalDateString(today)
   const yesterdayStr = getLocalDateString(yesterday)
 
-  // Only check completed cases — in_progress cases naturally have unrecorded milestones
-  const { data: completedStatus } = await supabase
-    .from('case_statuses')
-    .select('id')
-    .eq('name', 'completed')
-    .single()
+  // Fetch completed status and facility templates in parallel
+  const [statusResult, templateResult] = await Promise.all([
+    supabase
+      .from('case_statuses')
+      .select('id')
+      .eq('name', 'completed')
+      .single(),
+    fetchTemplateMap(supabase, facilityId),
+  ])
 
-  if (!completedStatus) return null
+  if (!statusResult.data) return null
+  const { templateMap, defaultTemplateId } = templateResult
 
-  // Fetch completed cases from today/yesterday that are NOT validated
-  // and have at least one milestone with recorded_at IS NULL
+  // Fetch completed cases with ALL their milestones and their template assignment
   const { data: cases, error } = await supabase
     .from('cases')
     .select(`
       id,
-      case_milestones!inner (
-        recorded_at
+      milestone_template_id,
+      case_milestones (
+        recorded_at,
+        facility_milestones (name)
       )
     `)
     .eq('facility_id', facilityId)
     .gte('scheduled_date', yesterdayStr)
     .lte('scheduled_date', todayStr)
-    .eq('status_id', completedStatus.id)
+    .eq('status_id', statusResult.data.id)
     .not('data_validated', 'is', true)
-    .is('case_milestones.recorded_at', null)
 
   if (error) {
     log.error('Failed to query missing milestones', { error: error.message })
     return null
   }
 
-  // Deduplicate by case ID (a case may have multiple null milestones)
-  const uniqueCaseIds = new Set(cases?.map((c) => c.id) ?? [])
-  const count = uniqueCaseIds.size
+  // For each case, check if any EXPECTED milestones (from template) are missing
+  const casesWithMissing: string[] = []
+
+  for (const c of cases ?? []) {
+    const expected = getExpectedMilestones(c.milestone_template_id, templateMap, defaultTemplateId)
+    if (expected.size === 0) continue
+
+    // Build set of milestones that have been recorded
+    const recorded = new Set<string>()
+    const milestones = Array.isArray(c.case_milestones) ? c.case_milestones : []
+    for (const m of milestones) {
+      if (m.recorded_at) {
+        const fm = normalizeJoin(
+          m.facility_milestones as { name: string } | { name: string }[] | null
+        )
+        if (fm?.name) recorded.add(fm.name)
+      }
+    }
+
+    // Check if any expected milestone is missing
+    for (const name of expected) {
+      if (!recorded.has(name)) {
+        casesWithMissing.push(c.id)
+        break
+      }
+    }
+  }
+
+  const count = casesWithMissing.length
 
   if (count === 0) return null
 
