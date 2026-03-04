@@ -1,11 +1,16 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useUser } from '@/lib/UserContext'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Search, Mic, Milestone, Zap } from 'lucide-react'
+import { Search, Mic, Milestone, Zap, Loader2 } from 'lucide-react'
+import { createClient } from '@/lib/supabase'
+import { voiceCommandsDAL } from '@/lib/dal/voice-commands'
+import type { VoiceCommandAlias } from '@/lib/dal/voice-commands'
+import { AliasGroupSection } from '@/components/settings/voice-commands/AliasGroupSection'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // ============================================
 // TYPES
@@ -71,6 +76,7 @@ const UTILITY_ACTIONS: UtilityAction[] = [
 
 export default function VoiceCommandsPageClient() {
   const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { showToast } = useToast()
 
   // UI state
   const [activeTab, setActiveTab] = useState<ObjectiveTab>('milestones')
@@ -90,6 +96,22 @@ export default function VoiceCommandsPageClient() {
       return data || []
     },
     { deps: [], enabled: !userLoading }
+  )
+
+  // Fetch all aliases for the facility
+  const {
+    data: allAliases,
+    loading: aliasesLoading,
+    error: aliasesError,
+    refetch: refetchAliases,
+  } = useSupabaseQuery<VoiceCommandAlias[]>(
+    async (sb) => {
+      if (!effectiveFacilityId) return []
+      const { data, error } = await voiceCommandsDAL.listByFacility(sb, effectiveFacilityId)
+      if (error) throw error
+      return data
+    },
+    { deps: [effectiveFacilityId], enabled: !!effectiveFacilityId }
   )
 
   // Build unified objective items
@@ -129,6 +151,43 @@ export default function VoiceCommandsPageClient() {
     if (!selectedId) return null
     return [...milestoneItems, ...actionItems].find((i) => i.id === selectedId) || null
   }, [selectedId, milestoneItems, actionItems])
+
+  // Group aliases for the selected item by action_type
+  const aliasGroups = useMemo(() => {
+    if (!selectedItem || !allAliases) return []
+
+    if (selectedItem.kind === 'milestone') {
+      // Milestones have record + cancel action types
+      const recordAliases = allAliases.filter(
+        (a) => a.milestone_type_id === selectedItem.milestoneTypeId && a.action_type === 'record'
+      )
+      const cancelAliases = allAliases.filter(
+        (a) => a.milestone_type_id === selectedItem.milestoneTypeId && a.action_type === 'cancel'
+      )
+      return [
+        { actionType: 'record', aliases: recordAliases },
+        { actionType: 'cancel', aliases: cancelAliases },
+      ]
+    } else {
+      // Utility actions have only their own action_type
+      const filtered = allAliases.filter(
+        (a) => a.action_type === selectedItem.actionType && a.milestone_type_id === null
+      )
+      return [{ actionType: selectedItem.actionType, aliases: filtered }]
+    }
+  }, [selectedItem, allAliases])
+
+  // Delete handler
+  const handleDelete = useCallback(async (aliasId: string) => {
+    const supabase = createClient()
+    const { error } = await voiceCommandsDAL.deleteAlias(supabase, aliasId)
+    if (error) {
+      showToast({ type: 'error', title: 'Failed to delete alias', message: error.message })
+      return
+    }
+    showToast({ type: 'success', title: 'Alias deleted' })
+    await refetchAliases()
+  }, [showToast, refetchAliases])
 
   // Loading / error states
   const loading = userLoading || milestonesLoading
@@ -237,14 +296,30 @@ export default function VoiceCommandsPageClient() {
               </div>
             </div>
 
-            {/* Placeholder for Phase 3 alias detail */}
-            <div className="flex-1 flex flex-col items-center justify-center">
-              <Mic className="w-10 h-10 text-slate-300 mb-3" />
-              <p className="text-sm font-medium text-slate-500">Aliases will appear here</p>
-              <p className="text-xs text-slate-400 mt-1">
-                Voice command alias management coming in the next phase.
-              </p>
-            </div>
+            {/* Alias detail */}
+            {aliasesLoading ? (
+              <div className="flex-1 flex items-center justify-center">
+                <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+              </div>
+            ) : aliasesError ? (
+              <div className="p-4">
+                <ErrorBanner message={aliasesError} />
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-4">
+                {aliasGroups.map((group) => (
+                  <AliasGroupSection
+                    key={group.actionType}
+                    actionType={group.actionType}
+                    aliases={group.aliases}
+                    milestoneTypeId={selectedItem.milestoneTypeId}
+                    facilityId={effectiveFacilityId}
+                    onDelete={handleDelete}
+                    onAdded={refetchAliases}
+                  />
+                ))}
+              </div>
+            )}
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center">
