@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
+import { FeatureGate } from '@/components/FeatureGate'
 import { getImpersonationState } from '@/lib/impersonation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
@@ -170,7 +171,7 @@ const SURGEON_STATUS_CONFIG: Record<
 
 export default function AnalyticsOverviewPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin, can } = useUser()
+  const { userData, loading: userLoading, isGlobalAdmin, can, isTierAtLeast } = useUser()
 
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
@@ -716,8 +717,9 @@ export default function AnalyticsOverviewPage() {
               </div>
 
               {/* ======================================== */}
-              {/* LAYER 3: TWO-COLUMN OPERATIONAL          */}
+              {/* LAYER 3: TWO-COLUMN OPERATIONAL (Pro+)   */}
               {/* ======================================== */}
+              <FeatureGate requires="professional" mode="blur" upgradeMessage="Upgrade to Professional to view operational analysis and surgeon idle time">
               <div className="stagger-item grid grid-cols-1 lg:grid-cols-2 gap-5">
                 {/* LEFT: Where are we losing time? */}
                 <Section title="Where are we losing time?" subtitle="Room turnover & non-operative time">
@@ -842,10 +844,12 @@ export default function AnalyticsOverviewPage() {
                   </div>
                 </Section>
               </div>
+              </FeatureGate>
 
               {/* ======================================== */}
-              {/* LAYER 4: AI INSIGHTS                     */}
+              {/* LAYER 4: AI INSIGHTS (Pro+)              */}
               {/* ======================================== */}
+              <FeatureGate requires="professional" mode="blur" upgradeMessage="Upgrade to Professional to view AI-powered insights and recommendations">
               <div className="stagger-item">
                 <Section
                   title="AI Insights"
@@ -908,6 +912,7 @@ export default function AnalyticsOverviewPage() {
                   </div>
                 </Section>
               </div>
+              </FeatureGate>
 
               {/* INSIGHT DRILL-THROUGH SLIDE-OVER */}
               <InsightSlideOver

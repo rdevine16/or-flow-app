@@ -64,7 +64,8 @@ import {
 } from '@/lib/flag-detection'
 
 // Enterprise analytics components
-import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Info, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
+import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Info, Lock, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
+import { FeatureGate } from '@/components/FeatureGate'
 import {
   SectionHeader,
   EnhancedMetricCard,
@@ -228,7 +229,7 @@ function ComparisonTooltip({ active, payload, label }: { active?: boolean; paylo
 
 export default function SurgeonPerformancePage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin, can } = useUser()
+  const { userData, loading: userLoading, isGlobalAdmin, can, isTierAtLeast } = useUser()
   
   // State
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
@@ -1073,16 +1074,27 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     >
                       Overview
                     </button>
-                    <button
-                      onClick={() => setActiveTab('day')}
-                      className={`px-3 py-1 text-xs font-medium transition-colors ${
-                        activeTab === 'day'
-                          ? 'bg-slate-900 text-white'
-                          : 'text-slate-500 hover:text-slate-700 bg-white'
-                      }`}
-                    >
-                      Day Analysis
-                    </button>
+                    {isTierAtLeast('professional') ? (
+                      <button
+                        onClick={() => setActiveTab('day')}
+                        className={`px-3 py-1 text-xs font-medium transition-colors ${
+                          activeTab === 'day'
+                            ? 'bg-slate-900 text-white'
+                            : 'text-slate-500 hover:text-slate-700 bg-white'
+                        }`}
+                      >
+                        Day Analysis
+                      </button>
+                    ) : (
+                      <span
+                        className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-slate-400 cursor-not-allowed"
+                        title="Upgrade to Professional to access Day Analysis"
+                      >
+                        <Lock className="h-3 w-3" />
+                        Day Analysis
+                        <span className="ml-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide">Pro</span>
+                      </span>
+                    )}
                   </div>
 
                   {/* Date nav — pushed right */}
@@ -1258,7 +1270,8 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     </div>
                   )}
 
-                  {/* Procedure Breakdown + Comparison Charts */}
+                  {/* Procedure Breakdown + Comparison Charts (requires surgical milestones) */}
+                  <FeatureGate requires="professional" mode="blur" upgradeMessage="Upgrade to Professional to view procedure breakdowns and surgical phase analysis">
                   <div className={`grid gap-6 ${hasComparisonData ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'}`}>
                     {/* Procedure Breakdown */}
                     <div className={`bg-white rounded-xl border border-slate-200 shadow-sm p-6 ${hasComparisonData ? '' : 'lg:col-span-3'}`}>
@@ -1397,6 +1410,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       </div>
                     )}
                   </div>
+                  </FeatureGate>
                 </div>
               ) : (
                 /* ============================================ */

@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
+import { FeatureGate } from '@/components/FeatureGate'
 import AccessDenied from '@/components/ui/AccessDenied'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 
@@ -1309,7 +1310,7 @@ function SkeletonBlockUtilization() {
 
 export default function BlockUtilizationPage() {
   const supabase = createClient()
-  const { effectiveFacilityId: facilityId, loading: userLoading, can } = useUser()
+  const { effectiveFacilityId: facilityId, loading: userLoading, can, isTierAtLeast } = useUser()
 
   // State
   const [loading, setLoading] = useState(true)
@@ -1774,13 +1775,15 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                 )
               ) : (
                 <>
-                  {/* Insight Banner */}
+                  {/* Insight Banner (capacity insights — Professional+) */}
                   {isAllSurgeons && (
-                    <CapacityInsightBanner
-                      utilizations={surgeonUtilizations}
-                      whatFitsMap={whatFitsMap}
-                      roomUtilizations={roomUtilizations}
-                    />
+                    <FeatureGate requires="professional" mode="blur" upgradeMessage="Upgrade to Professional to view capacity insights">
+                      <CapacityInsightBanner
+                        utilizations={surgeonUtilizations}
+                        whatFitsMap={whatFitsMap}
+                        roomUtilizations={roomUtilizations}
+                      />
+                    </FeatureGate>
                   )}
 
                   {/* Summary Cards */}
@@ -1881,29 +1884,34 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                   {/* SINGLE SURGEON: Detail View */}
                   {!isAllSurgeons && selectedUtil && (
                     <>
-                      {selectedUtil.avgRemainingMinutes > 30 && (
-                        <InsightCard icon={<Zap className="w-4 h-4" />} title="Capacity Available" type="info">
-                          <p className="text-sm text-slate-700">
-                            Dr. {selectedUtil.surgeonName} averages{' '}
-                            <strong>{formatDuration(selectedUtil.avgRemainingMinutes)}</strong> of unused block time
-                            per operating day across {selectedUtil.blockDayCount} block days.
-                            {selectedUtil.casesOutsideBlock > 0 && (
-                              <> Additionally, {selectedUtil.casesOutsideBlock} case{selectedUtil.casesOutsideBlock > 1 ? 's were' : ' was'} performed outside block time.</>
-                            )}
-                          </p>
-                        </InsightCard>
-                      )}
+                      {/* Insight cards and What Fits — Professional+ */}
+                      <FeatureGate requires="professional" mode="blur" upgradeMessage="Upgrade to Professional to view capacity insights and recommendations">
+                        <>
+                          {selectedUtil.avgRemainingMinutes > 30 && (
+                            <InsightCard icon={<Zap className="w-4 h-4" />} title="Capacity Available" type="info">
+                              <p className="text-sm text-slate-700">
+                                Dr. {selectedUtil.surgeonName} averages{' '}
+                                <strong>{formatDuration(selectedUtil.avgRemainingMinutes)}</strong> of unused block time
+                                per operating day across {selectedUtil.blockDayCount} block days.
+                                {selectedUtil.casesOutsideBlock > 0 && (
+                                  <> Additionally, {selectedUtil.casesOutsideBlock} case{selectedUtil.casesOutsideBlock > 1 ? 's were' : ' was'} performed outside block time.</>
+                                )}
+                              </p>
+                            </InsightCard>
+                          )}
 
-                      {selectedUtil.overrunDayCount > 0 && (
-                        <InsightCard icon={<TimerOff className="w-4 h-4" />} title="Block Overruns Detected" type="warning">
-                          <p className="text-sm text-slate-700">
-                            Dr. {selectedUtil.surgeonName} ran past block end on{' '}
-                            <strong>{selectedUtil.overrunDayCount} of {selectedUtil.blockDayCount}</strong> block days
-                            ({formatDuration(selectedUtil.totalOverrunMinutes)} total overrun).
-                            {' '}This may indicate a need to adjust block length, reduce caseload, or investigate workflow delays.
-                          </p>
-                        </InsightCard>
-                      )}
+                          {selectedUtil.overrunDayCount > 0 && (
+                            <InsightCard icon={<TimerOff className="w-4 h-4" />} title="Block Overruns Detected" type="warning">
+                              <p className="text-sm text-slate-700">
+                                Dr. {selectedUtil.surgeonName} ran past block end on{' '}
+                                <strong>{selectedUtil.overrunDayCount} of {selectedUtil.blockDayCount}</strong> block days
+                                ({formatDuration(selectedUtil.totalOverrunMinutes)} total overrun).
+                                {' '}This may indicate a need to adjust block length, reduce caseload, or investigate workflow delays.
+                              </p>
+                            </InsightCard>
+                          )}
+                        </>
+                      </FeatureGate>
 
                       <div>
                         <SectionHeader title="Block Day Breakdown" subtitle={`${selectedUtil.blockDayCount} block days in period`} icon={<Calendar className="w-4 h-4" />} accentColor="blue" />
@@ -1921,16 +1929,18 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                         </div>
                       </div>
 
-                      <div>
-                        <SectionHeader title="What Could Fit?" subtitle="Based on historical case durations and available block time" icon={<PlusCircle className="w-4 h-4" />} accentColor="green" />
-                        <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-                          <WhatFitsPanel
-                            options={whatFitsMap.get(selectedUtil.surgeonId) || []}
-                            avgRemainingMinutes={selectedUtil.avgRemainingMinutes}
-                            medianTurnover={surgeonTurnovers.get(selectedUtil.surgeonId) || 30}
-                          />
+                      <FeatureGate requires="professional" mode="blur" upgradeMessage="Upgrade to Professional to see what additional cases could fit">
+                        <div>
+                          <SectionHeader title="What Could Fit?" subtitle="Based on historical case durations and available block time" icon={<PlusCircle className="w-4 h-4" />} accentColor="green" />
+                          <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                            <WhatFitsPanel
+                              options={whatFitsMap.get(selectedUtil.surgeonId) || []}
+                              avgRemainingMinutes={selectedUtil.avgRemainingMinutes}
+                              medianTurnover={surgeonTurnovers.get(selectedUtil.surgeonId) || 30}
+                            />
+                          </div>
                         </div>
-                      </div>
+                      </FeatureGate>
 
                       {selectedUtil.casesOutsideBlock > 0 && (
                         <div>
@@ -2102,18 +2112,20 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                     </div>
                   </div>
 
-                  {/* Unblocked Capacity Insight */}
+                  {/* Unblocked Capacity Insight — Professional+ */}
                   {roomUtilizations.some(r => r.unblockedMinutes > 120) && (
-                    <InsightCard icon={<Info className="w-4 h-4" />} title="Unblocked Room Capacity" type="info">
-                      <p className="text-sm text-slate-700">
-                        {roomUtilizations.filter(r => r.unblockedMinutes > 120).map(r => (
-                          <span key={r.roomId}>
-                            <strong>{r.roomName}</strong> has {formatHours(r.unblockedMinutes)} of available time not assigned to any block schedule.{' '}
-                          </span>
-                        ))}
-                        Consider assigning block time to capture this capacity.
-                      </p>
-                    </InsightCard>
+                    <FeatureGate requires="professional" mode="blur" upgradeMessage="Upgrade to Professional to view capacity recommendations">
+                      <InsightCard icon={<Info className="w-4 h-4" />} title="Unblocked Room Capacity" type="info">
+                        <p className="text-sm text-slate-700">
+                          {roomUtilizations.filter(r => r.unblockedMinutes > 120).map(r => (
+                            <span key={r.roomId}>
+                              <strong>{r.roomName}</strong> has {formatHours(r.unblockedMinutes)} of available time not assigned to any block schedule.{' '}
+                            </span>
+                          ))}
+                          Consider assigning block time to capture this capacity.
+                        </p>
+                      </InsightCard>
+                    </FeatureGate>
                   )}
                 </>
               )}

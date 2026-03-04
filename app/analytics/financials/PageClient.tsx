@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
+import { FeatureGate } from '@/components/FeatureGate'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
@@ -34,7 +35,7 @@ import SurgeonTab from '@/components/analytics/financials/SurgeonTab'
 export default function FinancialsAnalyticsPage() {
   const supabase = createClient()
   const router = useRouter()
-  const { loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
+  const { loading: userLoading, isGlobalAdmin, effectiveFacilityId, can, isTierAtLeast } = useUser()
 
   // Data state - Using view data
   const [caseStats, setCaseStats] = useState<CaseCompletionStats[]>([])
@@ -254,8 +255,8 @@ if (facilityStatsRes.error) {
     router.push(`/analytics/financials/surgeons/${surgeonId}`)
   }
 
-  // Permission guard
-  if (!userLoading && !can('financials.view')) {
+  // Permission + tier guard (enterprise only)
+  if (!userLoading && (!can('financials.view') || !isTierAtLeast('enterprise'))) {
     return (
       <DashboardLayout>
         <AccessDenied />
