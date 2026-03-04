@@ -53,6 +53,23 @@ vi.mock('../supabase', () => ({
   }),
 }))
 
+// Mock the subscription tier hook
+const mockIsTierAtLeast = vi.fn((requiredTier: string) => true)
+const mockHasFeature = vi.fn((feature: string) => true)
+
+let mockTierData = {
+  tier: 'enterprise' as const,
+  tierName: 'Enterprise',
+  tierLoading: false,
+  isTierAtLeast: mockIsTierAtLeast,
+  hasFeature: mockHasFeature,
+  features: {},
+}
+
+vi.mock('@/lib/hooks/useSubscriptionTier', () => ({
+  useSubscriptionTier: vi.fn(() => mockTierData),
+}))
+
 // Helper to render a component that reads the UserContext
 function TestConsumer() {
   const {
@@ -80,6 +97,16 @@ describe('UserContext — Role & Permission Access', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUserRecord = null
+    mockIsTierAtLeast.mockImplementation((requiredTier: string) => true)
+    mockHasFeature.mockImplementation((feature: string) => true)
+    mockTierData = {
+      tier: 'enterprise',
+      tierName: 'Enterprise',
+      tierLoading: false,
+      isTierAtLeast: mockIsTierAtLeast,
+      hasFeature: mockHasFeature,
+      features: {},
+    }
   })
 
   it('sets isAdmin=true and all can()=true for global_admin (bypass)', async () => {
@@ -172,3 +199,8 @@ describe('UserContext — Role & Permission Access', () => {
     })
   })
 })
+
+// NOTE: Tier integration tests are covered by lib/hooks/__tests__/useSubscriptionTier.test.ts
+// UserContext simply passes through the useSubscriptionTier hook values, so integration
+// testing the tier system through UserContext would duplicate coverage already provided
+// by the dedicated useSubscriptionTier unit tests.

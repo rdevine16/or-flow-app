@@ -7,6 +7,8 @@ import { logger } from './logger'
 import { createClient } from './supabase'
 import { getImpersonationState } from './impersonation'
 import { usePermissions } from '@/lib/hooks/usePermissions'
+import { useSubscriptionTier } from '@/lib/hooks/useSubscriptionTier'
+import type { TierSlug, TierFeatureKey } from '@/lib/tier-config'
 
 interface UserData {
   userId: string | null
@@ -35,6 +37,12 @@ interface UserContextType {
   canAny: (...keys: string[]) => boolean
   canAll: (...keys: string[]) => boolean
   permissionsLoading: boolean
+  // Subscription tier
+  tier: TierSlug
+  tierName: string
+  tierLoading: boolean
+  isTierAtLeast: (requiredTier: TierSlug) => boolean
+  hasFeature: (feature: TierFeatureKey) => boolean
 }
 
 const defaultUserData: UserData = {
@@ -51,6 +59,8 @@ const defaultUserData: UserData = {
 
 const defaultCan = () => false
 const defaultCanMulti = () => false
+const defaultIsTierAtLeast = () => true // Default to true (enterprise) before data loads
+const defaultHasFeature = () => true
 
 const UserContext = createContext<UserContextType>({
   userData: defaultUserData,
@@ -66,6 +76,11 @@ const UserContext = createContext<UserContextType>({
   canAny: defaultCanMulti,
   canAll: defaultCanMulti,
   permissionsLoading: true,
+  tier: 'enterprise',
+  tierName: 'Enterprise',
+  tierLoading: true,
+  isTierAtLeast: defaultIsTierAtLeast,
+  hasFeature: defaultHasFeature,
 })
 
 export function UserProvider({ children }: { children: ReactNode }) {
@@ -215,6 +230,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     loading: permissionsLoading,
   } = usePermissions(userData.accessLevel, !loading && !!userData.userId)
 
+  // Subscription tier: fetch for the effective facility
+  const {
+    tier,
+    tierName,
+    loading: tierLoading,
+    isTierAtLeast,
+    hasFeature,
+  } = useSubscriptionTier(effectiveFacilityId)
+
   return (
     <UserContext.Provider value={{
       userData,
@@ -230,6 +254,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
       canAny,
       canAll,
       permissionsLoading,
+      tier,
+      tierName,
+      tierLoading,
+      isTierAtLeast,
+      hasFeature,
     }}>
       {children}
     </UserContext.Provider>

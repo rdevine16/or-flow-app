@@ -99,7 +99,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         const { data: facility } = await supabase
           .from('facilities')
-          .select('name, subscription_status, trial_ends_at, logo_url')
+          .select('name, subscription_status, trial_ends_at, logo_url, subscription_plan_id, subscription_plans (slug, name)')
           .eq('id', userRecord.facility_id)
           .single()
 
