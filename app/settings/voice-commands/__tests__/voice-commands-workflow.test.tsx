@@ -53,20 +53,33 @@ const MILESTONE_TYPES = [
   { id: 'mt-2', name: 'incision', display_order: 6 },
 ]
 
+const FACILITY_MILESTONES = [
+  { id: 'fm-1', source_milestone_type_id: 'mt-1' },
+  { id: 'fm-2', source_milestone_type_id: 'mt-2' },
+]
+
+// Facility aliases use facility_milestone_id (not milestone_type_id) per check constraint
 const ALIASES = [
-  { id: 'a-1', facility_id: 'fac-1', milestone_type_id: 'mt-1', facility_milestone_id: null, alias_phrase: 'patient is in', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'record', auto_learned: false },
-  { id: 'a-2', facility_id: 'fac-1', milestone_type_id: 'mt-1', facility_milestone_id: null, alias_phrase: 'undo patient in', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'cancel', auto_learned: true },
+  { id: 'a-1', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: 'fm-1', alias_phrase: 'patient is in', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'record', auto_learned: false },
+  { id: 'a-2', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: 'fm-1', alias_phrase: 'undo patient in', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'cancel', auto_learned: true },
   { id: 'a-3', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: null, alias_phrase: 'next patient please', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'next_patient', auto_learned: false },
 ]
 
 let mockCanManage = true
 const mockRefetch = vi.fn()
+let depsOneCallIndex = 0
 
 vi.mock('@/hooks/useSupabaseQuery', () => ({
   useSupabaseQuery: vi.fn((_fn: unknown, opts: { deps: unknown[] }) => {
     const depsLength = (opts?.deps || []).length
     if (depsLength === 0) {
       return { data: MILESTONE_TYPES, loading: false, error: null, refetch: vi.fn() }
+    }
+    // Two queries with deps: [effectiveFacilityId]
+    // Order: facility_milestones (1st), aliases (2nd) per render cycle
+    const callIdx = depsOneCallIndex++
+    if (callIdx % 2 === 0) {
+      return { data: FACILITY_MILESTONES, loading: false, error: null, refetch: vi.fn() }
     }
     return { data: ALIASES, loading: false, error: null, refetch: mockRefetch }
   }),
@@ -93,6 +106,7 @@ import VoiceCommandsPageClient from '../PageClient'
 describe('Voice Commands Workflow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    depsOneCallIndex = 0
     mockCanManage = true
     mockDeleteAlias.mockResolvedValue({ success: true, error: null })
     mockCheckDuplicate.mockResolvedValue({ data: null, error: null })
@@ -147,7 +161,8 @@ describe('Voice Commands Workflow', () => {
         expect(mockAddAlias).toHaveBeenCalledWith('mock-client', expect.objectContaining({
           alias_phrase: 'patient has arrived',
           action_type: 'record',
-          milestone_type_id: 'mt-1',
+          milestone_type_id: null,
+          facility_milestone_id: 'fm-1',
           facility_id: 'fac-1',
         }))
       })

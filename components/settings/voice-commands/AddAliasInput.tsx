@@ -9,8 +9,10 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 interface AddAliasInputProps {
   /** The action_type for new aliases in this section */
   actionType: string
-  /** milestone_type_id (for milestone objectives) or null (for utility actions) */
+  /** milestone_type_id — used for global templates (facility_id=NULL) */
   milestoneTypeId: string | null
+  /** facility_milestone_id — used for facility-scoped aliases */
+  facilityMilestoneId?: string | null
   /** facility_id for facility-scoped aliases, null for global templates */
   facilityId: string | null
   /** Called after a successful add to refresh the alias list */
@@ -20,6 +22,7 @@ interface AddAliasInputProps {
 export function AddAliasInput({
   actionType,
   milestoneTypeId,
+  facilityMilestoneId = null,
   facilityId,
   onAdded,
 }: AddAliasInputProps) {
@@ -59,10 +62,11 @@ export function AddAliasInput({
       }
 
       // Insert the new alias
+      // Global templates use milestone_type_id; facility aliases use facility_milestone_id
       const { error: insertError } = await voiceCommandsDAL.addAlias(supabase, {
         facility_id: facilityId,
-        milestone_type_id: milestoneTypeId,
-        facility_milestone_id: null,
+        milestone_type_id: facilityId ? null : milestoneTypeId,
+        facility_milestone_id: facilityId ? facilityMilestoneId : null,
         alias_phrase: trimmed,
         action_type: actionType,
       })

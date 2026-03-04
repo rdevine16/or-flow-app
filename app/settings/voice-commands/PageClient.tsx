@@ -5,7 +5,7 @@ import { useUser } from '@/lib/UserContext'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Search, Mic, Milestone, Zap, Loader2 } from 'lucide-react'
+import { Search, Mic, Milestone, Zap, Loader2, Info } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { voiceCommandsDAL } from '@/lib/dal/voice-commands'
 import type { VoiceCommandAlias } from '@/lib/dal/voice-commands'
@@ -20,6 +20,11 @@ interface MilestoneType {
   id: string
   name: string
   display_order: number
+}
+
+interface FacilityMilestone {
+  id: string
+  source_milestone_type_id: string
 }
 
 type ObjectiveTab = 'milestones' | 'actions'
@@ -38,8 +43,10 @@ interface ObjectiveItem {
   name: string
   label: string
   kind: 'milestone' | 'action'
-  /** For milestones: the milestone_type_id. For actions: the action_type string */
+  /** For milestones: the milestone_type_id */
   milestoneTypeId: string | null
+  /** For facility milestones: the facility_milestone_id used by aliases */
+  facilityMilestoneId: string | null
   actionType: string
 }
 
@@ -99,6 +106,34 @@ export default function VoiceCommandsPageClient() {
     { deps: [], enabled: !userLoading }
   )
 
+  // Fetch facility_milestones to map milestone_type_id → facility_milestone_id
+  // Facility aliases use facility_milestone_id (not milestone_type_id) per the check constraint
+  const { data: facilityMilestones } = useSupabaseQuery<FacilityMilestone[]>(
+    async (sb) => {
+      if (!effectiveFacilityId) return []
+      const { data, error } = await sb
+        .from('facility_milestones')
+        .select('id, source_milestone_type_id')
+        .eq('facility_id', effectiveFacilityId)
+        .eq('is_active', true)
+
+      if (error) throw error
+      return data || []
+    },
+    { deps: [effectiveFacilityId], enabled: !!effectiveFacilityId }
+  )
+
+  // Build milestone_type_id → facility_milestone_id lookup
+  const milestoneTypeToFacilityMilestone = useMemo(() => {
+    const map = new Map<string, string>()
+    if (facilityMilestones) {
+      for (const fm of facilityMilestones) {
+        map.set(fm.source_milestone_type_id, fm.id)
+      }
+    }
+    return map
+  }, [facilityMilestones])
+
   // Fetch all aliases for the facility
   const {
     data: allAliases,
@@ -124,9 +159,10 @@ export default function VoiceCommandsPageClient() {
       label: MILESTONE_DISPLAY_NAMES[mt.name] || mt.name,
       kind: 'milestone' as const,
       milestoneTypeId: mt.id,
+      facilityMilestoneId: milestoneTypeToFacilityMilestone.get(mt.id) || null,
       actionType: 'record', // milestones use record/cancel
     }))
-  }, [milestoneTypes])
+  }, [milestoneTypes, milestoneTypeToFacilityMilestone])
 
   const actionItems: ObjectiveItem[] = useMemo(() => {
     return UTILITY_ACTIONS.map((ua) => ({
@@ -135,6 +171,7 @@ export default function VoiceCommandsPageClient() {
       label: ua.label,
       kind: 'action' as const,
       milestoneTypeId: null,
+      facilityMilestoneId: null,
       actionType: ua.action_type,
     }))
   }, [])
@@ -154,16 +191,18 @@ export default function VoiceCommandsPageClient() {
   }, [selectedId, milestoneItems, actionItems])
 
   // Group aliases for the selected item by action_type
+  // Facility aliases use facility_milestone_id (not milestone_type_id) per the DB constraint
   const aliasGroups = useMemo(() => {
     if (!selectedItem || !allAliases) return []
 
     if (selectedItem.kind === 'milestone') {
+      const fmId = selectedItem.facilityMilestoneId
       // Milestones have record + cancel action types
       const recordAliases = allAliases.filter(
-        (a) => a.milestone_type_id === selectedItem.milestoneTypeId && a.action_type === 'record'
+        (a) => a.facility_milestone_id === fmId && a.action_type === 'record'
       )
       const cancelAliases = allAliases.filter(
-        (a) => a.milestone_type_id === selectedItem.milestoneTypeId && a.action_type === 'cancel'
+        (a) => a.facility_milestone_id === fmId && a.action_type === 'cancel'
       )
       return [
         { actionType: 'record', aliases: recordAliases },
@@ -172,7 +211,7 @@ export default function VoiceCommandsPageClient() {
     } else {
       // Utility actions have only their own action_type
       const filtered = allAliases.filter(
-        (a) => a.action_type === selectedItem.actionType && a.milestone_type_id === null
+        (a) => a.action_type === selectedItem.actionType && a.facility_milestone_id === null
       )
       return [{ actionType: selectedItem.actionType, aliases: filtered }]
     }
@@ -200,138 +239,154 @@ export default function VoiceCommandsPageClient() {
   const actionCount = actionItems.length
 
   return (
-    <div
-      className="flex flex-col md:flex-row border border-slate-200 rounded-xl overflow-hidden bg-white"
-      style={{ minHeight: 500 }}
-    >
-      {/* ==================== LEFT PANEL ==================== */}
-      <div className="w-full md:w-[280px] md:min-w-[280px] border-b md:border-b-0 md:border-r border-slate-200 bg-white flex flex-col max-h-[300px] md:max-h-none">
-        {/* Search */}
-        <div className="p-2.5 pb-1.5">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[13px] h-[13px] text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search commands..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-7 pr-3 py-1.5 text-xs bg-slate-50 rounded-[5px] border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            />
-          </div>
-        </div>
-
-        {/* Filter Tabs */}
-        <div className="flex items-center gap-1 px-2.5 pb-1.5">
-          <button
-            onClick={() => { setActiveTab('milestones'); setSelectedId(null) }}
-            className={`px-[7px] py-[3px] text-[11px] rounded-[3px] transition-colors ${
-              activeTab === 'milestones'
-                ? 'font-semibold text-slate-800 bg-slate-100'
-                : 'font-normal text-slate-500 bg-transparent hover:bg-slate-50'
-            }`}
-          >
-            Milestones <span className="text-slate-400">({milestoneCount})</span>
-          </button>
-          <button
-            onClick={() => { setActiveTab('actions'); setSelectedId(null) }}
-            className={`px-[7px] py-[3px] text-[11px] rounded-[3px] transition-colors ${
-              activeTab === 'actions'
-                ? 'font-semibold text-slate-800 bg-slate-100'
-                : 'font-normal text-slate-500 bg-transparent hover:bg-slate-50'
-            }`}
-          >
-            Actions <span className="text-slate-400">({actionCount})</span>
-          </button>
-        </div>
-
-        {/* Scrollable List */}
-        <div className="flex-1 overflow-y-auto px-1.5 pb-1.5">
-          {visibleItems.length === 0 ? (
-            <div className="px-2.5 py-6 text-center">
-              <p className="text-xs text-slate-400">No matching commands</p>
-            </div>
-          ) : (
-            visibleItems.map((item) => {
-              const isSelected = selectedId === item.id
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => setSelectedId(item.id)}
-                  className={`px-2.5 py-2 rounded-[5px] cursor-pointer transition-colors mb-0.5 ${
-                    isSelected
-                      ? 'bg-blue-50 border border-blue-200'
-                      : 'border border-transparent hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    {item.kind === 'milestone' ? (
-                      <Milestone className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                    ) : (
-                      <Zap className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                    )}
-                    <span className="text-xs font-medium text-slate-700 truncate">
-                      {item.label}
-                    </span>
-                  </div>
-                </div>
-              )
-            })
-          )}
+    <div>
+      {/* Wake word info banner */}
+      <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-4 py-3">
+        <Info className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="text-xs font-medium text-amber-800">
+            Users must say &ldquo;ORbit&rdquo; before any voice command to activate the listener.
+          </p>
+          <p className="text-[11px] text-amber-600 mt-0.5">
+            Example: &ldquo;ORbit, patient in&rdquo; or &ldquo;ORbit, next patient&rdquo;
+          </p>
         </div>
       </div>
 
-      {/* ==================== RIGHT PANEL ==================== */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
-        {selectedItem ? (
-          <>
-            {/* Header */}
-            <div className="bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Mic className="w-4 h-4 text-slate-400" />
-                <h2 className="text-sm font-semibold text-slate-900">
-                  {selectedItem.label}
-                </h2>
-                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-slate-100 text-slate-500">
-                  {selectedItem.kind === 'milestone' ? 'Milestone' : 'Action'}
-                </span>
-              </div>
+      <div
+        className="flex flex-col md:flex-row border border-slate-200 rounded-xl overflow-hidden bg-white"
+        style={{ minHeight: 500 }}
+      >
+        {/* ==================== LEFT PANEL ==================== */}
+        <div className="w-full md:w-[280px] md:min-w-[280px] border-b md:border-b-0 md:border-r border-slate-200 bg-white flex flex-col max-h-[300px] md:max-h-none">
+          {/* Search */}
+          <div className="p-2.5 pb-1.5">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[13px] h-[13px] text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search commands..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-7 pr-3 py-1.5 text-xs bg-slate-50 rounded-[5px] border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
             </div>
+          </div>
 
-            {/* Alias detail */}
-            {aliasesLoading ? (
-              <div className="flex-1 flex items-center justify-center">
-                <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
-              </div>
-            ) : aliasesError ? (
-              <div className="p-4">
-                <ErrorBanner message={aliasesError} />
+          {/* Filter Tabs */}
+          <div className="flex items-center gap-1 px-2.5 pb-1.5">
+            <button
+              onClick={() => { setActiveTab('milestones'); setSelectedId(null) }}
+              className={`px-[7px] py-[3px] text-[11px] rounded-[3px] transition-colors ${
+                activeTab === 'milestones'
+                  ? 'font-semibold text-slate-800 bg-slate-100'
+                  : 'font-normal text-slate-500 bg-transparent hover:bg-slate-50'
+              }`}
+            >
+              Milestones <span className="text-slate-400">({milestoneCount})</span>
+            </button>
+            <button
+              onClick={() => { setActiveTab('actions'); setSelectedId(null) }}
+              className={`px-[7px] py-[3px] text-[11px] rounded-[3px] transition-colors ${
+                activeTab === 'actions'
+                  ? 'font-semibold text-slate-800 bg-slate-100'
+                  : 'font-normal text-slate-500 bg-transparent hover:bg-slate-50'
+              }`}
+            >
+              Actions <span className="text-slate-400">({actionCount})</span>
+            </button>
+          </div>
+
+          {/* Scrollable List */}
+          <div className="flex-1 overflow-y-auto px-1.5 pb-1.5">
+            {visibleItems.length === 0 ? (
+              <div className="px-2.5 py-6 text-center">
+                <p className="text-xs text-slate-400">No matching commands</p>
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto p-4">
-                {aliasGroups.map((group) => (
-                  <AliasGroupSection
-                    key={group.actionType}
-                    actionType={group.actionType}
-                    aliases={group.aliases}
-                    milestoneTypeId={selectedItem.milestoneTypeId}
-                    facilityId={effectiveFacilityId}
-                    onDelete={handleDelete}
-                    onAdded={refetchAliases}
-                    readOnly={!canManage}
-                  />
-                ))}
-              </div>
+              visibleItems.map((item) => {
+                const isSelected = selectedId === item.id
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => setSelectedId(item.id)}
+                    className={`px-2.5 py-2 rounded-[5px] cursor-pointer transition-colors mb-0.5 ${
+                      isSelected
+                        ? 'bg-blue-50 border border-blue-200'
+                        : 'border border-transparent hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {item.kind === 'milestone' ? (
+                        <Milestone className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                      ) : (
+                        <Zap className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                      )}
+                      <span className="text-xs font-medium text-slate-700 truncate">
+                        {item.label}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })
             )}
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <Mic className="w-10 h-10 text-slate-300 mb-3" />
-            <p className="text-sm font-medium text-slate-500">Select a command to view aliases</p>
-            <p className="text-xs text-slate-400 mt-1">
-              Choose a milestone or action from the list to manage its voice aliases.
-            </p>
           </div>
-        )}
+        </div>
+
+        {/* ==================== RIGHT PANEL ==================== */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
+          {selectedItem ? (
+            <>
+              {/* Header */}
+              <div className="bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Mic className="w-4 h-4 text-slate-400" />
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    {selectedItem.label}
+                  </h2>
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-slate-100 text-slate-500">
+                    {selectedItem.kind === 'milestone' ? 'Milestone' : 'Action'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Alias detail */}
+              {aliasesLoading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+                </div>
+              ) : aliasesError ? (
+                <div className="p-4">
+                  <ErrorBanner message={aliasesError} />
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto p-4">
+                  {aliasGroups.map((group) => (
+                    <AliasGroupSection
+                      key={group.actionType}
+                      actionType={group.actionType}
+                      aliases={group.aliases}
+                      facilityMilestoneId={selectedItem.facilityMilestoneId}
+                      milestoneTypeId={selectedItem.milestoneTypeId}
+                      facilityId={effectiveFacilityId}
+                      onDelete={handleDelete}
+                      onAdded={refetchAliases}
+                      readOnly={!canManage}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <Mic className="w-10 h-10 text-slate-300 mb-3" />
+              <p className="text-sm font-medium text-slate-500">Select a command to view aliases</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Choose a milestone or action from the list to manage its voice aliases.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

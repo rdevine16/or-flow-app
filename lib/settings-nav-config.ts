@@ -244,15 +244,6 @@ export const settingsCategories: SettingsCategory[] = [
         permission: 'settings.manage',
       },
       {
-        id: 'voice-commands-global',
-        label: 'Voice Templates',
-        href: '/settings/voice-commands/global',
-        icon: Mic,
-        description: 'Default voice commands for new facilities',
-        badge: 'admin',
-        permission: 'settings.manage',
-      },
-      {
         id: 'integrations',
         label: 'Integrations',
         href: '/settings/integrations',

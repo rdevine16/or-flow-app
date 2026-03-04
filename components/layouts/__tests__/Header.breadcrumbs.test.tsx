@@ -83,6 +83,7 @@ function baseProps(overrides: Partial<Parameters<typeof Header>[0]> = {}) {
     impersonation: null,
     facilityStatus: null,
     isAdmin: false,
+    isAdminMode: false,
     onEndImpersonation: vi.fn(),
     onLogout: vi.fn(),
     ...overrides,

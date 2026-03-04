@@ -280,6 +280,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             impersonation={impersonation}
             facilityStatus={facilityStatus}
             isAdmin={isAdmin}
+            isAdminMode={isAdminMode}
             onEndImpersonation={handleEndImpersonation}
             onLogout={handleLogout}
           />

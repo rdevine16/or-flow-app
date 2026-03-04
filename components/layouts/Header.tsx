@@ -44,6 +44,7 @@ interface HeaderProps {
   impersonation: ImpersonationState | null
   facilityStatus: FacilityStatus | null
   isAdmin: boolean
+  isAdminMode: boolean
   onEndImpersonation: () => void
   onLogout: () => void
 }
@@ -54,6 +55,7 @@ export default function Header({
   impersonation,
   facilityStatus,
   isAdmin,
+  isAdminMode,
   onLogout,
 }: HeaderProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -247,12 +249,12 @@ export default function Header({
                 </Link>
                 {isAdmin && (
                   <Link
-                    href="/settings"
+                    href={isAdminMode ? '/admin/configuration' : '/settings'}
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                     onClick={() => setUserMenuOpen(false)}
                   >
                     <Settings className="w-4 h-4 text-slate-400" />
-                    Settings
+                    {isAdminMode ? 'Configuration' : 'Settings'}
                   </Link>
                 )}
               </div>

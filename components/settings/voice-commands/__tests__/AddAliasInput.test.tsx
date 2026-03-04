@@ -27,6 +27,7 @@ describe('AddAliasInput', () => {
   const defaultProps = {
     actionType: 'record',
     milestoneTypeId: 'milestone-1',
+    facilityMilestoneId: 'facility-milestone-1',
     facilityId: 'facility-1',
     onAdded: mockOnAdded,
   }
@@ -137,8 +138,8 @@ describe('AddAliasInput', () => {
           expect.anything(),
           {
             facility_id: 'facility-1',
-            milestone_type_id: 'milestone-1',
-            facility_milestone_id: null,
+            milestone_type_id: null,
+            facility_milestone_id: 'facility-milestone-1',
             alias_phrase: 'new phrase',
             action_type: 'record',
           }

@@ -18,7 +18,10 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
 interface AliasGroupSectionProps {
   actionType: string
   aliases: VoiceCommandAlias[]
+  /** milestone_type_id — used for global templates (facility_id=NULL) */
   milestoneTypeId: string | null
+  /** facility_milestone_id — used for facility-scoped aliases */
+  facilityMilestoneId?: string | null
   facilityId: string | null
   onDelete: (aliasId: string) => Promise<void>
   onAdded: () => void
@@ -29,6 +32,7 @@ export function AliasGroupSection({
   actionType,
   aliases,
   milestoneTypeId,
+  facilityMilestoneId = null,
   facilityId,
   onDelete,
   onAdded,
@@ -67,6 +71,7 @@ export function AliasGroupSection({
           <AddAliasInput
             actionType={actionType}
             milestoneTypeId={milestoneTypeId}
+            facilityMilestoneId={facilityMilestoneId}
             facilityId={facilityId}
             onAdded={onAdded}
           />

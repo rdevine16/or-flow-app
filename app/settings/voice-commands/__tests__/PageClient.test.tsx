@@ -62,10 +62,17 @@ const MILESTONE_TYPES = [
   { id: 'mt-3', name: 'closing', display_order: 7 },
 ]
 
+const FACILITY_MILESTONES = [
+  { id: 'fm-1', source_milestone_type_id: 'mt-1' },
+  { id: 'fm-2', source_milestone_type_id: 'mt-2' },
+  { id: 'fm-3', source_milestone_type_id: 'mt-3' },
+]
+
+// Facility aliases use facility_milestone_id (not milestone_type_id) per check constraint
 const ALIASES = [
-  { id: 'a-1', facility_id: 'fac-1', milestone_type_id: 'mt-1', facility_milestone_id: null, alias_phrase: 'patient is in', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'record', auto_learned: false },
-  { id: 'a-2', facility_id: 'fac-1', milestone_type_id: 'mt-1', facility_milestone_id: null, alias_phrase: 'cancel patient in', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'cancel', auto_learned: true },
-  { id: 'a-3', facility_id: 'fac-1', milestone_type_id: 'mt-2', facility_milestone_id: null, alias_phrase: 'start incision', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'record', auto_learned: false },
+  { id: 'a-1', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: 'fm-1', alias_phrase: 'patient is in', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'record', auto_learned: false },
+  { id: 'a-2', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: 'fm-1', alias_phrase: 'cancel patient in', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'cancel', auto_learned: true },
+  { id: 'a-3', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: 'fm-2', alias_phrase: 'start incision', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'record', auto_learned: false },
   { id: 'a-4', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: null, alias_phrase: 'next patient please', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'next_patient', auto_learned: false },
 ]
 
@@ -76,11 +83,13 @@ const ALIASES = [
 let mockMilestoneData: typeof MILESTONE_TYPES | null = MILESTONE_TYPES
 let mockMilestonesLoading = false
 let mockMilestonesError: string | null = null
+let mockFacilityMilestoneData: typeof FACILITY_MILESTONES | null = FACILITY_MILESTONES
 let mockAliasData: typeof ALIASES | null = ALIASES
 let mockAliasesLoading = false
 let mockAliasesError: string | null = null
 const mockRefetch = vi.fn()
 let mockCanManage = true
+let depsOneCallIndex = 0
 
 vi.mock('@/hooks/useSupabaseQuery', () => ({
   useSupabaseQuery: vi.fn((_fn: unknown, opts: { deps: unknown[] }) => {
@@ -89,7 +98,14 @@ vi.mock('@/hooks/useSupabaseQuery', () => ({
       // milestone_types query
       return { data: mockMilestoneData, loading: mockMilestonesLoading, error: mockMilestonesError, refetch: vi.fn() }
     }
-    // aliases query (deps: [effectiveFacilityId])
+    // Two queries with deps: [effectiveFacilityId]
+    // Order: facility_milestones (1st), aliases (2nd) per render cycle
+    const callIdx = depsOneCallIndex++
+    if (callIdx % 2 === 0) {
+      // facility_milestones query
+      return { data: mockFacilityMilestoneData, loading: false, error: null, refetch: vi.fn() }
+    }
+    // aliases query
     return { data: mockAliasData, loading: mockAliasesLoading, error: mockAliasesError, refetch: mockRefetch }
   }),
 }))
@@ -122,9 +138,11 @@ import VoiceCommandsPageClient from '../PageClient'
 describe('VoiceCommandsPageClient', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    depsOneCallIndex = 0
     mockMilestoneData = MILESTONE_TYPES
     mockMilestonesLoading = false
     mockMilestonesError = null
+    mockFacilityMilestoneData = FACILITY_MILESTONES
     mockAliasData = ALIASES
     mockAliasesLoading = false
     mockAliasesError = null

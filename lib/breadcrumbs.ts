@@ -260,18 +260,6 @@ export const ROUTE_BREADCRUMBS: Record<string, RouteSegment[]> = {
     { label: 'Admin', href: '/admin' },
     { label: 'Audit Log', href: null },
   ],
-  '/admin/cancellation-reasons': [
-    { label: 'Admin', href: '/admin' },
-    { label: 'Cancellation Reasons', href: null },
-  ],
-  '/admin/checklist-templates': [
-    { label: 'Admin', href: '/admin' },
-    { label: 'Checklist Templates', href: null },
-  ],
-  '/admin/complexities': [
-    { label: 'Admin', href: '/admin' },
-    { label: 'Complexities', href: null },
-  ],
   '/admin/demo': [
     { label: 'Admin', href: '/admin' },
     { label: 'Demo', href: null },
@@ -282,42 +270,89 @@ export const ROUTE_BREADCRUMBS: Record<string, RouteSegment[]> = {
   ],
   '/admin/permission-templates': [
     { label: 'Admin', href: '/admin' },
+    { label: 'Configuration', href: '/admin/configuration' },
     { label: 'Permission Templates', href: null },
+  ],
+
+  // Admin Configuration
+  '/admin/configuration': [
+    { label: 'Admin', href: '/admin' },
+    { label: 'Configuration', href: null },
+  ],
+  '/admin/cancellation-reasons': [
+    { label: 'Admin', href: '/admin' },
+    { label: 'Configuration', href: '/admin/configuration' },
+    { label: 'Cancellation Reasons', href: null },
+  ],
+  '/admin/checklist-templates': [
+    { label: 'Admin', href: '/admin' },
+    { label: 'Configuration', href: '/admin/configuration' },
+    { label: 'Checklist Templates', href: null },
+  ],
+  '/admin/complexities': [
+    { label: 'Admin', href: '/admin' },
+    { label: 'Configuration', href: '/admin/configuration' },
+    { label: 'Complexities', href: null },
+  ],
+  '/admin/settings/analytics': [
+    { label: 'Admin', href: '/admin' },
+    { label: 'Configuration', href: '/admin/configuration' },
+    { label: 'Analytics Defaults', href: null },
   ],
   '/admin/settings/body-regions': [
     { label: 'Admin', href: '/admin' },
-    { label: 'Settings', href: null },
+    { label: 'Configuration', href: '/admin/configuration' },
     { label: 'Body Regions', href: null },
   ],
   '/admin/settings/cost-categories': [
     { label: 'Admin', href: '/admin' },
-    { label: 'Settings', href: null },
+    { label: 'Configuration', href: '/admin/configuration' },
     { label: 'Cost Categories', href: null },
   ],
   '/admin/settings/delay-types': [
     { label: 'Admin', href: '/admin' },
-    { label: 'Settings', href: null },
+    { label: 'Configuration', href: '/admin/configuration' },
     { label: 'Delay Types', href: null },
+  ],
+  '/admin/settings/flag-rules': [
+    { label: 'Admin', href: '/admin' },
+    { label: 'Configuration', href: '/admin/configuration' },
+    { label: 'Flag Rules', href: null },
   ],
   '/admin/settings/implant-companies': [
     { label: 'Admin', href: '/admin' },
-    { label: 'Settings', href: null },
+    { label: 'Configuration', href: '/admin/configuration' },
     { label: 'Implant Companies', href: null },
   ],
   '/admin/settings/milestones': [
     { label: 'Admin', href: '/admin' },
-    { label: 'Settings', href: null },
+    { label: 'Configuration', href: '/admin/configuration' },
     { label: 'Milestones', href: null },
+  ],
+  '/admin/settings/notifications': [
+    { label: 'Admin', href: '/admin' },
+    { label: 'Configuration', href: '/admin/configuration' },
+    { label: 'Notifications', href: null },
+  ],
+  '/admin/settings/payers': [
+    { label: 'Admin', href: '/admin' },
+    { label: 'Configuration', href: '/admin/configuration' },
+    { label: 'Payers', href: null },
   ],
   '/admin/settings/procedure-categories': [
     { label: 'Admin', href: '/admin' },
-    { label: 'Settings', href: null },
+    { label: 'Configuration', href: '/admin/configuration' },
     { label: 'Procedure Categories', href: null },
   ],
   '/admin/settings/procedures': [
     { label: 'Admin', href: '/admin' },
-    { label: 'Settings', href: null },
+    { label: 'Configuration', href: '/admin/configuration' },
     { label: 'Procedures', href: null },
+  ],
+  '/admin/voice-templates': [
+    { label: 'Admin', href: '/admin' },
+    { label: 'Configuration', href: '/admin/configuration' },
+    { label: 'Voice Templates', href: null },
   ],
 }
 
