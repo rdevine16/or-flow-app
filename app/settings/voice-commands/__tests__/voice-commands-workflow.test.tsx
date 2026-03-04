@@ -59,8 +59,10 @@ const FACILITY_MILESTONES = [
 ]
 
 // Facility aliases use facility_milestone_id (not milestone_type_id) per check constraint
+// a-1 is a global template alias (has source_alias_id), a-4 is a local facility alias
 const ALIASES = [
-  { id: 'a-1', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: 'fm-1', alias_phrase: 'patient is in', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'record', auto_learned: false },
+  { id: 'a-1', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: 'fm-1', alias_phrase: 'patient is in', source_alias_id: 'global-1', is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'record', auto_learned: false },
+  { id: 'a-4', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: 'fm-1', alias_phrase: 'patient arrived', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'record', auto_learned: false },
   { id: 'a-2', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: 'fm-1', alias_phrase: 'undo patient in', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'cancel', auto_learned: true },
   { id: 'a-3', facility_id: 'fac-1', milestone_type_id: null, facility_milestone_id: null, alias_phrase: 'next patient please', source_alias_id: null, is_active: true, deleted_at: null, created_at: '2025-01-01', updated_at: '2025-01-01', action_type: 'next_patient', auto_learned: false },
 ]
@@ -127,7 +129,8 @@ describe('Voice Commands Workflow', () => {
       expect(screen.getByText('patient is in')).toBeInTheDocument()
       expect(screen.getByText('undo patient in')).toBeInTheDocument()
 
-      // Step 3: Check AI Learned badge appears for auto_learned alias
+      // Step 3: Check badges — Global for inherited alias, AI Learned for auto_learned alias
+      expect(screen.getByText('Global')).toBeInTheDocument()
       expect(screen.getByText('AI Learned')).toBeInTheDocument()
 
       // Step 4: Switch to Actions tab
@@ -178,15 +181,15 @@ describe('Voice Commands Workflow', () => {
   })
 
   describe('Workflow: Delete alias → confirm → toast → refetch', () => {
-    it('deletes an alias through confirm dialog', async () => {
+    it('deletes a local alias through confirm dialog', async () => {
       const user = userEvent.setup()
       render(<VoiceCommandsPageClient />)
 
       // Select Patient In milestone
       await user.click(screen.getByText('Patient In'))
 
-      // Hover over first alias to reveal delete button
-      const deleteBtn = screen.getByRole('button', { name: /delete alias "patient is in"/i })
+      // Delete the local alias (not the global one)
+      const deleteBtn = screen.getByRole('button', { name: /delete alias "patient arrived"/i })
       await user.click(deleteBtn)
 
       // Confirm dialog appears
@@ -194,7 +197,7 @@ describe('Voice Commands Workflow', () => {
       await user.click(confirmBtn)
 
       await waitFor(() => {
-        expect(mockDeleteAlias).toHaveBeenCalledWith('mock-client', 'a-1')
+        expect(mockDeleteAlias).toHaveBeenCalledWith('mock-client', 'a-4')
       })
 
       await waitFor(() => {
@@ -204,6 +207,26 @@ describe('Voice Commands Workflow', () => {
       })
 
       expect(mockRefetch).toHaveBeenCalled()
+    })
+  })
+
+  describe('Workflow: Global aliases are protected', () => {
+    it('shows Global tag and hides delete button for global aliases', async () => {
+      const user = userEvent.setup()
+      render(<VoiceCommandsPageClient />)
+
+      // Select Patient In milestone
+      await user.click(screen.getByText('Patient In'))
+
+      // "patient is in" is a global alias (has source_alias_id)
+      expect(screen.getByText('patient is in')).toBeInTheDocument()
+      expect(screen.getByText('Global')).toBeInTheDocument()
+
+      // Should NOT have a delete button for the global alias
+      expect(screen.queryByRole('button', { name: /delete alias "patient is in"/i })).not.toBeInTheDocument()
+
+      // But "patient arrived" (local) should have a delete button
+      expect(screen.getByRole('button', { name: /delete alias "patient arrived"/i })).toBeInTheDocument()
     })
   })
 

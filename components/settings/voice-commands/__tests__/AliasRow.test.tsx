@@ -209,6 +209,34 @@ describe('AliasRow', () => {
     })
   })
 
+  describe('Global Command Protection', () => {
+    const globalAlias: VoiceCommandAlias = {
+      ...baseAlias,
+      source_alias_id: 'global-template-1',
+    }
+
+    it('shows Global tag when alias has source_alias_id', () => {
+      render(<AliasRow alias={globalAlias} onDelete={mockOnDelete} />)
+      expect(screen.getByText('Global')).toBeInTheDocument()
+    })
+
+    it('does not show Global tag for local aliases', () => {
+      render(<AliasRow alias={baseAlias} onDelete={mockOnDelete} />)
+      expect(screen.queryByText('Global')).not.toBeInTheDocument()
+    })
+
+    it('hides delete button for global aliases even when not readOnly', () => {
+      render(<AliasRow alias={globalAlias} onDelete={mockOnDelete} readOnly={false} />)
+      expect(screen.queryByLabelText('Delete alias "start the case"')).not.toBeInTheDocument()
+    })
+
+    it('renders Global tag with blue styling', () => {
+      render(<AliasRow alias={globalAlias} onDelete={mockOnDelete} />)
+      const badge = screen.getByText('Global')
+      expect(badge).toHaveClass('bg-blue-50', 'text-blue-600', 'border-blue-200')
+    })
+  })
+
   describe('Multiple Delete Attempts', () => {
     it('handles rapid delete → cancel → delete clicks', async () => {
       const user = userEvent.setup()
