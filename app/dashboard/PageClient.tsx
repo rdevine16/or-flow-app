@@ -24,6 +24,7 @@ import { useTodayStatus } from '@/lib/hooks/useTodayStatus'
 import { useScheduleTimeline } from '@/lib/hooks/useScheduleTimeline'
 import CaseDrawer from '@/components/cases/CaseDrawer'
 import { useProcedureCategories } from '@/hooks/useLookups'
+import { FeatureGate } from '@/components/FeatureGate'
 
 const TIME_RANGE_OPTIONS: { label: string; value: TimeRange }[] = [
   { label: 'Today', value: 'today' },
@@ -71,7 +72,7 @@ export default function DashboardPage() {
   const { data: alerts, loading: alertsLoading } = useDashboardAlerts()
   const { data: todayStatus, loading: todayStatusLoading } = useTodayStatus()
   const { data: timeline, loading: timelineLoading } = useScheduleTimeline()
-  const { userData } = useUser()
+  const { userData, isTierAtLeast } = useUser()
   const [drawerCaseId, setDrawerCaseId] = useState<string | null>(null)
   const { data: procedureCategories } = useProcedureCategories()
 
@@ -84,6 +85,14 @@ export default function DashboardPage() {
     }
     return map
   }, [procedureCategories])
+
+  // Essential tier: hide flag/DQ-related alerts (validation, missing_milestones).
+  // Keep operational alerts (behind_schedule, stale_cases) for all tiers.
+  const filteredAlerts = useMemo(() => {
+    if (!alerts) return []
+    if (isTierAtLeast('professional')) return alerts
+    return alerts.filter((a) => a.type === 'behind_schedule' || a.type === 'stale_cases')
+  }, [alerts, isTierAtLeast])
 
   const trendLabel = getTrendLabel(timeRange)
   const greeting = useMemo(() => getGreeting(), [])
@@ -182,11 +191,13 @@ export default function DashboardPage() {
             } : undefined}
             loading={loading}
           />
-          <FacilityScoreMini
-            score={kpis?.facilityScore ?? null}
-            loading={loading}
-            trendLabel={trendLabel}
-          />
+          <FeatureGate requires="professional" mode="blur">
+            <FacilityScoreMini
+              score={kpis?.facilityScore ?? null}
+              loading={loading}
+              trendLabel={trendLabel}
+            />
+          </FeatureGate>
         </div>
 
         {/* Schedule Adherence Timeline (Gantt) — full width, 60s polling */}
@@ -195,10 +206,12 @@ export default function DashboardPage() {
         {/* Alerts + Insights (50/50) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <NeedsAttention
-            alerts={alerts ?? []}
+            alerts={filteredAlerts}
             loading={alertsLoading}
           />
-          <InsightsSection timeRange={timeRange} />
+          <FeatureGate requires="professional" mode="blur">
+            <InsightsSection timeRange={timeRange} />
+          </FeatureGate>
         </div>
 
         {/* Room Status + Surgeons */}
