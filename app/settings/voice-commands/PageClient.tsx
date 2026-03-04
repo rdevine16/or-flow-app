@@ -75,7 +75,8 @@ const UTILITY_ACTIONS: UtilityAction[] = [
 // ============================================
 
 export default function VoiceCommandsPageClient() {
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
+  const canManage = can('settings.manage')
   const { showToast } = useToast()
 
   // UI state
@@ -200,11 +201,11 @@ export default function VoiceCommandsPageClient() {
 
   return (
     <div
-      className="flex border border-slate-200 rounded-xl overflow-hidden bg-white"
-      style={{ height: 'calc(100vh - 220px)', minHeight: 500 }}
+      className="flex flex-col md:flex-row border border-slate-200 rounded-xl overflow-hidden bg-white"
+      style={{ minHeight: 500 }}
     >
       {/* ==================== LEFT PANEL ==================== */}
-      <div className="w-[280px] min-w-[280px] border-r border-slate-200 bg-white flex flex-col">
+      <div className="w-full md:w-[280px] md:min-w-[280px] border-b md:border-b-0 md:border-r border-slate-200 bg-white flex flex-col max-h-[300px] md:max-h-none">
         {/* Search */}
         <div className="p-2.5 pb-1.5">
           <div className="relative">
@@ -316,6 +317,7 @@ export default function VoiceCommandsPageClient() {
                     facilityId={effectiveFacilityId}
                     onDelete={handleDelete}
                     onAdded={refetchAliases}
+                    readOnly={!canManage}
                   />
                 ))}
               </div>

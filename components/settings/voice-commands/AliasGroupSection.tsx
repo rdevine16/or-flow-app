@@ -22,6 +22,7 @@ interface AliasGroupSectionProps {
   facilityId: string | null
   onDelete: (aliasId: string) => Promise<void>
   onAdded: () => void
+  readOnly?: boolean
 }
 
 export function AliasGroupSection({
@@ -31,6 +32,7 @@ export function AliasGroupSection({
   facilityId,
   onDelete,
   onAdded,
+  readOnly = false,
 }: AliasGroupSectionProps) {
   const label = ACTION_TYPE_LABELS[actionType] || actionType
 
@@ -54,20 +56,22 @@ export function AliasGroupSection({
       ) : (
         <div className="space-y-0.5">
           {aliases.map((alias) => (
-            <AliasRow key={alias.id} alias={alias} onDelete={onDelete} />
+            <AliasRow key={alias.id} alias={alias} onDelete={onDelete} readOnly={readOnly} />
           ))}
         </div>
       )}
 
-      {/* Add input */}
-      <div className="px-3">
-        <AddAliasInput
-          actionType={actionType}
-          milestoneTypeId={milestoneTypeId}
-          facilityId={facilityId}
-          onAdded={onAdded}
-        />
-      </div>
+      {/* Add input — hidden in read-only mode */}
+      {!readOnly && (
+        <div className="px-3">
+          <AddAliasInput
+            actionType={actionType}
+            milestoneTypeId={milestoneTypeId}
+            facilityId={facilityId}
+            onAdded={onAdded}
+          />
+        </div>
+      )}
     </div>
   )
 }

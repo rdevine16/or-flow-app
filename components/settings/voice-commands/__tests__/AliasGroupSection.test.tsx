@@ -163,6 +163,23 @@ describe('AliasGroupSection', () => {
     })
   })
 
+  describe('Permission Gating (readOnly)', () => {
+    it('shows AddAliasInput when readOnly is false', () => {
+      render(<AliasGroupSection {...defaultProps} readOnly={false} />)
+      expect(screen.getByTestId('add-alias-input')).toBeInTheDocument()
+    })
+
+    it('hides AddAliasInput when readOnly is true', () => {
+      render(<AliasGroupSection {...defaultProps} readOnly={true} />)
+      expect(screen.queryByTestId('add-alias-input')).not.toBeInTheDocument()
+    })
+
+    it('defaults readOnly to false (shows add input)', () => {
+      render(<AliasGroupSection {...defaultProps} />)
+      expect(screen.getByTestId('add-alias-input')).toBeInTheDocument()
+    })
+  })
+
   describe('Action Type Labels', () => {
     const actionTypeCases = [
       { actionType: 'record', label: 'Record' },

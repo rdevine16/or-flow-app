@@ -185,6 +185,30 @@ describe('AliasRow', () => {
     })
   })
 
+  describe('Permission Gating (readOnly)', () => {
+    it('hides delete button when readOnly is true', () => {
+      render(<AliasRow alias={baseAlias} onDelete={mockOnDelete} readOnly={true} />)
+      expect(screen.queryByLabelText('Delete alias "start the case"')).not.toBeInTheDocument()
+    })
+
+    it('shows delete button when readOnly is false', () => {
+      render(<AliasRow alias={baseAlias} onDelete={mockOnDelete} readOnly={false} />)
+      expect(screen.getByLabelText('Delete alias "start the case"')).toBeInTheDocument()
+    })
+
+    it('still shows alias phrase and AI Learned badge in read-only mode', () => {
+      const learnedAlias = { ...baseAlias, auto_learned: true }
+      render(<AliasRow alias={learnedAlias} onDelete={mockOnDelete} readOnly={true} />)
+      expect(screen.getByText('start the case')).toBeInTheDocument()
+      expect(screen.getByText('AI Learned')).toBeInTheDocument()
+    })
+
+    it('defaults readOnly to false (shows delete button)', () => {
+      render(<AliasRow alias={baseAlias} onDelete={mockOnDelete} />)
+      expect(screen.getByLabelText('Delete alias "start the case"')).toBeInTheDocument()
+    })
+  })
+
   describe('Multiple Delete Attempts', () => {
     it('handles rapid delete → cancel → delete clicks', async () => {
       const user = userEvent.setup()

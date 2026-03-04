@@ -7,9 +7,10 @@ import type { VoiceCommandAlias } from '@/lib/dal/voice-commands'
 interface AliasRowProps {
   alias: VoiceCommandAlias
   onDelete: (aliasId: string) => Promise<void>
+  readOnly?: boolean
 }
 
-export function AliasRow({ alias, onDelete }: AliasRowProps) {
+export function AliasRow({ alias, onDelete, readOnly = false }: AliasRowProps) {
   const [deleting, setDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
 
@@ -35,30 +36,32 @@ export function AliasRow({ alias, onDelete }: AliasRowProps) {
         </span>
       )}
 
-      {confirmOpen ? (
-        <div className="flex items-center gap-1 flex-shrink-0">
+      {!readOnly && (
+        confirmOpen ? (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
+            >
+              {deleting ? '...' : 'Confirm'}
+            </button>
+            <button
+              onClick={() => setConfirmOpen(false)}
+              className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
           <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
+            onClick={() => setConfirmOpen(true)}
+            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all flex-shrink-0"
+            aria-label={`Delete alias "${alias.alias_phrase}"`}
           >
-            {deleting ? '...' : 'Confirm'}
+            <Trash2 className="w-3 h-3" />
           </button>
-          <button
-            onClick={() => setConfirmOpen(false)}
-            className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={() => setConfirmOpen(true)}
-          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all flex-shrink-0"
-          aria-label={`Delete alias "${alias.alias_phrase}"`}
-        >
-          <Trash2 className="w-3 h-3" />
-        </button>
+        )
       )}
     </div>
   )

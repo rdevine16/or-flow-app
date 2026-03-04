@@ -70,7 +70,7 @@ describe('AddAliasInput', () => {
           alias_phrase: 'test phrase',
           action_type: 'record',
           milestone_type_id: 'milestone-1',
-        } as any,
+        } as VoiceCommandAlias,
         error: null,
       })
 
@@ -97,7 +97,7 @@ describe('AddAliasInput', () => {
     it('calls checkDuplicate with correct parameters', async () => {
       const user = userEvent.setup()
       vi.mocked(voiceCommandsDAL.checkDuplicate).mockResolvedValue({ data: null, error: null })
-      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as any, error: null })
+      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as VoiceCommandAlias, error: null })
 
       render(<AddAliasInput {...defaultProps} />)
 
@@ -122,7 +122,7 @@ describe('AddAliasInput', () => {
     it('calls addAlias with correct parameters', async () => {
       const user = userEvent.setup()
       vi.mocked(voiceCommandsDAL.checkDuplicate).mockResolvedValue({ data: null, error: null })
-      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as any, error: null })
+      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as VoiceCommandAlias, error: null })
 
       render(<AddAliasInput {...defaultProps} />)
 
@@ -150,7 +150,7 @@ describe('AddAliasInput', () => {
       const user = userEvent.setup()
       const mockShowToast = vi.fn()
       vi.mocked(voiceCommandsDAL.checkDuplicate).mockResolvedValue({ data: null, error: null })
-      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as any, error: null })
+      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as VoiceCommandAlias, error: null })
 
       const { useToast } = await import('@/components/ui/Toast/ToastProvider')
       vi.mocked(useToast).mockReturnValue({ showToast: mockShowToast })
@@ -176,7 +176,7 @@ describe('AddAliasInput', () => {
     it('trims whitespace from input before adding', async () => {
       const user = userEvent.setup()
       vi.mocked(voiceCommandsDAL.checkDuplicate).mockResolvedValue({ data: null, error: null })
-      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as any, error: null })
+      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as VoiceCommandAlias, error: null })
 
       render(<AddAliasInput {...defaultProps} />)
 
@@ -260,7 +260,7 @@ describe('AddAliasInput', () => {
     it('submits alias when Enter is pressed', async () => {
       const user = userEvent.setup()
       vi.mocked(voiceCommandsDAL.checkDuplicate).mockResolvedValue({ data: null, error: null })
-      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as any, error: null })
+      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as VoiceCommandAlias, error: null })
 
       render(<AddAliasInput {...defaultProps} />)
 
@@ -312,7 +312,7 @@ describe('AddAliasInput', () => {
       expect(addButton).toBeDisabled()
 
       // Resolve and verify re-enabled
-      resolveAdd({ data: {} as any, error: null })
+      resolveAdd({ data: {} as VoiceCommandAlias, error: null })
       await waitFor(() => {
         expect(input).not.toBeDisabled()
       })
@@ -340,7 +340,7 @@ describe('AddAliasInput', () => {
         expect(spinnerElement).toBeInTheDocument()
       })
 
-      resolveAdd({ data: {} as any, error: null })
+      resolveAdd({ data: {} as VoiceCommandAlias, error: null })
     })
   })
 
@@ -348,7 +348,7 @@ describe('AddAliasInput', () => {
     it('passes null facility_id to DAL for global templates', async () => {
       const user = userEvent.setup()
       vi.mocked(voiceCommandsDAL.checkDuplicate).mockResolvedValue({ data: null, error: null })
-      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as any, error: null })
+      vi.mocked(voiceCommandsDAL.addAlias).mockResolvedValue({ data: {} as VoiceCommandAlias, error: null })
 
       render(<AddAliasInput {...defaultProps} facilityId={null} />)
 
