@@ -1,344 +1,155 @@
-# Implementation Plan: Subscription Tier System
+# Implementation Plan: Voice Command Settings UI
 
 ## Summary
-
-Introduce a 3-tier subscription model (Essential / Professional / Enterprise) that gates features, analytics, and engine behavior per facility. Essential tier enables day-of surgical flow with only `patient_in` + `patient_out` milestones. Higher tiers unlock analytics, scoring, financials, and integrations progressively.
-
-Key architectural decisions:
-- **Extend existing `FeatureGate`** component with tier modes (hide/lock/blur/locked-tab) — no separate TierGate
-- **Tiers replace `facility_features`** — `subscription_plans` table becomes the single source of truth for feature access
-- **Auto-sync permissions** — tier changes trigger DB function that updates `facility_permissions`
-- **Per-case template resolution** — engines read `cases.milestone_template_id` (already exists) to determine expected milestones, not a global hardcoded list
-- **Foundation first** — infrastructure before UI gating
+Build a two-column settings page for managing voice command aliases used by the iOS Room Mode. Left column lists objectives (milestones + utility actions) with filter tabs. Right column shows aliases grouped by action type with add/delete. Includes a separate global admin page for managing default templates.
 
 ## Interview Notes
-
-1. **Gate component:** Extend existing `FeatureGate` rather than creating separate `TierGate`. Add tier modes.
-2. **Tier vs features:** Tiers replace the `facility_features` system. `subscription_plans` is single source of truth.
-3. **Permission sync:** Tier change auto-syncs `facility_permissions` via DB function. Existing `can()` checks "just work".
-4. **Milestone source:** Per-case — engines read the template applied to each case via `cases.milestone_template_id` (3-tier cascade: surgeon override → procedure type → facility default).
-5. **Locked nav UX:** Clicking locked sidebar item navigates to the page with a full upgrade prompt.
-6. **Wizard placement:** Plan selection goes after name/basics in facility creation wizard.
-7. **Blur CTA:** Inline upgrade CTA overlay on blurred widgets (not modal).
-8. **Priority:** Foundation first — DB, hooks, gate component, then engines, then page-level gating.
+- **Migration:** Create a formal migration for voice_command_aliases (table exists in prod but no local migration)
+- **Nav placement:** Operations tab in settings sidebar
+- **Scope:** Global templates (facility_id=NULL) managed by global admin on separate page + facility-specific aliases on the main page
+- **Left column:** Tabs/filter to switch between Milestones and Actions
+- **Add behavior:** Duplicate check across all objectives before saving
+- **Delete behavior:** Hard delete (remove row entirely)
+- **Global admin:** Separate /settings/voice-commands/global page
+- **Right panel:** Grouped by action_type with section headers (Record, Cancel)
 
 ---
 
 ## Phases
 
-### Phase 1: Database Schema & Permission Sync
-**What:** Create `subscription_plans` table, add `facilities.subscription_plan_id` FK, seed 3 tiers, default existing facilities to Enterprise. Create a DB function that syncs `facility_permissions` when a facility's plan changes.
-**Complexity:** Medium
-
-**Files touched:**
-- NEW: `supabase/migrations/YYYYMMDD_subscription_plans.sql`
-
-**Details:**
-- `subscription_plans` table: `id`, `slug`, `name`, `description`, `price_monthly_cents`, `sort_order`, `features` (JSONB), `is_active`, timestamps
-- Seed: essential ($750), professional ($1,500), enterprise ($2,500)
-- `facilities.subscription_plan_id` UUID FK → `subscription_plans.id`
-- UPDATE existing facilities to enterprise plan
-- RLS: all authenticated users can read plans; only service_role can modify
-- `sync_facility_permissions_for_tier()` function: when `facilities.subscription_plan_id` changes, update `facility_permissions` based on tier's feature set
-- Trigger on `facilities` AFTER UPDATE of `subscription_plan_id`
-
-**Commit:** `feat(tiers): phase 1 - subscription plans schema and permission sync`
-
-**3-stage test gate:**
-1. Unit: Verify migration applies cleanly, seed data exists, FK constraint works
-2. Integration: Change a facility's plan → verify `facility_permissions` auto-sync
-3. Workflow: Create facility → assign plan → verify permissions match tier
-
----
-
-### Phase 2: Tier Hook & Configuration
-**What:** Create `useSubscriptionTier()` hook, `tier-config.ts` with feature mappings, and integrate tier into UserContext so it's globally available.
-**Complexity:** Medium
-
-**Files touched:**
-- NEW: `lib/tier-config.ts`
-- NEW: `lib/hooks/useSubscriptionTier.ts`
-- MODIFY: `lib/UserContext.tsx` — add tier to context
-- MODIFY: `components/layouts/DashboardLayout.tsx` — provide tier context
-
-**Details:**
-- `tier-config.ts`: tier slug → feature map (analytics, financials, flags, orbit_score, data_quality, spd, integrations), tier hierarchy for comparison (`isTierAtLeast()`)
-- `useSubscriptionTier()`: fetches facility's plan via `facilities.subscription_plan_id` join to `subscription_plans`, returns `{ tier, features, loading, isTierAtLeast() }`
-- Add `tier`, `isTierAtLeast()` to UserContext alongside existing `can()`, `canAny()`, `canAll()`
-- DashboardLayout already fetches facility data — extend to include plan
-
-**Commit:** `feat(tiers): phase 2 - tier hook, config, and context integration`
-
-**3-stage test gate:**
-1. Unit: `isTierAtLeast('professional')` returns correct boolean for each tier
-2. Integration: `useSubscriptionTier()` returns correct tier for a facility with plan set
-3. Workflow: Login as facility user → verify tier is available in context → check feature access
-
----
-
-### Phase 3: FeatureGate Extension
-**What:** Extend existing `FeatureGate` component with tier-based gating modes: `hide`, `lock`, `blur`, `locked-tab`. Add `UpgradePrompt` overlay component for blurred/locked content.
-**Complexity:** Medium
-
-**Files touched:**
-- MODIFY: `components/FeatureGate.tsx` — add `requires` tier prop, `mode` prop, tier-based rendering
-- NEW: `components/ui/UpgradePrompt.tsx` — inline upgrade CTA overlay
-- MODIFY: `lib/features/useFeature.ts` — integrate tier checks (or deprecate in favor of tier)
-
-**Details:**
-- `FeatureGate` new props: `requires?: 'essential' | 'professional' | 'enterprise'`, `mode?: 'hide' | 'lock' | 'blur' | 'locked-tab'`
-- `hide`: renders nothing (for settings pages)
-- `lock`: greyed out + lock icon + tier badge (for sidebar items)
-- `blur`: blurred preview + UpgradePrompt overlay (for dashboard widgets)
-- `locked-tab`: disabled tab with upgrade tooltip (for analytics tabs)
-- `UpgradePrompt`: lock icon, "Upgrade to [Tier]" message, "View Plans" button → `/settings/subscription`
-- When `requires` prop is set, check `isTierAtLeast(requires)` from context
-
-**Commit:** `feat(tiers): phase 3 - FeatureGate tier modes and UpgradePrompt`
-
-**3-stage test gate:**
-1. Unit: FeatureGate renders correctly for each mode when tier is below required
-2. Integration: FeatureGate with `requires="professional"` + Essential tier → shows blur/lock/hide correctly
-3. Workflow: Switch facility to Essential → verify FeatureGate hides/blurs/locks content across modes
-
----
-
-### Phase 4: Sidebar & Navigation Gating
-**What:** Apply tier-based gating to sidebar navigation and settings navigation. Locked items show tier badge, click navigates to page with upgrade prompt.
+### Phase 1: Database Migration + DAL
+**What:** Create migration to formalize `voice_command_aliases` table in version control. Create DAL module with query/mutation functions for listing, adding, and deleting aliases.
 **Complexity:** Small
 
 **Files touched:**
-- MODIFY: `components/layouts/navigation-config.tsx` — add `requiredTier` to NavItem, render locked state
-- MODIFY: `lib/settings-nav-config.ts` — add `requiredTier` to settings items, filter/lock by tier
-- MODIFY: sidebar rendering component (within DashboardLayout or dedicated sidebar component)
+- NEW: `supabase/migrations/YYYYMMDDHHMMSS_create_voice_command_aliases.sql`
+- NEW: `lib/dal/voice-commands.ts`
+- MODIFY: `lib/dal/index.ts` — export new DAL
 
 **Details:**
-- Add `requiredTier?: 'professional' | 'enterprise'` to `NavItem` and `SettingsNavItem` interfaces
-- Items requiring higher tier: Financials (enterprise), Flags (professional), ORbit Score (professional), Data Quality (professional), SPD (professional), Integrations (enterprise)
-- Locked items: greyed text + `Lock` icon + "Pro"/"Enterprise" badge pill
-- Clicking locked item navigates to the page (page itself shows upgrade prompt via FeatureGate)
-- Settings: hide entire categories for features not in tier (Financials category hidden for Essential/Professional)
+- Migration uses `CREATE TABLE IF NOT EXISTS` since table exists in prod
+- Include RLS policies (facility-scoped: users can manage their own facility + global_admin bypass)
+- Include indexes on `facility_id`, `milestone_type_id`, `action_type`
+- DAL functions: `listByFacility()`, `listGlobal()`, `addAlias()`, `deleteAlias()`, `checkDuplicate()`
+- Types: `VoiceCommandAlias`, `VoiceAliasInsert`
 
-**Commit:** `feat(tiers): phase 4 - sidebar and settings navigation tier gating`
+**Commit:** `feat(voice-commands): phase 1 - migration and data access layer`
 
 **3-stage test gate:**
-1. Unit: `getFilteredNavigation()` returns locked items for lower tiers
-2. Integration: Essential tier user sees locked sidebar items with correct badges
-3. Workflow: Essential user clicks locked "Financials" → navigates to page → sees upgrade prompt
+1. Unit: DAL function signatures and types compile
+2. Integration: Query returns expected shape from Supabase
+3. Workflow: Verify migration applies cleanly (CREATE IF NOT EXISTS)
 
 ---
 
-### Phase 5: Engine — Template-Defaults (Tier-Aware)
-**What:** Make `template-defaults.ts` tier-aware so Essential tier facilities can create templates with only `patient_in` + `patient_out`. Remove hardcoded enforcement of 7 required milestones for lower tiers.
-**Complexity:** Small
+### Phase 2: Settings Nav + Page Scaffolding
+**What:** Add "Voice Commands" to Operations tab in settings nav. Create page route with two-column layout — left panel with search + Milestones/Actions filter tabs showing objectives, right panel with empty state. Wire up data fetching for milestone types and utility action types.
+**Complexity:** Medium
 
 **Files touched:**
-- MODIFY: `lib/template-defaults.ts` — add `getRequiredMilestonesForTier()`, make `isRequiredMilestone()` tier-aware
-- MODIFY: any template creation/validation UI that enforces required milestones
+- MODIFY: `lib/settings-nav-config.ts` — add Voice Commands item to Operations
+- NEW: `app/settings/voice-commands/page.tsx` — server page
+- NEW: `app/settings/voice-commands/PageClient.tsx` — client component with two-column layout
 
 **Details:**
-- `getRequiredMilestonesForTier(tier)`: Essential → `['patient_in', 'patient_out']`, Professional/Enterprise → current 7
-- `getRequiredPhasesForTier(tier)`: Essential → `['pre_op', 'post_op']`, Professional/Enterprise → all 4
-- Update template creation validation to accept tier parameter
-- Existing "grandfathered" templates behavior already aligns with Essential needs
+- Nav item: `{ id: 'voice-commands', label: 'Voice Commands', href: '/settings/voice-commands', icon: Mic, permission: 'settings.manage' }`
+- Left column (~280px): search bar + two filter tabs (Milestones / Actions)
+- Milestones tab: query `milestone_types` ordered by `display_order` — shows Patient In, Anesthesia Start, etc.
+- Actions tab: hardcoded list of utility action types — Next Patient, Surgeon Left, Undo Last, Confirm Pending, Cancel Pending
+- Selected item highlighted with `bg-blue-50 border border-blue-200`
+- Right panel: empty state with "Select a command to view aliases" when nothing selected
+- Follow Procedures page two-column pattern exactly
 
-**Commit:** `feat(tiers): phase 5 - tier-aware template defaults`
+**Commit:** `feat(voice-commands): phase 2 - settings nav and page scaffolding`
 
 **3-stage test gate:**
-1. Unit: `getRequiredMilestonesForTier('essential')` returns `['patient_in', 'patient_out']`
-2. Integration: Create template for Essential facility → validates with only 2 milestones
-3. Workflow: Essential facility creates new template → only patient_in/patient_out required → saves successfully
+1. Unit: Nav config includes voice-commands item in operations category
+2. Integration: Page renders with left column showing milestones and actions
+3. Workflow: Navigate Settings → Operations → Voice Commands → see left panel with milestones
 
 ---
 
-### Phase 6: Engine — Flag Engine (Template-Driven)
-**What:** Replace hardcoded `CORE_MILESTONE_SEQUENCE` with per-case template lookup. Add `canEvaluateMetric()` guard that skips flag rules whose prerequisite milestones aren't in the case's template.
+### Phase 3: Right Panel — Alias Detail View
+**What:** When an objective is selected, the right panel shows all aliases grouped by action_type sections (Record, Cancel). Each alias row shows the phrase, an "AI Learned" badge if `auto_learned=true`, and a delete button. Add-new-phrase input at the bottom of each section with duplicate detection across all objectives.
 **Complexity:** Large
 
 **Files touched:**
-- MODIFY: `lib/flagEngine.ts` — make `countMissingMilestones()` and `countSequenceViolations()` template-aware, add `canEvaluateMetric()`
+- MODIFY: `app/settings/voice-commands/PageClient.tsx` — add right panel logic
+- NEW: `components/settings/voice-commands/AliasGroupSection.tsx` — section for one action_type
+- NEW: `components/settings/voice-commands/AliasRow.tsx` — individual alias row
+- NEW: `components/settings/voice-commands/AddAliasInput.tsx` — inline add with duplicate check
 
 **Details:**
-- `countMissingMilestones(milestones, expectedMilestones)` — count missing from expected list, not CORE_MILESTONE_SEQUENCE
-- `countSequenceViolations(milestones, expectedMilestones)` — only check order of milestones in the template
-- `canEvaluateMetric(metric, templateMilestones)` — check if all prerequisite milestones for the metric exist in the template
-- `extractMetricValue()` — skip metrics that can't be evaluated (return null instead of computing with missing data)
-- Expected milestones derived from case's template: query `milestone_template_items` via `cases.milestone_template_id`, join to `facility_milestones.name`
-- This data should be fetched once per case batch and passed through, not re-queried per metric
+- When a milestone is selected: show `record` and `cancel` sections (both action types apply)
+- When a utility action is selected: show only the relevant action_type section (e.g., `next_patient` only has `next_patient` aliases)
+- AliasGroupSection: header with action type label + count badge, list of AliasRow items, AddAliasInput at bottom
+- AliasRow: phrase text, "AI Learned" purple badge if `auto_learned=true`, delete (trash icon) on hover with confirm dialog
+- AddAliasInput: text input + "Add" button, on submit: check `checkDuplicate()` DAL function → if exists, show warning toast with conflicting objective name → if unique, insert and refetch
+- Delete: hard delete via `deleteAlias()` DAL function → remove from list → toast confirmation
+- Loading skeleton while aliases fetch
 
-**Commit:** `feat(tiers): phase 6 - template-driven flag engine`
+**Commit:** `feat(voice-commands): phase 3 - alias detail panel with add and delete`
 
 **3-stage test gate:**
-1. Unit: `countMissingMilestones()` with Essential template (2 milestones) counts correctly
-2. Integration: Flag evaluation for Essential case → skips surgical_time, anesthesia rules → only evaluates total_case_time, FCOTS, turnover
-3. Workflow: Create case on Essential facility → flag engine runs → no false-positive missing milestone flags
+1. Unit: AliasGroupSection renders correct sections, AddAliasInput validates duplicates
+2. Integration: Select objective → aliases load grouped by action type → add/delete persists
+3. Workflow: Select "Incision" → see Record + Cancel sections → add phrase → duplicate warning → add unique phrase → delete a phrase → verify iOS would read updated data
 
 ---
 
-### Phase 7: Engine — Data Quality Edge Function (Template-Driven)
-**What:** Replace hardcoded `requiredMilestones` and `checkPairs` in the DQ edge function with per-case template lookup. Only flag milestones that are in the case's template but missing.
-**Complexity:** Large
-
-**Files touched:**
-- MODIFY: `supabase/functions/run-data-quality-detection/index.ts` — template-driven milestone checks
-
-**Details:**
-- For each case, query `cases.milestone_template_id` → `milestone_template_items` → `facility_milestones.name` to get expected milestones
-- Replace `const requiredMilestones = ['patient_in', 'incision', 'closing', 'patient_out']` with template-derived list
-- Replace `checkPairs` with dynamically built pairs from template milestones (only check pairs where both milestones exist in template)
-- Keep `patient_in`/`patient_out` impossible duration check (always in every template)
-- Batch template lookups per facility to avoid N+1 queries
-- Deploy via `supabase functions deploy run-data-quality-detection`
-
-**Commit:** `feat(tiers): phase 7 - template-driven data quality edge function`
-
-**3-stage test gate:**
-1. Unit: Template lookup returns correct milestones for different templates
-2. Integration: DQ detection on Essential case → only flags patient_in/patient_out missing, not incision/closing
-3. Workflow: Run DQ detection nightly → Essential facility cases produce no false-positive missing milestone issues
-
----
-
-### Phase 8: Engine — Dashboard Alerts (Template-Scoped)
-**What:** Scope "missing milestones" dashboard alerts to only flag milestones expected by the case's template.
+### Phase 4: Global Admin Templates Page
+**What:** Create separate `/settings/voice-commands/global` page for global admins to manage default templates (`facility_id=NULL` aliases). Same two-column layout but queries global aliases only. Add nav item visible only to global admins.
 **Complexity:** Medium
 
 **Files touched:**
-- MODIFY: `lib/hooks/useDashboardAlerts.ts` — join to template items, only count milestones in template as "missing"
+- NEW: `app/settings/voice-commands/global/page.tsx`
+- NEW: `app/settings/voice-commands/global/PageClient.tsx`
+- MODIFY: `lib/settings-nav-config.ts` — add global admin sub-item with admin badge
 
 **Details:**
-- Current logic: counts ANY null `case_milestones.recorded_at` for completed cases
-- New logic: join `case_milestones` → `milestone_template_items` (via case's template) → only count milestones that are IN the template but have null `recorded_at`
-- Essential tier cases with only patient_in/patient_out template → alert only fires if those 2 are missing
-- Alternative approach: query through `cases.milestone_template_id` to `milestone_template_items` to know which facility_milestone_ids are expected
+- Route only accessible to global_admin users (check `access_level` in UserContext)
+- Queries `voice_command_aliases` where `facility_id IS NULL`
+- Same two-column layout and components as facility page (reuse AliasGroupSection, AliasRow, AddAliasInput)
+- Adds/deletes target `facility_id=NULL` records
+- Nav item: `{ id: 'voice-commands-global', label: 'Voice Templates', href: '/settings/voice-commands/global', icon: Mic, badge: 'admin' }`
+- Header text explains: "Default voice commands applied to new facilities"
+- Changes only affect new facilities — no cascade to existing
 
-**Commit:** `feat(tiers): phase 8 - template-scoped dashboard alerts`
+**Commit:** `feat(voice-commands): phase 4 - global admin templates page`
 
 **3-stage test gate:**
-1. Unit: Alert query returns 0 for Essential case with both milestones recorded
-2. Integration: Essential case missing patient_out → alert fires; case missing incision → no alert (not in template)
-3. Workflow: Dashboard for Essential facility → "Needs Attention" only shows relevant missing milestones
+1. Unit: Global page queries facility_id=NULL aliases only
+2. Integration: Global admin can add/delete global template aliases
+3. Workflow: Global admin navigates to global page → edits defaults → verifies facility page unaffected
 
 ---
 
-### Phase 9: Dashboard Widget Gating
-**What:** Gate dashboard widgets by tier — blur Facility Score ring, Insights section for Essential. Limit "Needs Attention" for Essential (no flags/DQ references).
-**Complexity:** Small
-
-**Files touched:**
-- MODIFY: `app/dashboard/PageClient.tsx` — wrap widgets in FeatureGate with blur mode
-
-**Details:**
-- Facility Score ring: `<FeatureGate requires="professional" mode="blur">` — shows blurred ring with UpgradePrompt
-- Insights section: `<FeatureGate requires="professional" mode="blur">`
-- Needs Attention panel: hide flag-related and DQ-related items for Essential (keep delayed cases)
-- KPI cards: all 5 visible for Essential (cases, utilization, turnover, on-time starts — all calculable from patient_in/out); Score card hidden/blurred
-- Room Status cards: visible for all tiers
-
-**Commit:** `feat(tiers): phase 9 - dashboard widget tier gating`
-
-**3-stage test gate:**
-1. Unit: FeatureGate renders blur overlay for Essential tier on Score ring
-2. Integration: Essential dashboard → Score ring blurred, KPI cards visible, Insights blurred
-3. Workflow: Essential user views dashboard → sees operational data, upgrade prompts for premium widgets
-
----
-
-### Phase 10: Analytics Page Gating
-**What:** Gate analytics page tabs and sections by tier. Surgeon Performance, Block Utilization, KPIs, and Financials pages.
+### Phase 5: Polish + Tests
+**What:** Permission gating (`settings.manage`), empty states, loading skeletons, error handling, search functionality in left panel, responsive behavior. Full test suite covering unit, integration, and workflow scenarios.
 **Complexity:** Medium
 
 **Files touched:**
-- MODIFY: `app/analytics/surgeons/PageClient.tsx` — blur milestone phases, lock Day Analysis tab
-- MODIFY: `app/analytics/block-utilization/PageClient.tsx` — blur "What Fits", capacity insights
-- MODIFY: `app/analytics/kpi/PageClient.tsx` — blur advanced KPIs, insights panel
-- MODIFY: `app/analytics/financials/PageClient.tsx` — entire page gated (already permission-gated, add tier gate)
+- MODIFY: `app/settings/voice-commands/PageClient.tsx` — polish, search filter, error states
+- NEW: `app/settings/voice-commands/__tests__/PageClient.test.tsx`
+- NEW: `app/settings/voice-commands/__tests__/voice-commands-workflow.test.tsx`
+- NEW: `components/settings/voice-commands/__tests__/AliasGroupSection.test.tsx`
+- NEW: `components/settings/voice-commands/__tests__/AddAliasInput.test.tsx`
 
 **Details:**
-- Surgeon Performance: Overview tab — case counts + OR time visible for all; milestone phase durations + subphase chart blurred for Essential. Day Analysis tab locked for Essential.
-- Block Utilization: Summary metrics + surgeon table visible; "What Fits" suggestions + capacity insights blurred for Essential. Room Utilization visible for all.
-- KPIs: Basic KPIs (FCOTS, turnover, volume, room utilization) visible; advanced KPIs + insights panel blurred for Essential.
-- Financials: entire page wrapped in `<FeatureGate requires="enterprise" mode="hide">` (already hidden via sidebar gating + permission gating, this adds defense-in-depth)
+- Permission gate: `can('settings.manage')` — read-only view without manage permission (hide add/delete)
+- Search in left panel: filter objectives by name (debounced, case-insensitive)
+- Empty states: no aliases for selected objective, no search results
+- Loading: skeleton rows in both panels while data fetches
+- Error: ErrorBanner at top of page on fetch failure
+- Keyboard: Enter to add alias, Escape to clear input
+- Responsive: stack panels vertically on small screens
 
-**Commit:** `feat(tiers): phase 10 - analytics page tier gating`
-
-**3-stage test gate:**
-1. Unit: Surgeon page renders locked Day Analysis tab for Essential tier
-2. Integration: Essential user on KPIs page → basic KPIs visible, advanced blurred with upgrade CTA
-3. Workflow: Essential user navigates analytics → sees available data, clear upgrade paths for premium sections
-
----
-
-### Phase 11: Case Form & Drawer Gating
-**What:** Gate case form fields and drawer tabs by tier. Hide financial fields, non-template milestones, complexity scoring for Essential.
-**Complexity:** Small
-
-**Files touched:**
-- MODIFY: `components/cases/CaseForm.tsx` — hide complexity selector for Essential, keep payer visible
-- MODIFY: `components/cases/CaseDrawer.tsx` — tier-gate financial tab, add tier checks alongside permission checks
-- MODIFY: `components/cases/CaseDrawerMilestones.tsx` — only show milestones from case's template (already template-driven via case_milestones, verify behavior)
-
-**Details:**
-- CaseForm: hide `CaseComplexitySelector` for Essential tier; hide implant cost / financial note fields (if they exist in form) for Essential + Professional; keep payer field visible for all
-- CaseDrawer: financial tab requires `isTierAtLeast('enterprise')` in addition to `can('tab.case_financials')`; flags tab requires `isTierAtLeast('professional')`; validation (DQ) tab requires `isTierAtLeast('professional')`
-- Milestone display already scoped to case_milestones (which come from template) — verify this is correct for Essential cases with only 2 milestones
-
-**Commit:** `feat(tiers): phase 11 - case form and drawer tier gating`
+**Commit:** `feat(voice-commands): phase 5 - polish, permissions, and test suite`
 
 **3-stage test gate:**
-1. Unit: CaseForm hides complexity selector when tier is Essential
-2. Integration: Essential user opens case drawer → financial tab hidden, milestones tab shows only patient_in/patient_out
-3. Workflow: Create case on Essential facility → form shows only relevant fields → drawer shows only relevant tabs
-
----
-
-### Phase 12: Admin — Plan Management & Wizard
-**What:** Global admin can assign plans to facilities. Facility list shows plan badge. Facility creation wizard includes plan selection step after name/basics.
-**Complexity:** Medium
-
-**Files touched:**
-- MODIFY: `app/admin/facilities/PageClient.tsx` — add plan badge, plan filter
-- MODIFY: `app/admin/facilities/[id]/PageClient.tsx` (or detail component) — plan assignment dropdown
-- MODIFY: `app/admin/facilities/new/` — add plan selection step after name/basics
-- MODIFY: `app/admin/PageClient.tsx` — add plan-based metrics to admin dashboard
-
-**Details:**
-- Facility list: show tier badge (Essential/Pro/Enterprise) alongside existing subscription_status badge; add tier filter dropdown
-- Facility detail: plan assignment dropdown (triggers permission sync via DB trigger)
-- Facility creation wizard: new step after name/basics — plan selection with 3 cards showing feature comparison; selected plan determines initial permission template and default milestone template
-- Admin dashboard: metrics by tier (how many facilities on each plan)
-
-**Commit:** `feat(tiers): phase 12 - admin plan management and facility wizard`
-
-**3-stage test gate:**
-1. Unit: Plan badge renders correctly for each tier
-2. Integration: Admin changes facility plan → permissions auto-sync → facility user sees updated feature access
-3. Workflow: Admin creates new facility with Essential plan → facility has correct permissions + Basic Flow template → admin views tier distribution
-
----
-
-### Phase 13: Subscription Settings Page
-**What:** Wire up existing subscription page stub at `/settings/subscription`. Show current plan, feature comparison, usage stats, and upgrade request flow.
-**Complexity:** Small
-
-**Files touched:**
-- MODIFY: `app/settings/subscription/PageClient.tsx` — replace hardcoded stub with live data
-- MODIFY: `lib/settings-nav-config.ts` — remove `badge: 'soon'` from subscription item
-
-**Details:**
-- Current plan card: reads from `useSubscriptionTier()`, shows plan name, price, description
-- Feature comparison grid: 3-column table showing what each tier includes (from `tier-config.ts`)
-- Usage stats: cases this month, active users (from existing queries)
-- Upgrade request: "Contact Sales" / "Request Upgrade" button → `mailto:support@orbitsurgical.com` (no self-service Stripe yet — out of scope)
-- Remove "Coming Soon" banner
-- Remove hardcoded plan data, use live DB data
-
-**Commit:** `feat(tiers): phase 13 - subscription settings page`
-
-**3-stage test gate:**
-1. Unit: Page renders current plan from DB, not hardcoded data
-2. Integration: Essential facility → page shows Essential plan highlighted, upgrade CTA for Professional/Enterprise
-3. Workflow: Facility admin views subscription → sees current plan + features → clicks "Request Upgrade" → email opens
+1. Unit: Components render in all states (loading, empty, error, populated), permission gating works
+2. Integration: Permission gating blocks non-admins from add/delete, duplicate detection works cross-objective
+3. Workflow: Full flow — navigate → select milestone → add alias → delete alias → switch tabs → select action → verify
 
 ---
 
@@ -346,18 +157,10 @@ Key architectural decisions:
 
 | # | Phase | Complexity | Key Files |
 |---|-------|-----------|-----------|
-| 1 | Database schema & permission sync | Medium | New migration |
-| 2 | Tier hook & configuration | Medium | tier-config.ts, useSubscriptionTier.ts, UserContext.tsx |
-| 3 | FeatureGate extension | Medium | FeatureGate.tsx, UpgradePrompt.tsx |
-| 4 | Sidebar & navigation gating | Small | navigation-config.tsx, settings-nav-config.ts |
-| 5 | Engine: template-defaults | Small | template-defaults.ts |
-| 6 | Engine: flag engine | Large | flagEngine.ts |
-| 7 | Engine: DQ edge function | Large | run-data-quality-detection/index.ts |
-| 8 | Engine: dashboard alerts | Medium | useDashboardAlerts.ts |
-| 9 | Dashboard widget gating | Small | dashboard/PageClient.tsx |
-| 10 | Analytics page gating | Medium | surgeons, block-util, kpi, financials PageClient.tsx |
-| 11 | Case form & drawer gating | Small | CaseForm.tsx, CaseDrawer.tsx |
-| 12 | Admin plan management & wizard | Medium | admin facilities pages |
-| 13 | Subscription settings page | Small | settings/subscription/PageClient.tsx |
+| 1 | Database migration + DAL | Small | migration, voice-commands.ts, dal/index.ts |
+| 2 | Settings nav + page scaffolding | Medium | settings-nav-config.ts, PageClient.tsx |
+| 3 | Right panel: alias detail view | Large | PageClient.tsx, AliasGroupSection, AliasRow, AddAliasInput |
+| 4 | Global admin templates page | Medium | global/PageClient.tsx, settings-nav-config.ts |
+| 5 | Polish + tests | Medium | PageClient.tsx, test files |
 
-**Total: 13 phases** (5 small, 6 medium, 2 large)
+**Total: 5 phases** (1 small, 3 medium, 1 large)
