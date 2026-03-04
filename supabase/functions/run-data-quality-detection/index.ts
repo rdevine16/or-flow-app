@@ -66,6 +66,92 @@ interface StaleDetectionResult {
 }
 
 // ============================================
+// TEMPLATE-DRIVEN MILESTONE LOOKUP
+// ============================================
+
+/**
+ * Known milestone pairs for negative duration checks.
+ * Only checked when both milestones exist in the case's template.
+ */
+const KNOWN_CHECK_PAIRS: [string, string][] = [
+  ['patient_in', 'patient_out'],
+  ['anes_start', 'anes_end'],
+  ['incision', 'closing'],
+  ['closing', 'closing_complete'],
+]
+
+/**
+ * Batch-fetch all template → milestone name mappings for a facility.
+ * Returns a Map from template_id → Set of milestone names,
+ * plus the facility's default template ID for fallback.
+ */
+async function fetchFacilityTemplates(
+  supabase: SupabaseClient,
+  facilityId: string
+): Promise<{ templateMap: Map<string, Set<string>>; defaultTemplateId: string | null }> {
+  const { data: templates, error } = await supabase
+    .from('milestone_templates')
+    .select(`
+      id,
+      is_default,
+      milestone_template_items(
+        facility_milestones(name)
+      )
+    `)
+    .eq('facility_id', facilityId)
+    .eq('is_active', true)
+
+  if (error) {
+    console.error(`Error fetching templates for facility ${facilityId}:`, error)
+    return { templateMap: new Map(), defaultTemplateId: null }
+  }
+
+  const templateMap = new Map<string, Set<string>>()
+  let defaultTemplateId: string | null = null
+
+  for (const template of templates || []) {
+    if (template.is_default) {
+      defaultTemplateId = template.id
+    }
+
+    const milestoneNames = new Set<string>()
+    for (const item of (template.milestone_template_items || []) as Record<string, unknown>[]) {
+      const fm = normalizeJoin(item.facility_milestones as Record<string, unknown> | Record<string, unknown>[] | null)
+      if (fm?.name && typeof fm.name === 'string') {
+        milestoneNames.add(fm.name)
+      }
+    }
+    templateMap.set(template.id, milestoneNames)
+  }
+
+  return { templateMap, defaultTemplateId }
+}
+
+/**
+ * Get the expected milestone names for a case based on its template.
+ * Falls back to the facility's default template when the case has no template assigned.
+ */
+function getExpectedMilestones(
+  caseTemplateId: string | null,
+  templateMap: Map<string, Set<string>>,
+  defaultTemplateId: string | null
+): Set<string> {
+  const templateId = caseTemplateId || defaultTemplateId
+  if (!templateId) return new Set()
+  return templateMap.get(templateId) || new Set()
+}
+
+/**
+ * Filter KNOWN_CHECK_PAIRS to only include pairs where both milestones
+ * exist in the expected template.
+ */
+function buildCheckPairs(expectedMilestones: Set<string>): [string, string][] {
+  return KNOWN_CHECK_PAIRS.filter(
+    ([start, end]) => expectedMilestones.has(start) && expectedMilestones.has(end)
+  )
+}
+
+// ============================================
 // MAIN HANDLER
 // ============================================
 
@@ -117,10 +203,13 @@ Deno.serve(async (req) => {
         
         const expiredCount = expiredData?.length || 0
         
-        // 2. Get recent cases (last 7 days)
+        // 2. Batch-fetch all templates for this facility (one query, avoids N+1)
+        const { templateMap, defaultTemplateId } = await fetchFacilityTemplates(supabase, facility.id)
+
+        // 3. Get recent cases (last 7 days)
         const sevenDaysAgo = new Date()
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-        
+
         const { data: cases, error: casesError } = await supabase
           .from('cases')
           .select(`
@@ -129,6 +218,7 @@ Deno.serve(async (req) => {
             scheduled_date,
             start_time,
             status_id,
+            milestone_template_id,
             case_statuses(name),
             case_milestones(
               id,
@@ -140,42 +230,48 @@ Deno.serve(async (req) => {
           .eq('facility_id', facility.id)
           .gte('scheduled_date', sevenDaysAgo.toISOString().split('T')[0])
           .order('scheduled_date', { ascending: false })
-        
+
         if (casesError) {
           console.error(`Error fetching cases for ${facility.name}:`, casesError)
           continue
         }
-        
+
         let issuesFound = 0
         const issueTypesFound = new Set<string>()
 
         // Get issue types
         const issueTypeIds = await getIssueTypeIds(supabase)
         
-        // 3. Check each case for issues
+        // 4. Check each case for issues
         for (const caseData of cases || []) {
           const milestones = caseData.case_milestones || []
           const statusName = normalizeJoin(caseData.case_statuses)?.name
-          
+
           // Skip cancelled cases
           if (statusName === 'cancelled') continue
-          
+
+          // Resolve expected milestones from the case's template (or facility default)
+          const expectedMilestones = getExpectedMilestones(
+            caseData.milestone_template_id,
+            templateMap,
+            defaultTemplateId
+          )
+
           // Build milestone map
           const milestoneMap = new Map<string, { recorded_at: string; facility_milestone_id: string }>()
           milestones.forEach((m: Record<string, unknown>) => {
-            const fm = normalizeJoin(m.facility_milestones)
+            const fm = normalizeJoin(m.facility_milestones as Record<string, unknown> | Record<string, unknown>[] | null)
             if (fm?.name) {
-              milestoneMap.set(fm.name, {
-                recorded_at: m.recorded_at,
-                facility_milestone_id: m.facility_milestone_id
+              milestoneMap.set(fm.name as string, {
+                recorded_at: m.recorded_at as string,
+                facility_milestone_id: m.facility_milestone_id as string
               })
             }
           })
-          
-          // Check for missing required milestones (for completed cases)
-          if (statusName === 'completed') {
-            const requiredMilestones = ['patient_in', 'incision', 'closing', 'patient_out']
-            for (const required of requiredMilestones) {
+
+          // Check for missing milestones — only flag milestones that are IN the case's template but missing
+          if (statusName === 'completed' && expectedMilestones.size > 0) {
+            for (const required of expectedMilestones) {
               if (!milestoneMap.has(required)) {
                 const created = await createIssueIfNotExists(supabase, {
                   facilityId: facility.id,
@@ -190,15 +286,12 @@ Deno.serve(async (req) => {
               }
             }
           }
-          
-          // Check for negative durations
-          const checkPairs = [
-            ['patient_in', 'patient_out'],
-            ['anes_start', 'anes_end'],
-            ['incision', 'closing'],
-            ['closing', 'closing_complete']
-          ]
-          
+
+          // Check for negative durations — only check pairs where both milestones are in the template
+          const checkPairs = expectedMilestones.size > 0
+            ? buildCheckPairs(expectedMilestones)
+            : KNOWN_CHECK_PAIRS // fallback if no template found
+
           for (const [start, end] of checkPairs) {
             const startData = milestoneMap.get(start)
             const endData = milestoneMap.get(end)
@@ -246,7 +339,7 @@ Deno.serve(async (req) => {
         }
         
         // ============================================
-        // 4. STALE CASE DETECTION
+        // 5. STALE CASE DETECTION
         // ============================================
         const staleResults = await detectStaleCases(supabase, facility.id)
         if (staleResults.created > 0) issueTypesFound.add('stale_case')
@@ -270,7 +363,7 @@ Deno.serve(async (req) => {
         console.log(`Facility ${facility.name}: ${cases?.length || 0} cases, ${issuesFound} issues found, ${expiredCount} expired`)
 
         // ============================================
-        // 5. CREATE DATA QUALITY NOTIFICATION
+        // 6. CREATE DATA QUALITY NOTIFICATION
         // ============================================
         const totalNewIssues = issuesFound + staleResults.created
         if (totalNewIssues > 0) {
