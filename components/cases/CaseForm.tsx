@@ -22,6 +22,7 @@ import StaffMultiSelect from '../cases/StaffMultiSelect'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { LeaveConfirm } from '@/components/ui/ConfirmDialog'
 import { createCaseSchema, draftCaseSchema, validateField } from '@/lib/validation/schemas'
+import { useUser } from '@/lib/UserContext'
 
 interface StaffSelection {
   user_id: string
@@ -90,6 +91,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const searchParams = useSearchParams()
   const supabase = createClient()
   const { showToast } = useToast()
+  const { isTierAtLeast } = useUser()
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1794,8 +1796,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         />
       )}
 
-      {/* 8. Case Complexities */}
-      {userFacilityId && (
+      {/* 8. Case Complexities — hidden for Essential tier */}
+      {userFacilityId && isTierAtLeast('professional') && (
         <CaseComplexitySelector
           facilityId={userFacilityId}
           selectedIds={selectedComplexityIds}

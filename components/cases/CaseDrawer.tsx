@@ -120,33 +120,41 @@ export default function CaseDrawer({
   dqCaseIds,
   onCancelCase,
 }: CaseDrawerProps) {
-  const [activeTab, setActiveTab] = useState<DrawerTab>('financials')
+  const [activeTab, setActiveTab] = useState<DrawerTab>('milestones')
   const prevCaseIdRef = useRef(caseId)
-  const { can } = useUser()
+  const { can, isTierAtLeast } = useUser()
   const { caseDetail, loading, error } = useCaseDrawer(caseId)
+
+  // Determine default tab based on tier — financials only for enterprise
+  const defaultTab: DrawerTab = (can('tab.case_financials') && isTierAtLeast('enterprise'))
+    ? 'financials'
+    : 'milestones'
 
   // Reset to default tab when switching cases
   useEffect(() => {
     prevCaseIdRef.current = caseId
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setActiveTab('financials')
-  }, [caseId])
+    setActiveTab(defaultTab)
+  }, [caseId, defaultTab])
 
   // Whether this case has DQ issues (drives conditional Validation tab)
   const hasValidationIssues = !!(caseId && dqCaseIds?.has(caseId))
 
-  // Build tabs dynamically — filter by permissions + include Validation when case has DQ issues
+  // Build tabs dynamically — filter by permissions + tier + include Validation when case has DQ issues
   // History tab is always last and visible to all users (no permission gate)
   const tabs = useMemo(() => {
     const visible = BASE_TABS.filter((tab) => {
-      if (tab.key === 'financials') return can('tab.case_financials')
+      if (tab.key === 'financials') return can('tab.case_financials') && isTierAtLeast('enterprise')
       if (tab.key === 'milestones') return can('tab.case_milestones')
-      if (tab.key === 'flags') return can('tab.case_flags')
+      if (tab.key === 'flags') return can('tab.case_flags') && isTierAtLeast('professional')
       return true
     })
-    if (hasValidationIssues && can('tab.case_validation')) return [...visible, VALIDATION_TAB, HISTORY_TAB]
+    // Validation tab requires professional tier (data quality feature)
+    if (hasValidationIssues && can('tab.case_validation') && isTierAtLeast('professional')) {
+      return [...visible, VALIDATION_TAB, HISTORY_TAB]
+    }
     return [...visible, HISTORY_TAB]
-  }, [hasValidationIssues, can])
+  }, [hasValidationIssues, can, isTierAtLeast])
 
   // Lazy-load metric issues only when validation tab is active
   const { data: validationIssues, loading: validationLoading } = useSupabaseQuery<MetricIssue[]>(

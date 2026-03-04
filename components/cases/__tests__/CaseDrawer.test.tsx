@@ -70,11 +70,16 @@ vi.mock('@/lib/dataQuality', () => ({
 }))
 
 // Mock useUser to provide can() for permission gating
+// Make isTierAtLeast and can configurable for tier gating tests
+let mockIsTierAtLeast = vi.fn(() => true)
+let mockCan = vi.fn(() => true)
+
 vi.mock('@/lib/UserContext', () => ({
   useUser: () => ({
-    can: () => true,
+    can: mockCan,
     canAny: () => true,
     canAll: () => true,
+    isTierAtLeast: mockIsTierAtLeast,
     permissionsLoading: false,
     userData: { accessLevel: 'facility_admin', userId: 'user-1', facilityId: 'fac-1' },
     loading: false,
@@ -647,5 +652,94 @@ describe('CaseDrawer — cross-tab consistency', () => {
 
     await user.click(screen.getByText('Flags'))
     expect(screen.getByText('CASE-2024-001')).toBeDefined()
+  })
+})
+
+// ============================================
+// TIER GATING (Phase 11)
+// ============================================
+
+describe('CaseDrawer — Phase 11 tier gating', () => {
+  beforeEach(() => {
+    mockIsTierAtLeast.mockReturnValue(true)
+    mockCan.mockReturnValue(true)
+    mockUseCaseDrawer.mockReturnValue({
+      caseDetail: MOCK_CASE_DETAIL,
+      loading: false,
+      error: null,
+    })
+    mockUseFinancialComparison.mockReturnValue({
+      data: null,
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+  })
+
+  describe('Tab visibility by tier', () => {
+    it('Essential tier: hides Financials, Flags, and Validation tabs', () => {
+      mockIsTierAtLeast.mockImplementation((tier) => tier === 'essential')
+
+      render(
+        <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+      )
+
+      // Essential tier: only Milestones and History tabs should be visible
+      expect(screen.getByText('Milestones')).toBeDefined()
+      expect(screen.getByText('History')).toBeDefined()
+      expect(screen.queryByText('Financials')).toBeNull()
+      expect(screen.queryByText('Flags')).toBeNull()
+    })
+
+    it('Professional tier: shows Flags tab but hides Financials', () => {
+      mockIsTierAtLeast.mockImplementation((tier) => tier === 'professional' || tier === 'essential')
+
+      render(
+        <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+      )
+
+      expect(screen.getByText('Milestones')).toBeDefined()
+      expect(screen.getByText('Flags')).toBeDefined()
+      expect(screen.getByText('History')).toBeDefined()
+      expect(screen.queryByText('Financials')).toBeNull()
+    })
+
+    it('Enterprise tier: shows all tabs including Financials', () => {
+      mockIsTierAtLeast.mockReturnValue(true)
+
+      render(
+        <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+      )
+
+      expect(screen.getByText('Financials')).toBeDefined()
+      expect(screen.getByText('Milestones')).toBeDefined()
+      expect(screen.getByText('Flags')).toBeDefined()
+      expect(screen.getByText('History')).toBeDefined()
+    })
+  })
+
+  describe('Default tab by tier', () => {
+    it('Essential tier defaults to Milestones tab (financials hidden)', () => {
+      mockIsTierAtLeast.mockImplementation((tier) => tier === 'essential')
+
+      render(
+        <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+      )
+
+      // Should show milestone content by default
+      expect(screen.getByText('4/4 milestones recorded')).toBeDefined()
+      expect(screen.getAllByText('Patient In').length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('Enterprise tier defaults to Financials tab', () => {
+      mockIsTierAtLeast.mockReturnValue(true)
+
+      render(
+        <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+      )
+
+      // Should show financials content by default
+      expect(screen.getByText('No financial data available')).toBeDefined()
+    })
   })
 })
