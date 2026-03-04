@@ -712,3 +712,233 @@ describe('required milestone/phase enforcement', () => {
     })
   })
 })
+
+// ─── Tier-Aware Template Creation Tests (Phase 5) ────────────
+
+import {
+  getRequiredPhasesForTier,
+  getRequiredPhaseMilestonesForTier,
+} from '@/lib/template-defaults'
+
+describe('tier-aware createTemplate auto-population', () => {
+  const mockPhases = [
+    { id: 'p-pre', name: 'pre_op', display_name: 'Pre-Op' },
+    { id: 'p-surg', name: 'surgical', display_name: 'Surgical' },
+    { id: 'p-close', name: 'closing', display_name: 'Closing' },
+    { id: 'p-post', name: 'post_op', display_name: 'Post-Op' },
+  ]
+
+  const mockMilestones = [
+    { id: 'm-pi', name: 'patient_in', display_name: 'Patient In' },
+    { id: 'm-pds', name: 'prep_drape_start', display_name: 'Prep/Drape Start' },
+    { id: 'm-pdc', name: 'prep_drape_complete', display_name: 'Prep/Drape Complete' },
+    { id: 'm-inc', name: 'incision', display_name: 'Incision' },
+    { id: 'm-close', name: 'closing', display_name: 'Closing' },
+    { id: 'm-closec', name: 'closing_complete', display_name: 'Closing Complete' },
+    { id: 'm-po', name: 'patient_out', display_name: 'Patient Out' },
+  ]
+
+  describe('essential tier', () => {
+    it('generates only 2 items: patient_in in pre_op, patient_out in post_op', () => {
+      const tier = 'essential'
+      const phaseLookup = mockPhases
+      const milestoneLookup = mockMilestones
+      const phaseByName = new Map(phaseLookup.map(p => [p.name, p]))
+      const milestoneByName = new Map(milestoneLookup.map(m => [m.name, m]))
+
+      const tierPhases = getRequiredPhasesForTier(tier)
+      const tierPhaseMilestoneMap = getRequiredPhaseMilestonesForTier(tier)
+
+      const requiredItems: Array<{
+        facility_milestone_id: string
+        facility_phase_id: string
+        display_order: number
+      }> = []
+      let displayOrder = 0
+
+      for (const phaseName of tierPhases) {
+        const phase = phaseByName.get(phaseName)
+        if (!phase) continue
+
+        const milestonesForPhase = tierPhaseMilestoneMap[phaseName] || []
+
+        for (const msName of milestonesForPhase) {
+          const ms = milestoneByName.get(msName)
+          if (!ms) continue
+
+          displayOrder += 1
+          requiredItems.push({
+            facility_milestone_id: ms.id,
+            facility_phase_id: phase.id,
+            display_order: displayOrder,
+          })
+        }
+      }
+
+      expect(requiredItems).toHaveLength(2)
+      expect(requiredItems[0]).toMatchObject({
+        facility_milestone_id: 'm-pi',
+        facility_phase_id: 'p-pre',
+        display_order: 1,
+      })
+      expect(requiredItems[1]).toMatchObject({
+        facility_milestone_id: 'm-po',
+        facility_phase_id: 'p-post',
+        display_order: 2,
+      })
+    })
+
+    it('creates only pre_op and post_op phases', () => {
+      const tier = 'essential'
+      const tierPhases = getRequiredPhasesForTier(tier)
+      expect(tierPhases).toEqual(['pre_op', 'post_op'])
+    })
+
+    it('does not include surgical or closing phases', () => {
+      const tier = 'essential'
+      const tierPhases = getRequiredPhasesForTier(tier)
+      expect(tierPhases).not.toContain('surgical')
+      expect(tierPhases).not.toContain('closing')
+    })
+  })
+
+  describe('professional tier', () => {
+    it('generates all 9 items (4 phases, 7 unique milestones, 2 shared boundaries)', () => {
+      const tier = 'professional'
+      const phaseLookup = mockPhases
+      const milestoneLookup = mockMilestones
+      const phaseByName = new Map(phaseLookup.map(p => [p.name, p]))
+      const milestoneByName = new Map(milestoneLookup.map(m => [m.name, m]))
+
+      const tierPhases = getRequiredPhasesForTier(tier)
+      const tierPhaseMilestoneMap = getRequiredPhaseMilestonesForTier(tier)
+
+      const requiredItems: Array<{
+        facility_milestone_id: string
+        facility_phase_id: string
+        display_order: number
+      }> = []
+      let displayOrder = 0
+
+      for (const phaseName of tierPhases) {
+        const phase = phaseByName.get(phaseName)
+        if (!phase) continue
+
+        const milestonesForPhase = tierPhaseMilestoneMap[phaseName] || []
+
+        for (const msName of milestonesForPhase) {
+          const ms = milestoneByName.get(msName)
+          if (!ms) continue
+
+          displayOrder += 1
+          requiredItems.push({
+            facility_milestone_id: ms.id,
+            facility_phase_id: phase.id,
+            display_order: displayOrder,
+          })
+        }
+      }
+
+      expect(requiredItems).toHaveLength(9)
+
+      // Verify phase distribution
+      const preOpItems = requiredItems.filter(i => i.facility_phase_id === 'p-pre')
+      const surgItems = requiredItems.filter(i => i.facility_phase_id === 'p-surg')
+      const closeItems = requiredItems.filter(i => i.facility_phase_id === 'p-close')
+      const postOpItems = requiredItems.filter(i => i.facility_phase_id === 'p-post')
+
+      expect(preOpItems).toHaveLength(3)
+      expect(surgItems).toHaveLength(2)
+      expect(closeItems).toHaveLength(2)
+      expect(postOpItems).toHaveLength(2)
+    })
+
+    it('creates all 4 phases', () => {
+      const tier = 'professional'
+      const tierPhases = getRequiredPhasesForTier(tier)
+      expect(tierPhases).toEqual(['pre_op', 'surgical', 'closing', 'post_op'])
+    })
+  })
+
+  describe('enterprise tier', () => {
+    it('generates all 9 items (same as professional)', () => {
+      const tier = 'enterprise'
+      const phaseLookup = mockPhases
+      const milestoneLookup = mockMilestones
+      const phaseByName = new Map(phaseLookup.map(p => [p.name, p]))
+      const milestoneByName = new Map(milestoneLookup.map(m => [m.name, m]))
+
+      const tierPhases = getRequiredPhasesForTier(tier)
+      const tierPhaseMilestoneMap = getRequiredPhaseMilestonesForTier(tier)
+
+      const requiredItems: Array<{
+        facility_milestone_id: string
+        facility_phase_id: string
+        display_order: number
+      }> = []
+      let displayOrder = 0
+
+      for (const phaseName of tierPhases) {
+        const phase = phaseByName.get(phaseName)
+        if (!phase) continue
+
+        const milestonesForPhase = tierPhaseMilestoneMap[phaseName] || []
+
+        for (const msName of milestonesForPhase) {
+          const ms = milestoneByName.get(msName)
+          if (!ms) continue
+
+          displayOrder += 1
+          requiredItems.push({
+            facility_milestone_id: ms.id,
+            facility_phase_id: phase.id,
+            display_order: displayOrder,
+          })
+        }
+      }
+
+      expect(requiredItems).toHaveLength(9)
+    })
+
+    it('creates all 4 phases', () => {
+      const tier = 'enterprise'
+      const tierPhases = getRequiredPhasesForTier(tier)
+      expect(tierPhases).toEqual(['pre_op', 'surgical', 'closing', 'post_op'])
+    })
+  })
+
+  describe('tier comparison', () => {
+    it('essential tier creates fewer items than professional/enterprise', () => {
+      const essentialPhases = getRequiredPhasesForTier('essential')
+      const professionalPhases = getRequiredPhasesForTier('professional')
+      const enterprisePhases = getRequiredPhasesForTier('enterprise')
+
+      expect(essentialPhases.length).toBeLessThan(professionalPhases.length)
+      expect(professionalPhases.length).toEqual(enterprisePhases.length)
+    })
+
+    it('essential tier milestone map has fewer entries than professional/enterprise', () => {
+      const essentialMap = getRequiredPhaseMilestonesForTier('essential')
+      const professionalMap = getRequiredPhaseMilestonesForTier('professional')
+      const enterpriseMap = getRequiredPhaseMilestonesForTier('enterprise')
+
+      const essentialTotal = Object.values(essentialMap).flat().length
+      const professionalTotal = Object.values(professionalMap).flat().length
+      const enterpriseTotal = Object.values(enterpriseMap).flat().length
+
+      expect(essentialTotal).toBe(2) // patient_in + patient_out
+      expect(professionalTotal).toBe(9) // 9 placements
+      expect(enterpriseTotal).toBe(9) // same as professional
+    })
+
+    it('professional and enterprise tiers are identical', () => {
+      const professionalPhases = getRequiredPhasesForTier('professional')
+      const enterprisePhases = getRequiredPhasesForTier('enterprise')
+      expect(professionalPhases).toEqual(enterprisePhases)
+
+      const professionalMap = getRequiredPhaseMilestonesForTier('professional')
+      const enterpriseMap = getRequiredPhaseMilestonesForTier('enterprise')
+      expect(professionalMap).toEqual(enterpriseMap)
+    })
+  })
+})

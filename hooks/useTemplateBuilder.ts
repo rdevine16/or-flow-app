@@ -11,10 +11,10 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import type { TemplateItemData, PhaseLookup, MilestoneLookup } from '@/lib/utils/buildTemplateRenderList'
 import {
-  REQUIRED_PHASE_NAMES,
-  REQUIRED_PHASE_MILESTONES,
-  isRequiredMilestone,
-  isRequiredPhase,
+  getRequiredPhasesForTier,
+  getRequiredPhaseMilestonesForTier,
+  isRequiredMilestoneForTier,
+  isRequiredPhaseForTier,
 } from '@/lib/template-defaults'
 
 // ─── Types ───────────────────────────────────────────────
@@ -85,7 +85,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 
 export function useTemplateBuilder() {
   const supabase = createClient()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, tier } = useUser()
   const { showToast } = useToast()
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
@@ -270,12 +270,14 @@ export function useTemplateBuilder() {
     [phases],
   )
 
-  // Determine if the current template has the full required structure.
+  // Determine if the current template has the required structure for this tier.
   // If it does → enforce. If it doesn't → grandfathered (no enforcement).
+  const tierPhaseMilestones = useMemo(() => getRequiredPhaseMilestonesForTier(tier), [tier])
+
   const templateHasRequiredStructure = useMemo(() => {
     if (builderState.items.length === 0) return false
-    // Check every required placement: for each phase, every milestone must be present
-    for (const [phaseName, msNames] of Object.entries(REQUIRED_PHASE_MILESTONES)) {
+    // Check every required placement for this tier's phase→milestone map
+    for (const [phaseName, msNames] of Object.entries(tierPhaseMilestones)) {
       const phaseEntry = (phases || []).find(p => p.name === phaseName)
       if (!phaseEntry) return false
       for (const msName of msNames) {
@@ -288,7 +290,7 @@ export function useTemplateBuilder() {
       }
     }
     return true
-  }, [builderState.items, phases, milestones])
+  }, [builderState.items, phases, milestones, tierPhaseMilestones])
 
   // Sets of item IDs and phase IDs that are required (for UI to disable delete buttons)
   const requiredMilestoneItemIds = useMemo(() => {
@@ -297,27 +299,27 @@ export function useTemplateBuilder() {
     for (const item of builderState.items) {
       const msName = milestoneNameById.get(item.facility_milestone_id)
       const phaseName = item.facility_phase_id ? phaseNameById.get(item.facility_phase_id) : null
-      if (msName && phaseName && isRequiredMilestone(msName) && isRequiredPhase(phaseName)) {
-        // Check this specific milestone-in-phase is a required placement
-        const requiredMs = REQUIRED_PHASE_MILESTONES[phaseName]
+      if (msName && phaseName && isRequiredMilestoneForTier(msName, tier) && isRequiredPhaseForTier(phaseName, tier)) {
+        // Check this specific milestone-in-phase is a required placement for this tier
+        const requiredMs = tierPhaseMilestones[phaseName]
         if (requiredMs?.includes(msName)) {
           ids.add(item.id)
         }
       }
     }
     return ids
-  }, [templateHasRequiredStructure, builderState.items, milestoneNameById, phaseNameById])
+  }, [templateHasRequiredStructure, builderState.items, milestoneNameById, phaseNameById, tier, tierPhaseMilestones])
 
   const requiredPhaseIds = useMemo(() => {
     if (!templateHasRequiredStructure) return new Set<string>()
     const ids = new Set<string>()
     for (const phase of (phases || [])) {
-      if (isRequiredPhase(phase.name)) {
+      if (isRequiredPhaseForTier(phase.name, tier)) {
         ids.add(phase.id)
       }
     }
     return ids
-  }, [templateHasRequiredStructure, phases])
+  }, [templateHasRequiredStructure, phases, tier])
 
   // ── Template CRUD ───────────────────────────────────────
 
@@ -339,11 +341,14 @@ export function useTemplateBuilder() {
 
       if (error) throw error
 
-      // Auto-populate required phases + milestones
+      // Auto-populate required phases + milestones (scoped to current tier)
       const phaseLookup = phases || []
       const milestoneLookup = milestones || []
       const phaseByName = new Map(phaseLookup.map(p => [p.name, p]))
       const milestoneByName = new Map(milestoneLookup.map(m => [m.name, m]))
+
+      const tierPhases = getRequiredPhasesForTier(tier)
+      const tierPhaseMilestoneMap = getRequiredPhaseMilestonesForTier(tier)
 
       const requiredItems: Array<{
         template_id: string
@@ -354,12 +359,12 @@ export function useTemplateBuilder() {
       const requiredEmptyPhaseIds = new Set<string>()
       let displayOrder = 0
 
-      for (const phaseName of REQUIRED_PHASE_NAMES) {
+      for (const phaseName of tierPhases) {
         const phase = phaseByName.get(phaseName)
         if (!phase) continue
 
         requiredEmptyPhaseIds.add(phase.id)
-        const milestonesForPhase = REQUIRED_PHASE_MILESTONES[phaseName] || []
+        const milestonesForPhase = tierPhaseMilestoneMap[phaseName] || []
 
         for (const msName of milestonesForPhase) {
           const ms = milestoneByName.get(msName)
@@ -404,7 +409,7 @@ export function useTemplateBuilder() {
     } finally {
       setSaving(false)
     }
-  }, [effectiveFacilityId, supabase, templates, setTemplates, showToast, phases, milestones])
+  }, [effectiveFacilityId, supabase, templates, setTemplates, showToast, phases, milestones, tier])
 
   const duplicateTemplate = useCallback(async (sourceId: string) => {
     if (!effectiveFacilityId) return

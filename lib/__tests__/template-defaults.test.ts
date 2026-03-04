@@ -205,3 +205,255 @@ describe('edge cases and invariants', () => {
     }
   })
 })
+
+// ─── Tier-Aware Variants Tests (Phase 5) ─────────────────────
+
+import {
+  getRequiredMilestonesForTier,
+  getRequiredPhasesForTier,
+  getRequiredPhaseMilestonesForTier,
+  isRequiredMilestoneForTier,
+  isRequiredPhaseForTier,
+} from '../template-defaults'
+
+describe('getRequiredMilestonesForTier', () => {
+  it('returns only patient_in and patient_out for essential tier', () => {
+    const essentialMs = getRequiredMilestonesForTier('essential')
+    expect(essentialMs).toEqual(['patient_in', 'patient_out'])
+  })
+
+  it('returns all 7 milestones for professional tier', () => {
+    const professionalMs = getRequiredMilestonesForTier('professional')
+    expect(professionalMs).toEqual(REQUIRED_MILESTONE_NAMES)
+    expect(professionalMs).toHaveLength(7)
+  })
+
+  it('returns all 7 milestones for enterprise tier', () => {
+    const enterpriseMs = getRequiredMilestonesForTier('enterprise')
+    expect(enterpriseMs).toEqual(REQUIRED_MILESTONE_NAMES)
+    expect(enterpriseMs).toHaveLength(7)
+  })
+})
+
+describe('getRequiredPhasesForTier', () => {
+  it('returns only pre_op and post_op for essential tier', () => {
+    const essentialPhases = getRequiredPhasesForTier('essential')
+    expect(essentialPhases).toEqual(['pre_op', 'post_op'])
+  })
+
+  it('returns all 4 phases for professional tier', () => {
+    const professionalPhases = getRequiredPhasesForTier('professional')
+    expect(professionalPhases).toEqual(REQUIRED_PHASE_NAMES)
+    expect(professionalPhases).toHaveLength(4)
+  })
+
+  it('returns all 4 phases for enterprise tier', () => {
+    const enterprisePhases = getRequiredPhasesForTier('enterprise')
+    expect(enterprisePhases).toEqual(REQUIRED_PHASE_NAMES)
+    expect(enterprisePhases).toHaveLength(4)
+  })
+})
+
+describe('getRequiredPhaseMilestonesForTier', () => {
+  it('returns simplified mapping for essential tier (pre_op: [patient_in], post_op: [patient_out])', () => {
+    const essentialMap = getRequiredPhaseMilestonesForTier('essential')
+    expect(Object.keys(essentialMap)).toEqual(['pre_op', 'post_op'])
+    expect(essentialMap.pre_op).toEqual(['patient_in'])
+    expect(essentialMap.post_op).toEqual(['patient_out'])
+  })
+
+  it('returns full mapping for professional tier', () => {
+    const professionalMap = getRequiredPhaseMilestonesForTier('professional')
+    expect(professionalMap).toEqual(REQUIRED_PHASE_MILESTONES)
+    expect(Object.keys(professionalMap)).toHaveLength(4)
+    expect(professionalMap.pre_op).toEqual(['patient_in', 'prep_drape_start', 'prep_drape_complete'])
+    expect(professionalMap.surgical).toEqual(['incision', 'closing'])
+    expect(professionalMap.closing).toEqual(['closing', 'closing_complete'])
+    expect(professionalMap.post_op).toEqual(['closing_complete', 'patient_out'])
+  })
+
+  it('returns full mapping for enterprise tier', () => {
+    const enterpriseMap = getRequiredPhaseMilestonesForTier('enterprise')
+    expect(enterpriseMap).toEqual(REQUIRED_PHASE_MILESTONES)
+    expect(Object.keys(enterpriseMap)).toHaveLength(4)
+  })
+})
+
+describe('isRequiredMilestoneForTier', () => {
+  describe('essential tier', () => {
+    it('returns true only for patient_in and patient_out', () => {
+      expect(isRequiredMilestoneForTier('patient_in', 'essential')).toBe(true)
+      expect(isRequiredMilestoneForTier('patient_out', 'essential')).toBe(true)
+    })
+
+    it('returns false for other required milestones', () => {
+      expect(isRequiredMilestoneForTier('prep_drape_start', 'essential')).toBe(false)
+      expect(isRequiredMilestoneForTier('prep_drape_complete', 'essential')).toBe(false)
+      expect(isRequiredMilestoneForTier('incision', 'essential')).toBe(false)
+      expect(isRequiredMilestoneForTier('closing', 'essential')).toBe(false)
+      expect(isRequiredMilestoneForTier('closing_complete', 'essential')).toBe(false)
+    })
+
+    it('returns false for non-required milestones', () => {
+      expect(isRequiredMilestoneForTier('timeout', 'essential')).toBe(false)
+      expect(isRequiredMilestoneForTier('sign_in', 'essential')).toBe(false)
+    })
+  })
+
+  describe('professional tier', () => {
+    it('returns true for all 7 required milestones', () => {
+      expect(isRequiredMilestoneForTier('patient_in', 'professional')).toBe(true)
+      expect(isRequiredMilestoneForTier('prep_drape_start', 'professional')).toBe(true)
+      expect(isRequiredMilestoneForTier('prep_drape_complete', 'professional')).toBe(true)
+      expect(isRequiredMilestoneForTier('incision', 'professional')).toBe(true)
+      expect(isRequiredMilestoneForTier('closing', 'professional')).toBe(true)
+      expect(isRequiredMilestoneForTier('closing_complete', 'professional')).toBe(true)
+      expect(isRequiredMilestoneForTier('patient_out', 'professional')).toBe(true)
+    })
+
+    it('returns false for non-required milestones', () => {
+      expect(isRequiredMilestoneForTier('timeout', 'professional')).toBe(false)
+    })
+  })
+
+  describe('enterprise tier', () => {
+    it('returns true for all 7 required milestones', () => {
+      expect(isRequiredMilestoneForTier('patient_in', 'enterprise')).toBe(true)
+      expect(isRequiredMilestoneForTier('prep_drape_start', 'enterprise')).toBe(true)
+      expect(isRequiredMilestoneForTier('prep_drape_complete', 'enterprise')).toBe(true)
+      expect(isRequiredMilestoneForTier('incision', 'enterprise')).toBe(true)
+      expect(isRequiredMilestoneForTier('closing', 'enterprise')).toBe(true)
+      expect(isRequiredMilestoneForTier('closing_complete', 'enterprise')).toBe(true)
+      expect(isRequiredMilestoneForTier('patient_out', 'enterprise')).toBe(true)
+    })
+
+    it('returns false for non-required milestones', () => {
+      expect(isRequiredMilestoneForTier('timeout', 'enterprise')).toBe(false)
+    })
+  })
+})
+
+describe('isRequiredPhaseForTier', () => {
+  describe('essential tier', () => {
+    it('returns true only for pre_op and post_op', () => {
+      expect(isRequiredPhaseForTier('pre_op', 'essential')).toBe(true)
+      expect(isRequiredPhaseForTier('post_op', 'essential')).toBe(true)
+    })
+
+    it('returns false for surgical and closing phases', () => {
+      expect(isRequiredPhaseForTier('surgical', 'essential')).toBe(false)
+      expect(isRequiredPhaseForTier('closing', 'essential')).toBe(false)
+    })
+
+    it('returns false for non-required phases', () => {
+      expect(isRequiredPhaseForTier('setup', 'essential')).toBe(false)
+      expect(isRequiredPhaseForTier('cleanup', 'essential')).toBe(false)
+    })
+  })
+
+  describe('professional tier', () => {
+    it('returns true for all 4 required phases', () => {
+      expect(isRequiredPhaseForTier('pre_op', 'professional')).toBe(true)
+      expect(isRequiredPhaseForTier('surgical', 'professional')).toBe(true)
+      expect(isRequiredPhaseForTier('closing', 'professional')).toBe(true)
+      expect(isRequiredPhaseForTier('post_op', 'professional')).toBe(true)
+    })
+
+    it('returns false for non-required phases', () => {
+      expect(isRequiredPhaseForTier('setup', 'professional')).toBe(false)
+    })
+  })
+
+  describe('enterprise tier', () => {
+    it('returns true for all 4 required phases', () => {
+      expect(isRequiredPhaseForTier('pre_op', 'enterprise')).toBe(true)
+      expect(isRequiredPhaseForTier('surgical', 'enterprise')).toBe(true)
+      expect(isRequiredPhaseForTier('closing', 'enterprise')).toBe(true)
+      expect(isRequiredPhaseForTier('post_op', 'enterprise')).toBe(true)
+    })
+
+    it('returns false for non-required phases', () => {
+      expect(isRequiredPhaseForTier('setup', 'enterprise')).toBe(false)
+    })
+  })
+})
+
+describe('tier-aware function consistency', () => {
+  it('essential tier: phase milestones map matches milestone list', () => {
+    const essentialMs = getRequiredMilestonesForTier('essential')
+    const essentialMap = getRequiredPhaseMilestonesForTier('essential')
+    const allMilestonesInMap = new Set(Object.values(essentialMap).flat())
+
+    for (const ms of essentialMs) {
+      expect(allMilestonesInMap.has(ms)).toBe(true)
+    }
+  })
+
+  it('essential tier: phase list matches phase milestones map keys', () => {
+    const essentialPhases = getRequiredPhasesForTier('essential')
+    const essentialMap = getRequiredPhaseMilestonesForTier('essential')
+    const mapKeys = Object.keys(essentialMap)
+
+    expect(essentialPhases).toEqual(mapKeys)
+  })
+
+  it('professional tier: phase milestones map matches milestone list', () => {
+    const professionalMs = getRequiredMilestonesForTier('professional')
+    const professionalMap = getRequiredPhaseMilestonesForTier('professional')
+    const allMilestonesInMap = new Set(Object.values(professionalMap).flat())
+
+    for (const ms of professionalMs) {
+      expect(allMilestonesInMap.has(ms)).toBe(true)
+    }
+  })
+
+  it('enterprise tier: uses same structure as professional', () => {
+    const professionalMs = getRequiredMilestonesForTier('professional')
+    const enterpriseMs = getRequiredMilestonesForTier('enterprise')
+    expect(enterpriseMs).toEqual(professionalMs)
+
+    const professionalPhases = getRequiredPhasesForTier('professional')
+    const enterprisePhases = getRequiredPhasesForTier('enterprise')
+    expect(enterprisePhases).toEqual(professionalPhases)
+
+    const professionalMap = getRequiredPhaseMilestonesForTier('professional')
+    const enterpriseMap = getRequiredPhaseMilestonesForTier('enterprise')
+    expect(enterpriseMap).toEqual(professionalMap)
+  })
+
+  it('isRequiredMilestoneForTier consistency across tiers', () => {
+    // patient_in and patient_out are required for all tiers
+    expect(isRequiredMilestoneForTier('patient_in', 'essential')).toBe(true)
+    expect(isRequiredMilestoneForTier('patient_in', 'professional')).toBe(true)
+    expect(isRequiredMilestoneForTier('patient_in', 'enterprise')).toBe(true)
+
+    expect(isRequiredMilestoneForTier('patient_out', 'essential')).toBe(true)
+    expect(isRequiredMilestoneForTier('patient_out', 'professional')).toBe(true)
+    expect(isRequiredMilestoneForTier('patient_out', 'enterprise')).toBe(true)
+
+    // prep_drape_start is NOT required for essential, but IS required for professional and enterprise
+    expect(isRequiredMilestoneForTier('prep_drape_start', 'essential')).toBe(false)
+    expect(isRequiredMilestoneForTier('prep_drape_start', 'professional')).toBe(true)
+    expect(isRequiredMilestoneForTier('prep_drape_start', 'enterprise')).toBe(true)
+  })
+
+  it('isRequiredPhaseForTier consistency across tiers', () => {
+    // pre_op and post_op are required for all tiers
+    expect(isRequiredPhaseForTier('pre_op', 'essential')).toBe(true)
+    expect(isRequiredPhaseForTier('pre_op', 'professional')).toBe(true)
+    expect(isRequiredPhaseForTier('pre_op', 'enterprise')).toBe(true)
+
+    expect(isRequiredPhaseForTier('post_op', 'essential')).toBe(true)
+    expect(isRequiredPhaseForTier('post_op', 'professional')).toBe(true)
+    expect(isRequiredPhaseForTier('post_op', 'enterprise')).toBe(true)
+
+    // surgical and closing are NOT required for essential, but ARE required for professional and enterprise
+    expect(isRequiredPhaseForTier('surgical', 'essential')).toBe(false)
+    expect(isRequiredPhaseForTier('surgical', 'professional')).toBe(true)
+    expect(isRequiredPhaseForTier('surgical', 'enterprise')).toBe(true)
+
+    expect(isRequiredPhaseForTier('closing', 'essential')).toBe(false)
+    expect(isRequiredPhaseForTier('closing', 'professional')).toBe(true)
+    expect(isRequiredPhaseForTier('closing', 'enterprise')).toBe(true)
+  })
+})

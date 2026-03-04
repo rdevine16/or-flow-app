@@ -1,6 +1,9 @@
 // lib/template-defaults.ts
 // Constants and helpers defining the required minimum milestones and phases for new templates.
 // Existing templates that don't contain all required items are grandfathered (no enforcement).
+// Tier-aware variants allow Essential tier to require only patient_in/patient_out.
+
+import type { TierSlug } from './tier-config'
 
 /** The 4 phases every new template must include. */
 export const REQUIRED_PHASE_NAMES = ['pre_op', 'surgical', 'closing', 'post_op'] as const
@@ -40,4 +43,53 @@ export function getRequiredPhasesForMilestone(milestoneName: string): string[] {
   return Object.entries(REQUIRED_PHASE_MILESTONES)
     .filter(([, milestones]) => milestones.includes(milestoneName))
     .map(([phase]) => phase)
+}
+
+// ============================================
+// Tier-aware variants
+// ============================================
+
+/**
+ * Essential tier only requires patient_in + patient_out.
+ * Professional and Enterprise require the full 7 milestones.
+ */
+export function getRequiredMilestonesForTier(tier: TierSlug): readonly string[] {
+  if (tier === 'essential') {
+    return ['patient_in', 'patient_out']
+  }
+  return REQUIRED_MILESTONE_NAMES
+}
+
+/**
+ * Essential tier only requires pre_op + post_op phases.
+ * Professional and Enterprise require all 4 phases.
+ */
+export function getRequiredPhasesForTier(tier: TierSlug): readonly string[] {
+  if (tier === 'essential') {
+    return ['pre_op', 'post_op']
+  }
+  return REQUIRED_PHASE_NAMES
+}
+
+/**
+ * Phase → milestone mapping scoped to a tier.
+ * Essential: pre_op has patient_in, post_op has patient_out.
+ * Professional/Enterprise: full mapping.
+ */
+export function getRequiredPhaseMilestonesForTier(tier: TierSlug): Record<string, readonly string[]> {
+  if (tier === 'essential') {
+    return {
+      pre_op: ['patient_in'],
+      post_op: ['patient_out'],
+    }
+  }
+  return REQUIRED_PHASE_MILESTONES
+}
+
+export function isRequiredMilestoneForTier(milestoneName: string, tier: TierSlug): boolean {
+  return getRequiredMilestonesForTier(tier).includes(milestoneName)
+}
+
+export function isRequiredPhaseForTier(phaseName: string, tier: TierSlug): boolean {
+  return (getRequiredPhasesForTier(tier) as readonly string[]).includes(phaseName)
 }
