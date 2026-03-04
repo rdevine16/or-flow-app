@@ -91,7 +91,6 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/subscription',
         icon: CreditCard,
         description: 'Plan, usage, and billing',
-        badge: 'soon',
         permission: 'settings.manage',
       },
     ],
