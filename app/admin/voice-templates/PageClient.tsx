@@ -66,6 +66,8 @@ const UTILITY_ACTIONS: UtilityAction[] = [
   { id: 'action-undo_last', name: 'undo_last', action_type: 'undo_last', label: 'Undo Last' },
   { id: 'action-confirm_pending', name: 'confirm_pending', action_type: 'confirm_pending', label: 'Confirm Pending' },
   { id: 'action-cancel_pending', name: 'cancel_pending', action_type: 'cancel_pending', label: 'Cancel Pending' },
+  { id: 'action-start_cement_timer', name: 'start_cement_timer', action_type: 'start_cement_timer', label: 'Start Cement Timer' },
+  { id: 'action-stop_cement_timer', name: 'stop_cement_timer', action_type: 'stop_cement_timer', label: 'Stop Cement Timer' },
 ]
 
 // ============================================

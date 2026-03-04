@@ -13,6 +13,8 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   undo_last: 'Undo Last',
   confirm_pending: 'Confirm Pending',
   cancel_pending: 'Cancel Pending',
+  start_cement_timer: 'Start Cement Timer',
+  stop_cement_timer: 'Stop Cement Timer',
 }
 
 interface AliasGroupSectionProps {
