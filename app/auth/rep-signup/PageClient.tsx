@@ -133,20 +133,24 @@ function RepSignupForm() {
     setError(null)
 
     try {
-      // Call API to create device rep with auto-confirmed email
+      const payload = {
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone || undefined,
+        inviteId: invite.id,
+        facilityId: invite.facility_id,
+        implantCompanyId: invite.implant_company_id,
+      }
+
+      // Debug: log payload to help diagnose validation issues
+      console.log('[rep-signup] Creating account with:', { ...payload, password: '***' })
+
       const response = await fetch('/api/create-device-rep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          phone: formData.phone,
-          inviteId: invite.id,
-          facilityId: invite.facility_id,
-          implantCompanyId: invite.implant_company_id,
-        }),
+        body: JSON.stringify(payload),
       })
 
       const result = await response.json()
