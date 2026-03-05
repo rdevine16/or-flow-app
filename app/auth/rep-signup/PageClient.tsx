@@ -152,7 +152,15 @@ function RepSignupForm() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to create account')
+        // Build a detailed error message from validation details if available
+        let errorMsg = result.error || 'Failed to create account'
+        if (result.details?.fields) {
+          const fieldErrors = Object.entries(result.details.fields)
+            .map(([field, msgs]) => `${field}: ${(msgs as string[]).join(', ')}`)
+            .join('; ')
+          if (fieldErrors) errorMsg = fieldErrors
+        }
+        throw new Error(errorMsg)
       }
 
       // Success toast

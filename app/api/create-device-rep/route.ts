@@ -77,22 +77,31 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     throw new Error(`Failed to create user profile: ${profileError.message}`)
   }
 
-  // 3. Grant access to the facility
+  // 3. Set the implant_company_id on the user profile
+  const { error: companyError } = await supabaseAdmin
+    .from('users')
+    .update({ implant_company_id: validated.implantCompanyId })
+    .eq('id', authData.user.id)
+
+  if (companyError) {
+    log.error('Failed to set implant company:', companyError)
+  }
+
+  // 4. Grant access to the facility
   const { error: accessError } = await supabaseAdmin
     .from('facility_device_reps')
     .insert({
       facility_id: validated.facilityId,
       user_id: authData.user.id,
-      implant_company_id: validated.implantCompanyId,
-      status: 'active',
-      accepted_at: nowUTC(), // ✅ Timezone-safe timestamp
+      status: 'accepted',
+      accepted_at: nowUTC(),
     })
 
   if (accessError) {
     throw new Error(`Failed to grant facility access: ${accessError.message}`)
   }
 
-  // 4. Mark invite as accepted
+  // 5. Mark invite as accepted
   const { error: inviteError } = await supabaseAdmin
     .from('device_rep_invites')
     .update({ accepted_at: nowUTC() }) // ✅ Timezone-safe timestamp
