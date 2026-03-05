@@ -14,16 +14,19 @@ import { logger } from '@/lib/logger'
 
 const log = logger('api/create-device-rep')
 
-// Validation schema
+// Lenient UUID pattern — checks format without enforcing RFC 4122 variant/version bits
+// (needed because some facility IDs like a1111111-... don't have standard variant bits)
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const createDeviceRepSchema = z.object({
   email: z.string().email('Invalid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   firstName: z.string().min(1, 'First name required').max(50),
   lastName: z.string().min(1, 'Last name required').max(50),
   phone: z.string().optional(),
-  inviteId: z.string().uuid('Invalid invite ID'),
-  facilityId: z.string().uuid('Invalid facility ID'),
-  implantCompanyId: z.string().uuid('Invalid company ID'),
+  inviteId: z.string().regex(uuidPattern, 'Invalid invite ID'),
+  facilityId: z.string().regex(uuidPattern, 'Invalid facility ID'),
+  implantCompanyId: z.string().regex(uuidPattern, 'Invalid company ID'),
 })
 
 export const POST = withErrorHandler(async (request: NextRequest) => {
