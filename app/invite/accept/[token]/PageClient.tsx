@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase'
 import { Building2, Check, X } from 'lucide-react'
 
@@ -179,9 +180,13 @@ export default function AcceptInvitePage() {
       <div className="bg-white rounded-xl shadow-xl p-8 max-w-md w-full">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-xl mb-4">
-            <span className="text-2xl font-bold text-white">O</span>
-          </div>
+          <Image
+            src="/images/orbitcirlce.png"
+            alt="ORbit"
+            width={64}
+            height={64}
+            className="mx-auto mb-4"
+          />
           <h1 className="text-2xl font-semibold text-slate-900">ORbit</h1>
           <p className="text-slate-500 mt-1">Surgical Case Management</p>
         </div>

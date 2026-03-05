@@ -10,6 +10,7 @@
 import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { X } from 'lucide-react'
@@ -45,30 +46,24 @@ function RepSignupForm() {
   })
 
   const fetchInvite = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('device_rep_invites')
-      .select(`
-        id,
-        email,
-        facility_id,
-        implant_company_id,
-        expires_at,
-        facilities (name),
-        implant_companies (name)
-      `)
-      .eq('invite_token', token)
-      .is('accepted_at', null)
-      .single()
+    // Use server API to fetch invite details (bypasses RLS for joined tables)
+    const res = await fetch(`/api/invite/details?token=${encodeURIComponent(token!)}`)
 
-    if (error || !data) {
-      const message = 'This invite link is invalid or has already been used.'
+    if (!res.ok) {
+      const message = 'This invite link is invalid.'
       setError(message)
       setLoading(false)
-      showToast({
-        type: 'error',
-        title: 'Invalid Invite',
-        message
-      })
+      showToast({ type: 'error', title: 'Invalid Invite', message })
+      return
+    }
+
+    const data = await res.json()
+
+    if (data.accepted_at) {
+      const message = 'This invite has already been accepted.'
+      setError(message)
+      setLoading(false)
+      showToast({ type: 'error', title: 'Already Accepted', message })
       return
     }
 
@@ -76,29 +71,21 @@ function RepSignupForm() {
       const message = 'This invite has expired. Please request a new invite.'
       setError(message)
       setLoading(false)
-      showToast({
-        type: 'error',
-        title: 'Invite Expired',
-        message
-      })
+      showToast({ type: 'error', title: 'Invite Expired', message })
       return
     }
-
-    // Extract names from joined data (Supabase can return as array or object)
-    const facility = Array.isArray(data.facilities) ? data.facilities[0] : data.facilities
-    const company = Array.isArray(data.implant_companies) ? data.implant_companies[0] : data.implant_companies
 
     setInvite({
       id: data.id,
       email: data.email,
       facility_id: data.facility_id,
       implant_company_id: data.implant_company_id,
-      facility_name: facility?.name || 'Unknown Facility',
-      company_name: company?.name || 'Unknown Company',
+      facility_name: data.facility_name || 'Unknown Facility',
+      company_name: data.company_name || 'Unknown Company',
     })
     setFormData(prev => ({ ...prev, email: data.email }))
     setLoading(false)
-  }, [token, supabase, showToast])
+  }, [token, showToast])
 
   useEffect(() => {
     if (token) {
@@ -353,9 +340,13 @@ export default function RepSignupPage() {
       <div className="bg-white rounded-xl shadow-xl p-8 max-w-md w-full">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-xl mb-4">
-            <span className="text-2xl font-bold text-white">O</span>
-          </div>
+          <Image
+            src="/images/orbitcirlce.png"
+            alt="ORbit"
+            width={64}
+            height={64}
+            className="mx-auto mb-4"
+          />
           <h1 className="text-2xl font-semibold text-slate-900">Create Your Account</h1>
           <p className="text-slate-500 mt-1">Join ORbit as a Device Rep</p>
         </div>
