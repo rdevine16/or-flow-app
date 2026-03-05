@@ -20,6 +20,7 @@ const PUBLIC_ROUTES = [
  */
 const PUBLIC_API_ROUTES = [
   '/api/invite/accept',       // Invite acceptance (user doesn't have account yet)
+  '/api/invite/details',      // Invite details lookup (anonymous users viewing invite page)
   '/api/create-device-rep',   // Device rep signup (user doesn't have account yet)
   '/api/check-auth-status',   // Auth status check (returns 401 gracefully if not authed)
   '/api/epic/auth/callback',  // Epic OAuth callback (comes from Epic's domain, no session cookie)

@@ -35,33 +35,21 @@ export default function AcceptInvitePage() {
   const hasFetched = useRef(false)
 
   const fetchInvite = useCallback(async () => {
-    // Fetch invite details (don't filter by accepted_at — we handle that state in the UI)
-    const { data, error } = await supabase
-      .from('device_rep_invites')
-      .select(`
-        id,
-        email,
-        facility_id,
-        implant_company_id,
-        expires_at,
-        accepted_at,
-        facilities (name, address),
-        implant_companies (name)
-      `)
-      .eq('invite_token', token)
-      .single()
+    // Use server API to fetch invite details (bypasses RLS for joined tables)
+    const res = await fetch(`/api/invite/details?token=${encodeURIComponent(token)}`)
 
-    if (error || !data) {
+    if (!res.ok) {
       setError('This invite link is invalid.')
       setLoading(false)
       return
     }
 
+    const data = await res.json()
+
     // Already accepted — show friendly message, not an error
     if (data.accepted_at) {
-      const facility = Array.isArray(data.facilities) ? data.facilities[0] : data.facilities
       setAlreadyAccepted(true)
-      setError(`You already have access to ${facility?.name || 'this facility'}. Open the ORbit iOS app to get started.`)
+      setError(`You already have access to ${data.facility_name || 'this facility'}. Open the ORbit iOS app to get started.`)
       setLoading(false)
       return
     }
@@ -73,22 +61,18 @@ export default function AcceptInvitePage() {
       return
     }
 
-    // Transform data - Supabase returns joined tables as arrays
-    const facility = Array.isArray(data.facilities) ? data.facilities[0] : data.facilities
-    const company = Array.isArray(data.implant_companies) ? data.implant_companies[0] : data.implant_companies
-
     setInvite({
       id: data.id,
       email: data.email,
       facility_id: data.facility_id,
       implant_company_id: data.implant_company_id,
       expires_at: data.expires_at,
-      facility_name: facility?.name || 'Unknown Facility',
-      facility_address: facility?.address || null,
-      company_name: company?.name || 'Unknown Company',
+      facility_name: data.facility_name || 'Unknown Facility',
+      facility_address: data.facility_address || null,
+      company_name: data.company_name || 'Unknown Company',
     })
 
-    // Check if user already exists
+    // Check if user already exists (this query is fine — users table has public select for email lookup)
     const { data: existingUserData } = await supabase
       .from('users')
       .select('id')
