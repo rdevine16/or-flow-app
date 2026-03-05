@@ -29,12 +29,13 @@ export default function AcceptInvitePage() {
   const [invite, setInvite] = useState<InviteData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [alreadyAccepted, setAlreadyAccepted] = useState(false)
   const [accepting, setAccepting] = useState(false)
   const [existingUser, setExistingUser] = useState(false)
   const hasFetched = useRef(false)
 
   const fetchInvite = useCallback(async () => {
-    // Fetch invite details
+    // Fetch invite details (don't filter by accepted_at — we handle that state in the UI)
     const { data, error } = await supabase
       .from('device_rep_invites')
       .select(`
@@ -43,15 +44,24 @@ export default function AcceptInvitePage() {
         facility_id,
         implant_company_id,
         expires_at,
+        accepted_at,
         facilities (name, address),
         implant_companies (name)
       `)
       .eq('invite_token', token)
-      .is('accepted_at', null)
       .single()
 
     if (error || !data) {
-      setError('This invite link is invalid or has already been used.')
+      setError('This invite link is invalid.')
+      setLoading(false)
+      return
+    }
+
+    // Already accepted — show friendly message, not an error
+    if (data.accepted_at) {
+      const facility = Array.isArray(data.facilities) ? data.facilities[0] : data.facilities
+      setAlreadyAccepted(true)
+      setError(`You already have access to ${facility?.name || 'this facility'}. Open the ORbit iOS app to get started.`)
       setLoading(false)
       return
     }
@@ -158,10 +168,16 @@ export default function AcceptInvitePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-xl p-8 max-w-md w-full text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <X className="w-8 h-8 text-red-600" />
+          <div className={`w-16 h-16 ${alreadyAccepted ? 'bg-green-100' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-4`}>
+            {alreadyAccepted ? (
+              <Check className="w-8 h-8 text-green-600" />
+            ) : (
+              <X className="w-8 h-8 text-red-600" />
+            )}
           </div>
-          <h1 className="text-xl font-semibold text-slate-900 mb-2">Invite Error</h1>
+          <h1 className="text-xl font-semibold text-slate-900 mb-2">
+            {alreadyAccepted ? 'Already Accepted' : 'Invite Error'}
+          </h1>
           <p className="text-slate-600 mb-6">{error}</p>
           <Link
             href="/"
