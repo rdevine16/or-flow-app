@@ -181,7 +181,7 @@ export default function AcceptInvitePage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Image
-            src="/images/orbitcirlce.png"
+            src="/images/orbitcircle.png"
             alt="ORbit"
             width={64}
             height={64}
