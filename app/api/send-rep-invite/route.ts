@@ -1,81 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { withErrorHandler, handleSupabaseError } from '@/lib/errorHandling'
+import { withErrorHandler } from '@/lib/errorHandling'
 import { validate } from '@/lib/validation/schemas'
-import { createClient } from '@/lib/supabase-server'
-import { nowUTC } from '@/lib/dateFactory'
 import { Resend } from 'resend'
 
-// Validation schema
+// Validation schema — matches what PageClient sends
 const sendRepInviteSchema = z.object({
   email: z.string().email('Invalid email'),
-  facilityId: z.string().uuid('Invalid facility ID'),
-  implantCompanyId: z.string().uuid('Invalid company ID'),
+  facilityName: z.string().min(1, 'Facility name required'),
+  companyName: z.string().min(1, 'Company name required'),
+  inviteToken: z.string().uuid('Invalid invite token'),
 })
 
 export const POST = withErrorHandler(async (req: NextRequest) => {
-  const supabase = await createClient()
   const body = await req.json()
   const validated = validate(sendRepInviteSchema, body)
 
-  // Check if user already exists
-  const { data: existingUser } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', validated.email)
-    .single()
-
-  if (existingUser) {
+  if (!process.env.RESEND_API_KEY) {
     return NextResponse.json(
-      { error: 'User with this email already exists' },
-      { status: 400 }
+      { error: 'Email service not configured' },
+      { status: 503 }
     )
   }
 
-  // Generate token
-  const token = crypto.randomUUID()
-  const expiresAt = new Date()
-  expiresAt.setDate(expiresAt.getDate() + 7) // 7 days from now
-
-  // Create invite
-  const { data: invite, error: inviteError } = await supabase
-    .from('device_rep_invites')
-    .insert({
-      email: validated.email,
-      facility_id: validated.facilityId,
-      implant_company_id: validated.implantCompanyId,
-      token,
-      expires_at: expiresAt.toISOString(),
-      created_at: nowUTC(),
-    })
-    .select('id, facilities(name)')
-    .single()
-
-  if (inviteError) handleSupabaseError(inviteError)
-
-  // Send email
   const resend = new Resend(process.env.RESEND_API_KEY)
-  const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/rep-signup?token=${token}`
+  const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invite/accept/${validated.inviteToken}`
 
-  try {
-    await resend.emails.send({
-      from: 'ORbit <noreply@yourdomain.com>',
-      to: validated.email,
-      subject: `Device Rep Invitation - ${invite.facilities?.[0]?.name || 'ORbit'}`,
-      html: `
-        <h2>You've been invited as a Device Representative</h2>
-        <p>Click the link below to create your account:</p>
-        <a href="${inviteUrl}">${inviteUrl}</a>
-        <p>This invitation expires in 7 days.</p>
-      `,
-    })
-  } catch (emailError: unknown) {
-    const message = emailError instanceof Error ? emailError.message : 'Unknown error'
-    throw new Error(`Failed to send email: ${message}`)
-  }
+  await resend.emails.send({
+    from: `ORbit <${process.env.RESEND_FROM_EMAIL || 'noreply@orbitsurgical.com'}>`,
+    to: validated.email,
+    subject: `Device Rep Invitation - ${validated.facilityName}`,
+    html: `
+      <h2>You've been invited as a Device Representative</h2>
+      <p><strong>${validated.facilityName}</strong> has invited you to access their cases on ORbit as a representative for <strong>${validated.companyName}</strong>.</p>
+      <p>Click the link below to accept the invitation and create your account:</p>
+      <p><a href="${inviteUrl}" style="display:inline-block;padding:12px 24px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Accept Invitation</a></p>
+      <p style="color:#64748b;font-size:14px;">Or copy this link: ${inviteUrl}</p>
+      <p style="color:#64748b;font-size:14px;">This invitation expires in 7 days.</p>
+    `,
+  })
 
-  return NextResponse.json({
-    success: true,
-    inviteId: invite.id,
-  }, { status: 201 })
+  return NextResponse.json({ success: true }, { status: 200 })
 })
