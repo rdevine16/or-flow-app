@@ -253,6 +253,13 @@ export type AuditAction =
   | 'ehr.retention_updated'
   | 'ehr.test_harness_run'
   | 'ehr.raw_message_purged'
+  // Room Schedule
+  | 'room_schedule_assignment.surgeon_assigned'
+  | 'room_schedule_assignment.surgeon_removed'
+  | 'room_schedule_assignment.staff_assigned'
+  | 'room_schedule_assignment.staff_removed'
+  | 'room_schedule_assignment.day_cloned'
+  | 'room_schedule_assignment.week_cloned'
 // Human-readable labels for audit log display
 export const auditActionLabels: Record<AuditAction, string> = {
     // Block Schedules
@@ -496,6 +503,13 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'admin.cancellation_reason_template_created': 'created a cancellation reason template',
   'admin.cancellation_reason_template_updated': 'updated a cancellation reason template',
   'admin.cancellation_reason_template_deleted': 'deleted a cancellation reason template',
+  // Room Schedule
+  'room_schedule_assignment.surgeon_assigned': 'assigned surgeon to room',
+  'room_schedule_assignment.surgeon_removed': 'removed surgeon from room',
+  'room_schedule_assignment.staff_assigned': 'assigned staff to room',
+  'room_schedule_assignment.staff_removed': 'removed staff from room',
+  'room_schedule_assignment.day_cloned': 'cloned room schedule day',
+  'room_schedule_assignment.week_cloned': 'cloned room schedule week',
 }
 // =====================================================
 // CORE LOGGING FUNCTION (single source of truth)
@@ -1853,6 +1867,104 @@ export const roomScheduleAudit = {
       newValues: formatted,
     })
   },
+
+  async surgeonAssigned(
+    supabase: SupabaseClient,
+    assignmentId: string,
+    surgeonName: string,
+    roomName: string,
+    date: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'room_schedule_assignment.surgeon_assigned', {
+      targetType: 'room_date_assignment',
+      targetId: assignmentId,
+      targetLabel: `${surgeonName} → ${roomName}`,
+      facilityId,
+      newValues: { surgeon: surgeonName, room: roomName, date },
+    })
+  },
+
+  async surgeonRemoved(
+    supabase: SupabaseClient,
+    assignmentId: string,
+    surgeonName: string,
+    roomName: string,
+    date: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'room_schedule_assignment.surgeon_removed', {
+      targetType: 'room_date_assignment',
+      targetId: assignmentId,
+      targetLabel: `${surgeonName} → ${roomName}`,
+      facilityId,
+      oldValues: { surgeon: surgeonName, room: roomName, date },
+    })
+  },
+
+  async staffAssigned(
+    supabase: SupabaseClient,
+    staffAssignmentId: string,
+    staffName: string,
+    roleName: string,
+    roomId: string,
+    date: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'room_schedule_assignment.staff_assigned', {
+      targetType: 'room_date_staff',
+      targetId: staffAssignmentId,
+      targetLabel: `${staffName} (${roleName})`,
+      facilityId,
+      newValues: { staff: staffName, role: roleName, room_id: roomId, date },
+    })
+  },
+
+  async staffRemoved(
+    supabase: SupabaseClient,
+    staffAssignmentId: string,
+    staffName: string,
+    roleName: string,
+    roomId: string,
+    date: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'room_schedule_assignment.staff_removed', {
+      targetType: 'room_date_staff',
+      targetId: staffAssignmentId,
+      targetLabel: `${staffName} (${roleName})`,
+      facilityId,
+      oldValues: { staff: staffName, role: roleName, room_id: roomId, date },
+    })
+  },
+
+  async dayCloned(
+    supabase: SupabaseClient,
+    sourceDate: string,
+    targetDate: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'room_schedule_assignment.day_cloned', {
+      targetType: 'room_date_assignment',
+      targetLabel: `${sourceDate} → ${targetDate}`,
+      facilityId,
+      metadata: { source_date: sourceDate, target_date: targetDate },
+    })
+  },
+
+  async weekCloned(
+    supabase: SupabaseClient,
+    sourceWeekStart: string,
+    targetWeekStart: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'room_schedule_assignment.week_cloned', {
+      targetType: 'room_date_assignment',
+      targetLabel: `Week of ${sourceWeekStart} → ${targetWeekStart}`,
+      facilityId,
+      metadata: { source_week_start: sourceWeekStart, target_week_start: targetWeekStart },
+    })
+  },
 }
 
 // =====================================================
@@ -3166,6 +3278,7 @@ export const ehrAudit = {
     })
   },
 }
+
 
 // =====================================================
 // GENERIC LOG (for custom actions)
