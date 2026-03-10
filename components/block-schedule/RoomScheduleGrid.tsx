@@ -1,11 +1,11 @@
 // components/block-schedule/RoomScheduleGrid.tsx
 // Main room schedule grid: rooms (rows) x days of week (columns) with week navigation
 
-import { useMemo, useEffect, useCallback } from 'react'
+import { useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRooms, type Room } from '@/hooks/useLookups'
-import { useRoomDateAssignments } from '@/hooks/useRoomDateAssignments'
 import { buildAssignmentMap, roomDateKey } from '@/types/room-scheduling'
+import type { RoomDateAssignment, RoomDateStaff } from '@/types/room-scheduling'
 import { RoomDayCell } from './RoomDayCell'
 
 // =====================================================
@@ -47,21 +47,22 @@ interface RoomScheduleGridProps {
   facilityId: string | null
   currentWeekStart: Date
   onWeekChange: (weekStart: Date) => void
+  assignments: RoomDateAssignment[]
+  staffAssignments: RoomDateStaff[]
+  assignmentsLoading: boolean
+  assignmentsError: string | null
 }
 
 export function RoomScheduleGrid({
   facilityId,
   currentWeekStart,
   onWeekChange,
+  assignments,
+  staffAssignments,
+  assignmentsLoading,
+  assignmentsError,
 }: RoomScheduleGridProps) {
   const { data: rooms, loading: roomsLoading } = useRooms(facilityId)
-  const {
-    assignments,
-    staffAssignments,
-    loading: assignmentsLoading,
-    error,
-    fetchWeek,
-  } = useRoomDateAssignments({ facilityId })
 
   // Build the 7 dates for the current week
   const weekDates = useMemo(() => {
@@ -69,17 +70,6 @@ export function RoomScheduleGrid({
   }, [currentWeekStart])
 
   const today = useMemo(() => new Date(), [])
-
-  // Fetch assignments when week or facility changes
-  const loadWeek = useCallback(() => {
-    const startDate = formatDate(currentWeekStart)
-    const endDate = formatDate(addDays(currentWeekStart, 6))
-    fetchWeek(startDate, endDate)
-  }, [currentWeekStart, fetchWeek])
-
-  useEffect(() => {
-    loadWeek()
-  }, [loadWeek])
 
   // Build assignment map for fast cell lookup
   const assignmentMap = useMemo(
@@ -142,9 +132,9 @@ export function RoomScheduleGrid({
       </div>
 
       {/* Error */}
-      {error && (
+      {assignmentsError && (
         <div className="px-4 py-2 bg-red-50 text-red-600 text-sm border-b border-red-200">
-          {error}
+          {assignmentsError}
         </div>
       )}
 
@@ -197,7 +187,8 @@ export function RoomScheduleGrid({
                   </td>
                   {/* Day cells */}
                   {weekDates.map((date, i) => {
-                    const key = roomDateKey(room.id, formatDate(date))
+                    const dateStr = formatDate(date)
+                    const key = roomDateKey(room.id, dateStr)
                     const cellData = assignmentMap[key] ?? null
                     const isToday = isSameDay(date, today)
 
@@ -206,6 +197,9 @@ export function RoomScheduleGrid({
                         <RoomDayCell
                           cellData={cellData}
                           isToday={isToday}
+                          roomId={room.id}
+                          date={dateStr}
+                          roomName={room.name}
                         />
                       </td>
                     )

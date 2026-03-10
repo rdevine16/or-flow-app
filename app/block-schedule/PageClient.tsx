@@ -9,7 +9,9 @@ import { useBlockSchedules } from '@/hooks/useBlockSchedules'
 import { useSurgeons } from '@/hooks'
 import { useFacilityClosures } from '@/hooks/useFacilityClosures'
 import { useSurgeonColors } from '@/hooks/useSurgeonColors'
+import { useRoomDateAssignments } from '@/hooks/useRoomDateAssignments'
 import { ExpandedBlock, BlockSchedule } from '@/types/block-scheduling'
+import type { SurgeonDragData, StaffDragData, RoomDayDropData } from '@/types/room-scheduling'
 import { WeekCalendar } from '@/components/block-schedule/WeekCalendar'
 import { BlockSidebar } from '@/components/block-schedule/BlockSidebar'
 import { BlockPopover } from '@/components/block-schedule/BlockPopover'
@@ -22,6 +24,11 @@ import { ChevronLeft, ChevronRight, Undo2, X } from 'lucide-react'
 import { BlockScheduleTabs, type BlockScheduleTab } from '@/components/block-schedule/BlockScheduleTabs'
 import { RoomScheduleGrid } from '@/components/block-schedule/RoomScheduleGrid'
 import { RoomScheduleSidebar } from '@/components/block-schedule/RoomScheduleSidebar'
+import { RoomScheduleDragOverlay } from '@/components/block-schedule/RoomScheduleDragOverlay'
+import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { logger } from '@/lib/logger'
+
+const log = logger('BlockSchedulePage')
 
 // =====================================================
 // UNDO TOAST COMPONENT
@@ -124,6 +131,31 @@ export default function BlockSchedulePage() {
   const { fetchHolidays, fetchClosures, isDateClosed } = useFacilityClosures({ facilityId })
   const { fetchColors, getColorMap, setColor } = useSurgeonColors({ facilityId })
   const { data: surgeons, loading: surgeonsLoading } = useSurgeons(facilityId)
+
+  // Room date assignments (lifted from RoomScheduleGrid for DnD access)
+  const {
+    assignments: roomAssignments,
+    staffAssignments: roomStaffAssignments,
+    loading: roomAssignmentsLoading,
+    error: roomAssignmentsError,
+    fetchWeek: fetchRoomWeek,
+    assignSurgeon,
+    assignStaff,
+  } = useRoomDateAssignments({ facilityId })
+
+  // DnD state
+  const [activeDrag, setActiveDrag] = useState<DragStartEvent['active'] | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  )
+
+  // Fetch room assignments when week or facility changes (only for room schedule tab)
+  useEffect(() => {
+    if (!facilityId || activeTab !== 'room-schedule') return
+    const startDate = formatDate(currentWeekStart)
+    const endDate = formatDate(addDays(currentWeekStart, 6))
+    fetchRoomWeek(startDate, endDate)
+  }, [facilityId, currentWeekStart, activeTab, fetchRoomWeek])
 
   // Refresh helper
   const refreshBlocks = useCallback(async () => {
@@ -363,6 +395,77 @@ export default function BlockSchedulePage() {
   }
 
   // =====================================================
+  // DND HANDLERS (room schedule)
+  // =====================================================
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveDrag(event.active)
+  }, [])
+
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      setActiveDrag(null)
+
+      const { active, over } = event
+      if (!over) return
+
+      const dropData = over.data.current as RoomDayDropData | undefined
+      if (!dropData || dropData.type !== 'room-day') return
+
+      const dragData = active.data.current as SurgeonDragData | StaffDragData | undefined
+      if (!dragData) return
+
+      if (dragData.type === 'surgeon') {
+        const result = await assignSurgeon({
+          or_room_id: dropData.roomId,
+          assignment_date: dropData.date,
+          surgeon_id: dragData.surgeonId,
+        })
+
+        if (result) {
+          showToast({
+            type: 'success',
+            title: 'Surgeon assigned',
+            message: `Dr. ${dragData.surgeon.last_name} assigned to ${dropData.roomName}`,
+          })
+        } else {
+          showToast({
+            type: 'error',
+            title: 'Assignment failed',
+            message: 'Already assigned to this room or another room on this date',
+          })
+        }
+      } else if (dragData.type === 'staff') {
+        const result = await assignStaff({
+          or_room_id: dropData.roomId,
+          assignment_date: dropData.date,
+          user_id: dragData.userId,
+          role_id: dragData.roleId,
+        })
+
+        if (result) {
+          showToast({
+            type: 'success',
+            title: 'Staff assigned',
+            message: `${dragData.user.first_name} ${dragData.user.last_name} assigned to ${dropData.roomName}`,
+          })
+        } else {
+          showToast({
+            type: 'error',
+            title: 'Assignment failed',
+            message: 'Already assigned to this room on this date',
+          })
+        }
+      }
+    },
+    [assignSurgeon, assignStaff, showToast]
+  )
+
+  const handleDragCancel = useCallback(() => {
+    setActiveDrag(null)
+  }, [])
+
+  // =====================================================
   // RENDER
   // =====================================================
   if (!userLoading && !can('scheduling.view')) {
@@ -459,22 +562,36 @@ export default function BlockSchedulePage() {
               </div>
             </div>
           ) : (
-            /* Room Schedule Tab */
-            <div className="flex flex-1 overflow-hidden min-h-0">
-              <RoomScheduleSidebar
-                facilityId={facilityId}
-                surgeons={surgeons}
-                surgeonsLoading={surgeonsLoading}
-                currentWeekStart={currentWeekStart}
-                onDateSelect={(date) => setCurrentWeekStart(getWeekStart(date))}
-                blocks={blocks}
-              />
-              <RoomScheduleGrid
-                facilityId={facilityId}
-                currentWeekStart={currentWeekStart}
-                onWeekChange={setCurrentWeekStart}
-              />
-            </div>
+            /* Room Schedule Tab — wrapped in DndContext for drag-and-drop */
+            <DndContext
+              sensors={sensors}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
+              <div className="flex flex-1 overflow-hidden min-h-0">
+                <RoomScheduleSidebar
+                  facilityId={facilityId}
+                  surgeons={surgeons}
+                  surgeonsLoading={surgeonsLoading}
+                  currentWeekStart={currentWeekStart}
+                  onDateSelect={(date) => setCurrentWeekStart(getWeekStart(date))}
+                  blocks={blocks}
+                />
+                <RoomScheduleGrid
+                  facilityId={facilityId}
+                  currentWeekStart={currentWeekStart}
+                  onWeekChange={setCurrentWeekStart}
+                  assignments={roomAssignments}
+                  staffAssignments={roomStaffAssignments}
+                  assignmentsLoading={roomAssignmentsLoading}
+                  assignmentsError={roomAssignmentsError}
+                />
+              </div>
+              <DragOverlay dropAnimation={null}>
+                <RoomScheduleDragOverlay active={activeDrag} />
+              </DragOverlay>
+            </DndContext>
           )}
         </div>
       )}

@@ -1,29 +1,51 @@
 // components/block-schedule/RoomDayCell.tsx
-// Individual cell in the room schedule grid — shows surgeons + staff for a room-date
+// Individual cell in the room schedule grid — droppable target for surgeons + staff
 
-import type { RoomDayCellData } from '@/types/room-scheduling'
+import { useDroppable } from '@dnd-kit/core'
+import type { RoomDayCellData, RoomDayDropData } from '@/types/room-scheduling'
 
 interface RoomDayCellProps {
   cellData: RoomDayCellData | null
   isToday: boolean
+  roomId: string
+  date: string
+  roomName: string
 }
 
-export function RoomDayCell({ cellData, isToday }: RoomDayCellProps) {
+export function RoomDayCell({ cellData, isToday, roomId, date, roomName }: RoomDayCellProps) {
+  const dropData: RoomDayDropData = {
+    type: 'room-day',
+    roomId,
+    date,
+    roomName,
+  }
+
+  const { setNodeRef, isOver } = useDroppable({
+    id: `cell-${roomId}-${date}`,
+    data: dropData,
+  })
+
   const hasSurgeons = cellData && cellData.surgeons.length > 0
   const hasStaff = cellData && cellData.staff.length > 0
   const isEmpty = !hasSurgeons && !hasStaff
 
   return (
     <div
+      ref={setNodeRef}
       className={`
         min-h-[80px] p-2 border-r border-b border-slate-200 transition-colors
         ${isToday ? 'bg-blue-50/50' : 'bg-white'}
-        ${isEmpty ? 'hover:bg-slate-50' : ''}
+        ${isOver ? 'bg-blue-100/70 ring-2 ring-inset ring-blue-400' : ''}
+        ${isEmpty && !isOver ? 'hover:bg-slate-50' : ''}
       `}
     >
       {isEmpty ? (
         <div className="h-full flex items-center justify-center">
-          <span className="text-xs text-slate-300">—</span>
+          {isOver ? (
+            <span className="text-xs text-blue-500 font-medium">Drop here</span>
+          ) : (
+            <span className="text-xs text-slate-300">&mdash;</span>
+          )}
         </div>
       ) : (
         <div className="space-y-1">
@@ -56,6 +78,13 @@ export function RoomDayCell({ cellData, isToday }: RoomDayCellProps) {
               )}
             </div>
           ))}
+
+          {/* Drop hint when hovering over non-empty cell */}
+          {isOver && (
+            <div className="text-[10px] text-blue-500 text-center pt-0.5">
+              + Add here
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { DndContext } from '@dnd-kit/core'
 import { DraggableStaffCard } from '../DraggableStaffCard'
 import type { StaffMember } from '@/types/staff-assignment'
 
@@ -14,37 +15,44 @@ const mockStaff: StaffMember = {
   user_roles: { name: 'Nurse' },
 }
 
+function renderCard(staff: StaffMember = mockStaff) {
+  return render(
+    <DndContext>
+      <DraggableStaffCard staff={staff} />
+    </DndContext>
+  )
+}
+
 describe('DraggableStaffCard', () => {
   it('renders staff name', () => {
-    render(<DraggableStaffCard staff={mockStaff} />)
+    renderCard()
     expect(screen.getByText('Jane Doe')).toBeDefined()
   })
 
   it('renders staff initials', () => {
-    render(<DraggableStaffCard staff={mockStaff} />)
+    renderCard()
     expect(screen.getByText('JD')).toBeDefined()
   })
 
   it('renders role name', () => {
-    render(<DraggableStaffCard staff={mockStaff} />)
+    renderCard()
     expect(screen.getByText('Nurse')).toBeDefined()
   })
 
   it('shows "Staff" when no role is defined', () => {
     const noRole: StaffMember = { ...mockStaff, user_roles: undefined }
-    render(<DraggableStaffCard staff={noRole} />)
+    renderCard(noRole)
     expect(screen.getByText('Staff')).toBeDefined()
   })
 
-  it('sets data-staff-id and data-role-id attributes', () => {
-    const { container } = render(<DraggableStaffCard staff={mockStaff} />)
-    expect(container.querySelector('[data-staff-id="staff-1"]')).not.toBeNull()
-    expect(container.querySelector('[data-role-id="role-1"]')).not.toBeNull()
+  it('has grab cursor styling', () => {
+    const { container } = renderCard()
+    const card = container.querySelector('[class*="cursor-grab"]')
+    expect(card).not.toBeNull()
   })
 
-  it('has grab cursor styling', () => {
-    const { container } = render(<DraggableStaffCard staff={mockStaff} />)
-    const card = container.firstElementChild
-    expect(card?.className).toContain('cursor-grab')
+  it('renders correctly within DndContext', () => {
+    const { container } = renderCard()
+    expect(container.firstElementChild).not.toBeNull()
   })
 })

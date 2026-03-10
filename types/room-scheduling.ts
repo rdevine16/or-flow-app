@@ -85,6 +85,45 @@ export interface AssignStaffInput {
 }
 
 // =====================================================
+// DRAG-AND-DROP TYPES (dnd-kit)
+// =====================================================
+
+/** Data attached to a draggable surgeon card */
+export interface SurgeonDragData {
+  type: 'surgeon'
+  surgeonId: string
+  surgeon: {
+    id: string
+    first_name: string
+    last_name: string
+  }
+}
+
+/** Data attached to a draggable staff card */
+export interface StaffDragData {
+  type: 'staff'
+  userId: string
+  roleId: string
+  user: {
+    id: string
+    first_name: string
+    last_name: string
+  }
+  roleName: string
+}
+
+/** Data attached to a droppable room-day cell */
+export interface RoomDayDropData {
+  type: 'room-day'
+  roomId: string
+  date: string
+  roomName: string
+}
+
+/** Union of all drag data types */
+export type RoomScheduleDragData = SurgeonDragData | StaffDragData
+
+// =====================================================
 // HELPER FUNCTIONS
 // =====================================================
 

@@ -1,8 +1,9 @@
 // components/block-schedule/DraggableSurgeonCard.tsx
-// Surgeon card for room schedule sidebar — shows name with optional block-time badge
-// Phase 6 will add dnd-kit useDraggable hook
+// Surgeon card for room schedule sidebar — draggable via dnd-kit
 
+import { useDraggable } from '@dnd-kit/core'
 import type { Surgeon } from '@/hooks/useLookups'
+import type { SurgeonDragData } from '@/types/room-scheduling'
 
 interface DraggableSurgeonCardProps {
   surgeon: Surgeon
@@ -13,10 +14,29 @@ export function DraggableSurgeonCard({
   surgeon,
   hasBlockTime,
 }: DraggableSurgeonCardProps) {
+  const dragData: SurgeonDragData = {
+    type: 'surgeon',
+    surgeonId: surgeon.id,
+    surgeon: {
+      id: surgeon.id,
+      first_name: surgeon.first_name,
+      last_name: surgeon.last_name,
+    },
+  }
+
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `surgeon-${surgeon.id}`,
+    data: dragData,
+  })
+
   return (
     <div
-      className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-blue-50 cursor-grab active:cursor-grabbing transition-colors group"
-      data-surgeon-id={surgeon.id}
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={`flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-blue-50 cursor-grab active:cursor-grabbing transition-colors group ${
+        isDragging ? 'opacity-40' : ''
+      }`}
     >
       {/* Surgeon icon */}
       <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
