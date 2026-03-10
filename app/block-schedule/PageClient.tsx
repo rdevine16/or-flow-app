@@ -18,8 +18,9 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { ChevronLeft, ChevronRight, Undo2, X, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Undo2, X } from 'lucide-react'
 import { BlockScheduleTabs, type BlockScheduleTab } from '@/components/block-schedule/BlockScheduleTabs'
+import { RoomScheduleGrid } from '@/components/block-schedule/RoomScheduleGrid'
 
 // =====================================================
 // UNDO TOAST COMPONENT
@@ -457,16 +458,12 @@ export default function BlockSchedulePage() {
               </div>
             </div>
           ) : (
-            /* Room Schedule Tab — Placeholder (wired in Phase 4) */
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <CalendarDays className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                <h2 className="text-lg font-medium text-slate-600 mb-1">Room Schedule</h2>
-                <p className="text-sm text-slate-400">
-                  Daily room assignments with surgeon and staff scheduling
-                </p>
-              </div>
-            </div>
+            /* Room Schedule Tab */
+            <RoomScheduleGrid
+              facilityId={facilityId}
+              currentWeekStart={currentWeekStart}
+              onWeekChange={setCurrentWeekStart}
+            />
           )}
         </div>
       )}
