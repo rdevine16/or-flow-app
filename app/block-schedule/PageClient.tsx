@@ -18,7 +18,8 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { ChevronLeft, ChevronRight, Undo2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Undo2, X, CalendarDays } from 'lucide-react'
+import { BlockScheduleTabs, type BlockScheduleTab } from '@/components/block-schedule/BlockScheduleTabs'
 
 // =====================================================
 // UNDO TOAST COMPONENT
@@ -76,6 +77,9 @@ export default function BlockSchedulePage() {
   const supabase = createClient()
   const { loading: userLoading, effectiveFacilityId: facilityId, can } = useUser()
   const { showToast } = useToast()
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<BlockScheduleTab>('surgeon-blocks')
 
   // Calendar state
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => getWeekStart(new Date()))
@@ -373,9 +377,12 @@ export default function BlockSchedulePage() {
         <PageLoader message="Loading block schedule..." />
       ) : (
         <div
-          className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex"
+          className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col"
           style={{ height: 'calc(100vh - 140px)' }}
         >
+          {/* Tab Navigation */}
+          <BlockScheduleTabs activeTab={activeTab} onTabChange={setActiveTab} />
+
           {/* Error Banner */}
           {error && (
             <ErrorBanner
@@ -383,67 +390,84 @@ export default function BlockSchedulePage() {
               onDismiss={() => setError(null)}
             />
           )}
-          {/* Sidebar */}
-          <BlockSidebar
-            surgeons={surgeons}
-            selectedSurgeonIds={selectedSurgeonIds}
-            colorMap={colorMap}
-            onToggleSurgeon={toggleSurgeon}
-            onSelectAll={selectAllSurgeons}
-            onDeselectAll={deselectAllSurgeons}
-            currentWeekStart={currentWeekStart}
-            onDateSelect={(date) => setCurrentWeekStart(getWeekStart(date))}
-            onAddBlock={can('scheduling.create') ? handleAddBlockButton : undefined}
-            showHolidays={showHolidays}
-            onToggleHolidays={() => setShowHolidays(!showHolidays)}
-            onColorChange={handleColorChange}
-          />
 
-          {/* Main Calendar */}
-          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            {/* Navigation Header */}
-            <div className="flex items-center gap-4 px-4 py-2 border-b border-slate-100 bg-white flex-shrink-0">
-              <button
-                onClick={goToToday}
-                className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
-                title="Go to today (T)"
-              >
-                Today
-              </button>
-              <div className="flex items-center">
-                <button
-                  onClick={goToPreviousWeek}
-                  className="p-2 hover:bg-slate-100 rounded-full transition-colors"
-                  title="Previous week (←)"
-                >
-                  <ChevronLeft className="h-5 w-5 text-slate-600" />
-                </button>
-                <button
-                  onClick={goToNextWeek}
-                  className="p-2 hover:bg-slate-100 rounded-full transition-colors"
-                  title="Next week (→)"
-                >
-                  <ChevronRight className="h-5 w-5 text-slate-600" />
-                </button>
-              </div>
-              <h1 className="text-xl font-normal text-slate-800">
-                {formatWeekHeader()}
-              </h1>
-            </div>
-
-            {/* Calendar Grid */}
-            <div className="flex-1 overflow-hidden min-h-0">
-              <WeekCalendar
-                weekStart={currentWeekStart}
-                blocks={filteredBlocks}
+          {activeTab === 'surgeon-blocks' ? (
+            /* Surgeon Blocks Tab */
+            <div className="flex flex-1 overflow-hidden min-h-0">
+              {/* Sidebar */}
+              <BlockSidebar
+                surgeons={surgeons}
+                selectedSurgeonIds={selectedSurgeonIds}
                 colorMap={colorMap}
-                isDateClosed={checkDateClosed}
-                onDragSelect={handleDragSelect}
-                onBlockClick={handleBlockClick}
-                activeSelection={popoverOpen && dragSelection ? dragSelection : null}
+                onToggleSurgeon={toggleSurgeon}
+                onSelectAll={selectAllSurgeons}
+                onDeselectAll={deselectAllSurgeons}
+                currentWeekStart={currentWeekStart}
+                onDateSelect={(date) => setCurrentWeekStart(getWeekStart(date))}
+                onAddBlock={can('scheduling.create') ? handleAddBlockButton : undefined}
+                showHolidays={showHolidays}
+                onToggleHolidays={() => setShowHolidays(!showHolidays)}
+                onColorChange={handleColorChange}
               />
+
+              {/* Main Calendar */}
+              <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                {/* Navigation Header */}
+                <div className="flex items-center gap-4 px-4 py-2 border-b border-slate-100 bg-white flex-shrink-0">
+                  <button
+                    onClick={goToToday}
+                    className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
+                    title="Go to today (T)"
+                  >
+                    Today
+                  </button>
+                  <div className="flex items-center">
+                    <button
+                      onClick={goToPreviousWeek}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                      title="Previous week (←)"
+                    >
+                      <ChevronLeft className="h-5 w-5 text-slate-600" />
+                    </button>
+                    <button
+                      onClick={goToNextWeek}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                      title="Next week (→)"
+                    >
+                      <ChevronRight className="h-5 w-5 text-slate-600" />
+                    </button>
+                  </div>
+                  <h1 className="text-xl font-normal text-slate-800">
+                    {formatWeekHeader()}
+                  </h1>
+                </div>
+
+                {/* Calendar Grid */}
+                <div className="flex-1 overflow-hidden min-h-0">
+                  <WeekCalendar
+                    weekStart={currentWeekStart}
+                    blocks={filteredBlocks}
+                    colorMap={colorMap}
+                    isDateClosed={checkDateClosed}
+                    onDragSelect={handleDragSelect}
+                    onBlockClick={handleBlockClick}
+                    activeSelection={popoverOpen && dragSelection ? dragSelection : null}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Room Schedule Tab — Placeholder (wired in Phase 4) */
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <CalendarDays className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                <h2 className="text-lg font-medium text-slate-600 mb-1">Room Schedule</h2>
+                <p className="text-sm text-slate-400">
+                  Daily room assignments with surgeon and staff scheduling
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
