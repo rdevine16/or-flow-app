@@ -21,6 +21,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ChevronLeft, ChevronRight, Undo2, X } from 'lucide-react'
 import { BlockScheduleTabs, type BlockScheduleTab } from '@/components/block-schedule/BlockScheduleTabs'
 import { RoomScheduleGrid } from '@/components/block-schedule/RoomScheduleGrid'
+import { RoomScheduleSidebar } from '@/components/block-schedule/RoomScheduleSidebar'
 
 // =====================================================
 // UNDO TOAST COMPONENT
@@ -459,11 +460,21 @@ export default function BlockSchedulePage() {
             </div>
           ) : (
             /* Room Schedule Tab */
-            <RoomScheduleGrid
-              facilityId={facilityId}
-              currentWeekStart={currentWeekStart}
-              onWeekChange={setCurrentWeekStart}
-            />
+            <div className="flex flex-1 overflow-hidden min-h-0">
+              <RoomScheduleSidebar
+                facilityId={facilityId}
+                surgeons={surgeons}
+                surgeonsLoading={surgeonsLoading}
+                currentWeekStart={currentWeekStart}
+                onDateSelect={(date) => setCurrentWeekStart(getWeekStart(date))}
+                blocks={blocks}
+              />
+              <RoomScheduleGrid
+                facilityId={facilityId}
+                currentWeekStart={currentWeekStart}
+                onWeekChange={setCurrentWeekStart}
+              />
+            </div>
           )}
         </div>
       )}
