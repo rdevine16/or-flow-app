@@ -107,17 +107,36 @@ export function RoomScheduleSidebar({
     fetchStaff()
   }, [fetchStaff])
 
-  // Build set of surgeon IDs that have block time on the focused date
-  const surgeonsWithBlockTime = useMemo(() => {
-    const focusedDateStr = formatDate(focusedDate)
-    const ids = new Set<string>()
+  // Build map of surgeon ID → day-of-week indices with block time this week
+  const surgeonsBlockDays = useMemo(() => {
+    const weekDates: string[] = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(currentWeekStart)
+      d.setDate(d.getDate() + i)
+      weekDates.push(formatDate(d))
+    }
+
+    const map = new Map<string, number[]>()
     for (const block of blocks) {
-      if (block.block_date === focusedDateStr) {
-        ids.add(block.surgeon_id)
+      const dayIndex = weekDates.indexOf(block.block_date)
+      if (dayIndex === -1) continue
+      const dayOfWeek = new Date(block.block_date + 'T00:00:00').getDay()
+      if (!map.has(block.surgeon_id)) {
+        map.set(block.surgeon_id, [])
+      }
+      const days = map.get(block.surgeon_id)!
+      if (!days.includes(dayOfWeek)) {
+        days.push(dayOfWeek)
       }
     }
-    return ids
-  }, [blocks, focusedDate])
+
+    // Sort each surgeon's days
+    for (const days of map.values()) {
+      days.sort((a, b) => a - b)
+    }
+
+    return map
+  }, [blocks, currentWeekStart])
 
   // Filter staff: exclude surgeons, then group by role
   const staffByRole = useMemo(() => {
@@ -279,9 +298,6 @@ export function RoomScheduleSidebar({
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Surgeons
             </span>
-            <span className="text-[10px] text-slate-400">
-              {focusedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-            </span>
           </div>
 
           {surgeonsLoading ? (
@@ -307,7 +323,7 @@ export function RoomScheduleSidebar({
                 <DraggableSurgeonCard
                   key={surgeon.id}
                   surgeon={surgeon}
-                  hasBlockTime={surgeonsWithBlockTime.has(surgeon.id)}
+                  blockDays={surgeonsBlockDays.get(surgeon.id) ?? []}
                 />
               ))}
             </div>

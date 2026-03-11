@@ -52,7 +52,7 @@ export function RoomDayCell({
     return (
       <div
         ref={setNodeRef}
-        className="min-h-[80px] p-2 border-r border-b border-slate-200 bg-slate-100/80"
+        className="h-full min-h-[80px] p-2 bg-slate-100/80"
         aria-label={`${roomName} closed on ${date}`}
       >
         <div className="h-full flex items-center justify-center">
@@ -69,8 +69,7 @@ export function RoomDayCell({
     <div
       ref={setNodeRef}
       className={`
-        group/cell min-h-[80px] p-2 border-r border-b border-slate-200 transition-colors relative
-        ${isToday ? 'bg-blue-50/50' : 'bg-white'}
+        group/cell h-full min-h-[80px] p-2 transition-colors relative
         ${isOver ? 'bg-blue-100/70 ring-2 ring-inset ring-blue-400' : ''}
         ${isEmpty && !isOver ? 'hover:bg-slate-50' : ''}
       `}

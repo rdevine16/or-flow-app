@@ -1,14 +1,15 @@
 // components/block-schedule/RoomScheduleGrid.tsx
 // Main room schedule grid: rooms (rows) x days of week (columns) with week navigation
 
-import { useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Copy } from 'lucide-react'
+import { useMemo, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, Copy, CalendarDays, Download } from 'lucide-react'
 import Link from 'next/link'
 import { useRooms, type Room } from '@/hooks/useLookups'
 import { buildAssignmentMap, roomDateKey } from '@/types/room-scheduling'
 import type { RoomDateAssignment, RoomDateStaff } from '@/types/room-scheduling'
 import type { RoomDaySchedule } from '@/hooks/useRoomSchedules'
 import { getDefaultWeekSchedule } from '@/hooks/useRoomSchedules'
+import { exportRoomSchedulePdf } from '@/lib/exportRoomSchedulePdf'
 import { RoomDayCell } from './RoomDayCell'
 
 // =====================================================
@@ -62,6 +63,12 @@ interface RoomScheduleGridProps {
   allRoomSchedules?: Map<string, RoomDaySchedule[]>
   /** Callback for click-to-assign (keyboard accessible fallback) */
   onRequestAssign?: (roomId: string, date: string, roomName: string) => void
+  /** Whether to show weekend columns (Saturday/Sunday) */
+  showWeekends: boolean
+  /** Toggle weekend visibility */
+  onToggleWeekends: () => void
+  /** Facility name for PDF export header */
+  facilityName?: string
 }
 
 export function RoomScheduleGrid({
@@ -78,16 +85,23 @@ export function RoomScheduleGrid({
   onCloneDay,
   allRoomSchedules,
   onRequestAssign,
+  showWeekends,
+  onToggleWeekends,
+  facilityName,
 }: RoomScheduleGridProps) {
   const { data: rooms, loading: roomsLoading } = useRooms(facilityId)
 
   // Default schedule for rooms without explicit schedules
   const defaultSchedule = useMemo(() => getDefaultWeekSchedule(), [])
 
-  // Build the 7 dates for the current week
+  // Build dates for the current week (optionally excluding weekends)
   const weekDates = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i))
-  }, [currentWeekStart])
+    const allDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i))
+    if (!showWeekends) {
+      return allDays.filter(d => d.getDay() !== 0 && d.getDay() !== 6)
+    }
+    return allDays
+  }, [currentWeekStart, showWeekends])
 
   const today = useMemo(() => new Date(), [])
 
@@ -117,6 +131,19 @@ export function RoomScheduleGrid({
     if (startMonth === endMonth) return `${startMonth} ${year}`
     return `${startMonth} – ${endMonth} ${year}`
   }
+
+  // PDF export
+  const handleExportPdf = useCallback(() => {
+    exportRoomSchedulePdf({
+      facilityName: facilityName ?? 'Room Schedule',
+      weekLabel: formatWeekHeader(),
+      weekDates,
+      rooms,
+      assignmentMap,
+      isRoomClosedOnDay,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facilityName, weekDates, rooms, assignmentMap, isRoomClosedOnDay])
 
   const loading = roomsLoading || assignmentsLoading
 
@@ -155,21 +182,44 @@ export function RoomScheduleGrid({
             <div className="h-4 w-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
           </div>
         )}
-        {onCloneWeek && (
+        <div className="ml-auto flex items-center gap-2">
           <button
-            onClick={() => {
-              const prevWeekStart = formatDate(addDays(currentWeekStart, -7))
-              const targetWeekStart = formatDate(currentWeekStart)
-              onCloneWeek(prevWeekStart, targetWeekStart)
-            }}
-            disabled={loading}
-            className="ml-auto px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-300 rounded-md hover:bg-slate-50 hover:text-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-            title="Copy all assignments from the previous week to this week"
+            onClick={handleExportPdf}
+            disabled={loading || rooms.length === 0}
+            className="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-300 rounded-md hover:bg-slate-50 hover:text-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            title="Export schedule as PDF"
           >
-            <Copy className="h-3.5 w-3.5" />
-            Clone previous week
+            <Download className="h-3.5 w-3.5" />
+            Export PDF
           </button>
-        )}
+          <button
+            onClick={onToggleWeekends}
+            className={`px-3 py-1.5 text-xs font-medium border rounded-md transition-colors flex items-center gap-1.5 ${
+              showWeekends
+                ? 'text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100'
+                : 'text-slate-600 border-slate-300 hover:bg-slate-50 hover:text-slate-800'
+            }`}
+            title={showWeekends ? 'Hide weekends' : 'Show weekends'}
+          >
+            <CalendarDays className="h-3.5 w-3.5" />
+            Weekends
+          </button>
+          {onCloneWeek && (
+            <button
+              onClick={() => {
+                const prevWeekStart = formatDate(addDays(currentWeekStart, -7))
+                const targetWeekStart = formatDate(currentWeekStart)
+                onCloneWeek(prevWeekStart, targetWeekStart)
+              }}
+              disabled={loading}
+              className="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-300 rounded-md hover:bg-slate-50 hover:text-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              title="Copy all assignments from the previous week to this week"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Clone previous week
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Error */}
@@ -197,27 +247,28 @@ export function RoomScheduleGrid({
             </div>
           </div>
         ) : (
-          <table className="w-full border-collapse">
+          <table className="w-full border-collapse table-fixed">
             <thead className="sticky top-0 z-10 bg-white">
               <tr>
                 {/* Room column header */}
-                <th className="w-[120px] min-w-[120px] px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-r border-slate-200 bg-slate-50">
+                <th style={{ width: 120 }} className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-r border-slate-200 bg-slate-50 align-middle">
                   Room
                 </th>
                 {/* Day column headers */}
                 {weekDates.map((date, i) => {
                   const isToday = isSameDay(date, today)
                   const dateStr = formatDate(date)
+                  const dayOfWeek = date.getDay()
                   const prevWeekSameDay = formatDate(addDays(date, -7))
                   return (
                     <th
                       key={i}
-                      className={`px-2 py-2 text-center text-xs border-b border-r border-slate-200 ${
+                      className={`px-2 py-2 text-center text-xs border-b border-r border-slate-200 align-middle ${
                         isToday ? 'bg-blue-50' : 'bg-slate-50'
                       }`}
                     >
                       <div className={`font-semibold ${isToday ? 'text-blue-600' : 'text-slate-500'}`}>
-                        {DAY_LABELS[i]}
+                        {DAY_LABELS[dayOfWeek]}
                       </div>
                       <div className={`text-[11px] ${isToday ? 'text-blue-500' : 'text-slate-400'}`}>
                         {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -240,7 +291,7 @@ export function RoomScheduleGrid({
               {rooms.map((room: Room) => (
                 <tr key={room.id}>
                   {/* Room name */}
-                  <td className="px-3 py-2 text-sm font-medium text-slate-700 border-r border-b border-slate-200 bg-slate-50/50 whitespace-nowrap">
+                  <td className="px-3 py-2 text-sm font-medium text-slate-700 border-r border-b border-slate-200 bg-slate-50/50 whitespace-nowrap align-top overflow-hidden text-ellipsis">
                     {room.name}
                   </td>
                   {/* Day cells */}
@@ -252,7 +303,7 @@ export function RoomScheduleGrid({
                     const isClosed = isRoomClosedOnDay(room.id, date.getDay())
 
                     return (
-                      <td key={i} className="p-0">
+                      <td key={i} className={`p-0 align-top border-b border-r border-slate-200 ${isToday ? 'bg-blue-50/50' : ''}`}>
                         <RoomDayCell
                           cellData={cellData}
                           isToday={isToday}

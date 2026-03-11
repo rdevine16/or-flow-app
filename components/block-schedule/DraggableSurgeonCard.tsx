@@ -5,14 +5,17 @@ import { useDraggable } from '@dnd-kit/core'
 import type { Surgeon } from '@/hooks/useLookups'
 import type { SurgeonDragData } from '@/types/room-scheduling'
 
+const DAY_LABELS_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+
 interface DraggableSurgeonCardProps {
   surgeon: Surgeon
-  hasBlockTime: boolean
+  /** Day-of-week indices (0=Sun..6=Sat) where this surgeon has block time this week */
+  blockDays: number[]
 }
 
 export function DraggableSurgeonCard({
   surgeon,
-  hasBlockTime,
+  blockDays,
 }: DraggableSurgeonCardProps) {
   const dragData: SurgeonDragData = {
     type: 'surgeon',
@@ -50,11 +53,12 @@ export function DraggableSurgeonCard({
         Dr. {surgeon.last_name}
       </span>
 
-      {/* Block-time badge */}
-      {hasBlockTime && (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 bg-blue-100 rounded flex-shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-          Block
+      {/* Block-time day badges */}
+      {blockDays.length > 0 && (
+        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 bg-blue-50 rounded flex-shrink-0">
+          {blockDays.map(d => (
+            <span key={d} className="w-4 text-center">{DAY_LABELS_SHORT[d]}</span>
+          ))}
         </span>
       )}
     </div>

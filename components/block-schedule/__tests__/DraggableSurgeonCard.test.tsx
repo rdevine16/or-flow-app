@@ -9,10 +9,10 @@ const mockSurgeon = {
   last_name: 'Smith',
 }
 
-function renderCard(hasBlockTime = false) {
+function renderCard(blockDays: number[] = []) {
   return render(
     <DndContext>
-      <DraggableSurgeonCard surgeon={mockSurgeon} hasBlockTime={hasBlockTime} />
+      <DraggableSurgeonCard surgeon={mockSurgeon} blockDays={blockDays} />
     </DndContext>
   )
 }
@@ -28,14 +28,18 @@ describe('DraggableSurgeonCard', () => {
     expect(screen.getByText('JS')).toBeDefined()
   })
 
-  it('shows block badge when hasBlockTime is true', () => {
-    renderCard(true)
-    expect(screen.getByText('Block')).toBeDefined()
+  it('shows day badges when blockDays are provided', () => {
+    renderCard([1, 3, 5]) // Mon, Wed, Fri
+    expect(screen.getByText('M')).toBeDefined()
+    expect(screen.getByText('W')).toBeDefined()
+    expect(screen.getByText('F')).toBeDefined()
   })
 
-  it('hides block badge when hasBlockTime is false', () => {
-    renderCard(false)
-    expect(screen.queryByText('Block')).toBeNull()
+  it('hides day badges when blockDays is empty', () => {
+    renderCard([])
+    // No day labels should appear when no block days
+    expect(screen.queryByText('M')).toBeNull()
+    expect(screen.queryByText('F')).toBeNull()
   })
 
   it('has grab cursor styling', () => {

@@ -43,6 +43,8 @@ function renderGrid(overrides: GridTestProps = {}) {
         onRemoveStaff={overrides.onRemoveStaff}
         onCloneWeek={overrides.onCloneWeek}
         onCloneDay={overrides.onCloneDay}
+        showWeekends={true}
+        onToggleWeekends={vi.fn()}
       />
     </DndContext>
   )
@@ -315,7 +317,7 @@ describe('RoomScheduleGrid', () => {
       const tbody = container.querySelector('tbody')
       const removeButton = tbody?.querySelector('button[title*="Remove"]')
       expect(removeButton).toBeDefined()
-      expect(removeButton?.getAttribute('title')).toBe('Remove J. Doe')
+      expect(removeButton?.getAttribute('title')).toBe('Remove Jane Doe')
     })
 
     it('does not render badge remove buttons when callbacks are not provided', () => {

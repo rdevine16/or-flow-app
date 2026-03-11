@@ -78,6 +78,8 @@ function RoomSchedulePageSimulator({
         assignmentsError={null}
         onCloneWeek={handleCloneWeek}
         onCloneDay={handleCloneDay}
+        showWeekends={true}
+        onToggleWeekends={vi.fn()}
       />
       {confirmDialog}
       <div data-testid="refresh-counter">{refreshCounter}</div>

@@ -110,6 +110,8 @@ function renderGrid(overrides: GridTestProps = {}) {
         staffAssignments={overrides.staffAssignments ?? sampleStaff}
         assignmentsLoading={overrides.assignmentsLoading ?? false}
         assignmentsError={overrides.assignmentsError ?? null}
+        showWeekends={true}
+        onToggleWeekends={vi.fn()}
       />
     </DndContext>
   )

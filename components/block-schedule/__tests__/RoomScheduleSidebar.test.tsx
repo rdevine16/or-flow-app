@@ -181,23 +181,15 @@ describe('RoomScheduleSidebar', () => {
   })
 
   describe('surgeon block-time badges', () => {
-    it('shows block badge for surgeon with block time on focused date', async () => {
-      // Default focused date is today; let's use a focused date matching block_date
-      // The component defaults to today. Since our block is on 2026-03-09,
-      // we need to click that date in the calendar. For the unit test,
-      // we check the block badge logic with today's blocks.
-      render(<RoomScheduleSidebar {...defaultProps} />)
+    it('shows block day badge for surgeon with block time in current week', () => {
+      // Block on 2026-03-09 (Monday) → DraggableSurgeonCard shows day badge
+      const { container } = render(<RoomScheduleSidebar {...defaultProps} />)
 
-      // Since block data has surgeon-1 on 2026-03-09, and default focused date is today,
-      // the badge visibility depends on if today matches that date.
-      // Let's test the logic directly: surgeon-1 should show "Block" if focused date is 2026-03-09
-      // We can simulate by clicking the date "9" in the calendar
-      const user = userEvent.setup()
-      const dateButton = screen.getByRole('button', { name: '9' })
-      await user.click(dateButton)
-
-      // After clicking March 9, surgeon-1 should show Block badge
-      expect(screen.getByText('Block')).toBeDefined()
+      // Badge uses text-[10px] font size — unique to block day badges
+      const dayBadges = container.querySelectorAll('.text-\\[10px\\]')
+      const blockBadgeTexts = Array.from(dayBadges).map(el => el.textContent)
+      // surgeon-1 has block on Monday → 'M' should appear in a badge
+      expect(blockBadgeTexts.some(t => t?.includes('M'))).toBe(true)
     })
   })
 

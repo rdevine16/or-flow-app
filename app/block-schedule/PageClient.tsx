@@ -32,7 +32,7 @@ import { AssignPersonDialog } from '@/components/block-schedule/AssignPersonDial
 import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { logger } from '@/lib/logger'
 
-const log = logger('BlockSchedulePage')
+const _log = logger('BlockSchedulePage')
 
 // =====================================================
 // UNDO TOAST COMPONENT
@@ -88,7 +88,8 @@ function getWeekStart(date: Date): Date {
 // =====================================================
 export default function BlockSchedulePage() {
   const supabase = createClient()
-  const { loading: userLoading, effectiveFacilityId: facilityId, can } = useUser()
+  const { loading: userLoading, effectiveFacilityId: facilityId, userData, can } = useUser()
+  const facilityName = userData.facilityName
   const { showToast } = useToast()
 
   // Tab state
@@ -101,6 +102,7 @@ export default function BlockSchedulePage() {
   // Surgeons
   const [selectedSurgeonIds, setSelectedSurgeonIds] = useState<Set<string>>(new Set())
   const [showHolidays, setShowHolidays] = useState(true)
+  const [showWeekends, setShowWeekends] = useState(false)
 
   // Popover state
   const [popoverOpen, setPopoverOpen] = useState(false)
@@ -462,25 +464,18 @@ export default function BlockSchedulePage() {
       if (!dragData) return
 
       if (dragData.type === 'surgeon') {
-        // Check for existing assignment on same date (more specific warning)
-        const existingAssignment = roomAssignments.find(
-          (a) => a.surgeon_id === dragData.surgeonId && a.assignment_date === dropData.date
+        // Check if surgeon is already assigned to THIS specific room on this date
+        const existingInSameRoom = roomAssignments.find(
+          (a) => a.surgeon_id === dragData.surgeonId
+            && a.assignment_date === dropData.date
+            && a.or_room_id === dropData.roomId
         )
-        if (existingAssignment) {
-          const existingRoom = existingAssignment.room?.name ?? 'another room'
-          if (existingAssignment.or_room_id === dropData.roomId) {
-            showToast({
-              type: 'warning',
-              title: 'Already assigned',
-              message: `Dr. ${dragData.surgeon.last_name} is already assigned to ${dropData.roomName} on this date`,
-            })
-          } else {
-            showToast({
-              type: 'warning',
-              title: 'Already assigned elsewhere',
-              message: `Dr. ${dragData.surgeon.last_name} is already assigned to ${existingRoom} on this date`,
-            })
-          }
+        if (existingInSameRoom) {
+          showToast({
+            type: 'warning',
+            title: 'Already assigned',
+            message: `Dr. ${dragData.surgeon.last_name} is already assigned to ${dropData.roomName} on this date`,
+          })
           return
         }
 
@@ -704,12 +699,13 @@ export default function BlockSchedulePage() {
     [assignDialogTarget, assignStaff, facilityStaff, showToast]
   )
 
-  // Computed: which surgeons/staff are already assigned on the assign dialog's target date
+  // Computed: which surgeons are already assigned to THIS room on the target date
   const assignedSurgeonIdsForDate = useMemo(() => {
     if (!assignDialogTarget) return new Set<string>()
     return new Set(
       roomAssignments
-        .filter((a) => a.assignment_date === assignDialogTarget.date)
+        .filter((a) => a.assignment_date === assignDialogTarget.date
+          && a.or_room_id === assignDialogTarget.roomId)
         .map((a) => a.surgeon_id)
     )
   }, [roomAssignments, assignDialogTarget])
@@ -850,6 +846,9 @@ export default function BlockSchedulePage() {
                   onCloneDay={handleCloneDay}
                   allRoomSchedules={allRoomSchedules}
                   onRequestAssign={handleRequestAssign}
+                  showWeekends={showWeekends}
+                  onToggleWeekends={() => setShowWeekends(prev => !prev)}
+                  facilityName={facilityName ?? ''}
                 />
               </div>
               <DragOverlay dropAnimation={null}>

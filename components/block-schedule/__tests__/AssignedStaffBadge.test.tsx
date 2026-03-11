@@ -95,7 +95,7 @@ describe('AssignedStaffBadge', () => {
       const onRemove = vi.fn()
       const { container } = render(<AssignedStaffBadge staff={defaultStaff} onRemove={onRemove} />)
       const button = container.querySelector('button')
-      expect(button?.getAttribute('title')).toBe('Remove J. Doe')
+      expect(button?.getAttribute('title')).toBe('Remove Jane Doe')
     })
 
     it('remove button title handles missing user data', () => {
@@ -160,9 +160,10 @@ describe('AssignedStaffBadge', () => {
 
     it('applies correct role badge styling', () => {
       const { container } = render(<AssignedStaffBadge staff={defaultStaff} />)
-      const roleBadge = container.querySelector('.bg-slate-100')
+      // RN role maps to emerald nurse style via getRoleStyle
+      const roleBadge = container.querySelector('.bg-emerald-50')
       expect(roleBadge).toBeDefined()
-      expect(roleBadge?.className).toContain('text-slate-400')
+      expect(roleBadge?.className).toContain('text-emerald-700')
     })
   })
 })

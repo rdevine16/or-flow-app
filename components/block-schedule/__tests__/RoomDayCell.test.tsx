@@ -361,7 +361,7 @@ describe('RoomDayCell', () => {
       // Badge should have remove button when callback provided
       const button = container.querySelector('button')
       expect(button).toBeDefined()
-      expect(button?.getAttribute('title')).toBe('Remove J. Doe')
+      expect(button?.getAttribute('title')).toBe('Remove Jane Doe')
     })
 
     it('does not render remove buttons when callbacks not provided', () => {
