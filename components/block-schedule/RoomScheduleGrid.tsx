@@ -2,7 +2,7 @@
 // Main room schedule grid: rooms (rows) x days of week (columns) with week navigation
 
 import { useMemo } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy } from 'lucide-react'
 import { useRooms, type Room } from '@/hooks/useLookups'
 import { buildAssignmentMap, roomDateKey } from '@/types/room-scheduling'
 import type { RoomDateAssignment, RoomDateStaff } from '@/types/room-scheduling'
@@ -53,6 +53,8 @@ interface RoomScheduleGridProps {
   assignmentsError: string | null
   onRemoveSurgeon?: (assignmentId: string) => void
   onRemoveStaff?: (staffId: string) => void
+  onCloneWeek?: (sourceWeekStart: string, targetWeekStart: string) => void
+  onCloneDay?: (sourceDate: string, targetDate: string) => void
 }
 
 export function RoomScheduleGrid({
@@ -65,6 +67,8 @@ export function RoomScheduleGrid({
   assignmentsError,
   onRemoveSurgeon,
   onRemoveStaff,
+  onCloneWeek,
+  onCloneDay,
 }: RoomScheduleGridProps) {
   const { data: rooms, loading: roomsLoading } = useRooms(facilityId)
 
@@ -129,9 +133,24 @@ export function RoomScheduleGrid({
           {formatWeekHeader()}
         </h2>
         {loading && (
-          <div className="ml-auto">
+          <div className="ml-auto mr-2">
             <div className="h-4 w-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
           </div>
+        )}
+        {onCloneWeek && (
+          <button
+            onClick={() => {
+              const prevWeekStart = formatDate(addDays(currentWeekStart, -7))
+              const targetWeekStart = formatDate(currentWeekStart)
+              onCloneWeek(prevWeekStart, targetWeekStart)
+            }}
+            disabled={loading}
+            className="ml-auto px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-300 rounded-md hover:bg-slate-50 hover:text-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            title="Copy all assignments from the previous week to this week"
+          >
+            <Copy className="h-3.5 w-3.5" />
+            Clone previous week
+          </button>
         )}
       </div>
 
@@ -164,6 +183,8 @@ export function RoomScheduleGrid({
                 {/* Day column headers */}
                 {weekDates.map((date, i) => {
                   const isToday = isSameDay(date, today)
+                  const dateStr = formatDate(date)
+                  const prevWeekSameDay = formatDate(addDays(date, -7))
                   return (
                     <th
                       key={i}
@@ -177,6 +198,15 @@ export function RoomScheduleGrid({
                       <div className={`text-[11px] ${isToday ? 'text-blue-500' : 'text-slate-400'}`}>
                         {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </div>
+                      {onCloneDay && (
+                        <button
+                          onClick={() => onCloneDay(prevWeekSameDay, dateStr)}
+                          className="mt-0.5 text-[10px] text-slate-400 hover:text-blue-500 transition-colors"
+                          title={`Clone from last ${DAY_LABELS[i]}`}
+                        >
+                          Clone
+                        </button>
+                      )}
                     </th>
                   )
                 })}

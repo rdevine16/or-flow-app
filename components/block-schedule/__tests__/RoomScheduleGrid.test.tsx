@@ -23,6 +23,8 @@ interface GridTestProps {
   assignmentsError?: string | null
   onRemoveSurgeon?: (assignmentId: string) => void
   onRemoveStaff?: (staffId: string) => void
+  onCloneWeek?: (sourceWeekStart: string, targetWeekStart: string) => void
+  onCloneDay?: (sourceDate: string, targetDate: string) => void
 }
 
 function renderGrid(overrides: GridTestProps = {}) {
@@ -39,6 +41,8 @@ function renderGrid(overrides: GridTestProps = {}) {
         assignmentsError={overrides.assignmentsError ?? null}
         onRemoveSurgeon={overrides.onRemoveSurgeon}
         onRemoveStaff={overrides.onRemoveStaff}
+        onCloneWeek={overrides.onCloneWeek}
+        onCloneDay={overrides.onCloneDay}
       />
     </DndContext>
   )
@@ -333,6 +337,160 @@ describe('RoomScheduleGrid', () => {
       const tbody = container.querySelector('tbody')
       // Should not have any remove buttons in cells (nav buttons are ok)
       expect(tbody?.querySelector('button[title*="Remove"]')).toBeNull()
+    })
+  })
+
+  describe('clone functionality', () => {
+    describe('clone week button', () => {
+      it('renders "Clone previous week" button when onCloneWeek callback provided', () => {
+        const onCloneWeek = vi.fn()
+        renderGrid({ onCloneWeek })
+
+        const cloneButton = screen.getByRole('button', { name: /Clone previous week/i })
+        expect(cloneButton).toBeDefined()
+        expect(cloneButton.title).toBe('Copy all assignments from the previous week to this week')
+      })
+
+      it('does not render clone week button when onCloneWeek not provided', () => {
+        renderGrid()
+
+        expect(screen.queryByRole('button', { name: /Clone previous week/i })).toBeNull()
+      })
+
+      it('calls onCloneWeek with correct date strings when clicked', async () => {
+        const user = userEvent.setup()
+        const onCloneWeek = vi.fn()
+        renderGrid({ onCloneWeek, currentWeekStart: new Date(2026, 2, 9) }) // March 9, 2026
+
+        const cloneButton = screen.getByRole('button', { name: /Clone previous week/i })
+        await user.click(cloneButton)
+
+        expect(onCloneWeek).toHaveBeenCalledOnce()
+        expect(onCloneWeek).toHaveBeenCalledWith('2026-03-02', '2026-03-09')
+      })
+
+      it('disables clone week button when loading', () => {
+        const onCloneWeek = vi.fn()
+        renderGrid({ onCloneWeek, assignmentsLoading: true })
+
+        const cloneButton = screen.getByRole('button', { name: /Clone previous week/i })
+        expect(cloneButton.disabled).toBe(true)
+      })
+
+      it('enables clone week button when not loading', () => {
+        const onCloneWeek = vi.fn()
+        renderGrid({ onCloneWeek, assignmentsLoading: false })
+
+        const cloneButton = screen.getByRole('button', { name: /Clone previous week/i })
+        expect(cloneButton.disabled).toBe(false)
+      })
+    })
+
+    describe('clone day links', () => {
+      it('renders "Clone" link in each day column header when onCloneDay provided', () => {
+        const onCloneDay = vi.fn()
+        renderGrid({ onCloneDay })
+
+        const cloneLinks = screen.getAllByRole('button', { name: /Clone/i }).filter((btn) => {
+          // Filter to only day column clone buttons (not the week clone button)
+          return btn.textContent === 'Clone'
+        })
+
+        expect(cloneLinks.length).toBe(7) // One for each day of the week
+      })
+
+      it('does not render clone day links when onCloneDay not provided', () => {
+        renderGrid()
+
+        const cloneLinks = screen.queryAllByRole('button', { name: /Clone/i }).filter((btn) => {
+          return btn.textContent === 'Clone'
+        })
+
+        expect(cloneLinks.length).toBe(0)
+      })
+
+      it('calls onCloneDay with correct date strings when Sunday clone clicked', async () => {
+        const user = userEvent.setup()
+        const onCloneDay = vi.fn()
+        renderGrid({ onCloneDay, currentWeekStart: new Date(2026, 2, 9) }) // March 9, 2026 (Sunday)
+
+        const cloneLinks = screen.getAllByRole('button', { name: /Clone/i }).filter((btn) => {
+          return btn.textContent === 'Clone'
+        })
+
+        // Click the first day (Sunday) clone link
+        await user.click(cloneLinks[0])
+
+        expect(onCloneDay).toHaveBeenCalledOnce()
+        expect(onCloneDay).toHaveBeenCalledWith('2026-03-02', '2026-03-09') // Previous Sun -> Current Sun
+      })
+
+      it('calls onCloneDay with correct date strings when Wednesday clone clicked', async () => {
+        const user = userEvent.setup()
+        const onCloneDay = vi.fn()
+        renderGrid({ onCloneDay, currentWeekStart: new Date(2026, 2, 9) }) // March 9, 2026 (Sunday)
+
+        const cloneLinks = screen.getAllByRole('button', { name: /Clone/i }).filter((btn) => {
+          return btn.textContent === 'Clone'
+        })
+
+        // Click the fourth day (Wednesday) clone link
+        await user.click(cloneLinks[3])
+
+        expect(onCloneDay).toHaveBeenCalledOnce()
+        expect(onCloneDay).toHaveBeenCalledWith('2026-03-05', '2026-03-12') // Previous Wed -> Current Wed
+      })
+
+      it('displays correct tooltip for day clone buttons', () => {
+        const onCloneDay = vi.fn()
+        renderGrid({ onCloneDay, currentWeekStart: new Date(2026, 2, 9) })
+
+        const cloneLinks = screen.getAllByRole('button', { name: /Clone/i }).filter((btn) => {
+          return btn.textContent === 'Clone'
+        })
+
+        // Check tooltips for each day
+        expect(cloneLinks[0].title).toBe('Clone from last Sun')
+        expect(cloneLinks[1].title).toBe('Clone from last Mon')
+        expect(cloneLinks[2].title).toBe('Clone from last Tue')
+        expect(cloneLinks[3].title).toBe('Clone from last Wed')
+        expect(cloneLinks[4].title).toBe('Clone from last Thu')
+        expect(cloneLinks[5].title).toBe('Clone from last Fri')
+        expect(cloneLinks[6].title).toBe('Clone from last Sat')
+      })
+    })
+
+    describe('combined clone functionality', () => {
+      it('renders both clone week button and clone day links when both callbacks provided', () => {
+        const onCloneWeek = vi.fn()
+        const onCloneDay = vi.fn()
+        renderGrid({ onCloneWeek, onCloneDay })
+
+        expect(screen.getByRole('button', { name: /Clone previous week/i })).toBeDefined()
+
+        const cloneLinks = screen.getAllByRole('button', { name: /Clone/i }).filter((btn) => {
+          return btn.textContent === 'Clone'
+        })
+        expect(cloneLinks.length).toBe(7)
+      })
+
+      it('allows cloning a week and then cloning individual days', async () => {
+        const user = userEvent.setup()
+        const onCloneWeek = vi.fn()
+        const onCloneDay = vi.fn()
+        renderGrid({ onCloneWeek, onCloneDay, currentWeekStart: new Date(2026, 2, 9) })
+
+        // Clone the week
+        await user.click(screen.getByRole('button', { name: /Clone previous week/i }))
+        expect(onCloneWeek).toHaveBeenCalledOnce()
+
+        // Then clone a specific day
+        const cloneLinks = screen.getAllByRole('button', { name: /Clone/i }).filter((btn) => {
+          return btn.textContent === 'Clone'
+        })
+        await user.click(cloneLinks[0])
+        expect(onCloneDay).toHaveBeenCalledOnce()
+      })
     })
   })
 })

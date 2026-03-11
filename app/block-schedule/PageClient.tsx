@@ -20,6 +20,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ChevronLeft, ChevronRight, Undo2, X } from 'lucide-react'
 import { BlockScheduleTabs, type BlockScheduleTab } from '@/components/block-schedule/BlockScheduleTabs'
 import { RoomScheduleGrid } from '@/components/block-schedule/RoomScheduleGrid'
@@ -143,6 +144,8 @@ export default function BlockSchedulePage() {
     removeSurgeon,
     assignStaff,
     removeStaff,
+    cloneDay,
+    cloneWeek,
   } = useRoomDateAssignments({ facilityId })
 
   // DnD state
@@ -150,6 +153,9 @@ export default function BlockSchedulePage() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
+
+  // Clone confirm dialog
+  const { confirmDialog: cloneConfirmDialog, showConfirm: showCloneConfirm } = useConfirmDialog()
 
   // Fetch room assignments when week or facility changes (only for room schedule tab)
   useEffect(() => {
@@ -503,6 +509,56 @@ export default function BlockSchedulePage() {
   )
 
   // =====================================================
+  // CLONE HANDLERS (room schedule)
+  // =====================================================
+
+  const refreshRoomWeek = useCallback(() => {
+    if (!facilityId) return
+    const startDate = formatDate(currentWeekStart)
+    const endDate = formatDate(addDays(currentWeekStart, 6))
+    fetchRoomWeek(startDate, endDate)
+  }, [facilityId, currentWeekStart, fetchRoomWeek])
+
+  const handleCloneWeek = useCallback(
+    (sourceWeekStart: string, targetWeekStart: string) => {
+      showCloneConfirm({
+        variant: 'warning',
+        title: 'Clone previous week?',
+        message: 'This will replace all assignments for the current week with assignments from the previous week.',
+        confirmText: 'Clone week',
+        onConfirm: async () => {
+          const success = await cloneWeek(sourceWeekStart, targetWeekStart)
+          if (success) {
+            refreshRoomWeek()
+            showToast({ type: 'success', title: 'Week cloned', message: 'Assignments copied from previous week' })
+          }
+        },
+      })
+    },
+    [showCloneConfirm, cloneWeek, refreshRoomWeek, showToast]
+  )
+
+  const handleCloneDay = useCallback(
+    (sourceDate: string, targetDate: string) => {
+      const dayName = new Date(targetDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' })
+      showCloneConfirm({
+        variant: 'warning',
+        title: `Clone previous ${dayName}?`,
+        message: `This will replace all assignments for ${dayName} with assignments from the previous ${dayName}.`,
+        confirmText: 'Clone day',
+        onConfirm: async () => {
+          const success = await cloneDay(sourceDate, targetDate)
+          if (success) {
+            refreshRoomWeek()
+            showToast({ type: 'success', title: 'Day cloned', message: `Assignments copied from previous ${dayName}` })
+          }
+        },
+      })
+    },
+    [showCloneConfirm, cloneDay, refreshRoomWeek, showToast]
+  )
+
+  // =====================================================
   // RENDER
   // =====================================================
   if (!userLoading && !can('scheduling.view')) {
@@ -625,6 +681,8 @@ export default function BlockSchedulePage() {
                   assignmentsError={roomAssignmentsError}
                   onRemoveSurgeon={handleRemoveSurgeon}
                   onRemoveStaff={handleRemoveStaff}
+                  onCloneWeek={handleCloneWeek}
+                  onCloneDay={handleCloneDay}
                 />
               </div>
               <DragOverlay dropAnimation={null}>
@@ -671,6 +729,9 @@ export default function BlockSchedulePage() {
         surgeonName={blockToDelete ? `Dr. ${blockToDelete.surgeon_last_name}` : ''}
         isRecurring={!!blockToDelete?.recurrence_type}
       />
+
+      {/* Clone Confirm Dialog */}
+      {cloneConfirmDialog}
 
       {/* Undo Toast */}
       {undoAction && <UndoToast action={undoAction} onDismiss={dismissUndo} />}
