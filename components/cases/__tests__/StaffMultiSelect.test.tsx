@@ -254,4 +254,29 @@ describe('StaffMultiSelect', () => {
 
     expect(onChange).toHaveBeenCalledWith([])
   })
+
+  it('shows "Room schedule" badge for pre-filled staff from room schedule', async () => {
+    render(
+      <StaffMultiSelect
+        {...defaultProps}
+        selectedStaff={[
+          { user_id: 'nurse-1', role_id: 'role-nurse', fromRoomSchedule: true },
+          { user_id: 'tech-1', role_id: 'role-tech', fromRoomSchedule: false },
+          { user_id: 'anesth-1', role_id: 'role-anesth' }, // no fromRoomSchedule property
+        ]}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice Johnson')).toBeInTheDocument()
+    })
+
+    // Only Alice (nurse-1) should have the "Room schedule" badge
+    // The badge is rendered with className "text-[10px]" and text "Room schedule"
+    expect(screen.getByText('Room schedule')).toBeInTheDocument()
+
+    // Verify it appears exactly once (only for Alice, not for Carol or David)
+    const badges = screen.getAllByText('Room schedule')
+    expect(badges).toHaveLength(1)
+  })
 })

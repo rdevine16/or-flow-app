@@ -35,6 +35,8 @@ export { notificationsDAL } from './notifications'
 export type { Notification, NotificationWithReadState, NotificationFilter } from './notifications'
 export { voiceCommandsDAL } from './voice-commands'
 export type { VoiceCommandAlias, VoiceAliasInsert } from './voice-commands'
+export { roomScheduleDAL } from './room-schedule'
+export type { RoomDatePreFill } from './room-schedule'
 
 // ============================================
 // SHARED TYPES

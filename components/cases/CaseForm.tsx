@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase'
 import SearchableDropdown from '../ui/SearchableDropdown'
 import { getLocalDateString } from '@/lib/date-utils'
 import { caseAudit, caseDeviceAudit } from '@/lib/audit-logger'
+import { roomScheduleDAL } from '@/lib/dal'
 import TimePicker from '../ui/TimePicker'
 import DatePickerCalendar from '../ui/DatePickerCalendar'
 import ImplantCompanySelect from '../cases/ImplantCompanySelect'
@@ -27,6 +28,7 @@ import { useUser } from '@/lib/UserContext'
 interface StaffSelection {
   user_id: string
   role_id: string
+  fromRoomSchedule?: boolean
 }
 
 interface RoomConflict {
@@ -141,6 +143,10 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   // Phase 3.3: Room conflict detection state
   const [roomConflicts, setRoomConflicts] = useState<RoomConflict[]>([])
   const conflictTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Phase 9: Room schedule pre-fill state
+  const [surgeonFromRoomSchedule, setSurgeonFromRoomSchedule] = useState(false)
+  const roomScheduleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Draft state
   const [isDraft, setIsDraft] = useState(false)
@@ -341,6 +347,55 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   useEffect(() => {
     checkRoomConflicts(formData.or_room_id, formData.scheduled_date, formData.start_time, formData.procedure_type_id)
   }, [formData.or_room_id, formData.scheduled_date, formData.start_time, formData.procedure_type_id, checkRoomConflicts])
+
+  // Phase 9: Room schedule pre-fill — fetch surgeon + staff from room_date_assignments
+  const checkRoomSchedulePreFill = useCallback((roomId: string, date: string) => {
+    if (roomScheduleTimerRef.current) {
+      clearTimeout(roomScheduleTimerRef.current)
+    }
+
+    if (!roomId || !date || !userFacilityId) {
+      return
+    }
+
+    roomScheduleTimerRef.current = setTimeout(async () => {
+      const { data } = await roomScheduleDAL.fetchRoomDatePreFill(supabase, userFacilityId, roomId, date)
+      if (!data) return
+
+      // Only pre-fill surgeon if no surgeon is currently selected
+      if (data.surgeons.length > 0 && !formData.surgeon_id) {
+        setFormData(prev => ({ ...prev, surgeon_id: data.surgeons[0].surgeon_id }))
+        setSurgeonFromRoomSchedule(true)
+      }
+
+      // Only pre-fill staff if no staff are currently selected
+      if (data.staff.length > 0 && selectedStaff.length === 0) {
+        setSelectedStaff(data.staff.map(s => ({
+          user_id: s.user_id,
+          role_id: s.role_id,
+          fromRoomSchedule: true,
+        })))
+      }
+    }, 400)
+  }, [userFacilityId, supabase, formData.surgeon_id, selectedStaff.length])
+
+  // Trigger room schedule pre-fill when room or date changes
+  useEffect(() => {
+    checkRoomSchedulePreFill(formData.or_room_id, formData.scheduled_date)
+  }, [formData.or_room_id, formData.scheduled_date, checkRoomSchedulePreFill])
+
+  // Cleanup room schedule timer
+  useEffect(() => {
+    return () => {
+      if (roomScheduleTimerRef.current) clearTimeout(roomScheduleTimerRef.current)
+    }
+  }, [])
+
+  // Clear surgeon pre-fill badge when user manually changes surgeon
+  const handleSurgeonChange = useCallback((id: string) => {
+    setFormData(prev => ({ ...prev, surgeon_id: id }))
+    setSurgeonFromRoomSchedule(false)
+  }, [])
 
   // Compute effective rep required status
   const selectedProcedure = procedureTypes.find(p => p.id === formData.procedure_type_id)
@@ -817,7 +872,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       p_notes: formData.notes || null,
       p_rep_required_override: repRequiredOverride,
       p_is_draft: true,
-      p_staff_assignments: selectedStaff.length > 0 ? JSON.stringify(selectedStaff) : null,
+      p_staff_assignments: selectedStaff.length > 0 ? JSON.stringify(selectedStaff.map(({ user_id, role_id }) => ({ user_id, role_id }))) : null,
     })
 
     if (rpcError) {
@@ -966,7 +1021,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         p_payer_id: formData.payer_id || null,
         p_notes: formData.notes || null,
         p_rep_required_override: repRequiredOverride,
-        p_staff_assignments: selectedStaff.length > 0 ? JSON.stringify(selectedStaff) : null,
+        p_staff_assignments: selectedStaff.length > 0 ? JSON.stringify(selectedStaff.map(({ user_id, role_id }) => ({ user_id, role_id }))) : null,
         p_patient_id: resolvedPatientId,
         p_source: 'manual',
       })
@@ -1362,17 +1417,26 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       </div>
 
       {/* 2. Surgeon — with preference quick-fill below */}
-      <SearchableDropdown
-        label="Surgeon *"
-        placeholder="Select Surgeon"
-        value={formData.surgeon_id}
-        onChange={(id) => {
-          setFormData({ ...formData, surgeon_id: id })
-          clearFieldError('surgeon_id')
-        }}
-        options={surgeons.map(s => ({ id: s.id, label: `Dr. ${s.first_name} ${s.last_name}` }))}
-        error={fieldErrors.surgeon_id}
-      />
+      <div>
+        <SearchableDropdown
+          label="Surgeon *"
+          placeholder="Select Surgeon"
+          value={formData.surgeon_id}
+          onChange={(id) => {
+            handleSurgeonChange(id)
+            clearFieldError('surgeon_id')
+          }}
+          options={surgeons.map(s => ({ id: s.id, label: `Dr. ${s.first_name} ${s.last_name}` }))}
+          error={fieldErrors.surgeon_id}
+        />
+        {surgeonFromRoomSchedule && formData.surgeon_id && (
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+              From room schedule
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* Surgeon Preference Quick Fill - Only show in create mode after surgeon selected */}
       {mode === 'create' && formData.surgeon_id && userFacilityId && (
@@ -1738,9 +1802,20 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           <StaffMultiSelect
             facilityId={userFacilityId}
             selectedStaff={selectedStaff}
-            onChange={setSelectedStaff}
+            onChange={(staff) => {
+              // Preserve fromRoomSchedule on items that were pre-filled;
+              // new manually-added items won't have the flag
+              setSelectedStaff(staff)
+            }}
             excludeUserIds={formData.surgeon_id ? [formData.surgeon_id] : []}
           />
+          {selectedStaff.some(s => s.fromRoomSchedule) && (
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+                Pre-filled from room schedule
+              </span>
+            </div>
+          )}
           <p className="text-xs text-slate-500 mt-1.5">
             Assign nurses, techs, anesthesiologists, and other staff to this case
           </p>

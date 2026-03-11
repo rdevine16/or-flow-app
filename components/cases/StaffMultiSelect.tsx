@@ -15,6 +15,7 @@ interface StaffUser {
 interface StaffSelection {
   user_id: string
   role_id: string
+  fromRoomSchedule?: boolean
 }
 
 interface StaffMultiSelectProps {
@@ -152,12 +153,19 @@ export default function StaffMultiSelect({
           <span className="text-slate-400">Select staff members...</span>
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            {selectedUsers.map(user => (
+            {selectedUsers.map(user => {
+              const isFromRoomSchedule = selectedStaff.find(s => s.user_id === user.id)?.fromRoomSchedule
+              return (
               <span
                 key={user.id}
                 className={`inline-flex items-center gap-1 px-2 py-1 text-sm rounded-md ${getRoleBadge(user.role_name)}`}
               >
                 {user.first_name} {user.last_name}
+                {isFromRoomSchedule && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded ml-0.5">
+                    Room schedule
+                  </span>
+                )}
                 {!disabled && (
                   <button
                     type="button"
@@ -170,7 +178,8 @@ export default function StaffMultiSelect({
                   </button>
                 )}
               </span>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

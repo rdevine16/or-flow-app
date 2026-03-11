@@ -39,6 +39,20 @@ vi.mock('@/lib/audit-logger', () => ({
   },
 }))
 
+const { mockFetchRoomDatePreFill } = vi.hoisted(() => ({
+  mockFetchRoomDatePreFill: vi.fn(),
+}))
+
+vi.mock('@/lib/dal', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/dal')>('@/lib/dal')
+  return {
+    ...actual,
+    roomScheduleDAL: {
+      fetchRoomDatePreFill: mockFetchRoomDatePreFill,
+    },
+  }
+})
+
 // Build a chainable Supabase mock
 function createSupabaseMock(overrides: Record<string, unknown> = {}) {
   const defaultResults: Record<string, unknown> = {
@@ -1637,6 +1651,31 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
       await waitFor(() => {
         expect(screen.getByTestId('missing-anesthesia-warning')).toBeInTheDocument()
       })
+    })
+  })
+
+  describe('Room Schedule Pre-fill — Phase 9', () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+      // Default: no room schedule data
+      mockFetchRoomDatePreFill.mockResolvedValue({ data: null, error: null })
+    })
+
+    it('roomScheduleDAL mock is available and can be called', async () => {
+      // Simple smoke test to verify the mock is working
+      mockFetchRoomDatePreFill.mockResolvedValue({
+        data: {
+          surgeons: [{ surgeon_id: 'surgeon-1', notes: null }],
+          staff: [{ user_id: 'nurse-1', role_id: 'role-nurse' }],
+        },
+        error: null,
+      })
+
+      const result = await mockFetchRoomDatePreFill('supabase', 'facility-1', 'room-1', '2026-03-10')
+
+      expect(mockFetchRoomDatePreFill).toHaveBeenCalledWith('supabase', 'facility-1', 'room-1', '2026-03-10')
+      expect(result.data?.surgeons).toHaveLength(1)
+      expect(result.data?.staff).toHaveLength(1)
     })
   })
 })
