@@ -140,7 +140,9 @@ export default function BlockSchedulePage() {
     error: roomAssignmentsError,
     fetchWeek: fetchRoomWeek,
     assignSurgeon,
+    removeSurgeon,
     assignStaff,
+    removeStaff,
   } = useRoomDateAssignments({ facilityId })
 
   // DnD state
@@ -465,6 +467,41 @@ export default function BlockSchedulePage() {
     setActiveDrag(null)
   }, [])
 
+  // Remove surgeon from room-day cell
+  const handleRemoveSurgeon = useCallback(
+    async (assignmentId: string) => {
+      const assignment = roomAssignments.find((a) => a.id === assignmentId)
+      const success = await removeSurgeon(assignmentId)
+      if (success) {
+        showToast({
+          type: 'success',
+          title: 'Surgeon removed',
+          message: `Dr. ${assignment?.surgeon?.last_name ?? 'Unknown'} removed`,
+        })
+      }
+    },
+    [removeSurgeon, roomAssignments, showToast]
+  )
+
+  // Remove staff from room-day cell
+  const handleRemoveStaff = useCallback(
+    async (staffId: string) => {
+      const staff = roomStaffAssignments.find((s) => s.id === staffId)
+      const success = await removeStaff(staffId)
+      if (success) {
+        const name = staff?.user
+          ? `${staff.user.first_name ?? ''} ${staff.user.last_name ?? ''}`.trim()
+          : 'Staff member'
+        showToast({
+          type: 'success',
+          title: 'Staff removed',
+          message: `${name} removed`,
+        })
+      }
+    },
+    [removeStaff, roomStaffAssignments, showToast]
+  )
+
   // =====================================================
   // RENDER
   // =====================================================
@@ -586,6 +623,8 @@ export default function BlockSchedulePage() {
                   staffAssignments={roomStaffAssignments}
                   assignmentsLoading={roomAssignmentsLoading}
                   assignmentsError={roomAssignmentsError}
+                  onRemoveSurgeon={handleRemoveSurgeon}
+                  onRemoveStaff={handleRemoveStaff}
                 />
               </div>
               <DragOverlay dropAnimation={null}>

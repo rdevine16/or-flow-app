@@ -21,6 +21,8 @@ interface GridTestProps {
   staffAssignments?: RoomDateStaff[]
   assignmentsLoading?: boolean
   assignmentsError?: string | null
+  onRemoveSurgeon?: (assignmentId: string) => void
+  onRemoveStaff?: (staffId: string) => void
 }
 
 function renderGrid(overrides: GridTestProps = {}) {
@@ -35,6 +37,8 @@ function renderGrid(overrides: GridTestProps = {}) {
         staffAssignments={overrides.staffAssignments ?? []}
         assignmentsLoading={overrides.assignmentsLoading ?? false}
         assignmentsError={overrides.assignmentsError ?? null}
+        onRemoveSurgeon={overrides.onRemoveSurgeon}
+        onRemoveStaff={overrides.onRemoveStaff}
       />
     </DndContext>
   )
@@ -253,6 +257,82 @@ describe('RoomScheduleGrid', () => {
     it('applies fixed width to room column', () => {
       const { container } = renderGrid()
       expect(container.querySelector('th.w-\\[120px\\]')).toBeDefined()
+    })
+  })
+
+  describe('removal callbacks', () => {
+    it('passes onRemoveSurgeon callback to RoomDayCell components', () => {
+      const onRemoveSurgeon = vi.fn()
+      const assignments: RoomDateAssignment[] = [
+        {
+          id: 'asgn-1',
+          facility_id: 'fac-1',
+          or_room_id: 'room-1',
+          assignment_date: '2026-03-10',
+          surgeon_id: 'surg-1',
+          notes: null,
+          created_by: null,
+          created_at: '2026-03-01T00:00:00Z',
+          updated_at: '2026-03-01T00:00:00Z',
+          surgeon: { id: 'surg-1', last_name: 'Smith', first_name: 'John' },
+        },
+      ]
+
+      const { container } = renderGrid({ assignments, onRemoveSurgeon })
+
+      // Surgeon badge should have remove button (search within table body to avoid nav buttons)
+      const tbody = container.querySelector('tbody')
+      const removeButton = tbody?.querySelector('button[title*="Remove"]')
+      expect(removeButton).toBeDefined()
+      expect(removeButton?.getAttribute('title')).toBe('Remove Dr. Smith')
+    })
+
+    it('passes onRemoveStaff callback to RoomDayCell components', () => {
+      const onRemoveStaff = vi.fn()
+      const staffAssignments: RoomDateStaff[] = [
+        {
+          id: 'staff-1',
+          room_date_assignment_id: null,
+          facility_id: 'fac-1',
+          or_room_id: 'room-1',
+          assignment_date: '2026-03-10',
+          user_id: 'user-1',
+          role_id: 'role-1',
+          created_at: '2026-03-01T00:00:00Z',
+          user: { id: 'user-1', first_name: 'Jane', last_name: 'Doe' },
+          role: { id: 'role-1', name: 'RN' },
+        },
+      ]
+
+      const { container } = renderGrid({ staffAssignments, onRemoveStaff })
+
+      // Staff badge should have remove button (search within table body to avoid nav buttons)
+      const tbody = container.querySelector('tbody')
+      const removeButton = tbody?.querySelector('button[title*="Remove"]')
+      expect(removeButton).toBeDefined()
+      expect(removeButton?.getAttribute('title')).toBe('Remove J. Doe')
+    })
+
+    it('does not render badge remove buttons when callbacks are not provided', () => {
+      const assignments: RoomDateAssignment[] = [
+        {
+          id: 'asgn-1',
+          facility_id: 'fac-1',
+          or_room_id: 'room-1',
+          assignment_date: '2026-03-10',
+          surgeon_id: 'surg-1',
+          notes: null,
+          created_by: null,
+          created_at: '2026-03-01T00:00:00Z',
+          updated_at: '2026-03-01T00:00:00Z',
+          surgeon: { id: 'surg-1', last_name: 'Smith', first_name: 'John' },
+        },
+      ]
+
+      const { container } = renderGrid({ assignments })
+      const tbody = container.querySelector('tbody')
+      // Should not have any remove buttons in cells (nav buttons are ok)
+      expect(tbody?.querySelector('button[title*="Remove"]')).toBeNull()
     })
   })
 })

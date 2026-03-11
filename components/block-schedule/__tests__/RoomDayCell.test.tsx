@@ -1,5 +1,5 @@
 // components/block-schedule/__tests__/RoomDayCell.test.tsx
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { DndContext } from '@dnd-kit/core'
 import { RoomDayCell } from '../RoomDayCell'
@@ -304,6 +304,140 @@ describe('RoomDayCell', () => {
 
       const { container } = renderCell({ cellData, isToday: false, ...defaultProps })
       expect(container.querySelector('.space-y-1')).toBeDefined()
+    })
+  })
+
+  describe('remove callbacks', () => {
+    it('passes onRemoveSurgeon callback to AssignedSurgeonBadge', () => {
+      const onRemoveSurgeon = vi.fn()
+      const cellData: RoomDayCellData = {
+        roomId: 'room-1',
+        date: '2026-03-09',
+        surgeons: [
+          makeSurgeon({
+            id: 'asgn-1',
+            surgeon: { id: 'surg-1', last_name: 'Smith', first_name: 'John' },
+          }),
+        ],
+        staff: [],
+      }
+
+      const { container } = renderCell({
+        cellData,
+        isToday: false,
+        onRemoveSurgeon,
+        ...defaultProps,
+      })
+
+      // Badge should have remove button when callback provided
+      const button = container.querySelector('button')
+      expect(button).toBeDefined()
+      expect(button?.getAttribute('title')).toBe('Remove Dr. Smith')
+    })
+
+    it('passes onRemoveStaff callback to AssignedStaffBadge', () => {
+      const onRemoveStaff = vi.fn()
+      const cellData: RoomDayCellData = {
+        roomId: 'room-1',
+        date: '2026-03-09',
+        surgeons: [],
+        staff: [
+          makeStaff({
+            id: 'staff-1',
+            user: { id: 'user-1', first_name: 'Jane', last_name: 'Doe' },
+            role: { id: 'role-1', name: 'RN' },
+          }),
+        ],
+      }
+
+      const { container } = renderCell({
+        cellData,
+        isToday: false,
+        onRemoveStaff,
+        ...defaultProps,
+      })
+
+      // Badge should have remove button when callback provided
+      const button = container.querySelector('button')
+      expect(button).toBeDefined()
+      expect(button?.getAttribute('title')).toBe('Remove J. Doe')
+    })
+
+    it('does not render remove buttons when callbacks not provided', () => {
+      const cellData: RoomDayCellData = {
+        roomId: 'room-1',
+        date: '2026-03-09',
+        surgeons: [
+          makeSurgeon({
+            id: 'asgn-1',
+            surgeon: { id: 'surg-1', last_name: 'Smith', first_name: 'John' },
+          }),
+        ],
+        staff: [
+          makeStaff({
+            id: 'staff-1',
+            user: { id: 'user-1', first_name: 'Jane', last_name: 'Doe' },
+            role: { id: 'role-1', name: 'RN' },
+          }),
+        ],
+      }
+
+      const { container } = renderCell({ cellData, isToday: false, ...defaultProps })
+      expect(container.querySelector('button')).toBeNull()
+    })
+  })
+
+  describe('add staff hint', () => {
+    it('shows "Add staff" hint when surgeons exist but no staff', () => {
+      const cellData: RoomDayCellData = {
+        roomId: 'room-1',
+        date: '2026-03-09',
+        surgeons: [
+          makeSurgeon({
+            id: 'asgn-1',
+            surgeon: { id: 'surg-1', last_name: 'Smith', first_name: 'John' },
+          }),
+        ],
+        staff: [],
+      }
+
+      renderCell({ cellData, isToday: false, ...defaultProps })
+      expect(screen.getByText('+ Add staff')).toBeDefined()
+    })
+
+    it('does not show hint when staff exists', () => {
+      const cellData: RoomDayCellData = {
+        roomId: 'room-1',
+        date: '2026-03-09',
+        surgeons: [
+          makeSurgeon({
+            id: 'asgn-1',
+            surgeon: { id: 'surg-1', last_name: 'Smith', first_name: 'John' },
+          }),
+        ],
+        staff: [
+          makeStaff({
+            id: 'staff-1',
+            user: { id: 'user-1', first_name: 'Jane', last_name: 'Doe' },
+            role: { id: 'role-1', name: 'RN' },
+          }),
+        ],
+      }
+
+      renderCell({ cellData, isToday: false, ...defaultProps })
+      expect(screen.queryByText('+ Add staff')).toBeNull()
+    })
+
+    it('does not show hint when no surgeons exist', () => {
+      const cellData: RoomDayCellData = {
+        roomId: 'room-1',
+        date: '2026-03-09',
+        surgeons: [],
+        staff: [],
+      }
+
+      renderCell({ cellData, isToday: false, ...defaultProps })
+      expect(screen.queryByText('+ Add staff')).toBeNull()
     })
   })
 })

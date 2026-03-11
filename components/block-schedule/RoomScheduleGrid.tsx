@@ -51,6 +51,8 @@ interface RoomScheduleGridProps {
   staffAssignments: RoomDateStaff[]
   assignmentsLoading: boolean
   assignmentsError: string | null
+  onRemoveSurgeon?: (assignmentId: string) => void
+  onRemoveStaff?: (staffId: string) => void
 }
 
 export function RoomScheduleGrid({
@@ -61,6 +63,8 @@ export function RoomScheduleGrid({
   staffAssignments,
   assignmentsLoading,
   assignmentsError,
+  onRemoveSurgeon,
+  onRemoveStaff,
 }: RoomScheduleGridProps) {
   const { data: rooms, loading: roomsLoading } = useRooms(facilityId)
 
@@ -200,6 +204,8 @@ export function RoomScheduleGrid({
                           roomId={room.id}
                           date={dateStr}
                           roomName={room.name}
+                          onRemoveSurgeon={onRemoveSurgeon}
+                          onRemoveStaff={onRemoveStaff}
                         />
                       </td>
                     )

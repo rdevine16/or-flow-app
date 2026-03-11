@@ -3,6 +3,8 @@
 
 import { useDroppable } from '@dnd-kit/core'
 import type { RoomDayCellData, RoomDayDropData } from '@/types/room-scheduling'
+import { AssignedSurgeonBadge } from './AssignedSurgeonBadge'
+import { AssignedStaffBadge } from './AssignedStaffBadge'
 
 interface RoomDayCellProps {
   cellData: RoomDayCellData | null
@@ -10,9 +12,19 @@ interface RoomDayCellProps {
   roomId: string
   date: string
   roomName: string
+  onRemoveSurgeon?: (assignmentId: string) => void
+  onRemoveStaff?: (staffId: string) => void
 }
 
-export function RoomDayCell({ cellData, isToday, roomId, date, roomName }: RoomDayCellProps) {
+export function RoomDayCell({
+  cellData,
+  isToday,
+  roomId,
+  date,
+  roomName,
+  onRemoveSurgeon,
+  onRemoveStaff,
+}: RoomDayCellProps) {
   const dropData: RoomDayDropData = {
     type: 'room-day',
     roomId,
@@ -51,33 +63,28 @@ export function RoomDayCell({ cellData, isToday, roomId, date, roomName }: RoomD
         <div className="space-y-1">
           {/* Surgeons */}
           {cellData?.surgeons.map((a) => (
-            <div
+            <AssignedSurgeonBadge
               key={a.id}
-              className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs"
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
-              <span className="font-medium text-blue-800 truncate">
-                Dr. {a.surgeon?.last_name ?? 'Unknown'}
-              </span>
-            </div>
+              assignment={a}
+              onRemove={onRemoveSurgeon}
+            />
           ))}
 
           {/* Staff */}
           {cellData?.staff.map((s) => (
-            <div
+            <AssignedStaffBadge
               key={s.id}
-              className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-slate-600"
-            >
-              <span className="truncate">
-                {s.user?.first_name?.[0]}. {s.user?.last_name ?? 'Unknown'}
-              </span>
-              {s.role?.name && (
-                <span className="text-[10px] text-slate-400 flex-shrink-0">
-                  {s.role.name}
-                </span>
-              )}
-            </div>
+              staff={s}
+              onRemove={onRemoveStaff}
+            />
           ))}
+
+          {/* Hint when surgeons assigned but no staff */}
+          {hasSurgeons && !hasStaff && !isOver && (
+            <div className="text-[10px] text-slate-300 text-center pt-0.5 italic">
+              + Add staff
+            </div>
+          )}
 
           {/* Drop hint when hovering over non-empty cell */}
           {isOver && (
