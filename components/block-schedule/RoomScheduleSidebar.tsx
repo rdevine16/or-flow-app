@@ -5,6 +5,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import type { Surgeon } from '@/hooks/useLookups'
 import type { StaffMember } from '@/types/staff-assignment'
@@ -288,9 +289,18 @@ export function RoomScheduleSidebar({
               <div className="h-4 w-4 mx-auto border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin" />
             </div>
           ) : filteredSurgeons.length === 0 ? (
-            <p className="text-xs text-slate-400 py-2">
-              {searchQuery ? 'No surgeons match search' : 'No surgeons in facility'}
-            </p>
+            <div className="text-xs text-slate-400 py-2">
+              {searchQuery ? (
+                'No surgeons match search'
+              ) : (
+                <>
+                  <p>No surgeons in facility</p>
+                  <Link href="/settings/users" className="text-blue-500 hover:text-blue-700 underline underline-offset-2">
+                    Add surgeons in Settings
+                  </Link>
+                </>
+              )}
+            </div>
           ) : (
             <div className="space-y-0.5">
               {filteredSurgeons.map((surgeon) => (
@@ -318,9 +328,18 @@ export function RoomScheduleSidebar({
               <div className="h-4 w-4 mx-auto border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin" />
             </div>
           ) : staffByRole.size === 0 ? (
-            <p className="text-xs text-slate-400 py-2">
-              {searchQuery ? 'No staff match search' : 'No staff in facility'}
-            </p>
+            <div className="text-xs text-slate-400 py-2">
+              {searchQuery ? (
+                'No staff match search'
+              ) : (
+                <>
+                  <p>No staff in facility</p>
+                  <Link href="/settings/users" className="text-blue-500 hover:text-blue-700 underline underline-offset-2">
+                    Add staff in Settings
+                  </Link>
+                </>
+              )}
+            </div>
           ) : (
             <div className="space-y-3">
               {Array.from(staffByRole.entries()).map(([role, members]) => (

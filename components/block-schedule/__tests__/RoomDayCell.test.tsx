@@ -9,6 +9,7 @@ const defaultProps = {
   roomId: 'room-1',
   date: '2026-03-09',
   roomName: 'OR 1',
+  isClosed: false,
 }
 
 function renderCell(props: Parameters<typeof RoomDayCell>[0]) {
@@ -384,6 +385,51 @@ describe('RoomDayCell', () => {
 
       const { container } = renderCell({ cellData, isToday: false, ...defaultProps })
       expect(container.querySelector('button')).toBeNull()
+    })
+  })
+
+  describe('closed room state', () => {
+    it('renders Closed label with lock icon when isClosed is true', () => {
+      renderCell({ ...defaultProps, cellData: null, isToday: false, isClosed: true })
+      expect(screen.getByText('Closed')).toBeDefined()
+    })
+
+    it('applies gray background when closed', () => {
+      const { container } = renderCell({ ...defaultProps, cellData: null, isToday: false, isClosed: true })
+      expect(container.querySelector('.bg-slate-100\\/80')).toBeDefined()
+    })
+
+    it('has correct aria-label when closed', () => {
+      const { container } = renderCell({ ...defaultProps, cellData: null, isToday: false, isClosed: true })
+      expect(container.querySelector('[aria-label="OR 1 closed on 2026-03-09"]')).toBeDefined()
+    })
+  })
+
+  describe('click-to-assign fallback', () => {
+    it('renders assign button in empty cell when onRequestAssign provided', () => {
+      const onRequestAssign = vi.fn()
+      const { container } = renderCell({ ...defaultProps, cellData: null, isToday: false, onRequestAssign })
+      const button = container.querySelector('[aria-label="Assign surgeon or staff to OR 1 on 2026-03-09"]')
+      expect(button).toBeDefined()
+    })
+
+    it('renders Add button in non-empty cell when onRequestAssign provided', () => {
+      const onRequestAssign = vi.fn()
+      const cellData: RoomDayCellData = {
+        roomId: 'room-1',
+        date: '2026-03-09',
+        surgeons: [makeSurgeon({ id: 'asgn-1', surgeon: { id: 'surg-1', last_name: 'Smith', first_name: 'John' } })],
+        staff: [],
+      }
+      const { container } = renderCell({ ...defaultProps, cellData, isToday: false, onRequestAssign })
+      const addButton = container.querySelector('[aria-label="Add surgeon or staff to OR 1 on 2026-03-09"]')
+      expect(addButton).toBeDefined()
+    })
+
+    it('does not render assign button when closed', () => {
+      const onRequestAssign = vi.fn()
+      const { container } = renderCell({ ...defaultProps, cellData: null, isToday: false, isClosed: true, onRequestAssign })
+      expect(container.querySelector('[aria-label*="Assign surgeon"]')).toBeNull()
     })
   })
 

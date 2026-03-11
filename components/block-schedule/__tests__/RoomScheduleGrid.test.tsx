@@ -153,7 +153,8 @@ describe('RoomScheduleGrid', () => {
 
       renderGrid()
       expect(screen.getByText('No rooms configured')).toBeDefined()
-      expect(screen.getByText('Add rooms in Settings to start scheduling')).toBeDefined()
+      expect(screen.getByText('Add operating rooms to start scheduling')).toBeDefined()
+      expect(screen.getByText('Configure rooms in Settings')).toBeDefined()
     })
 
     it('does not show empty state while rooms are loading', () => {

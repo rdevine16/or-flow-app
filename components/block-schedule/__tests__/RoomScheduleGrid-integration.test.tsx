@@ -148,9 +148,14 @@ describe('RoomScheduleGrid — Integration', () => {
 
       // 3 rooms x 7 days = 21 cells
       // 3 cells have data (OR1 Mon, OR1 Tue, OR2 Mon)
-      // 18 cells should be empty
+      // 6 cells are closed (Sun + Sat for 3 rooms, default schedule)
+      // 12 cells should show empty dash
       const emptyCells = screen.getAllByText('—')
-      expect(emptyCells.length).toBe(18)
+      expect(emptyCells.length).toBe(12)
+
+      // Closed cells show "Closed" label
+      const closedCells = screen.getAllByText('Closed')
+      expect(closedCells.length).toBe(6)
     })
   })
 

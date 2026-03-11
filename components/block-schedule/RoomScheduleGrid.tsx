@@ -3,9 +3,12 @@
 
 import { useMemo } from 'react'
 import { ChevronLeft, ChevronRight, Copy } from 'lucide-react'
+import Link from 'next/link'
 import { useRooms, type Room } from '@/hooks/useLookups'
 import { buildAssignmentMap, roomDateKey } from '@/types/room-scheduling'
 import type { RoomDateAssignment, RoomDateStaff } from '@/types/room-scheduling'
+import type { RoomDaySchedule } from '@/hooks/useRoomSchedules'
+import { getDefaultWeekSchedule } from '@/hooks/useRoomSchedules'
 import { RoomDayCell } from './RoomDayCell'
 
 // =====================================================
@@ -55,6 +58,10 @@ interface RoomScheduleGridProps {
   onRemoveStaff?: (staffId: string) => void
   onCloneWeek?: (sourceWeekStart: string, targetWeekStart: string) => void
   onCloneDay?: (sourceDate: string, targetDate: string) => void
+  /** Room schedules map: roomId -> 7-day schedule (for closed room detection) */
+  allRoomSchedules?: Map<string, RoomDaySchedule[]>
+  /** Callback for click-to-assign (keyboard accessible fallback) */
+  onRequestAssign?: (roomId: string, date: string, roomName: string) => void
 }
 
 export function RoomScheduleGrid({
@@ -69,8 +76,13 @@ export function RoomScheduleGrid({
   onRemoveStaff,
   onCloneWeek,
   onCloneDay,
+  allRoomSchedules,
+  onRequestAssign,
 }: RoomScheduleGridProps) {
   const { data: rooms, loading: roomsLoading } = useRooms(facilityId)
+
+  // Default schedule for rooms without explicit schedules
+  const defaultSchedule = useMemo(() => getDefaultWeekSchedule(), [])
 
   // Build the 7 dates for the current week
   const weekDates = useMemo(() => {
@@ -84,6 +96,12 @@ export function RoomScheduleGrid({
     () => buildAssignmentMap(assignments, staffAssignments),
     [assignments, staffAssignments]
   )
+
+  // Check if a room is closed on a specific day of week
+  const isRoomClosedOnDay = (roomId: string, dayOfWeek: number): boolean => {
+    const schedule = allRoomSchedules?.get(roomId) ?? defaultSchedule
+    return schedule[dayOfWeek]?.isClosed ?? false
+  }
 
   // Navigation
   const goToPreviousWeek = () => onWeekChange(addDays(currentWeekStart, -7))
@@ -167,9 +185,15 @@ export function RoomScheduleGrid({
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <p className="text-sm text-slate-500 mb-1">No rooms configured</p>
-              <p className="text-xs text-slate-400">
-                Add rooms in Settings to start scheduling
+              <p className="text-xs text-slate-400 mb-3">
+                Add operating rooms to start scheduling
               </p>
+              <Link
+                href="/settings/rooms"
+                className="text-xs text-blue-500 hover:text-blue-700 underline underline-offset-2"
+              >
+                Configure rooms in Settings
+              </Link>
             </div>
           </div>
         ) : (
@@ -225,17 +249,20 @@ export function RoomScheduleGrid({
                     const key = roomDateKey(room.id, dateStr)
                     const cellData = assignmentMap[key] ?? null
                     const isToday = isSameDay(date, today)
+                    const isClosed = isRoomClosedOnDay(room.id, date.getDay())
 
                     return (
                       <td key={i} className="p-0">
                         <RoomDayCell
                           cellData={cellData}
                           isToday={isToday}
+                          isClosed={isClosed}
                           roomId={room.id}
                           date={dateStr}
                           roomName={room.name}
                           onRemoveSurgeon={onRemoveSurgeon}
                           onRemoveStaff={onRemoveStaff}
+                          onRequestAssign={isClosed || !onRequestAssign ? undefined : (rId, d) => onRequestAssign(rId, d, room.name)}
                         />
                       </td>
                     )

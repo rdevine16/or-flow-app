@@ -1,7 +1,7 @@
 // app/block-schedule/page.tsx
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
@@ -10,8 +10,10 @@ import { useSurgeons } from '@/hooks'
 import { useFacilityClosures } from '@/hooks/useFacilityClosures'
 import { useSurgeonColors } from '@/hooks/useSurgeonColors'
 import { useRoomDateAssignments } from '@/hooks/useRoomDateAssignments'
+import { useRoomSchedules, type RoomDaySchedule } from '@/hooks/useRoomSchedules'
 import { ExpandedBlock, BlockSchedule } from '@/types/block-scheduling'
 import type { SurgeonDragData, StaffDragData, RoomDayDropData } from '@/types/room-scheduling'
+import type { StaffMember } from '@/types/staff-assignment'
 import { WeekCalendar } from '@/components/block-schedule/WeekCalendar'
 import { BlockSidebar } from '@/components/block-schedule/BlockSidebar'
 import { BlockPopover } from '@/components/block-schedule/BlockPopover'
@@ -26,6 +28,7 @@ import { BlockScheduleTabs, type BlockScheduleTab } from '@/components/block-sch
 import { RoomScheduleGrid } from '@/components/block-schedule/RoomScheduleGrid'
 import { RoomScheduleSidebar } from '@/components/block-schedule/RoomScheduleSidebar'
 import { RoomScheduleDragOverlay } from '@/components/block-schedule/RoomScheduleDragOverlay'
+import { AssignPersonDialog } from '@/components/block-schedule/AssignPersonDialog'
 import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { logger } from '@/lib/logger'
 
@@ -154,6 +157,20 @@ export default function BlockSchedulePage() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
+  // Room open/close schedules (for closed-room detection)
+  const { fetchAllRoomSchedules } = useRoomSchedules({ facilityId })
+  const [allRoomSchedules, setAllRoomSchedules] = useState<Map<string, RoomDaySchedule[]>>(new Map())
+
+  // Staff for assign dialog
+  const [facilityStaff, setFacilityStaff] = useState<StaffMember[]>([])
+
+  // Assign dialog state (click-to-assign fallback)
+  const [assignDialogTarget, setAssignDialogTarget] = useState<{
+    roomId: string
+    date: string
+    roomName: string
+  } | null>(null)
+
   // Clone confirm dialog
   const { confirmDialog: cloneConfirmDialog, showConfirm: showCloneConfirm } = useConfirmDialog()
 
@@ -164,6 +181,27 @@ export default function BlockSchedulePage() {
     const endDate = formatDate(addDays(currentWeekStart, 6))
     fetchRoomWeek(startDate, endDate)
   }, [facilityId, currentWeekStart, activeTab, fetchRoomWeek])
+
+  // Fetch room open/close schedules (for closed-room detection)
+  useEffect(() => {
+    if (!facilityId || activeTab !== 'room-schedule') return
+    fetchAllRoomSchedules().then(setAllRoomSchedules)
+  }, [facilityId, activeTab, fetchAllRoomSchedules])
+
+  // Fetch facility staff (for assign dialog)
+  useEffect(() => {
+    if (!facilityId || activeTab !== 'room-schedule') return
+    const fetchStaff = async () => {
+      const { data } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email, profile_image_url, role_id, facility_id, user_roles (name)')
+        .eq('facility_id', facilityId)
+        .eq('is_active', true)
+        .order('last_name')
+      setFacilityStaff((data as unknown as StaffMember[]) || [])
+    }
+    fetchStaff()
+  }, [facilityId, activeTab, supabase])
 
   // Refresh helper
   const refreshBlocks = useCallback(async () => {
@@ -424,6 +462,28 @@ export default function BlockSchedulePage() {
       if (!dragData) return
 
       if (dragData.type === 'surgeon') {
+        // Check for existing assignment on same date (more specific warning)
+        const existingAssignment = roomAssignments.find(
+          (a) => a.surgeon_id === dragData.surgeonId && a.assignment_date === dropData.date
+        )
+        if (existingAssignment) {
+          const existingRoom = existingAssignment.room?.name ?? 'another room'
+          if (existingAssignment.or_room_id === dropData.roomId) {
+            showToast({
+              type: 'warning',
+              title: 'Already assigned',
+              message: `Dr. ${dragData.surgeon.last_name} is already assigned to ${dropData.roomName} on this date`,
+            })
+          } else {
+            showToast({
+              type: 'warning',
+              title: 'Already assigned elsewhere',
+              message: `Dr. ${dragData.surgeon.last_name} is already assigned to ${existingRoom} on this date`,
+            })
+          }
+          return
+        }
+
         const result = await assignSurgeon({
           or_room_id: dropData.roomId,
           assignment_date: dropData.date,
@@ -440,10 +500,32 @@ export default function BlockSchedulePage() {
           showToast({
             type: 'error',
             title: 'Assignment failed',
-            message: 'Already assigned to this room or another room on this date',
+            message: 'Could not assign surgeon. Please try again.',
           })
         }
       } else if (dragData.type === 'staff') {
+        // Check for existing staff assignment on same date
+        const existingStaff = roomStaffAssignments.find(
+          (s) => s.user_id === dragData.userId && s.assignment_date === dropData.date
+        )
+        if (existingStaff) {
+          const staffName = `${dragData.user.first_name} ${dragData.user.last_name}`
+          if (existingStaff.or_room_id === dropData.roomId) {
+            showToast({
+              type: 'warning',
+              title: 'Already assigned',
+              message: `${staffName} is already assigned to ${dropData.roomName} on this date`,
+            })
+          } else {
+            showToast({
+              type: 'warning',
+              title: 'Already assigned elsewhere',
+              message: `${staffName} is already assigned to another room on this date`,
+            })
+          }
+          return
+        }
+
         const result = await assignStaff({
           or_room_id: dropData.roomId,
           assignment_date: dropData.date,
@@ -461,12 +543,12 @@ export default function BlockSchedulePage() {
           showToast({
             type: 'error',
             title: 'Assignment failed',
-            message: 'Already assigned to this room on this date',
+            message: 'Could not assign staff. Please try again.',
           })
         }
       }
     },
-    [assignSurgeon, assignStaff, showToast]
+    [assignSurgeon, assignStaff, showToast, roomAssignments, roomStaffAssignments]
   )
 
   const handleDragCancel = useCallback(() => {
@@ -557,6 +639,89 @@ export default function BlockSchedulePage() {
     },
     [showCloneConfirm, cloneDay, refreshRoomWeek, showToast]
   )
+
+  // =====================================================
+  // CLICK-TO-ASSIGN (keyboard accessible fallback)
+  // =====================================================
+
+  const handleRequestAssign = useCallback(
+    (roomId: string, date: string, roomName: string) => {
+      setAssignDialogTarget({ roomId, date, roomName })
+    },
+    []
+  )
+
+  const handleDialogAssignSurgeon = useCallback(
+    async (surgeonId: string) => {
+      if (!assignDialogTarget) return
+      const surgeon = surgeons.find((s) => s.id === surgeonId)
+      const result = await assignSurgeon({
+        or_room_id: assignDialogTarget.roomId,
+        assignment_date: assignDialogTarget.date,
+        surgeon_id: surgeonId,
+      })
+      if (result) {
+        showToast({
+          type: 'success',
+          title: 'Surgeon assigned',
+          message: `Dr. ${surgeon?.last_name ?? 'Unknown'} assigned to ${assignDialogTarget.roomName}`,
+        })
+      } else {
+        showToast({
+          type: 'error',
+          title: 'Assignment failed',
+          message: 'Could not assign surgeon. They may already be assigned on this date.',
+        })
+      }
+    },
+    [assignDialogTarget, assignSurgeon, surgeons, showToast]
+  )
+
+  const handleDialogAssignStaff = useCallback(
+    async (userId: string, roleId: string) => {
+      if (!assignDialogTarget) return
+      const staff = facilityStaff.find((s) => s.id === userId)
+      const result = await assignStaff({
+        or_room_id: assignDialogTarget.roomId,
+        assignment_date: assignDialogTarget.date,
+        user_id: userId,
+        role_id: roleId,
+      })
+      if (result) {
+        showToast({
+          type: 'success',
+          title: 'Staff assigned',
+          message: `${staff?.first_name ?? ''} ${staff?.last_name ?? 'Staff'} assigned to ${assignDialogTarget.roomName}`,
+        })
+      } else {
+        showToast({
+          type: 'error',
+          title: 'Assignment failed',
+          message: 'Could not assign staff. They may already be assigned on this date.',
+        })
+      }
+    },
+    [assignDialogTarget, assignStaff, facilityStaff, showToast]
+  )
+
+  // Computed: which surgeons/staff are already assigned on the assign dialog's target date
+  const assignedSurgeonIdsForDate = useMemo(() => {
+    if (!assignDialogTarget) return new Set<string>()
+    return new Set(
+      roomAssignments
+        .filter((a) => a.assignment_date === assignDialogTarget.date)
+        .map((a) => a.surgeon_id)
+    )
+  }, [roomAssignments, assignDialogTarget])
+
+  const assignedStaffIdsForDate = useMemo(() => {
+    if (!assignDialogTarget) return new Set<string>()
+    return new Set(
+      roomStaffAssignments
+        .filter((s) => s.assignment_date === assignDialogTarget.date)
+        .map((s) => s.user_id)
+    )
+  }, [roomStaffAssignments, assignDialogTarget])
 
   // =====================================================
   // RENDER
@@ -683,6 +848,8 @@ export default function BlockSchedulePage() {
                   onRemoveStaff={handleRemoveStaff}
                   onCloneWeek={handleCloneWeek}
                   onCloneDay={handleCloneDay}
+                  allRoomSchedules={allRoomSchedules}
+                  onRequestAssign={handleRequestAssign}
                 />
               </div>
               <DragOverlay dropAnimation={null}>
@@ -735,6 +902,20 @@ export default function BlockSchedulePage() {
 
       {/* Undo Toast */}
       {undoAction && <UndoToast action={undoAction} onDismiss={dismissUndo} />}
+
+      {/* Click-to-Assign Dialog (keyboard accessible fallback for DnD) */}
+      <AssignPersonDialog
+        isOpen={!!assignDialogTarget}
+        onClose={() => setAssignDialogTarget(null)}
+        roomName={assignDialogTarget?.roomName ?? ''}
+        date={assignDialogTarget?.date ?? ''}
+        surgeons={surgeons}
+        staff={facilityStaff}
+        onAssignSurgeon={handleDialogAssignSurgeon}
+        onAssignStaff={handleDialogAssignStaff}
+        assignedSurgeonIds={assignedSurgeonIdsForDate}
+        assignedStaffIds={assignedStaffIdsForDate}
+      />
     </DashboardLayout>
   )
 }
