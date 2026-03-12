@@ -74,8 +74,18 @@ const mockRoles = [
   { id: 'role-admin', name: 'facility admin' },
 ]
 
-// Default mock callback for onSelectUser
+// Default mock callbacks
 const mockOnSelectUser = vi.fn()
+const mockOnToggleDeactivated = vi.fn()
+const mockOnAddStaff = vi.fn()
+
+const defaultProps = {
+  facilityId: 'fac-1',
+  onSelectUser: mockOnSelectUser,
+  showDeactivated: false,
+  onToggleDeactivated: mockOnToggleDeactivated,
+  onAddStaff: mockOnAddStaff,
+}
 
 function setupMocks(overrides?: {
   staff?: typeof mockStaff
@@ -116,7 +126,7 @@ describe('StaffDirectoryTab', () => {
   describe('rendering', () => {
     it('renders staff table with all members', () => {
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       expect(screen.getByText('Jane Wilson')).toBeDefined()
       expect(screen.getByText('Mike Brown')).toBeDefined()
@@ -125,28 +135,28 @@ describe('StaffDirectoryTab', () => {
 
     it('shows staff count', () => {
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
-      expect(screen.getByText('3 staff members')).toBeDefined()
+      expect(screen.getByText('3 active members')).toBeDefined()
     })
 
     it('shows singular count for 1 member', () => {
       setupMocks({ staff: [mockStaff[0]] })
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
-      expect(screen.getByText('1 staff member')).toBeDefined()
+      expect(screen.getByText('1 active member')).toBeDefined()
     })
 
     it('displays time-off totals inline for users with data', () => {
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       expect(screen.getByText('PTO: 5d | Sick: 2d')).toBeDefined()
     })
 
     it('shows 0d for users with no time-off data', () => {
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       // Mike Brown (user-2) has no totals
       const rows = screen.getAllByText('0d')
@@ -155,7 +165,7 @@ describe('StaffDirectoryTab', () => {
 
     it('renders role badges', () => {
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       // Role names appear in both dropdown and badge — use getAllByText
       const nurseBadges = screen.getAllByText('nurse')
@@ -169,7 +179,7 @@ describe('StaffDirectoryTab', () => {
 
     it('renders access level labels', () => {
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       // "Staff" appears in multiple places (access level + count text)
       const staffLabels = screen.getAllByText('Staff')
@@ -184,7 +194,7 @@ describe('StaffDirectoryTab', () => {
   describe('loading and error states', () => {
     it('shows loader when loading', () => {
       setupMocks({ loading: true })
-      const { container } = render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      const { container } = render(<StaffDirectoryTab {...defaultProps} />)
 
       // PageLoader renders a spinner
       expect(container.querySelector('[class*="animate-spin"]')).toBeDefined()
@@ -201,7 +211,7 @@ describe('StaffDirectoryTab', () => {
         data: mockRoles, loading: false, error: null, refresh: vi.fn(),
       })
 
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
       expect(screen.getByText(/Failed to fetch staff/)).toBeDefined()
     })
   })
@@ -212,7 +222,7 @@ describe('StaffDirectoryTab', () => {
   describe('empty states', () => {
     it('shows empty state when no staff exist', () => {
       setupMocks({ staff: [] })
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       expect(screen.getByText('No staff members found')).toBeDefined()
       expect(screen.getByText('No active staff in this facility.')).toBeDefined()
@@ -221,7 +231,7 @@ describe('StaffDirectoryTab', () => {
     it('shows filter-specific empty state when filters eliminate all results', async () => {
       const user = userEvent.setup()
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       // Search for something that matches nobody
       const searchInput = screen.getByPlaceholderText('Search by name or email...')
@@ -239,20 +249,20 @@ describe('StaffDirectoryTab', () => {
     it('filters by name', async () => {
       const user = userEvent.setup()
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       const searchInput = screen.getByPlaceholderText('Search by name or email...')
       await user.type(searchInput, 'Jane')
 
       expect(screen.getByText('Jane Wilson')).toBeDefined()
       expect(screen.queryByText('Mike Brown')).toBeNull()
-      expect(screen.getByText('1 staff member')).toBeDefined()
+      expect(screen.getByText('1 active member')).toBeDefined()
     })
 
     it('filters by email', async () => {
       const user = userEvent.setup()
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       const searchInput = screen.getByPlaceholderText('Search by name or email...')
       await user.type(searchInput, 'admin@')
@@ -264,7 +274,7 @@ describe('StaffDirectoryTab', () => {
     it('is case-insensitive', async () => {
       const user = userEvent.setup()
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       const searchInput = screen.getByPlaceholderText('Search by name or email...')
       await user.type(searchInput, 'MIKE')
@@ -280,14 +290,14 @@ describe('StaffDirectoryTab', () => {
     it('filters by role', async () => {
       const user = userEvent.setup()
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       const roleSelect = screen.getByDisplayValue('All Roles')
       await user.selectOptions(roleSelect, 'role-rn')
 
       expect(screen.getByText('Jane Wilson')).toBeDefined()
       expect(screen.queryByText('Mike Brown')).toBeNull()
-      expect(screen.getByText('1 staff member')).toBeDefined()
+      expect(screen.getByText('1 active member')).toBeDefined()
     })
   })
 
@@ -297,7 +307,7 @@ describe('StaffDirectoryTab', () => {
   describe('sorting', () => {
     it('sorts by name ascending by default', () => {
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       // Default sort: last_name asc → Adams, Brown, Wilson
       const names = screen.getAllByText(/Adams|Brown|Wilson/).map((el) => el.textContent)
@@ -307,7 +317,7 @@ describe('StaffDirectoryTab', () => {
     it('toggles sort direction on column header click', async () => {
       const user = userEvent.setup()
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       // Click "Name" header to toggle to descending
       const nameHeader = screen.getByRole('button', { name: /Name/ })
@@ -321,7 +331,7 @@ describe('StaffDirectoryTab', () => {
     it('sorts by time-off total', async () => {
       const user = userEvent.setup()
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       const timeOffHeader = screen.getByRole('button', { name: /Time Off/ })
       await user.click(timeOffHeader)
@@ -340,7 +350,7 @@ describe('StaffDirectoryTab', () => {
       const user = userEvent.setup()
       const mockOnSelectUserLocal = vi.fn()
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUserLocal} />)
+      render(<StaffDirectoryTab {...defaultProps} onSelectUser={mockOnSelectUserLocal} />)
 
       // Click Jane Wilson's row (component uses div grid layout, not table rows)
       const janeRow = screen.getByText('Jane Wilson').closest('div[class*="cursor-pointer"]')
@@ -362,7 +372,7 @@ describe('StaffDirectoryTab', () => {
       const user = userEvent.setup()
       const mockOnSelectUserLocal = vi.fn()
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUserLocal} />)
+      render(<StaffDirectoryTab {...defaultProps} onSelectUser={mockOnSelectUserLocal} />)
 
       // Click Mike Brown's row
       const mikeRow = screen.getByText('Mike Brown').closest('div[class*="cursor-pointer"]')
@@ -402,7 +412,7 @@ describe('StaffDirectoryTab', () => {
         },
       ]
       setupMocks({ staff: extraStaff })
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       // Filter to nurses only
       const roleSelect = screen.getByDisplayValue('All Roles')
@@ -414,7 +424,7 @@ describe('StaffDirectoryTab', () => {
 
       expect(screen.getByText('Jane Wilson')).toBeDefined()
       expect(screen.queryByText('Amy Nurse')).toBeNull()
-      expect(screen.getByText('1 staff member')).toBeDefined()
+      expect(screen.getByText('1 active member')).toBeDefined()
     })
   })
 
@@ -424,7 +434,7 @@ describe('StaffDirectoryTab', () => {
   describe('data merge: staff list + time-off totals', () => {
     it('correctly matches totals to users by user_id', () => {
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       // Jane (user-1) should show PTO: 5d | Sick: 2d
       expect(screen.getByText('PTO: 5d | Sick: 2d')).toBeDefined()
@@ -435,7 +445,7 @@ describe('StaffDirectoryTab', () => {
 
     it('handles users with no matching totals gracefully', () => {
       setupMocks({ totals: [] })
-      render(<StaffDirectoryTab facilityId="fac-1" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} />)
 
       // All users should show 0d
       const zeroDays = screen.getAllByText('0d')
@@ -449,12 +459,12 @@ describe('StaffDirectoryTab', () => {
   describe('facility scoping', () => {
     it('passes facilityId to useSupabaseQueries', () => {
       setupMocks()
-      render(<StaffDirectoryTab facilityId="fac-test-123" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} facilityId="fac-test-123" />)
 
       expect(vi.mocked(useSupabaseQueries)).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({
-          deps: ['fac-test-123', expect.any(Number)],
+          deps: ['fac-test-123', expect.any(Number), false],
           enabled: true,
         })
       )
@@ -462,7 +472,7 @@ describe('StaffDirectoryTab', () => {
 
     it('disables queries when facilityId is empty', () => {
       setupMocks()
-      render(<StaffDirectoryTab facilityId="" onSelectUser={mockOnSelectUser} />)
+      render(<StaffDirectoryTab {...defaultProps} facilityId="" />)
 
       expect(vi.mocked(useSupabaseQueries)).toHaveBeenCalledWith(
         expect.any(Object),

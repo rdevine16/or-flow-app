@@ -14,7 +14,7 @@ import { UserTimeOffSummaryDisplay } from './UserTimeOffSummary'
 import { deriveAccountStatus, STATUS_CONFIG } from './DrawerProfileTab'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Search, ChevronDown, ChevronUp, Users } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, Users, Plus, Eye, EyeOff } from 'lucide-react'
 
 // ============================================
 // Types
@@ -23,6 +23,9 @@ import { Search, ChevronDown, ChevronUp, Users } from 'lucide-react'
 interface StaffDirectoryTabProps {
   facilityId: string
   onSelectUser: (user: UserListItem) => void
+  showDeactivated: boolean
+  onToggleDeactivated: () => void
+  onAddStaff: () => void
 }
 
 type SortField = 'name' | 'role' | 'email' | 'total_days' | 'status'
@@ -72,7 +75,13 @@ const STATUS_SORT_ORDER: Record<string, number> = {
 // Component
 // ============================================
 
-export function StaffDirectoryTab({ facilityId, onSelectUser }: StaffDirectoryTabProps) {
+export function StaffDirectoryTab({
+  facilityId,
+  onSelectUser,
+  showDeactivated,
+  onToggleDeactivated,
+  onAddStaff,
+}: StaffDirectoryTabProps) {
   const currentYear = new Date().getFullYear()
 
   // Filters
@@ -93,7 +102,7 @@ export function StaffDirectoryTab({ facilityId, onSelectUser }: StaffDirectoryTa
   }>(
     {
       staff: async (supabase) => {
-        const result = await usersDAL.listByFacility(supabase, facilityId)
+        const result = await usersDAL.listByFacility(supabase, facilityId, showDeactivated)
         if (result.error) throw result.error
         return result.data
       },
@@ -103,7 +112,7 @@ export function StaffDirectoryTab({ facilityId, onSelectUser }: StaffDirectoryTa
         return result.data
       },
     },
-    { deps: [facilityId, currentYear], enabled: !!facilityId }
+    { deps: [facilityId, currentYear, showDeactivated], enabled: !!facilityId }
   )
 
   // Build totals lookup map
@@ -122,6 +131,13 @@ export function StaffDirectoryTab({ facilityId, onSelectUser }: StaffDirectoryTa
     if (!data?.staff) return []
 
     let items = data.staff
+
+    // When showDeactivated, only show inactive; otherwise only active
+    if (showDeactivated) {
+      items = items.filter((u) => !u.is_active)
+    } else {
+      items = items.filter((u) => u.is_active)
+    }
 
     // Search filter
     if (searchQuery.trim()) {
@@ -171,7 +187,7 @@ export function StaffDirectoryTab({ facilityId, onSelectUser }: StaffDirectoryTa
     })
 
     return items
-  }, [data?.staff, searchQuery, roleFilter, sortField, sortDirection, totalsMap])
+  }, [data?.staff, searchQuery, roleFilter, sortField, sortDirection, totalsMap, showDeactivated])
 
   // Column sort toggle
   function toggleSort(field: SortField) {
@@ -227,10 +243,46 @@ export function StaffDirectoryTab({ facilityId, onSelectUser }: StaffDirectoryTa
           ))}
         </select>
 
+        {/* View Deactivated toggle */}
+        <button
+          onClick={onToggleDeactivated}
+          className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border transition-colors
+            ${showDeactivated
+              ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+        >
+          {showDeactivated ? (
+            <>
+              <EyeOff className="w-4 h-4" />
+              View Active
+            </>
+          ) : (
+            <>
+              <Eye className="w-4 h-4" />
+              View Deactivated
+            </>
+          )}
+        </button>
+
         {/* Count */}
         <span className="text-sm text-slate-500 whitespace-nowrap">
-          {filteredStaff.length} staff member{filteredStaff.length !== 1 ? 's' : ''}
+          {filteredStaff.length} {showDeactivated ? 'deactivated' : 'active'} member{filteredStaff.length !== 1 ? 's' : ''}
         </span>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Add Staff */}
+        {!showDeactivated && (
+          <button
+            onClick={onAddStaff}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Staff
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -278,7 +330,7 @@ export function StaffDirectoryTab({ facilityId, onSelectUser }: StaffDirectoryTa
                 return (
                   <div
                     key={user.id}
-                    className="grid items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                    className={`grid items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors ${!user.is_active ? 'opacity-60' : ''}`}
                     style={{ gridTemplateColumns: '1fr 140px 180px 100px 100px' }}
                     onClick={() => onSelectUser(user)}
                   >

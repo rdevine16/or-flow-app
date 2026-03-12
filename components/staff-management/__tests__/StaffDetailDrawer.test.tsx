@@ -6,6 +6,49 @@ import { StaffDetailDrawer } from '../StaffDetailDrawer'
 import type { UserListItem } from '@/lib/dal/users'
 import type { TimeOffRequest, UserTimeOffSummary } from '@/types/time-off'
 
+// Mock Supabase client (used by DrawerActionsTab)
+vi.mock('@/lib/supabase', () => ({
+  createClient: () => ({
+    from: vi.fn().mockReturnValue({
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }),
+        }),
+      }),
+    }),
+  }),
+}))
+
+// Mock audit-logger (used by DrawerActionsTab)
+vi.mock('@/lib/audit-logger', () => ({
+  userAudit: {
+    updated: vi.fn().mockResolvedValue(undefined),
+    invited: vi.fn().mockResolvedValue(undefined),
+    deactivated: vi.fn().mockResolvedValue(undefined),
+    reactivated: vi.fn().mockResolvedValue(undefined),
+  },
+}))
+
+// Mock toast provider (used by DrawerActionsTab)
+vi.mock('@/components/ui/Toast/ToastProvider', () => ({
+  useToast: () => ({ showToast: vi.fn() }),
+}))
+
+// Mock useLookups (used by EditUserForm)
+vi.mock('@/hooks/useLookups', () => ({
+  useUserRoles: () => ({
+    data: [
+      { id: 'role-rn', name: 'nurse' },
+      { id: 'role-st', name: 'scrub tech' },
+    ],
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
+}))
+
 // ============================================
 // Test data
 // ============================================

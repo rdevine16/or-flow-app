@@ -11,7 +11,7 @@ import Badge from '@/components/ui/Badge'
 import { DrawerProfileTab, deriveAccountStatus, STATUS_CONFIG } from './DrawerProfileTab'
 import { DrawerTimeOffTab } from './DrawerTimeOffTab'
 import { DrawerActionsTab } from './DrawerActionsTab'
-import { X, User as UserIcon } from 'lucide-react'
+import { X } from 'lucide-react'
 
 // ============================================
 // Types
@@ -28,6 +28,7 @@ interface StaffDetailDrawerProps {
     requestId: string,
     review: TimeOffReviewInput,
   ) => Promise<{ success: boolean; error?: string }>
+  onUserUpdated?: () => void
 }
 
 type DrawerTab = 'profile' | 'time-off' | 'actions'
@@ -75,6 +76,7 @@ export function StaffDetailDrawer({
   requests,
   currentUserId,
   onReview,
+  onUserUpdated,
 }: StaffDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>('profile')
 
@@ -178,7 +180,11 @@ export function StaffDetailDrawer({
               />
             )}
             {activeTab === 'actions' && (
-              <DrawerActionsTab userName={fullName} />
+              <DrawerActionsTab
+                user={user}
+                currentUserId={currentUserId}
+                onUserUpdated={onUserUpdated ?? (() => {})}
+              />
             )}
           </div>
         </Dialog.Content>

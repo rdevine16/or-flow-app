@@ -228,4 +228,62 @@ export const usersDAL = {
 
     return !!data
   },
+
+  /**
+   * Update user profile fields (admin action)
+   */
+  async updateUser(
+    supabase: AnySupabaseClient,
+    userId: string,
+    updates: {
+      first_name?: string
+      last_name?: string
+      email?: string | null
+      role_id?: string
+      access_level?: string
+    },
+  ): Promise<DALResult<UserListItem>> {
+    const { data, error } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', userId)
+      .select(USER_LIST_SELECT)
+      .single()
+
+    return { data: data as unknown as UserListItem | null, error }
+  },
+
+  /**
+   * Soft-deactivate a user (set is_active = false)
+   */
+  async deactivateUser(
+    supabase: AnySupabaseClient,
+    userId: string,
+  ): Promise<DALResult<{ id: string }>> {
+    const { data, error } = await supabase
+      .from('users')
+      .update({ is_active: false })
+      .eq('id', userId)
+      .select('id')
+      .single()
+
+    return { data: data as { id: string } | null, error }
+  },
+
+  /**
+   * Reactivate a deactivated user (set is_active = true)
+   */
+  async reactivateUser(
+    supabase: AnySupabaseClient,
+    userId: string,
+  ): Promise<DALResult<{ id: string }>> {
+    const { data, error } = await supabase
+      .from('users')
+      .update({ is_active: true })
+      .eq('id', userId)
+      .select('id')
+      .single()
+
+    return { data: data as { id: string } | null, error }
+  },
 }

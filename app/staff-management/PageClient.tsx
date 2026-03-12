@@ -7,6 +7,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useUser } from '@/lib/UserContext'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
+import { useUserRoles } from '@/hooks/useLookups'
 import { useTimeOffRequests } from '@/hooks/useTimeOffRequests'
 import { usersDAL, type UserListItem } from '@/lib/dal/users'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
@@ -16,6 +17,7 @@ import { StaffDirectoryTab } from '@/components/staff-management/StaffDirectoryT
 import { TimeOffCalendarTab } from '@/components/staff-management/TimeOffCalendarTab'
 import { TimeOffReviewModal } from '@/components/staff-management/TimeOffReviewModal'
 import { StaffDetailDrawer } from '@/components/staff-management/StaffDetailDrawer'
+import InviteUserModal from '@/components/InviteUserModal'
 import type { TimeOffRequest } from '@/types/time-off'
 import { Users, CalendarDays } from 'lucide-react'
 
@@ -51,6 +53,11 @@ export default function StaffManagementPageClient() {
   const [activeTab, setActiveTab] = useState<StaffManagementTab>('directory')
   const [selectedRequest, setSelectedRequest] = useState<TimeOffRequest | null>(null)
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showDeactivated, setShowDeactivated] = useState(false)
+
+  // Roles for InviteUserModal
+  const { data: roles } = useUserRoles()
 
   // Fetch all requests + totals for the review modal
   const facilityId = effectiveFacilityId
@@ -61,8 +68,8 @@ export default function StaffManagementPageClient() {
     refetch: refetchRequests,
   } = useTimeOffRequests({ facilityId })
 
-  // Fetch staff list for coverage indicator
-  const { data: staffList } = useSupabaseQuery<UserListItem[]>(
+  // Fetch staff list for coverage indicator (and directory)
+  const { data: staffList, refetch: refetchStaff } = useSupabaseQuery<UserListItem[]>(
     async (supabase) => {
       if (!facilityId) return []
       const result = await usersDAL.listByFacility(supabase, facilityId)
@@ -71,6 +78,13 @@ export default function StaffManagementPageClient() {
     },
     { deps: [facilityId], enabled: !!facilityId, initialData: [] },
   )
+
+  // Handle user updates (edit, deactivate, invite) — refresh directory + close drawer
+  const handleUserUpdated = useCallback(() => {
+    refetchStaff()
+    refetchRequests()
+    setSelectedUser(null)
+  }, [refetchStaff, refetchRequests])
 
   // Approved requests for coverage calculation
   const approvedRequests = useMemo(
@@ -153,6 +167,9 @@ export default function StaffManagementPageClient() {
           <StaffDirectoryTab
             facilityId={facilityId}
             onSelectUser={handleSelectUser}
+            showDeactivated={showDeactivated}
+            onToggleDeactivated={() => setShowDeactivated((v) => !v)}
+            onAddStaff={() => setShowInviteModal(true)}
           />
         )}
 
@@ -185,6 +202,19 @@ export default function StaffManagementPageClient() {
         requests={allRequests}
         currentUserId={userData.userId ?? ''}
         onReview={handleReview}
+        onUserUpdated={handleUserUpdated}
+      />
+
+      {/* Invite modal — triggered from Add Staff button */}
+      <InviteUserModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        onSuccess={() => {
+          setShowInviteModal(false)
+          refetchStaff()
+        }}
+        facilityId={facilityId}
+        roles={roles ?? []}
       />
     </DashboardLayout>
   )
