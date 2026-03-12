@@ -8,6 +8,8 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
 import { StaffDirectoryTab } from '@/components/staff-management/StaffDirectoryTab'
+import { TimeOffCalendarTab } from '@/components/staff-management/TimeOffCalendarTab'
+import type { TimeOffRequest } from '@/types/time-off'
 import { Users, CalendarDays } from 'lucide-react'
 
 // ============================================
@@ -39,6 +41,8 @@ export default function StaffManagementPageClient() {
   } = useUser()
 
   const [activeTab, setActiveTab] = useState<StaffManagementTab>('directory')
+  // Phase 10 will read selectedRequest to render the TimeOffReviewModal
+  const [, setSelectedRequest] = useState<TimeOffRequest | null>(null)
 
   if (userLoading) return <PageLoader />
   if (!isAdmin) return <AccessDenied />
@@ -89,11 +93,10 @@ export default function StaffManagementPageClient() {
         )}
 
         {activeTab === 'time-off-calendar' && (
-          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-            <CalendarDays className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">Time-Off Calendar</p>
-            <p className="text-sm text-slate-400 mt-1">Coming in Phase 9</p>
-          </div>
+          <TimeOffCalendarTab
+            facilityId={facilityId}
+            onRequestClick={setSelectedRequest}
+          />
         )}
       </div>
     </DashboardLayout>
