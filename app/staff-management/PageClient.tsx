@@ -1,6 +1,7 @@
 // app/staff-management/PageClient.tsx
 // Staff Management page — admin-only. Contains Staff Directory and Time-Off Calendar tabs.
 // Review modal is owned at this level so it can be triggered from either tab.
+// StaffDetailDrawer (Phase 11) slides out from the directory row click.
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
@@ -14,6 +15,7 @@ import AccessDenied from '@/components/ui/AccessDenied'
 import { StaffDirectoryTab } from '@/components/staff-management/StaffDirectoryTab'
 import { TimeOffCalendarTab } from '@/components/staff-management/TimeOffCalendarTab'
 import { TimeOffReviewModal } from '@/components/staff-management/TimeOffReviewModal'
+import { StaffDetailDrawer } from '@/components/staff-management/StaffDetailDrawer'
 import type { TimeOffRequest } from '@/types/time-off'
 import { Users, CalendarDays } from 'lucide-react'
 
@@ -48,6 +50,7 @@ export default function StaffManagementPageClient() {
 
   const [activeTab, setActiveTab] = useState<StaffManagementTab>('directory')
   const [selectedRequest, setSelectedRequest] = useState<TimeOffRequest | null>(null)
+  const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null)
 
   // Fetch all requests + totals for the review modal
   const facilityId = effectiveFacilityId
@@ -75,6 +78,7 @@ export default function StaffManagementPageClient() {
     [allRequests],
   )
 
+  // Calendar review modal handlers
   const handleRequestClick = useCallback((request: TimeOffRequest) => {
     setSelectedRequest(request)
   }, [])
@@ -93,6 +97,15 @@ export default function StaffManagementPageClient() {
     },
     [reviewRequest, refetchRequests],
   )
+
+  // Staff detail drawer handlers
+  const handleSelectUser = useCallback((user: UserListItem) => {
+    setSelectedUser(user)
+  }, [])
+
+  const handleDrawerClose = useCallback(() => {
+    setSelectedUser(null)
+  }, [])
 
   if (userLoading) return <PageLoader />
   if (!isAdmin) return <AccessDenied />
@@ -137,7 +150,10 @@ export default function StaffManagementPageClient() {
 
         {/* Tab content */}
         {activeTab === 'directory' && (
-          <StaffDirectoryTab facilityId={facilityId} />
+          <StaffDirectoryTab
+            facilityId={facilityId}
+            onSelectUser={handleSelectUser}
+          />
         )}
 
         {activeTab === 'time-off-calendar' && (
@@ -148,7 +164,7 @@ export default function StaffManagementPageClient() {
         )}
       </div>
 
-      {/* Review modal — shared across tabs */}
+      {/* Review modal — shared across tabs (calendar click) */}
       <TimeOffReviewModal
         request={selectedRequest}
         open={selectedRequest !== null}
@@ -157,6 +173,17 @@ export default function StaffManagementPageClient() {
         totals={totals}
         staffList={staffList ?? []}
         approvedRequests={approvedRequests}
+        onReview={handleReview}
+      />
+
+      {/* Staff detail drawer — opens from directory row click */}
+      <StaffDetailDrawer
+        user={selectedUser}
+        onClose={handleDrawerClose}
+        facilityName={userData.facilityName}
+        totals={totals}
+        requests={allRequests}
+        currentUserId={userData.userId ?? ''}
         onReview={handleReview}
       />
     </DashboardLayout>

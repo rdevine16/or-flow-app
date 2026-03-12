@@ -1,5 +1,6 @@
 // components/staff-management/StaffDirectoryTab.tsx
-// Staff directory data table with search, role filter, and per-user time-off totals.
+// Staff directory data table with search, role filter, account status, and per-user time-off totals.
+// Clicking a row opens the StaffDetailDrawer (Phase 11).
 'use client'
 
 import { useMemo, useState } from 'react'
@@ -10,6 +11,7 @@ import { timeOffDAL } from '@/lib/dal/time-off'
 import type { UserTimeOffSummary } from '@/types/time-off'
 import Badge from '@/components/ui/Badge'
 import { UserTimeOffSummaryDisplay } from './UserTimeOffSummary'
+import { deriveAccountStatus, STATUS_CONFIG } from './DrawerProfileTab'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Search, ChevronDown, ChevronUp, Users } from 'lucide-react'
@@ -20,9 +22,10 @@ import { Search, ChevronDown, ChevronUp, Users } from 'lucide-react'
 
 interface StaffDirectoryTabProps {
   facilityId: string
+  onSelectUser: (user: UserListItem) => void
 }
 
-type SortField = 'name' | 'role' | 'email' | 'total_days'
+type SortField = 'name' | 'role' | 'email' | 'total_days' | 'status'
 type SortDirection = 'asc' | 'desc'
 
 // ============================================
@@ -56,10 +59,20 @@ const ACCESS_LEVEL_LABELS: Record<string, string> = {
 }
 
 // ============================================
+// Status sort order
+// ============================================
+
+const STATUS_SORT_ORDER: Record<string, number> = {
+  active: 0,
+  pending: 1,
+  inactive: 2,
+}
+
+// ============================================
 // Component
 // ============================================
 
-export function StaffDirectoryTab({ facilityId }: StaffDirectoryTabProps) {
+export function StaffDirectoryTab({ facilityId, onSelectUser }: StaffDirectoryTabProps) {
   const currentYear = new Date().getFullYear()
 
   // Filters
@@ -69,9 +82,6 @@ export function StaffDirectoryTab({ facilityId }: StaffDirectoryTabProps) {
   // Sort
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-
-  // Expanded row
-  const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
 
   // Lookups
   const { data: roles } = useUserRoles()
@@ -148,6 +158,12 @@ export function StaffDirectoryTab({ facilityId }: StaffDirectoryTabProps) {
           const daysA = totalsMap.get(a.id)?.total_days ?? 0
           const daysB = totalsMap.get(b.id)?.total_days ?? 0
           cmp = daysA - daysB
+          break
+        }
+        case 'status': {
+          const statusA = deriveAccountStatus(a)
+          const statusB = deriveAccountStatus(b)
+          cmp = (STATUS_SORT_ORDER[statusA] ?? 9) - (STATUS_SORT_ORDER[statusB] ?? 9)
           break
         }
       }
@@ -234,7 +250,7 @@ export function StaffDirectoryTab({ facilityId }: StaffDirectoryTabProps) {
             {/* Header */}
             <div
               className="grid items-center px-4 py-2.5 border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wider"
-              style={{ gridTemplateColumns: '1fr 140px 200px 180px 100px' }}
+              style={{ gridTemplateColumns: '1fr 140px 180px 100px 100px' }}
             >
               <button className="text-left" onClick={() => toggleSort('name')}>
                 Name <SortIcon field="name" />
@@ -242,11 +258,11 @@ export function StaffDirectoryTab({ facilityId }: StaffDirectoryTabProps) {
               <button className="text-left" onClick={() => toggleSort('role')}>
                 Role <SortIcon field="role" />
               </button>
-              <button className="text-left" onClick={() => toggleSort('email')}>
-                Email <SortIcon field="email" />
-              </button>
               <button className="text-left" onClick={() => toggleSort('total_days')}>
                 Time Off (YTD) <SortIcon field="total_days" />
+              </button>
+              <button className="text-left" onClick={() => toggleSort('status')}>
+                Status <SortIcon field="status" />
               </button>
               <div className="text-left">Access</div>
             </div>
@@ -256,58 +272,56 @@ export function StaffDirectoryTab({ facilityId }: StaffDirectoryTabProps) {
               {filteredStaff.map((user) => {
                 const roleName = getRoleName(user)
                 const totals = totalsMap.get(user.id)
-                const isExpanded = expandedUserId === user.id
+                const accountStatus = deriveAccountStatus(user)
+                const statusCfg = STATUS_CONFIG[accountStatus]
 
                 return (
-                  <div key={user.id}>
-                    <div
-                      className="grid items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
-                      style={{ gridTemplateColumns: '1fr 140px 200px 180px 100px' }}
-                      onClick={() => setExpandedUserId(isExpanded ? null : user.id)}
-                    >
-                      {/* Name */}
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-medium text-slate-600 shrink-0">
-                          {user.first_name?.[0]}{user.last_name?.[0]}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-900 truncate">
-                            {user.first_name} {user.last_name}
-                          </p>
-                        </div>
+                  <div
+                    key={user.id}
+                    className="grid items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                    style={{ gridTemplateColumns: '1fr 140px 180px 100px 100px' }}
+                    onClick={() => onSelectUser(user)}
+                  >
+                    {/* Name */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-medium text-slate-600 shrink-0">
+                        {user.first_name?.[0]}{user.last_name?.[0]}
                       </div>
-
-                      {/* Role */}
-                      <div>
-                        {roleName ? (
-                          <Badge variant={getRoleBadgeVariant(roleName)} size="sm">
-                            {roleName}
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
-                      </div>
-
-                      {/* Email */}
-                      <div className="text-sm text-slate-600 truncate">
-                        {user.email ?? '—'}
-                      </div>
-
-                      {/* Time-Off Totals */}
-                      <div className="text-sm text-slate-600">
-                        <UserTimeOffSummaryDisplay totals={totals} variant="inline" />
-                      </div>
-
-                      {/* Access Level */}
-                      <div className="text-xs text-slate-500">
-                        {ACCESS_LEVEL_LABELS[user.access_level] ?? user.access_level}
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-900 truncate">
+                          {user.first_name} {user.last_name}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate">{user.email ?? ''}</p>
                       </div>
                     </div>
 
-                    {/* Expanded detail */}
-                    {isExpanded && (
-                      <StaffRowDetail user={user} totals={totals} />
-                    )}
+                    {/* Role */}
+                    <div>
+                      {roleName ? (
+                        <Badge variant={getRoleBadgeVariant(roleName)} size="sm">
+                          {roleName}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-slate-400">&mdash;</span>
+                      )}
+                    </div>
+
+                    {/* Time-Off Totals */}
+                    <div className="text-sm text-slate-600">
+                      <UserTimeOffSummaryDisplay totals={totals} variant="inline" />
+                    </div>
+
+                    {/* Account Status */}
+                    <div>
+                      <Badge variant={statusCfg.variant} size="sm">
+                        {statusCfg.label}
+                      </Badge>
+                    </div>
+
+                    {/* Access Level */}
+                    <div className="text-xs text-slate-500">
+                      {ACCESS_LEVEL_LABELS[user.access_level] ?? user.access_level}
+                    </div>
                   </div>
                 )
               })}
@@ -320,7 +334,7 @@ export function StaffDirectoryTab({ facilityId }: StaffDirectoryTabProps) {
 }
 
 // ============================================
-// Sub-components
+// Helpers
 // ============================================
 
 function getRoleName(user: UserListItem): string | null {
@@ -328,63 +342,3 @@ function getRoleName(user: UserListItem): string | null {
   if (Array.isArray(user.role)) return (user.role as { name: string }[])[0]?.name ?? null
   return user.role.name
 }
-
-/** Expanded row detail panel */
-function StaffRowDetail({
-  user,
-  totals,
-}: {
-  user: UserListItem
-  totals: UserTimeOffSummary | undefined
-}) {
-  const roleName = getRoleName(user)
-
-  return (
-    <div className="px-4 py-4 bg-slate-50 border-t border-slate-100">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-        <div>
-          <p className="text-xs text-slate-500 mb-1">Full Name</p>
-          <p className="font-medium text-slate-900">{user.first_name} {user.last_name}</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-500 mb-1">Email</p>
-          <p className="text-slate-700">{user.email ?? '—'}</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-500 mb-1">Role</p>
-          <p className="text-slate-700">{roleName ?? '—'}</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-500 mb-1">Access Level</p>
-          <p className="text-slate-700">{ACCESS_LEVEL_LABELS[user.access_level] ?? user.access_level}</p>
-        </div>
-      </div>
-
-      {/* Time-off breakdown */}
-      <div className="mt-4 pt-4 border-t border-slate-200">
-        <p className="text-xs text-slate-500 mb-2">Time Off This Year</p>
-        <UserTimeOffSummaryDisplay totals={totals} variant="detail" />
-      </div>
-
-      {/* Account info */}
-      <div className="mt-4 pt-4 border-t border-slate-200">
-        <div className="flex items-center gap-6 text-xs text-slate-500">
-          <span>
-            Joined: {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
-          </span>
-          <span>
-            Last login: {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'Never'}
-          </span>
-          <span>
-            Status: {user.is_active ? (
-              <span className="text-green-600 font-medium">Active</span>
-            ) : (
-              <span className="text-red-600 font-medium">Inactive</span>
-            )}
-          </span>
-        </div>
-      </div>
-    </div>
-  )
-}
-

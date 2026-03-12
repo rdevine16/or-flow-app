@@ -6,17 +6,20 @@
 
 | Phase | Platform | Description | Status |
 |-------|----------|-------------|--------|
-| 1 | Database | `time_off_requests` table, RLS, indexes, soft delete trigger | pending |
+| 1 | Database | `time_off_requests` table, RLS, indexes, soft delete trigger | done |
 | 2 | iOS | Staff Schedule Repository + Models (data layer) | pending |
 | 3 | iOS | Staff Home View — schedule display (room + surgeon + cases) | pending |
 | 4 | iOS | Rich case detail — milestones, team badges, status | pending |
 | 5 | iOS | Time-Off Request form + My Requests section | pending |
 | 6 | iOS | Time-Off notifications + Home tab routing | pending |
-| 7 | Web | Time-Off DAL + types + hooks | pending |
-| 8 | Web | Staff Management page — Staff Directory tab | pending |
-| 9 | Web | Staff Management page — Time-Off Calendar tab | pending |
+| 7 | Web | Time-Off DAL + types + hooks | done |
+| 8 | Web | Staff Management page — Staff Directory tab | done |
+| 9 | Web | Staff Management page — Time-Off Calendar tab | done |
 | 10 | Web | Time-Off Review Modal + per-user totals + coverage indicator | pending |
-| 11 | Both | Polish, edge cases, accessibility, final testing | pending |
+| 11 | Web | Staff Detail Drawer — tabbed slide-out (Profile / Time-Off / Actions) | pending |
+| 12 | Web | User management actions in drawer — edit, invite, deactivate + Add Staff | pending |
+| 13 | Web | Global admin features + remove /settings/users route | pending |
+| 14 | Both | Polish, edge cases, accessibility, final testing | pending |
 
 ---
 
@@ -363,7 +366,148 @@
 
 ---
 
-## Phase 11: Polish, edge cases, accessibility, final testing
+## Phase 11: Web — Staff Detail Drawer (tabbed slide-out)
+**Platform:** Web
+**Risk:** Medium (new component pattern, replaces expandable rows)
+**Dependencies:** Phase 8, Phase 10
+**Files:**
+- `components/staff-management/StaffDetailDrawer.tsx` (new)
+- `components/staff-management/DrawerProfileTab.tsx` (new)
+- `components/staff-management/DrawerTimeOffTab.tsx` (new)
+- `components/staff-management/DrawerActionsTab.tsx` (new)
+- `components/staff-management/StaffDirectoryTab.tsx` (modify — replace expandable row with drawer trigger)
+- `app/staff-management/PageClient.tsx` (modify — add drawer state)
+
+**Tasks:**
+1. Create `StaffDetailDrawer` (shadcn Sheet, slide-out from right):
+   - Header: avatar + name + role badge + account status badge
+   - Tab navigation: Profile | Time-Off | Actions
+   - Close button
+   - Width: ~480px
+2. Create `DrawerProfileTab`:
+   - Full name, email, phone
+   - Role badge, access level
+   - Account status badge (Active ✓ / Pending ● / No Account ○)
+   - Join date, last login
+   - Facility name
+3. Create `DrawerTimeOffTab`:
+   - Per-type breakdown (PTO / Sick / Personal) with badges and day counts
+   - Total days taken this year
+   - Recent requests list with status badges (pending=amber, approved=green, denied=red)
+   - Inline approve/deny buttons on pending requests (reuse `TimeOffReviewModal` or inline review)
+   - "No requests" empty state
+4. Create `DrawerActionsTab`:
+   - Placeholder action buttons (Edit Profile, Send Invite, Deactivate)
+   - Buttons disabled with "Coming in Phase 12" tooltip
+   - Layout ready for Phase 12 to wire up real actions
+5. Add account status checking to StaffDirectoryTab:
+   - Call `/api/check-user-status` and `/api/check-auth-status` on load
+   - Add "Status" column to directory table showing Active/Pending/No Account badges
+6. Replace expandable `StaffRowDetail` with drawer:
+   - Click row → opens `StaffDetailDrawer` instead of expanding inline
+   - Remove `StaffRowDetail` component and `expandedUserId` state
+   - Add `selectedUserId` state + drawer open/close
+
+**Tests:**
+- Unit: Drawer renders with correct tabs
+- Unit: Profile tab shows account status badge based on auth/invite state
+- Unit: Time-Off tab shows breakdown + recent requests
+- Integration: Click row → drawer opens with correct user data
+- Integration: Approve request in drawer → request status updates
+- Workflow: Open drawer → switch tabs → review time-off → close drawer
+
+---
+
+## Phase 12: Web — User management actions in drawer
+**Platform:** Web
+**Risk:** Medium (porting complex forms + invite flow)
+**Dependencies:** Phase 11
+**Files:**
+- `components/staff-management/DrawerActionsTab.tsx` (modify — wire up real actions)
+- `components/staff-management/StaffDirectoryTab.tsx` (modify — add toolbar buttons)
+- `components/staff-management/EditUserForm.tsx` (new — inline edit form for drawer)
+- `app/staff-management/PageClient.tsx` (modify — add InviteUserModal integration)
+
+**Tasks:**
+1. Create `EditUserForm` for the drawer Actions tab:
+   - Inline form (not a separate modal): name, email, role, access level
+   - Save button with loading state
+   - Validation: required fields, email format
+   - Cannot change own permissions
+   - Audit log on save (`userAudit.updated()`)
+2. Wire up invite/resend invite in Actions tab:
+   - "Send Invite" button (visible when user has email but no auth account)
+   - "Resend Invite" button (visible when invite is pending)
+   - Calls existing `/api/admin/invite` and `/api/resend-invite` routes
+   - Audit log (`userAudit.invited()`)
+   - Toast notification on success/failure
+3. Wire up deactivate/reactivate in Actions tab:
+   - "Deactivate" button with ConfirmDialog
+   - "Reactivate" button (shown for inactive users — switch to "View Deactivated" in directory)
+   - Cannot deactivate yourself
+   - Soft delete pattern: `is_active = false`, `deleted_at`, `deleted_by`
+   - Audit log (`userAudit.deactivated()` / `userAudit.reactivated()`)
+4. Add "Add Staff" button to StaffDirectoryTab toolbar:
+   - Opens existing `InviteUserModal` (reuse as-is)
+   - Position: right side of toolbar, next to search/filters
+   - Refetch directory after successful add
+5. Add "View Deactivated" toggle to toolbar:
+   - Toggle between active and deactivated staff
+   - Deactivated rows show with muted styling + "Reactivate" option in drawer
+
+**Tests:**
+- Unit: Edit form validation
+- Unit: Deactivate confirmation flow
+- Integration: Edit user → save → drawer reflects changes
+- Integration: Send invite → status badge changes to Pending
+- Integration: Deactivate → user moves to deactivated view
+- Workflow: Add Staff → fill form → see new user in directory → open drawer → edit role
+
+---
+
+## Phase 13: Web — Global admin features + remove /settings/users
+**Platform:** Web
+**Risk:** Medium (route removal, navigation changes)
+**Dependencies:** Phase 12
+**Files:**
+- `app/staff-management/PageClient.tsx` (modify — global admin facility selector)
+- `components/staff-management/StaffDirectoryTab.tsx` (modify — facility column for global admin)
+- `components/layouts/DashboardLayout.tsx` or sidebar config (modify — remove Settings > Users link)
+- `app/settings/users/` (delete — entire directory)
+- `components/InviteUserModal.tsx` (modify if needed — ensure facility selector works for global admin)
+
+**Tasks:**
+1. Add global admin facility selector to Staff Management:
+   - Facility dropdown at page level (above tabs)
+   - Default to current effective facility
+   - Selecting a facility re-scopes directory + calendar
+   - Uses existing `facilities` lookup
+2. Add facility column to directory for global admins:
+   - Shows facility name when viewing across facilities (or "All Facilities" mode)
+   - Allow moving user between facilities (update `facility_id`)
+   - Audit log on facility change
+3. Delete `/settings/users` route:
+   - Remove `app/settings/users/page.tsx`
+   - Remove `app/settings/users/PageClient.tsx`
+   - Keep API routes (`/api/admin/invite`, `/api/resend-invite`, `/api/check-user-status`, `/api/check-auth-status`) — still needed
+4. Update sidebar navigation:
+   - Remove "Users" link from Settings section
+   - Ensure "Staff Management" link is prominent in admin section
+   - Update any breadcrumbs or internal links pointing to `/settings/users`
+5. Verify no orphaned references:
+   - Search codebase for `/settings/users` links
+   - Update any redirects or help text
+
+**Tests:**
+- Unit: Facility selector renders for global admin, hidden for facility admin
+- Integration: Switch facility → directory + calendar re-scope
+- Integration: Move user to different facility → user disappears from current view
+- Workflow: Global admin → select facility → manage staff → switch to another facility
+- Regression: Verify no broken links to removed route
+
+---
+
+## Phase 14: Polish, edge cases, accessibility, final testing
 **Platform:** Both
 **Risk:** Low
 **Dependencies:** All previous phases
@@ -379,23 +523,33 @@
    - Landscape layout (iPad)
    - Empty state animations
 2. **Web Polish:**
-   - Responsive layout for Staff Management page
+   - Responsive layout for Staff Management page (all tabs + drawer)
    - Keyboard navigation in calendar
-   - ARIA labels on calendar cells and review modal
+   - ARIA labels on calendar cells, review modal, and drawer
    - Loading states and error boundaries
-   - Toast notifications on approve/deny actions
+   - Toast notifications on all actions (approve/deny, edit, invite, deactivate)
+   - Drawer keyboard accessibility (Escape to close, tab trapping)
 3. **Edge Cases:**
    - Staff assigned to multiple rooms on same day
    - Time-off request spanning weekends
    - Partial day on first/last day of multi-day request (should be rejected by constraint)
    - Admin reviewing their own time-off request
    - Concurrent approve/deny (optimistic locking or last-write-wins)
-4. **Final Testing:**
+   - Deactivating a user with pending time-off requests (auto-deny or warn?)
+   - Inviting a user whose email already exists in another facility
+4. **Merged Page Regression:**
+   - All user management actions that existed in /settings/users work in Staff Management
+   - Audit logging fires on every action
+   - Account status badges update correctly after invite/accept
+   - Global admin can manage all facilities
+5. **Final Testing:**
    - Full 3-stage test gate on both platforms
    - Cross-platform workflow: admin creates schedule on web → staff sees on iOS
    - Time-off flow: staff requests on iOS → admin reviews on web → staff notified on iOS
+   - User management flow: add staff → invite → staff accepts → appears as Active
 
 **Tests:**
 - Full regression suite
 - Accessibility audit
-- Performance: home page loads < 2s with 10 cases
+- Performance: Staff Management page loads < 2s with 50 staff
+- Performance: Calendar renders smoothly with 30+ requests per month
