@@ -31,6 +31,7 @@ const mockStaff = [
     first_name: 'Jane',
     last_name: 'Wilson',
     role_id: 'role-rn',
+    facility_id: 'fac-1',
     is_active: true,
     access_level: 'user',
     last_login_at: '2026-03-10T10:00:00Z',
@@ -43,6 +44,7 @@ const mockStaff = [
     first_name: 'Mike',
     last_name: 'Brown',
     role_id: 'role-st',
+    facility_id: 'fac-1',
     is_active: true,
     access_level: 'user',
     last_login_at: null,
@@ -55,11 +57,30 @@ const mockStaff = [
     first_name: 'Sarah',
     last_name: 'Adams',
     role_id: 'role-admin',
+    facility_id: 'fac-1',
     is_active: true,
     access_level: 'facility_admin',
     last_login_at: '2026-03-11T08:00:00Z',
     created_at: '2024-10-01T00:00:00Z',
     role: { name: 'facility admin' },
+  },
+]
+
+const mockStaffAllFacilities = [
+  {
+    ...mockStaff[0],
+    facility_id: 'fac-1',
+    facility: { name: 'General Hospital' },
+  },
+  {
+    ...mockStaff[1],
+    facility_id: 'fac-2',
+    facility: { name: 'City Medical Center' },
+  },
+  {
+    ...mockStaff[2],
+    facility_id: 'fac-1',
+    facility: { name: 'General Hospital' },
   },
 ]
 
@@ -464,7 +485,7 @@ describe('StaffDirectoryTab', () => {
       expect(vi.mocked(useSupabaseQueries)).toHaveBeenCalledWith(
         expect.any(Object),
         expect.objectContaining({
-          deps: ['fac-test-123', expect.any(Number), false],
+          deps: ['fac-test-123', expect.any(Number), false, false],
           enabled: true,
         })
       )
@@ -480,6 +501,97 @@ describe('StaffDirectoryTab', () => {
           enabled: false,
         })
       )
+    })
+  })
+
+  // ------------------------------------------
+  // Phase 13: All Facilities mode (global admin)
+  // ------------------------------------------
+  describe('all facilities mode', () => {
+    it('shows facility column instead of time-off column', () => {
+      setupMocks({ staff: mockStaffAllFacilities })
+      render(
+        <StaffDirectoryTab
+          {...defaultProps}
+          facilityId={null}
+          isAllFacilitiesMode
+        />
+      )
+
+      // Facility header should appear
+      expect(screen.getByRole('button', { name: /Facility/ })).toBeDefined()
+      // Time-off header should not appear
+      expect(screen.queryByRole('button', { name: /Time Off/ })).toBeNull()
+    })
+
+    it('renders facility names for each user', () => {
+      setupMocks({ staff: mockStaffAllFacilities })
+      render(
+        <StaffDirectoryTab
+          {...defaultProps}
+          facilityId={null}
+          isAllFacilitiesMode
+        />
+      )
+
+      expect(screen.getAllByText('General Hospital').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('City Medical Center')).toBeDefined()
+    })
+
+    it('enables queries when facilityId is null but isAllFacilitiesMode is true', () => {
+      setupMocks({ staff: mockStaffAllFacilities })
+      render(
+        <StaffDirectoryTab
+          {...defaultProps}
+          facilityId={null}
+          isAllFacilitiesMode
+        />
+      )
+
+      expect(vi.mocked(useSupabaseQueries)).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({
+          enabled: true,
+        })
+      )
+    })
+
+    it('sorts by facility name', async () => {
+      const user = userEvent.setup()
+      setupMocks({ staff: mockStaffAllFacilities })
+      render(
+        <StaffDirectoryTab
+          {...defaultProps}
+          facilityId={null}
+          isAllFacilitiesMode
+        />
+      )
+
+      const facilityHeader = screen.getByRole('button', { name: /Facility/ })
+      await user.click(facilityHeader)
+
+      // Ascending by facility: City Medical Center first, then General Hospital
+      const names = screen.getAllByText(/Adams|Brown|Wilson/).map((el) => el.textContent)
+      expect(names[0]).toContain('Brown') // City Medical Center
+    })
+
+    it('search works in all-facilities mode', async () => {
+      const user = userEvent.setup()
+      setupMocks({ staff: mockStaffAllFacilities })
+      render(
+        <StaffDirectoryTab
+          {...defaultProps}
+          facilityId={null}
+          isAllFacilitiesMode
+        />
+      )
+
+      const searchInput = screen.getByPlaceholderText('Search by name or email...')
+      await user.type(searchInput, 'Mike')
+
+      expect(screen.getByText('Mike Brown')).toBeDefined()
+      expect(screen.queryByText('Jane Wilson')).toBeNull()
+      expect(screen.getByText('City Medical Center')).toBeDefined()
     })
   })
 })

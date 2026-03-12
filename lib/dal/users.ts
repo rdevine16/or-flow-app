@@ -43,11 +43,13 @@ export interface UserListItem {
   first_name: string
   last_name: string
   role_id: string | null
+  facility_id: string | null
   is_active: boolean
   access_level: string
   last_login_at: string | null
   created_at: string
   role?: { name: string } | null
+  facility?: { name: string } | null
 }
 
 // ============================================
@@ -66,9 +68,16 @@ const SURGEON_LIST_SELECT = `
 ` as const
 
 const USER_LIST_SELECT = `
-  id, email, first_name, last_name, role_id, is_active,
+  id, email, first_name, last_name, role_id, facility_id, is_active,
   access_level, last_login_at, created_at,
   role:user_roles(name)
+` as const
+
+const USER_LIST_WITH_FACILITY_SELECT = `
+  id, email, first_name, last_name, role_id, facility_id, is_active,
+  access_level, last_login_at, created_at,
+  role:user_roles(name),
+  facility:facilities(name)
 ` as const
 
 // ============================================
@@ -165,6 +174,26 @@ export const usersDAL = {
       .from('users')
       .select(USER_LIST_SELECT)
       .eq('facility_id', facilityId)
+      .order('last_name')
+
+    if (!includeInactive) {
+      query = query.eq('is_active', true)
+    }
+
+    const { data, error } = await query
+    return { data: (data as unknown as UserListItem[]) || [], error }
+  },
+
+  /**
+   * List all users across all facilities (global admin view)
+   */
+  async listAllFacilities(
+    supabase: AnySupabaseClient,
+    includeInactive: boolean = false,
+  ): Promise<DALListResult<UserListItem>> {
+    let query = supabase
+      .from('users')
+      .select(USER_LIST_WITH_FACILITY_SELECT)
       .order('last_name')
 
     if (!includeInactive) {

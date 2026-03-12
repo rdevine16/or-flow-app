@@ -83,9 +83,8 @@ export const BREADCRUMB_MAP: Record<string, BreadcrumbItem[]> = {
     { label: 'Settings', href: '/settings' },
     { label: 'Facility', href: '/settings/facility' },
   ],
-  'settings-users': [
-    { label: 'Settings', href: '/settings' },
-    { label: 'Users', href: '/settings/users' },
+  'staff-management': [
+    { label: 'Staff Management', href: '/staff-management' },
   ],
   'settings-financials': [
     { label: 'Settings', href: '/settings' },
@@ -233,6 +232,7 @@ export const ROUTE_BREADCRUMBS: Record<string, RouteSegment[]> = {
   // Flat pages
   '/rooms': [{ label: 'Rooms', href: null }],
   '/block-schedule': [{ label: 'Block Schedule', href: null }],
+  '/staff-management': [{ label: 'Staff Management', href: null }],
   '/checkin': [{ label: 'Check-In', href: null }],
   '/spd': [{ label: 'SPD', href: null }],
   '/profile': [{ label: 'Profile', href: null }],

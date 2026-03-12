@@ -311,8 +311,8 @@ export function RoomScheduleSidebar({
               ) : (
                 <>
                   <p>No surgeons in facility</p>
-                  <Link href="/settings/users" className="text-blue-500 hover:text-blue-700 underline underline-offset-2">
-                    Add surgeons in Settings
+                  <Link href="/staff-management" className="text-blue-500 hover:text-blue-700 underline underline-offset-2">
+                    Add surgeons in Staff Management
                   </Link>
                 </>
               )}
@@ -350,8 +350,8 @@ export function RoomScheduleSidebar({
               ) : (
                 <>
                   <p>No staff in facility</p>
-                  <Link href="/settings/users" className="text-blue-500 hover:text-blue-700 underline underline-offset-2">
-                    Add staff in Settings
+                  <Link href="/staff-management" className="text-blue-500 hover:text-blue-700 underline underline-offset-2">
+                    Add staff in Staff Management
                   </Link>
                 </>
               )}

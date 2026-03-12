@@ -21,14 +21,15 @@ import { Search, ChevronDown, ChevronUp, Users, Plus, Eye, EyeOff } from 'lucide
 // ============================================
 
 interface StaffDirectoryTabProps {
-  facilityId: string
+  facilityId: string | null
   onSelectUser: (user: UserListItem) => void
   showDeactivated: boolean
   onToggleDeactivated: () => void
   onAddStaff: () => void
+  isAllFacilitiesMode?: boolean
 }
 
-type SortField = 'name' | 'role' | 'email' | 'total_days' | 'status'
+type SortField = 'name' | 'role' | 'email' | 'total_days' | 'status' | 'facility'
 type SortDirection = 'asc' | 'desc'
 
 // ============================================
@@ -81,6 +82,7 @@ export function StaffDirectoryTab({
   showDeactivated,
   onToggleDeactivated,
   onAddStaff,
+  isAllFacilitiesMode = false,
 }: StaffDirectoryTabProps) {
   const currentYear = new Date().getFullYear()
 
@@ -102,17 +104,25 @@ export function StaffDirectoryTab({
   }>(
     {
       staff: async (supabase) => {
+        if (isAllFacilitiesMode) {
+          const result = await usersDAL.listAllFacilities(supabase, showDeactivated)
+          if (result.error) throw result.error
+          return result.data
+        }
+        if (!facilityId) return []
         const result = await usersDAL.listByFacility(supabase, facilityId, showDeactivated)
         if (result.error) throw result.error
         return result.data
       },
       totals: async (supabase) => {
+        // Time-off totals require a specific facility
+        if (!facilityId) return []
         const result = await timeOffDAL.fetchUserTimeOffTotals(supabase, facilityId, currentYear)
         if (result.error) throw result.error
         return result.data
       },
     },
-    { deps: [facilityId, currentYear, showDeactivated], enabled: !!facilityId }
+    { deps: [facilityId, currentYear, showDeactivated, isAllFacilitiesMode], enabled: !!facilityId || isAllFacilitiesMode }
   )
 
   // Build totals lookup map
@@ -180,6 +190,12 @@ export function StaffDirectoryTab({
           const statusA = deriveAccountStatus(a)
           const statusB = deriveAccountStatus(b)
           cmp = (STATUS_SORT_ORDER[statusA] ?? 9) - (STATUS_SORT_ORDER[statusB] ?? 9)
+          break
+        }
+        case 'facility': {
+          const facA = getFacilityName(a) ?? ''
+          const facB = getFacilityName(b) ?? ''
+          cmp = facA.localeCompare(facB)
           break
         }
       }
@@ -302,7 +318,11 @@ export function StaffDirectoryTab({
             {/* Header */}
             <div
               className="grid items-center px-4 py-2.5 border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wider"
-              style={{ gridTemplateColumns: '1fr 140px 180px 100px 100px' }}
+              style={{
+                gridTemplateColumns: isAllFacilitiesMode
+                  ? '1fr 140px 140px 100px 100px'
+                  : '1fr 140px 180px 100px 100px',
+              }}
             >
               <button className="text-left" onClick={() => toggleSort('name')}>
                 Name <SortIcon field="name" />
@@ -310,9 +330,15 @@ export function StaffDirectoryTab({
               <button className="text-left" onClick={() => toggleSort('role')}>
                 Role <SortIcon field="role" />
               </button>
-              <button className="text-left" onClick={() => toggleSort('total_days')}>
-                Time Off (YTD) <SortIcon field="total_days" />
-              </button>
+              {isAllFacilitiesMode ? (
+                <button className="text-left" onClick={() => toggleSort('facility')}>
+                  Facility <SortIcon field="facility" />
+                </button>
+              ) : (
+                <button className="text-left" onClick={() => toggleSort('total_days')}>
+                  Time Off (YTD) <SortIcon field="total_days" />
+                </button>
+              )}
               <button className="text-left" onClick={() => toggleSort('status')}>
                 Status <SortIcon field="status" />
               </button>
@@ -331,7 +357,11 @@ export function StaffDirectoryTab({
                   <div
                     key={user.id}
                     className={`grid items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors ${!user.is_active ? 'opacity-60' : ''}`}
-                    style={{ gridTemplateColumns: '1fr 140px 180px 100px 100px' }}
+                    style={{
+                      gridTemplateColumns: isAllFacilitiesMode
+                        ? '1fr 140px 140px 100px 100px'
+                        : '1fr 140px 180px 100px 100px',
+                    }}
                     onClick={() => onSelectUser(user)}
                   >
                     {/* Name */}
@@ -358,10 +388,16 @@ export function StaffDirectoryTab({
                       )}
                     </div>
 
-                    {/* Time-Off Totals */}
-                    <div className="text-sm text-slate-600">
-                      <UserTimeOffSummaryDisplay totals={totals} variant="inline" />
-                    </div>
+                    {/* Facility (all-facilities mode) or Time-Off Totals */}
+                    {isAllFacilitiesMode ? (
+                      <div className="text-sm text-slate-600 truncate">
+                        {getFacilityName(user) ?? <span className="text-slate-400">&mdash;</span>}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-600">
+                        <UserTimeOffSummaryDisplay totals={totals} variant="inline" />
+                      </div>
+                    )}
 
                     {/* Account Status */}
                     <div>
@@ -393,4 +429,10 @@ function getRoleName(user: UserListItem): string | null {
   if (!user.role) return null
   if (Array.isArray(user.role)) return (user.role as { name: string }[])[0]?.name ?? null
   return user.role.name
+}
+
+function getFacilityName(user: UserListItem): string | null {
+  if (!user.facility) return null
+  if (Array.isArray(user.facility)) return (user.facility as { name: string }[])[0]?.name ?? null
+  return user.facility.name
 }

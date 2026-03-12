@@ -23,7 +23,6 @@ import {
   Puzzle,
   Tag,
   User,
-  Users,
   Zap,
 } from 'lucide-react'
 import type { TierSlug } from '@/lib/tier-config'
@@ -124,13 +123,6 @@ export const settingsCategories: SettingsCategory[] = [
     label: 'Organization',
     tabLabel: 'Org',
     items: [
-      {
-        id: 'users',
-        label: 'Users & Roles',
-        href: '/settings/users',
-        icon: Users,
-        description: 'Staff accounts and permissions',
-      },
       {
         id: 'permissions',
         label: 'Roles & Permissions',

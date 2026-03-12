@@ -165,7 +165,7 @@ describe('resolveBreadcrumbs', () => {
       ...facilityOptions,
       getSettingsLabel: (pathname: string) => {
         if (pathname === '/settings/financials/cost-categories') return 'Cost Categories'
-        if (pathname === '/settings/users') return 'Users & Roles'
+        if (pathname === '/settings/permissions') return 'Roles & Permissions'
         return undefined
       },
     }
@@ -179,12 +179,12 @@ describe('resolveBreadcrumbs', () => {
       ])
     })
 
-    it('resolves /settings/users via getSettingsLabel', () => {
-      const result = resolveBreadcrumbs('/settings/users', emptyLabels, optionsWithSettings)
+    it('resolves /settings/permissions via getSettingsLabel', () => {
+      const result = resolveBreadcrumbs('/settings/permissions', emptyLabels, optionsWithSettings)
       expect(result).toEqual([
         { label: 'General Hospital', href: '/' },
         { label: 'Settings', href: '/settings' },
-        { label: 'Users & Roles', href: null },
+        { label: 'Roles & Permissions', href: null },
       ])
     })
   })
@@ -201,7 +201,7 @@ describe('resolveBreadcrumbs', () => {
         ...facilityOptions,
         getSettingsLabel: (p: string) => getNavItemForPath(p)?.label,
       }
-      const result = resolveBreadcrumbs('/settings/users', emptyLabels, opts)
+      const result = resolveBreadcrumbs('/settings/permissions', emptyLabels, opts)
       // Should resolve to something — the exact label depends on settings-nav-config
       expect(result.length).toBeGreaterThanOrEqual(2)
       expect(result[result.length - 1].href).toBeNull()

@@ -10,6 +10,7 @@ import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useUserRoles } from '@/hooks/useLookups'
 import { useTimeOffRequests } from '@/hooks/useTimeOffRequests'
 import { usersDAL, type UserListItem } from '@/lib/dal/users'
+import { facilitiesDAL, type Facility } from '@/lib/dal/facilities'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
@@ -19,7 +20,7 @@ import { TimeOffReviewModal } from '@/components/staff-management/TimeOffReviewM
 import { StaffDetailDrawer } from '@/components/staff-management/StaffDetailDrawer'
 import InviteUserModal from '@/components/InviteUserModal'
 import type { TimeOffRequest } from '@/types/time-off'
-import { Users, CalendarDays } from 'lucide-react'
+import { Users, CalendarDays, Building2 } from 'lucide-react'
 
 // ============================================
 // Tab config
@@ -48,6 +49,8 @@ export default function StaffManagementPageClient() {
     userData,
     effectiveFacilityId,
     isAdmin,
+    isGlobalAdmin,
+    isImpersonating,
   } = useUser()
 
   const [activeTab, setActiveTab] = useState<StaffManagementTab>('directory')
@@ -56,11 +59,33 @@ export default function StaffManagementPageClient() {
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [showDeactivated, setShowDeactivated] = useState(false)
 
+  // Global admin facility selector
+  const showFacilitySelector = isGlobalAdmin && !isImpersonating
+  const [selectedFacilityOverride, setSelectedFacilityOverride] = useState<string>('')
+  // '' = use default (effectiveFacilityId), 'all' = all facilities, uuid = specific facility
+
+  // Fetch facilities for global admin selector
+  const { data: allFacilities } = useSupabaseQuery<Facility[]>(
+    async (supabase) => {
+      const result = await facilitiesDAL.listAll(supabase)
+      if (result.error) throw result.error
+      return result.data
+    },
+    { deps: [], enabled: showFacilitySelector, initialData: [] },
+  )
+
+  // Compute the active facility ID (null = all facilities mode)
+  const activeFacilityId: string | null = !showFacilitySelector
+    ? effectiveFacilityId
+    : selectedFacilityOverride === 'all'
+      ? null
+      : selectedFacilityOverride || effectiveFacilityId
+
   // Roles for InviteUserModal
   const { data: roles } = useUserRoles()
 
-  // Fetch all requests + totals for the review modal
-  const facilityId = effectiveFacilityId
+  // Fetch all requests + totals for the review modal (requires specific facility)
+  const facilityId = activeFacilityId
   const {
     requests: allRequests,
     totals,
@@ -71,12 +96,18 @@ export default function StaffManagementPageClient() {
   // Fetch staff list for coverage indicator (and directory)
   const { data: staffList, refetch: refetchStaff } = useSupabaseQuery<UserListItem[]>(
     async (supabase) => {
-      if (!facilityId) return []
-      const result = await usersDAL.listByFacility(supabase, facilityId)
+      if (activeFacilityId === null) {
+        // All facilities mode (global admin)
+        const result = await usersDAL.listAllFacilities(supabase)
+        if (result.error) throw result.error
+        return result.data
+      }
+      if (!activeFacilityId) return []
+      const result = await usersDAL.listByFacility(supabase, activeFacilityId)
       if (result.error) throw result.error
       return result.data
     },
-    { deps: [facilityId], enabled: !!facilityId, initialData: [] },
+    { deps: [activeFacilityId], enabled: activeFacilityId !== undefined, initialData: [] },
   )
 
   // Handle user updates (edit, deactivate, invite) — refresh directory + close drawer
@@ -123,17 +154,51 @@ export default function StaffManagementPageClient() {
 
   if (userLoading) return <PageLoader />
   if (!isAdmin) return <AccessDenied />
-  if (!facilityId) return <AccessDenied />
+  if (!showFacilitySelector && !facilityId) return <AccessDenied />
+
+  const isAllFacilitiesMode = activeFacilityId === null
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         {/* Page header */}
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Staff Management</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Manage your team, view staff directory, and review time-off requests.
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Staff Management</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Manage your team, view staff directory, and review time-off requests.
+            </p>
+          </div>
+
+          {/* Global admin facility selector */}
+          {showFacilitySelector && (
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-slate-400" />
+              <select
+                value={selectedFacilityOverride || 'default'}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setSelectedFacilityOverride(val === 'default' ? '' : val)
+                  setSelectedUser(null)
+                  setSelectedRequest(null)
+                }}
+                className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white
+                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[200px]"
+              >
+                <option value="default">
+                  {userData.facilityName ?? 'Current Facility'}
+                </option>
+                <option value="all">All Facilities</option>
+                {(allFacilities ?? [])
+                  .filter((f) => f.id !== effectiveFacilityId)
+                  .map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Tab navigation */}
@@ -165,19 +230,30 @@ export default function StaffManagementPageClient() {
         {/* Tab content */}
         {activeTab === 'directory' && (
           <StaffDirectoryTab
-            facilityId={facilityId}
+            facilityId={activeFacilityId}
             onSelectUser={handleSelectUser}
             showDeactivated={showDeactivated}
             onToggleDeactivated={() => setShowDeactivated((v) => !v)}
             onAddStaff={() => setShowInviteModal(true)}
+            isAllFacilitiesMode={isAllFacilitiesMode}
           />
         )}
 
-        {activeTab === 'time-off-calendar' && (
+        {activeTab === 'time-off-calendar' && !isAllFacilitiesMode && activeFacilityId && (
           <TimeOffCalendarTab
-            facilityId={facilityId}
+            facilityId={activeFacilityId}
             onRequestClick={handleRequestClick}
           />
+        )}
+
+        {activeTab === 'time-off-calendar' && isAllFacilitiesMode && (
+          <div className="bg-white rounded-xl border border-slate-200 px-6 py-12 text-center">
+            <CalendarDays className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <p className="text-slate-500 font-medium">Select a specific facility</p>
+            <p className="text-sm text-slate-400 mt-1">
+              The time-off calendar requires a single facility. Use the facility selector above to choose one.
+            </p>
+          </div>
         )}
       </div>
 
@@ -213,7 +289,7 @@ export default function StaffManagementPageClient() {
           setShowInviteModal(false)
           refetchStaff()
         }}
-        facilityId={facilityId}
+        facilityId={activeFacilityId ?? effectiveFacilityId}
         roles={roles ?? []}
       />
     </DashboardLayout>

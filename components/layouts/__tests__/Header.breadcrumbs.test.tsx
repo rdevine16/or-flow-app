@@ -426,7 +426,7 @@ describe('Header breadcrumb: settings routes via getNavItemForPath', () => {
 
   it('resolves unknown /settings/sub-page via getNavItemForPath fallback or prefix fallback', () => {
     // For any /settings/* path, at minimum the "Settings" breadcrumb should appear
-    renderHeader(baseProps({ pathname: '/settings/users' }))
+    renderHeader(baseProps({ pathname: '/settings/permissions' }))
     const texts = getBreadcrumbTexts()
     expect(texts).toContain('Settings')
     // Last segment should not be a link
