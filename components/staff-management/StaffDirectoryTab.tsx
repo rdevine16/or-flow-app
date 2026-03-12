@@ -9,6 +9,7 @@ import { usersDAL, type UserListItem } from '@/lib/dal/users'
 import { timeOffDAL } from '@/lib/dal/time-off'
 import type { UserTimeOffSummary } from '@/types/time-off'
 import Badge from '@/components/ui/Badge'
+import { UserTimeOffSummaryDisplay } from './UserTimeOffSummary'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Search, ChevronDown, ChevronUp, Users } from 'lucide-react'
@@ -294,11 +295,7 @@ export function StaffDirectoryTab({ facilityId }: StaffDirectoryTabProps) {
 
                       {/* Time-Off Totals */}
                       <div className="text-sm text-slate-600">
-                        {totals ? (
-                          <TimeOffInline totals={totals} />
-                        ) : (
-                          <span className="text-slate-400">0d</span>
-                        )}
+                        <UserTimeOffSummaryDisplay totals={totals} variant="inline" />
                       </div>
 
                       {/* Access Level */}
@@ -330,18 +327,6 @@ function getRoleName(user: UserListItem): string | null {
   if (!user.role) return null
   if (Array.isArray(user.role)) return (user.role as { name: string }[])[0]?.name ?? null
   return user.role.name
-}
-
-/** Inline time-off totals: "PTO: 5d | Sick: 2d" */
-function TimeOffInline({ totals }: { totals: UserTimeOffSummary }) {
-  const parts: string[] = []
-  if (totals.pto_days > 0) parts.push(`PTO: ${formatDays(totals.pto_days)}`)
-  if (totals.sick_days > 0) parts.push(`Sick: ${formatDays(totals.sick_days)}`)
-  if (totals.personal_days > 0) parts.push(`Personal: ${formatDays(totals.personal_days)}`)
-
-  if (parts.length === 0) return <span className="text-slate-400">0d</span>
-
-  return <span>{parts.join(' | ')}</span>
 }
 
 /** Expanded row detail panel */
@@ -378,14 +363,7 @@ function StaffRowDetail({
       {/* Time-off breakdown */}
       <div className="mt-4 pt-4 border-t border-slate-200">
         <p className="text-xs text-slate-500 mb-2">Time Off This Year</p>
-        <div className="flex items-center gap-4">
-          <TimeOffBadge label="PTO" days={totals?.pto_days ?? 0} variant="info" />
-          <TimeOffBadge label="Sick" days={totals?.sick_days ?? 0} variant="warning" />
-          <TimeOffBadge label="Personal" days={totals?.personal_days ?? 0} variant="purple" />
-          <div className="ml-auto text-sm font-medium text-slate-700">
-            Total: {formatDays(totals?.total_days ?? 0)}
-          </div>
-        </div>
+        <UserTimeOffSummaryDisplay totals={totals} variant="detail" />
       </div>
 
       {/* Account info */}
@@ -410,25 +388,3 @@ function StaffRowDetail({
   )
 }
 
-function TimeOffBadge({
-  label,
-  days,
-  variant,
-}: {
-  label: string
-  days: number
-  variant: 'info' | 'warning' | 'purple'
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <Badge variant={variant} size="sm">{label}</Badge>
-      <span className="text-sm text-slate-700">{formatDays(days)}</span>
-    </div>
-  )
-}
-
-function formatDays(days: number): string {
-  if (days === 0) return '0d'
-  if (Number.isInteger(days)) return `${days}d`
-  return `${days.toFixed(1)}d`
-}

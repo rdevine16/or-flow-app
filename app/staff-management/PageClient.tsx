@@ -1,14 +1,19 @@
 // app/staff-management/PageClient.tsx
 // Staff Management page — admin-only. Contains Staff Directory and Time-Off Calendar tabs.
+// Review modal is owned at this level so it can be triggered from either tab.
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useUser } from '@/lib/UserContext'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
+import { useTimeOffRequests } from '@/hooks/useTimeOffRequests'
+import { usersDAL, type UserListItem } from '@/lib/dal/users'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
 import { StaffDirectoryTab } from '@/components/staff-management/StaffDirectoryTab'
 import { TimeOffCalendarTab } from '@/components/staff-management/TimeOffCalendarTab'
+import { TimeOffReviewModal } from '@/components/staff-management/TimeOffReviewModal'
 import type { TimeOffRequest } from '@/types/time-off'
 import { Users, CalendarDays } from 'lucide-react'
 
@@ -36,18 +41,61 @@ const TABS: TabConfig[] = [
 export default function StaffManagementPageClient() {
   const {
     loading: userLoading,
+    userData,
     effectiveFacilityId,
     isAdmin,
   } = useUser()
 
   const [activeTab, setActiveTab] = useState<StaffManagementTab>('directory')
-  // Phase 10 will read selectedRequest to render the TimeOffReviewModal
-  const [, setSelectedRequest] = useState<TimeOffRequest | null>(null)
+  const [selectedRequest, setSelectedRequest] = useState<TimeOffRequest | null>(null)
+
+  // Fetch all requests + totals for the review modal
+  const facilityId = effectiveFacilityId
+  const {
+    requests: allRequests,
+    totals,
+    reviewRequest,
+    refetch: refetchRequests,
+  } = useTimeOffRequests({ facilityId })
+
+  // Fetch staff list for coverage indicator
+  const { data: staffList } = useSupabaseQuery<UserListItem[]>(
+    async (supabase) => {
+      if (!facilityId) return []
+      const result = await usersDAL.listByFacility(supabase, facilityId)
+      if (result.error) throw result.error
+      return result.data
+    },
+    { deps: [facilityId], enabled: !!facilityId, initialData: [] },
+  )
+
+  // Approved requests for coverage calculation
+  const approvedRequests = useMemo(
+    () => allRequests.filter((r) => r.status === 'approved'),
+    [allRequests],
+  )
+
+  const handleRequestClick = useCallback((request: TimeOffRequest) => {
+    setSelectedRequest(request)
+  }, [])
+
+  const handleReviewClose = useCallback(() => {
+    setSelectedRequest(null)
+  }, [])
+
+  const handleReview = useCallback(
+    async (requestId: string, review: Parameters<typeof reviewRequest>[1]) => {
+      const result = await reviewRequest(requestId, review)
+      if (result.success) {
+        await refetchRequests()
+      }
+      return result
+    },
+    [reviewRequest, refetchRequests],
+  )
 
   if (userLoading) return <PageLoader />
   if (!isAdmin) return <AccessDenied />
-
-  const facilityId = effectiveFacilityId
   if (!facilityId) return <AccessDenied />
 
   return (
@@ -95,10 +143,22 @@ export default function StaffManagementPageClient() {
         {activeTab === 'time-off-calendar' && (
           <TimeOffCalendarTab
             facilityId={facilityId}
-            onRequestClick={setSelectedRequest}
+            onRequestClick={handleRequestClick}
           />
         )}
       </div>
+
+      {/* Review modal — shared across tabs */}
+      <TimeOffReviewModal
+        request={selectedRequest}
+        open={selectedRequest !== null}
+        onClose={handleReviewClose}
+        currentUserId={userData.userId ?? ''}
+        totals={totals}
+        staffList={staffList ?? []}
+        approvedRequests={approvedRequests}
+        onReview={handleReview}
+      />
     </DashboardLayout>
   )
 }
