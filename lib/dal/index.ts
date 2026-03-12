@@ -37,6 +37,7 @@ export { voiceCommandsDAL } from './voice-commands'
 export type { VoiceCommandAlias, VoiceAliasInsert } from './voice-commands'
 export { roomScheduleDAL } from './room-schedule'
 export type { RoomDatePreFill } from './room-schedule'
+export { timeOffDAL } from './time-off'
 
 // ============================================
 // SHARED TYPES
