@@ -366,35 +366,43 @@ export function TimeOffCalendarTab({ facilityId, onRequestClick }: TimeOffCalend
           </button>
         </div>
 
-        {/* Weekday headers */}
-        <div className="grid grid-cols-7 border-b border-slate-200">
-          {WEEKDAYS.map((day) => (
-            <div
-              key={day}
-              className="px-2 py-2 text-xs font-medium text-slate-500 text-center uppercase tracking-wider bg-slate-50"
-            >
-              {day}
-            </div>
-          ))}
-        </div>
+        {/* Calendar grid with horizontal scroll for narrow screens */}
+        <div className="overflow-x-auto">
+          {/* Weekday headers */}
+          <div className="grid grid-cols-7 border-b border-slate-200 min-w-[560px]" role="row">
+            {WEEKDAYS.map((day) => (
+              <div
+                key={day}
+                className="px-2 py-2 text-xs font-medium text-slate-500 text-center uppercase tracking-wider bg-slate-50"
+                role="columnheader"
+              >
+                {day}
+              </div>
+            ))}
+          </div>
 
-        {/* Calendar grid */}
-        <div className="grid grid-cols-7 border-l border-t border-slate-200">
-          {calendarDays.map((day) => {
-            const dateStr = formatDateStr(day)
-            return (
-              <CalendarDayCell
-                key={dateStr}
-                date={day}
-                isCurrentMonth={day.getMonth() === currentMonth.month}
-                isToday={isSameDay(day, today)}
-                requests={requestsByDate.get(dateStr) ?? []}
-                approvedOffCount={coverageMap.get(dateStr) ?? 0}
-                totalStaff={totalActiveStaff}
-                onRequestClick={onRequestClick}
-              />
-            )
-          })}
+          {/* Calendar grid */}
+          <div
+            className="grid grid-cols-7 border-l border-t border-slate-200 min-w-[560px]"
+            role="grid"
+            aria-label={`Time-off calendar for ${MONTH_NAMES[currentMonth.month]} ${currentMonth.year}`}
+          >
+            {calendarDays.map((day) => {
+              const dateStr = formatDateStr(day)
+              return (
+                <CalendarDayCell
+                  key={dateStr}
+                  date={day}
+                  isCurrentMonth={day.getMonth() === currentMonth.month}
+                  isToday={isSameDay(day, today)}
+                  requests={requestsByDate.get(dateStr) ?? []}
+                  approvedOffCount={coverageMap.get(dateStr) ?? 0}
+                  totalStaff={totalActiveStaff}
+                  onRequestClick={onRequestClick}
+                />
+              )
+            })}
+          </div>
         </div>
       </div>
 

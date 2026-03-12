@@ -15,7 +15,8 @@ import type {
 } from '@/types/time-off'
 import { REQUEST_TYPE_LABELS, calculateBusinessDays } from '@/types/time-off'
 import type { UserListItem } from '@/lib/dal/users'
-import { CalendarDays, User } from 'lucide-react'
+import { CalendarDays, User, AlertCircle } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { logger } from '@/lib/logger'
 
 const log = logger('staff-management:review-modal')
@@ -95,12 +96,15 @@ export function TimeOffReviewModal({
   approvedRequests,
   onReview,
 }: TimeOffReviewModalProps) {
+  const { showToast } = useToast()
   const [reviewNotes, setReviewNotes] = useState('')
   const [submitting, setSubmitting] = useState<'approve' | 'deny' | null>(null)
+  const [reviewError, setReviewError] = useState<string | null>(null)
 
   const resetState = useCallback(() => {
     setReviewNotes('')
     setSubmitting(null)
+    setReviewError(null)
   }, [])
 
   const handleClose = useCallback(() => {
@@ -114,6 +118,7 @@ export function TimeOffReviewModal({
 
       const action = status === 'approved' ? 'approve' : 'deny'
       setSubmitting(action)
+      setReviewError(null)
 
       const review: TimeOffReviewInput = {
         status,
@@ -125,13 +130,27 @@ export function TimeOffReviewModal({
 
       if (result.success) {
         log.info(`Time-off request ${action}d`, { requestId: request.id })
+        const userName = request.user
+          ? `${request.user.first_name} ${request.user.last_name}`
+          : 'Staff member'
+        showToast({
+          type: 'success',
+          title: `Request ${status === 'approved' ? 'Approved' : 'Denied'}`,
+          message: `${userName}'s time-off request has been ${status}.`,
+        })
         handleClose()
       } else {
         log.error(`Failed to ${action} request`, { requestId: request.id, error: result.error })
+        setReviewError(result.error ?? `Failed to ${action} request. Please try again.`)
+        showToast({
+          type: 'error',
+          title: `${action === 'approve' ? 'Approval' : 'Denial'} Failed`,
+          message: result.error ?? 'An unexpected error occurred.',
+        })
         setSubmitting(null)
       }
     },
-    [request, currentUserId, reviewNotes, onReview, handleClose],
+    [request, currentUserId, reviewNotes, onReview, handleClose, showToast],
   )
 
   if (!request) return null
@@ -147,6 +166,7 @@ export function TimeOffReviewModal({
     request.partial_day_type,
   )
   const isPending = request.status === 'pending'
+  const isSelfReview = request.user_id === currentUserId
 
   return (
     <Modal
@@ -192,7 +212,7 @@ export function TimeOffReviewModal({
 
       {/* Request details */}
       <div className="space-y-3 pt-2">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <p className="text-xs text-slate-500 mb-1">Request Type</p>
             <Badge
@@ -278,6 +298,14 @@ export function TimeOffReviewModal({
       {/* Review notes input + action buttons (only for pending) */}
       {isPending && (
         <>
+          {/* Self-review warning */}
+          {isSelfReview && (
+            <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700" role="alert">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>You are reviewing your own request. Consider having another admin review it instead.</span>
+            </div>
+          )}
+
           <div className="pt-4 border-t border-slate-200">
             <label htmlFor="review-notes" className="text-xs text-slate-500 mb-1 block">
               Review Notes (optional)
@@ -294,6 +322,14 @@ export function TimeOffReviewModal({
             />
           </div>
 
+          {/* Error display */}
+          {reviewError && (
+            <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{reviewError}</span>
+            </div>
+          )}
+
           <Modal.Footer>
             <Modal.Cancel onClick={handleClose} />
             <Modal.Action
@@ -301,6 +337,7 @@ export function TimeOffReviewModal({
               loading={submitting === 'deny'}
               disabled={submitting !== null}
               variant="danger"
+              aria-label={`Deny time-off request for ${userName}`}
             >
               Deny
             </Modal.Action>
@@ -309,6 +346,7 @@ export function TimeOffReviewModal({
               loading={submitting === 'approve'}
               disabled={submitting !== null}
               variant="primary"
+              aria-label={`Approve time-off request for ${userName}`}
             >
               Approve
             </Modal.Action>

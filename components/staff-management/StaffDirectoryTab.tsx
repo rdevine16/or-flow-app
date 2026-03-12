@@ -239,6 +239,7 @@ export function StaffDirectoryTab({
             placeholder="Search by name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search staff by name or email"
             className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm
               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
@@ -248,6 +249,7 @@ export function StaffDirectoryTab({
         <select
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value)}
+          aria-label="Filter by role"
           className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white
             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
@@ -314,35 +316,36 @@ export function StaffDirectoryTab({
             </p>
           </div>
         ) : (
-          <>
+          <div className="overflow-x-auto" role="table" aria-label="Staff directory">
             {/* Header */}
             <div
-              className="grid items-center px-4 py-2.5 border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wider"
+              className="grid items-center px-4 py-2.5 border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wider min-w-[600px]"
+              role="row"
               style={{
                 gridTemplateColumns: isAllFacilitiesMode
                   ? '1fr 140px 140px 100px 100px'
                   : '1fr 140px 180px 100px 100px',
               }}
             >
-              <button className="text-left" onClick={() => toggleSort('name')}>
+              <button className="text-left" onClick={() => toggleSort('name')} aria-label={`Sort by name ${sortField === 'name' ? (sortDirection === 'asc' ? 'descending' : 'ascending') : 'ascending'}`} role="columnheader">
                 Name <SortIcon field="name" />
               </button>
-              <button className="text-left" onClick={() => toggleSort('role')}>
+              <button className="text-left" onClick={() => toggleSort('role')} aria-label={`Sort by role`} role="columnheader">
                 Role <SortIcon field="role" />
               </button>
               {isAllFacilitiesMode ? (
-                <button className="text-left" onClick={() => toggleSort('facility')}>
+                <button className="text-left" onClick={() => toggleSort('facility')} aria-label="Sort by facility" role="columnheader">
                   Facility <SortIcon field="facility" />
                 </button>
               ) : (
-                <button className="text-left" onClick={() => toggleSort('total_days')}>
+                <button className="text-left" onClick={() => toggleSort('total_days')} aria-label="Sort by time off" role="columnheader">
                   Time Off (YTD) <SortIcon field="total_days" />
                 </button>
               )}
-              <button className="text-left" onClick={() => toggleSort('status')}>
+              <button className="text-left" onClick={() => toggleSort('status')} aria-label="Sort by status" role="columnheader">
                 Status <SortIcon field="status" />
               </button>
-              <div className="text-left">Access</div>
+              <div className="text-left" role="columnheader">Access</div>
             </div>
 
             {/* Rows */}
@@ -356,17 +359,26 @@ export function StaffDirectoryTab({
                 return (
                   <div
                     key={user.id}
-                    className={`grid items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors ${!user.is_active ? 'opacity-60' : ''}`}
+                    className={`grid items-center px-4 py-3 cursor-pointer hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 transition-colors min-w-[600px] ${!user.is_active ? 'opacity-60' : ''}`}
                     style={{
                       gridTemplateColumns: isAllFacilitiesMode
                         ? '1fr 140px 140px 100px 100px'
                         : '1fr 140px 180px 100px 100px',
                     }}
+                    role="row"
+                    tabIndex={0}
                     onClick={() => onSelectUser(user)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onSelectUser(user)
+                      }
+                    }}
+                    aria-label={`${user.first_name} ${user.last_name}, ${roleName ?? 'no role'}, ${statusCfg.label}`}
                   >
                     {/* Name */}
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-medium text-slate-600 shrink-0">
+                    <div className="flex items-center gap-3 min-w-0" role="cell">
+                      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-medium text-slate-600 shrink-0" aria-hidden="true">
                         {user.first_name?.[0]}{user.last_name?.[0]}
                       </div>
                       <div className="min-w-0">
@@ -378,7 +390,7 @@ export function StaffDirectoryTab({
                     </div>
 
                     {/* Role */}
-                    <div>
+                    <div role="cell">
                       {roleName ? (
                         <Badge variant={getRoleBadgeVariant(roleName)} size="sm">
                           {roleName}
@@ -389,32 +401,34 @@ export function StaffDirectoryTab({
                     </div>
 
                     {/* Facility (all-facilities mode) or Time-Off Totals */}
-                    {isAllFacilitiesMode ? (
-                      <div className="text-sm text-slate-600 truncate">
-                        {getFacilityName(user) ?? <span className="text-slate-400">&mdash;</span>}
-                      </div>
-                    ) : (
-                      <div className="text-sm text-slate-600">
-                        <UserTimeOffSummaryDisplay totals={totals} variant="inline" />
-                      </div>
-                    )}
+                    <div role="cell">
+                      {isAllFacilitiesMode ? (
+                        <span className="text-sm text-slate-600 truncate">
+                          {getFacilityName(user) ?? <span className="text-slate-400">&mdash;</span>}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-slate-600">
+                          <UserTimeOffSummaryDisplay totals={totals} variant="inline" />
+                        </span>
+                      )}
+                    </div>
 
                     {/* Account Status */}
-                    <div>
+                    <div role="cell">
                       <Badge variant={statusCfg.variant} size="sm">
                         {statusCfg.label}
                       </Badge>
                     </div>
 
                     {/* Access Level */}
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-slate-500" role="cell">
                       {ACCESS_LEVEL_LABELS[user.access_level] ?? user.access_level}
                     </div>
                   </div>
                 )
               })}
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>

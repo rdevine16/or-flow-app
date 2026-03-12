@@ -1,10 +1,16 @@
 // components/staff-management/__tests__/TimeOffReviewModal.test.tsx
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TimeOffReviewModal } from '../TimeOffReviewModal'
 import type { TimeOffRequest, UserTimeOffSummary } from '@/types/time-off'
 import type { UserListItem } from '@/lib/dal/users'
+
+// Mock toast provider (phase 14)
+const mockShowToast = vi.fn()
+vi.mock('@/components/ui/Toast/ToastProvider', () => ({
+  useToast: () => ({ showToast: mockShowToast }),
+}))
 
 // ============================================
 // Test Data
@@ -91,6 +97,10 @@ describe('TimeOffReviewModal', () => {
     approvedRequests: [],
     onReview: vi.fn(),
   }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   describe('basic rendering', () => {
     it('renders nothing when request is null', () => {
@@ -546,6 +556,118 @@ describe('TimeOffReviewModal', () => {
       )
 
       expect(screen.queryByLabelText(/Review Notes/i)).not.toBeInTheDocument()
+    })
+  })
+
+  // ------------------------------------------
+  // Phase 14: Toast notifications
+  // ------------------------------------------
+  describe('toast notifications', () => {
+    it('shows success toast when request is approved', async () => {
+      const user = userEvent.setup()
+      const mockOnReview = vi.fn().mockResolvedValue({ success: true })
+      const request = createRequest('req1', 'u1', 'pending')
+
+      render(
+        <TimeOffReviewModal
+          {...defaultProps}
+          request={request}
+          open={true}
+          onReview={mockOnReview}
+        />,
+      )
+
+      const approveButton = screen.getByRole('button', { name: /Approve/i })
+      await user.click(approveButton)
+
+      await waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'success',
+            title: 'Request Approved',
+            message: expect.stringContaining('approved'),
+          })
+        )
+      })
+    })
+
+    it('shows success toast when request is denied', async () => {
+      const user = userEvent.setup()
+      const mockOnReview = vi.fn().mockResolvedValue({ success: true })
+      const request = createRequest('req1', 'u1', 'pending')
+
+      render(
+        <TimeOffReviewModal
+          {...defaultProps}
+          request={request}
+          open={true}
+          onReview={mockOnReview}
+        />,
+      )
+
+      const denyButton = screen.getByRole('button', { name: /Deny/i })
+      await user.click(denyButton)
+
+      await waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'success',
+            title: 'Request Denied',
+            message: expect.stringContaining('denied'),
+          })
+        )
+      })
+    })
+
+    it('shows error toast when review fails', async () => {
+      const user = userEvent.setup()
+      const mockOnReview = vi.fn().mockResolvedValue({ success: false, error: 'Database error' })
+      const request = createRequest('req1', 'u1', 'pending')
+
+      render(
+        <TimeOffReviewModal
+          {...defaultProps}
+          request={request}
+          open={true}
+          onReview={mockOnReview}
+        />,
+      )
+
+      const approveButton = screen.getByRole('button', { name: /Approve/i })
+      await user.click(approveButton)
+
+      await waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'error',
+            title: 'Approval Failed',
+            message: 'Database error',
+          })
+        )
+      })
+    })
+
+    it('displays error message in modal when review fails', async () => {
+      const user = userEvent.setup()
+      const mockOnReview = vi.fn().mockResolvedValue({ success: false, error: 'Network timeout' })
+      const request = createRequest('req1', 'u1', 'pending')
+
+      render(
+        <TimeOffReviewModal
+          {...defaultProps}
+          request={request}
+          open={true}
+          onReview={mockOnReview}
+        />,
+      )
+
+      const approveButton = screen.getByRole('button', { name: /Approve/i })
+      await user.click(approveButton)
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeInTheDocument()
+        expect(screen.getByText(/Network timeout/i)).toBeInTheDocument()
+      })
     })
   })
 })

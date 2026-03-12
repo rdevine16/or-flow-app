@@ -162,7 +162,7 @@ export default function StaffManagementPageClient() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Page header */}
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Staff Management</h1>
             <p className="text-sm text-slate-500 mt-1">
@@ -183,7 +183,8 @@ export default function StaffManagementPageClient() {
                   setSelectedRequest(null)
                 }}
                 className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white
-                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[200px]"
+                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[160px] sm:min-w-[200px]"
+                aria-label="Select facility"
               >
                 <option value="default">
                   {userData.facilityName ?? 'Current Facility'}
@@ -202,12 +203,13 @@ export default function StaffManagementPageClient() {
         </div>
 
         {/* Tab navigation */}
-        <div className="flex items-center gap-1 border-b border-slate-200">
+        <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto" role="tablist" aria-label="Staff management sections">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.key
             return (
               <button
                 key={tab.key}
+                id={`tab-${tab.key}`}
                 onClick={() => setActiveTab(tab.key)}
                 className={`
                   relative flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap
@@ -219,6 +221,8 @@ export default function StaffManagementPageClient() {
                 `}
                 aria-selected={isActive}
                 role="tab"
+                aria-controls={`tabpanel-${tab.key}`}
+                tabIndex={isActive ? 0 : -1}
               >
                 {tab.icon}
                 {tab.label}
@@ -229,30 +233,34 @@ export default function StaffManagementPageClient() {
 
         {/* Tab content */}
         {activeTab === 'directory' && (
-          <StaffDirectoryTab
-            facilityId={activeFacilityId}
-            onSelectUser={handleSelectUser}
-            showDeactivated={showDeactivated}
-            onToggleDeactivated={() => setShowDeactivated((v) => !v)}
-            onAddStaff={() => setShowInviteModal(true)}
-            isAllFacilitiesMode={isAllFacilitiesMode}
-          />
+          <div role="tabpanel" id="tabpanel-directory" aria-labelledby="tab-directory">
+            <StaffDirectoryTab
+              facilityId={activeFacilityId}
+              onSelectUser={handleSelectUser}
+              showDeactivated={showDeactivated}
+              onToggleDeactivated={() => setShowDeactivated((v) => !v)}
+              onAddStaff={() => setShowInviteModal(true)}
+              isAllFacilitiesMode={isAllFacilitiesMode}
+            />
+          </div>
         )}
 
-        {activeTab === 'time-off-calendar' && !isAllFacilitiesMode && activeFacilityId && (
-          <TimeOffCalendarTab
-            facilityId={activeFacilityId}
-            onRequestClick={handleRequestClick}
-          />
-        )}
-
-        {activeTab === 'time-off-calendar' && isAllFacilitiesMode && (
-          <div className="bg-white rounded-xl border border-slate-200 px-6 py-12 text-center">
-            <CalendarDays className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">Select a specific facility</p>
-            <p className="text-sm text-slate-400 mt-1">
-              The time-off calendar requires a single facility. Use the facility selector above to choose one.
-            </p>
+        {activeTab === 'time-off-calendar' && (
+          <div role="tabpanel" id="tabpanel-time-off-calendar" aria-labelledby="tab-time-off-calendar">
+            {!isAllFacilitiesMode && activeFacilityId ? (
+              <TimeOffCalendarTab
+                facilityId={activeFacilityId}
+                onRequestClick={handleRequestClick}
+              />
+            ) : isAllFacilitiesMode ? (
+              <div className="bg-white rounded-xl border border-slate-200 px-6 py-12 text-center">
+                <CalendarDays className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium">Select a specific facility</p>
+                <p className="text-sm text-slate-400 mt-1">
+                  The time-off calendar requires a single facility. Use the facility selector above to choose one.
+                </p>
+              </div>
+            ) : null}
           </div>
         )}
       </div>

@@ -7,6 +7,7 @@ import type { TimeOffRequest, UserTimeOffSummary, TimeOffReviewInput } from '@/t
 import { REQUEST_TYPE_LABELS, calculateBusinessDays } from '@/types/time-off'
 import { UserTimeOffSummaryDisplay } from './UserTimeOffSummary'
 import Badge from '@/components/ui/Badge'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { CalendarDays, Clock } from 'lucide-react'
 import { logger } from '@/lib/logger'
 
@@ -68,6 +69,7 @@ export function DrawerTimeOffTab({
   currentUserId,
   onReview,
 }: DrawerTimeOffTabProps) {
+  const { showToast } = useToast()
   const [reviewingId, setReviewingId] = useState<string | null>(null)
 
   // Filter requests for this specific user, sorted by most recent first
@@ -87,12 +89,23 @@ export function DrawerTimeOffTab({
         reviewed_by: currentUserId,
         review_notes: null,
       })
-      if (!result.success) {
+      if (result.success) {
+        showToast({
+          type: 'success',
+          title: `Request ${status === 'approved' ? 'Approved' : 'Denied'}`,
+          message: `Time-off request has been ${status}.`,
+        })
+      } else {
         log.error('Inline review failed', { requestId, error: result.error })
+        showToast({
+          type: 'error',
+          title: 'Review Failed',
+          message: result.error ?? 'An unexpected error occurred.',
+        })
       }
       setReviewingId(null)
     },
-    [onReview, currentUserId],
+    [onReview, currentUserId, showToast],
   )
 
   return (
@@ -177,17 +190,19 @@ export function DrawerTimeOffTab({
                     <div className="flex items-center gap-2 pt-1">
                       <button
                         onClick={() => handleInlineReview(req.id, 'approved')}
-                        disabled={isReviewing}
+                        disabled={reviewingId !== null}
+                        aria-label={`Approve ${REQUEST_TYPE_LABELS[req.request_type]} request`}
                         className="px-3 py-1 text-xs font-medium rounded-md bg-emerald-50 text-emerald-700
-                          hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                          hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 transition-colors disabled:opacity-50"
                       >
                         {isReviewing ? '...' : 'Approve'}
                       </button>
                       <button
                         onClick={() => handleInlineReview(req.id, 'denied')}
-                        disabled={isReviewing}
+                        disabled={reviewingId !== null}
+                        aria-label={`Deny ${REQUEST_TYPE_LABELS[req.request_type]} request`}
                         className="px-3 py-1 text-xs font-medium rounded-md bg-red-50 text-red-700
-                          hover:bg-red-100 transition-colors disabled:opacity-50"
+                          hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 transition-colors disabled:opacity-50"
                       >
                         {isReviewing ? '...' : 'Deny'}
                       </button>

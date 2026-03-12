@@ -141,12 +141,13 @@ export function StaffDetailDrawer({
             </div>
 
             {/* Tab navigation */}
-            <div className="flex items-center gap-1 mt-4 -mb-4 border-b-0">
+            <div className="flex items-center gap-1 mt-4 -mb-4 border-b-0" role="tablist" aria-label="Staff detail sections">
               {TABS.map((tab) => {
                 const isActive = activeTab === tab.key
                 return (
                   <button
                     key={tab.key}
+                    id={`drawer-tab-${tab.key}`}
                     onClick={() => setActiveTab(tab.key)}
                     className={`
                       px-3 py-2 text-sm font-medium rounded-t-md transition-colors
@@ -157,6 +158,8 @@ export function StaffDetailDrawer({
                     `}
                     role="tab"
                     aria-selected={isActive}
+                    aria-controls={`drawer-tabpanel-${tab.key}`}
+                    tabIndex={isActive ? 0 : -1}
                   >
                     {tab.label}
                   </button>
@@ -166,7 +169,7 @@ export function StaffDetailDrawer({
           </div>
 
           {/* Tab content — scrollable */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" role="tabpanel" id={`drawer-tabpanel-${activeTab}`} aria-labelledby={`drawer-tab-${activeTab}`}>
             {activeTab === 'profile' && (
               <DrawerProfileTab user={user} facilityName={facilityName} />
             )}

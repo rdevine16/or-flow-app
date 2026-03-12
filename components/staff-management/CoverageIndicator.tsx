@@ -162,7 +162,7 @@ export function CoverageIndicator({
         <span>Coverage Impact {includeRequestUserId ? '(if approved)' : ''}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="status" aria-label="Staff coverage by role">
         {roleCoverage.map((rc) => {
           const isLow = rc.total > 0 && rc.available <= Math.ceil(rc.total * 0.5)
           return (
@@ -172,6 +172,7 @@ export function CoverageIndicator({
                 flex items-center justify-between px-3 py-1.5 rounded-lg text-sm
                 ${isLow ? 'bg-amber-50 text-amber-800' : 'bg-slate-50 text-slate-700'}
               `}
+              aria-label={`${rc.roleName}: ${rc.available} of ${rc.total} available${isLow ? ', low coverage' : ''}`}
             >
               <span className="font-medium truncate">{rc.roleName}</span>
               <span className={`tabular-nums ${isLow ? 'font-semibold' : ''}`}>

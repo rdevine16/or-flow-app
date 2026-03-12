@@ -94,7 +94,7 @@ export function EditUserForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Name */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label htmlFor="edit-firstName" className="block text-xs font-medium text-slate-500 mb-1">
             First Name

@@ -341,7 +341,7 @@ describe('StaffDirectoryTab', () => {
       render(<StaffDirectoryTab {...defaultProps} />)
 
       // Click "Name" header to toggle to descending
-      const nameHeader = screen.getByRole('button', { name: /Name/ })
+      const nameHeader = screen.getByRole('columnheader', { name: /Sort by name/ })
       await user.click(nameHeader)
 
       // Now descending: Wilson, Brown, Adams
@@ -354,7 +354,7 @@ describe('StaffDirectoryTab', () => {
       setupMocks()
       render(<StaffDirectoryTab {...defaultProps} />)
 
-      const timeOffHeader = screen.getByRole('button', { name: /Time Off/ })
+      const timeOffHeader = screen.getByRole('columnheader', { name: /Sort by time off/ })
       await user.click(timeOffHeader)
 
       // Ascending: Brown (0d), Adams (4d), Wilson (7d)
@@ -407,6 +407,66 @@ describe('StaffDirectoryTab', () => {
           last_name: 'Brown',
         })
       )
+    })
+  })
+
+  // ------------------------------------------
+  // Phase 14: Keyboard navigation
+  // ------------------------------------------
+  describe('keyboard navigation', () => {
+    it('opens drawer when Enter key pressed on row', async () => {
+      const user = userEvent.setup()
+      const mockOnSelectUserLocal = vi.fn()
+      setupMocks()
+      render(<StaffDirectoryTab {...defaultProps} onSelectUser={mockOnSelectUserLocal} />)
+
+      // Find Jane Wilson's row
+      const janeRow = screen.getByText('Jane Wilson').closest('div[role="row"]')
+      if (!janeRow) throw new Error('Could not find Jane row')
+
+      // Focus and press Enter
+      janeRow.focus()
+      await user.keyboard('{Enter}')
+
+      expect(mockOnSelectUserLocal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'user-1',
+          first_name: 'Jane',
+          last_name: 'Wilson',
+        })
+      )
+    })
+
+    it('opens drawer when Space key pressed on row', async () => {
+      const user = userEvent.setup()
+      const mockOnSelectUserLocal = vi.fn()
+      setupMocks()
+      render(<StaffDirectoryTab {...defaultProps} onSelectUser={mockOnSelectUserLocal} />)
+
+      // Find Mike Brown's row
+      const mikeRow = screen.getByText('Mike Brown').closest('div[role="row"]')
+      if (!mikeRow) throw new Error('Could not find Mike row')
+
+      // Focus and press Space
+      mikeRow.focus()
+      await user.keyboard(' ')
+
+      expect(mockOnSelectUserLocal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'user-2',
+          first_name: 'Mike',
+          last_name: 'Brown',
+        })
+      )
+    })
+
+    it('rows have tabIndex=0 for keyboard accessibility', () => {
+      setupMocks()
+      render(<StaffDirectoryTab {...defaultProps} />)
+
+      const rows = screen.getAllByRole('row').filter((el) => el.getAttribute('tabIndex') === '0')
+      // Header row does not have tabIndex, only data rows (3 staff members)
+      expect(rows.length).toBe(3)
     })
   })
 
@@ -519,9 +579,9 @@ describe('StaffDirectoryTab', () => {
       )
 
       // Facility header should appear
-      expect(screen.getByRole('button', { name: /Facility/ })).toBeDefined()
+      expect(screen.getByRole('columnheader', { name: /Sort by facility/ })).toBeDefined()
       // Time-off header should not appear
-      expect(screen.queryByRole('button', { name: /Time Off/ })).toBeNull()
+      expect(screen.queryByRole('columnheader', { name: /Sort by time off/ })).toBeNull()
     })
 
     it('renders facility names for each user', () => {
@@ -567,7 +627,7 @@ describe('StaffDirectoryTab', () => {
         />
       )
 
-      const facilityHeader = screen.getByRole('button', { name: /Facility/ })
+      const facilityHeader = screen.getByRole('columnheader', { name: /Sort by facility/ })
       await user.click(facilityHeader)
 
       // Ascending by facility: City Medical Center first, then General Hospital

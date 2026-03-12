@@ -53,6 +53,12 @@ export function CalendarDayCell({
   // Coverage warning threshold: red when >= 25% of staff are off
   const coverageWarning = totalStaff > 0 && approvedOffCount >= Math.ceil(totalStaff * 0.25)
 
+  const dateLabel = date.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
   return (
     <div
       className={`
@@ -60,6 +66,8 @@ export function CalendarDayCell({
         ${!isCurrentMonth ? 'bg-slate-50/50' : isWeekend ? 'bg-slate-50/30' : 'bg-white'}
         ${isToday ? 'ring-2 ring-blue-400 ring-inset' : ''}
       `}
+      role="gridcell"
+      aria-label={`${dateLabel}${requests.length > 0 ? `, ${requests.length} request${requests.length !== 1 ? 's' : ''}` : ''}${approvedOffCount > 0 ? `, ${approvedOffCount} staff off` : ''}`}
     >
       {/* Day header: number + coverage badge */}
       <div className="flex items-center justify-between mb-1">
@@ -73,6 +81,7 @@ export function CalendarDayCell({
                 : 'text-slate-400'
             }
           `}
+          aria-current={isToday ? 'date' : undefined}
         >
           {dayNum}
         </span>
@@ -87,6 +96,7 @@ export function CalendarDayCell({
               }
             `}
             title={`${approvedOffCount} of ${totalStaff} staff off`}
+            role="status"
           >
             {approvedOffCount} off
           </span>
@@ -105,9 +115,10 @@ export function CalendarDayCell({
             className={`
               w-full text-left rounded px-1.5 py-0.5 text-[11px] leading-tight truncate
               ${STATUS_COLORS[req.status]}
-              hover:opacity-75 transition-opacity cursor-pointer
+              hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-opacity cursor-pointer
               ${req.status === 'denied' ? 'line-through' : ''}
             `}
+            aria-label={`${req.user?.first_name} ${req.user?.last_name}, ${REQUEST_TYPE_LABELS[req.request_type]}, ${req.status}. Click to review.`}
             title={`${req.user?.first_name} ${req.user?.last_name} — ${REQUEST_TYPE_LABELS[req.request_type]} (${req.status})`}
           >
             <span className="font-medium">
@@ -119,7 +130,7 @@ export function CalendarDayCell({
         ))}
 
         {overflow > 0 && (
-          <p className="text-[10px] text-slate-400 text-center mt-0.5">
+          <p className="text-[10px] text-slate-400 text-center mt-0.5" aria-label={`${overflow} more requests`}>
             +{overflow} more
           </p>
         )}
