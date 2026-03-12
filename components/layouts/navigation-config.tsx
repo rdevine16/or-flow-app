@@ -2,7 +2,7 @@
 // Centralized navigation configuration for DashboardLayout
 
 import { ReactNode } from 'react'
-import { AlertTriangle, Ban, BarChart3, Bell, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, CreditCard, Database, FileText, Flag, FlaskConical, Home, KeyRound, LayoutGrid, Package, Plug, Settings, ShieldCheck, User } from 'lucide-react'
+import { AlertTriangle, Ban, BarChart3, Bell, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, CreditCard, Database, FileText, Flag, FlaskConical, Home, KeyRound, LayoutGrid, Package, Plug, Settings, ShieldCheck, User, UserCog } from 'lucide-react'
 import type { TierSlug } from '@/lib/tier-config'
 
 // ============================================
@@ -75,6 +75,7 @@ export const navIcons = {
   notifications: <Bell className={iconClass} />,
   demoGenerator: <Database className={iconClass} />,
   integrations: <Plug className={iconClass} />,
+  staffManagement: <UserCog className={iconClass} />,
 }
 
 // ============================================
@@ -209,6 +210,12 @@ export const facilityNavigation: NavItem[] = [
     icon: navIcons.dataQuality,
     allowedRoles: ['global_admin', 'facility_admin'],
     requiredTier: 'professional',
+  },
+  {
+    name: 'Staff Management',
+    href: '/staff-management',
+    icon: navIcons.staffManagement,
+    allowedRoles: ['global_admin', 'facility_admin'],
   },
   {
     name: 'Settings',
