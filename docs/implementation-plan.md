@@ -21,10 +21,10 @@
 | 13 | Web | Global admin features + remove /settings/users route | done |
 | 14 | Both | Polish, accessibility, and edge cases | done |
 | 15 | Both | Polish, notifications, and bug fixes | done |
-| 16 | DB + Web | Partial holidays migration + Holidays tab on Staff Management | pending |
-| 17 | Web | Time-off holiday-aware PTO calculation + review display | pending |
-| 18 | Web | Verify + fix block schedule + analytics holiday integration | pending |
-| 19 | Both | Holiday polish, edge cases, and final testing | pending |
+| 16 | DB + Web | Partial holidays migration + Holidays tab on Staff Management | done |
+| 17 | Web | Time-off holiday-aware PTO calculation + review display | done |
+| 18 | Web | Verify + fix block schedule + analytics holiday integration | done |
+| 19 | Both | Holiday polish, edge cases, and final testing | done |
 
 ---
 
@@ -761,3 +761,16 @@ The block schedule page already calls `isDateClosed()` from `useFacilityClosures
 - Analytics calculation regression with holidays
 - Time-off PTO calculation regression with holidays
 - Accessibility audit on holiday UI elements
+
+---
+
+## Session Log
+
+### Session — 2026-03-13, wrap-up
+- **Phase:** 19 — completed (all web phases 1, 7–19 done)
+- **What was done:** Wrap-up session — ran 3-stage test gate, updated plan status for phases 16-19 to done
+- **Files changed:** docs/implementation-plan.md (status updates + session log)
+- **Commit:** 15c2fbe (last phase commit)
+- **Test results:** Stage 1: pre-existing typecheck errors only. Stage 2: 99.87% pass (6130/6138, 8 unrelated failures). Stage 3: coverage gaps identified for phases 16-19 (block utilization partial holiday logic untested, DrawerTimeOffTab missing test file, no end-to-end holiday workflow tests)
+- **Known issues discovered:** Missing test coverage for block utilization partial holiday logic, useTimeOffRequests holiday-aware totals integration, timezone handling for partial holidays, DrawerTimeOffTab component
+- **Context usage:** low
