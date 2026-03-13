@@ -134,7 +134,7 @@ export default function BlockSchedulePage() {
     loading: hookLoading,
   } = useBlockSchedules({ facilityId })
 
-  const { fetchHolidays, fetchClosures, isDateClosed } = useFacilityClosures({ facilityId })
+  const { fetchHolidays, fetchClosures, isDateClosed, getDateClosureInfo } = useFacilityClosures({ facilityId })
   const { fetchColors, getColorMap, setColor } = useSurgeonColors({ facilityId })
   const { data: surgeons, loading: surgeonsLoading } = useSurgeons(facilityId)
 
@@ -292,6 +292,13 @@ export default function BlockSchedulePage() {
     if (!showHolidays) return false
     return isDateClosed(date)
   }, [showHolidays, isDateClosed])
+
+  const checkDateClosureInfo = useCallback((date: Date) => {
+    if (!showHolidays) {
+      return { isClosed: false, isPartialHoliday: false, holidayName: null, closureReason: null, partialCloseTime: null }
+    }
+    return getDateClosureInfo(date)
+  }, [showHolidays, getDateClosureInfo])
 
   // =====================================================
   // EVENT HANDLERS (continued from page_part1.tsx)
@@ -808,6 +815,7 @@ export default function BlockSchedulePage() {
                     blocks={filteredBlocks}
                     colorMap={colorMap}
                     isDateClosed={checkDateClosed}
+                    getDateClosureInfo={checkDateClosureInfo}
                     onDragSelect={handleDragSelect}
                     onBlockClick={handleBlockClick}
                     activeSelection={popoverOpen && dragSelection ? dragSelection : null}
@@ -849,6 +857,8 @@ export default function BlockSchedulePage() {
                   showWeekends={showWeekends}
                   onToggleWeekends={() => setShowWeekends(prev => !prev)}
                   facilityName={facilityName ?? ''}
+                  isFacilityDateClosed={isDateClosed}
+                  getDateClosureInfo={getDateClosureInfo}
                 />
               </div>
               <DragOverlay dropAnimation={null}>

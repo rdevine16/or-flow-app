@@ -3,6 +3,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { ExpandedBlock, formatTime12Hour, DAY_OF_WEEK_SHORT } from '@/types/block-scheduling'
+import type { DateClosureInfo } from '@/hooks/useFacilityClosures'
 import { BlockCard } from './BlockCard'
 
 interface WeekCalendarProps {
@@ -10,6 +11,7 @@ interface WeekCalendarProps {
   blocks: ExpandedBlock[]
   colorMap: Record<string, string>
   isDateClosed: (date: Date) => boolean
+  getDateClosureInfo?: (date: Date) => DateClosureInfo
   onDragSelect: (dayOfWeek: number, startTime: string, endTime: string, clickPosition?: { x: number; y: number }) => void
   onBlockClick: (block: ExpandedBlock, clickPosition?: { x: number; y: number }) => void
   // Keep selection visible while popover is open
@@ -30,6 +32,7 @@ export function WeekCalendar({
   blocks,
   colorMap,
   isDateClosed,
+  getDateClosureInfo,
   onDragSelect,
   onBlockClick,
   activeSelection,
@@ -186,6 +189,13 @@ export function WeekCalendar({
     const hour = getTimeFromY(e.clientY)
 
     if (isDateClosed(weekDays[day])) return
+
+    // Block drag in partial-holiday closed portion
+    const dayClosureInfo = getDateClosureInfo?.(weekDays[day])
+    if (dayClosureInfo?.isPartialHoliday && dayClosureInfo.partialCloseTime) {
+      const [ch, cm] = dayClosureInfo.partialCloseTime.split(':').map(Number)
+      if (hour >= ch + cm / 60) return
+    }
 
     e.preventDefault() // Prevent text selection during drag
 
@@ -389,11 +399,21 @@ export function WeekCalendar({
         {weekDays.map((date, i) => {
           const isToday = isSameDay(date, new Date())
           const isClosed = isDateClosed(date)
+          const closureInfo = getDateClosureInfo?.(date)
+          const holidayLabel = closureInfo?.holidayName
+            ?? (closureInfo?.closureReason ? `Closed: ${closureInfo.closureReason}` : null)
 
           return (
             <div
               key={i}
               className="flex-1 py-3 text-center"
+              title={
+                closureInfo?.isPartialHoliday
+                  ? `${closureInfo.holidayName} — Partial, closes at ${formatTime12Hour(closureInfo.partialCloseTime || '')}`
+                  : holidayLabel
+                    ? `${holidayLabel} — Full day closure`
+                    : undefined
+              }
             >
               <div className={`text-xs font-medium uppercase tracking-wide ${
                 isToday ? 'text-blue-600' : 'text-slate-500'
@@ -406,11 +426,20 @@ export function WeekCalendar({
                     ? 'text-white bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center mx-auto'
                     : isClosed
                     ? 'text-slate-300'
+                    : closureInfo?.isPartialHoliday
+                    ? 'text-amber-400'
                     : 'text-slate-800'
                 }`}
               >
                 {date.getDate()}
               </div>
+              {(isClosed || closureInfo?.isPartialHoliday) && holidayLabel && (
+                <div className={`text-[10px] mt-0.5 truncate px-1 ${
+                  closureInfo?.isPartialHoliday ? 'text-amber-500' : 'text-slate-400'
+                }`}>
+                  {holidayLabel}
+                </div>
+              )}
             </div>
           )
         })}
@@ -445,7 +474,14 @@ export function WeekCalendar({
           {/* Day Columns */}
           {weekDays.map((date, dayIndex) => {
             const isClosed = isDateClosed(date)
+            const closureInfo = getDateClosureInfo?.(date)
+            const isPartial = closureInfo?.isPartialHoliday ?? false
+            const partialCloseHour = isPartial && closureInfo?.partialCloseTime
+              ? (() => { const [h, m] = closureInfo.partialCloseTime!.split(':').map(Number); return h + m / 60 })()
+              : null
             const dayBlocks = blocksByDay[dayIndex] || []
+            const closureLabel = closureInfo?.holidayName
+              ?? (closureInfo?.closureReason ? `Closed: ${closureInfo.closureReason}` : 'Closed')
 
             return (
               <div
@@ -462,7 +498,7 @@ export function WeekCalendar({
                   />
                 ))}
 
-                {/* Closed overlay */}
+                {/* Full-day closed overlay */}
                 {isClosed && (
                   <div className="absolute inset-0 bg-slate-100/50 pointer-events-none">
                     <div className="absolute inset-0 opacity-[0.07]" style={{
@@ -470,7 +506,27 @@ export function WeekCalendar({
                     }} />
                     <div className="flex items-start justify-center pt-2">
                       <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 bg-white/80 px-2 py-0.5 rounded">
-                        Closed
+                        {closureLabel}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Partial holiday overlay — dims hours after close time */}
+                {!isClosed && isPartial && partialCloseHour !== null && (
+                  <div
+                    className="absolute left-0 right-0 bg-amber-50/60 pointer-events-none z-[1]"
+                    style={{
+                      top: `${partialCloseHour * HOUR_HEIGHT}px`,
+                      bottom: 0,
+                    }}
+                  >
+                    <div className="absolute inset-0 opacity-[0.05]" style={{
+                      backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, currentColor 10px, currentColor 11px)',
+                    }} />
+                    <div className="flex items-start justify-center pt-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500 bg-white/80 px-1.5 py-0.5 rounded">
+                        {closureInfo?.holidayName ?? 'Holiday'} — Closes {formatTime12Hour(closureInfo?.partialCloseTime || '')}
                       </span>
                     </div>
                   </div>

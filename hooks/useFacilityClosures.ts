@@ -15,6 +15,20 @@ import {
   getHolidayDateDescription,
 } from '@/types/block-scheduling'
 
+/** Rich closure info for a specific date */
+export interface DateClosureInfo {
+  /** true for full-day closure (full holiday or one-off closure) */
+  isClosed: boolean
+  /** true for a partial holiday (facility closes early) */
+  isPartialHoliday: boolean
+  /** Holiday name, if the date matches a holiday */
+  holidayName: string | null
+  /** Reason text for one-off closures */
+  closureReason: string | null
+  /** Close time for partial holidays, e.g. "12:00:00" */
+  partialCloseTime: string | null
+}
+
 interface UseFacilityClosuresOptions {
   facilityId: string | null
 }
@@ -355,27 +369,19 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
   // UTILITY: Check if date is closed
   // =====================================================
 
-  const isDateClosed = useCallback(
-    (date: Date): boolean => {
-      const dateStr = getLocalDateString(date)
-
-      // Check one-off closures
-      if (closures.some(c => c.closure_date === dateStr)) {
-        return true
-      }
-
-      // Check holidays
+  /** Find the matching holiday for a given date, if any */
+  const findMatchingHoliday = useCallback(
+    (date: Date): FacilityHoliday | null => {
       const month = date.getMonth() + 1
       const day = date.getDate()
       const dow = date.getDay()
       const weekOfMonth = Math.ceil(day / 7)
 
-      // Check if it's the last occurrence of this weekday in the month
       const nextWeek = new Date(date)
       nextWeek.setDate(nextWeek.getDate() + 7)
       const isLastOfMonth = nextWeek.getMonth() !== date.getMonth()
 
-      return holidays.some(h => {
+      return holidays.find(h => {
         if (!h.is_active) return false
         if (h.month !== month) return false
 
@@ -392,9 +398,70 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
         }
 
         return false
-      })
+      }) ?? null
     },
-    [closures, holidays]
+    [holidays]
+  )
+
+  /** Returns true only for FULL closures (one-off closures or non-partial holidays) */
+  const isDateClosed = useCallback(
+    (date: Date): boolean => {
+      const dateStr = getLocalDateString(date)
+
+      // Check one-off closures
+      if (closures.some(c => c.closure_date === dateStr)) {
+        return true
+      }
+
+      // Check holidays — only full-day holidays count as "closed"
+      const holiday = findMatchingHoliday(date)
+      if (holiday && !holiday.is_partial) {
+        return true
+      }
+
+      return false
+    },
+    [closures, findMatchingHoliday]
+  )
+
+  /** Rich closure info including holiday name, partial status, and close time */
+  const getDateClosureInfo = useCallback(
+    (date: Date): DateClosureInfo => {
+      const dateStr = getLocalDateString(date)
+
+      // Check one-off closures first
+      const closure = closures.find(c => c.closure_date === dateStr)
+      if (closure) {
+        return {
+          isClosed: true,
+          isPartialHoliday: false,
+          holidayName: null,
+          closureReason: closure.reason ?? null,
+          partialCloseTime: null,
+        }
+      }
+
+      // Check holidays
+      const holiday = findMatchingHoliday(date)
+      if (holiday) {
+        return {
+          isClosed: !holiday.is_partial,
+          isPartialHoliday: holiday.is_partial,
+          holidayName: holiday.name,
+          closureReason: null,
+          partialCloseTime: holiday.is_partial ? (holiday.partial_close_time ?? null) : null,
+        }
+      }
+
+      return {
+        isClosed: false,
+        isPartialHoliday: false,
+        holidayName: null,
+        closureReason: null,
+        partialCloseTime: null,
+      }
+    },
+    [closures, findMatchingHoliday]
   )
 
   return {
@@ -414,5 +481,6 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
     deleteClosure,
     // Utility
     isDateClosed,
+    getDateClosureInfo,
   }
 }

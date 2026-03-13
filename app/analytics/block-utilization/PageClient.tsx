@@ -108,6 +108,8 @@ interface FacilityHolidayRow {
   week_of_month: number | null
   day_of_week: number | null
   is_active: boolean
+  is_partial: boolean
+  partial_close_time: string | null
 }
 
 interface RoomScheduleRow {
@@ -268,7 +270,7 @@ function resolveBlockDates(
   rangeStart: Date,
   rangeEnd: Date,
   closureDates: Set<string>,
-  holidayDates: Set<string>,
+  holidayDates: Map<string, ResolvedHolidayInfo>,
   surgeonMap: Map<string, string>
 ): ResolvedBlockDay[] {
   const results: ResolvedBlockDay[] = []
@@ -285,6 +287,8 @@ function resolveBlockDates(
 
   const exceptions = new Set<string>(block.exception_dates || [])
   const blockDuration = timeDiffMinutes(block.start_time, block.end_time)
+  const blockStartMin = timeToMinutes(block.start_time)
+  const blockEndMin = timeToMinutes(block.end_time)
 
   const current = new Date(effStart)
   while (current <= effEnd) {
@@ -293,19 +297,46 @@ function resolveBlockDates(
       if (
         matchesRecurrence(current, block.recurrence_type) &&
         !exceptions.has(dateStr) &&
-        !closureDates.has(dateStr) &&
-        !holidayDates.has(dateStr)
+        !closureDates.has(dateStr)
       ) {
-        results.push({
-          date: dateStr,
-          blockId: block.id,
-          surgeonId: block.surgeon_id,
-          surgeonName: surgeonMap.get(block.surgeon_id) || 'Unknown',
-          roomId: block.or_room_id || null,
-          startTime: block.start_time,
-          endTime: block.end_time,
-          durationMinutes: blockDuration,
-        })
+        const holiday = holidayDates.get(dateStr)
+
+        if (holiday && !holiday.isPartial) {
+          // Full-day holiday — skip entirely
+        } else if (holiday && holiday.isPartial && holiday.closeTime) {
+          // Partial holiday — include block only for time before close
+          const closeMin = timeToMinutes(holiday.closeTime)
+          if (blockStartMin < closeMin) {
+            // Block starts before close time — truncate end to close time
+            const effectiveEndMin = Math.min(blockEndMin, closeMin)
+            const effectiveDuration = effectiveEndMin - blockStartMin
+            if (effectiveDuration > 0) {
+              results.push({
+                date: dateStr,
+                blockId: block.id,
+                surgeonId: block.surgeon_id,
+                surgeonName: surgeonMap.get(block.surgeon_id) || 'Unknown',
+                roomId: block.or_room_id || null,
+                startTime: block.start_time,
+                endTime: minutesToTimeStr24(effectiveEndMin),
+                durationMinutes: effectiveDuration,
+              })
+            }
+          }
+          // Block starts at or after close time — excluded entirely
+        } else {
+          // Normal day — include full block
+          results.push({
+            date: dateStr,
+            blockId: block.id,
+            surgeonId: block.surgeon_id,
+            surgeonName: surgeonMap.get(block.surgeon_id) || 'Unknown',
+            roomId: block.or_room_id || null,
+            startTime: block.start_time,
+            endTime: block.end_time,
+            durationMinutes: blockDuration,
+          })
+        }
       }
     }
     current.setDate(current.getDate() + 1)
@@ -333,8 +364,18 @@ function matchesRecurrence(date: Date, recurrenceType: RecurrenceType): boolean 
   }
 }
 
-function resolveHolidayDates(holidays: FacilityHolidayRow[], startDate: Date, endDate: Date): Set<string> {
-  const dates = new Set<string>()
+interface ResolvedHolidayInfo {
+  name: string
+  isPartial: boolean
+  closeTime: string | null // e.g. "12:00:00" — only set for partial holidays
+}
+
+function resolveHolidayDates(
+  holidays: FacilityHolidayRow[],
+  startDate: Date,
+  endDate: Date
+): Map<string, ResolvedHolidayInfo> {
+  const dates = new Map<string, ResolvedHolidayInfo>()
   const startYear = startDate.getFullYear()
   const endYear = endDate.getFullYear()
 
@@ -344,12 +385,16 @@ function resolveHolidayDates(holidays: FacilityHolidayRow[], startDate: Date, en
       if (h.day !== null) {
         const d = new Date(year, h.month - 1, h.day)
         const ds = toDateStr(d)
-        if (d >= startDate && d <= endDate) dates.add(ds)
+        if (d >= startDate && d <= endDate) {
+          dates.set(ds, { name: h.name, isPartial: h.is_partial, closeTime: h.partial_close_time })
+        }
       } else if (h.week_of_month !== null && h.day_of_week !== null) {
         const resolved = getNthWeekdayOfMonth(year, h.month - 1, h.day_of_week, h.week_of_month)
         if (resolved) {
           const ds = toDateStr(resolved)
-          if (resolved >= startDate && resolved <= endDate) dates.add(ds)
+          if (resolved >= startDate && resolved <= endDate) {
+            dates.set(ds, { name: h.name, isPartial: h.is_partial, closeTime: h.partial_close_time })
+          }
         }
       }
     }
@@ -394,6 +439,13 @@ function minutesToTimeStr(mins: number): string {
   const h = Math.floor(mins / 60)
   const m = mins % 60
   return formatTime12Hour(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`)
+}
+
+/** 24-hour format time string for internal use (e.g. "12:00:00") */
+function minutesToTimeStr24(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`
 }
 
 function toDateStr(d: Date): string {
@@ -595,7 +647,7 @@ function calculateRoomUtilization(
   blockDays: ResolvedBlockDay[],
   facilityMilestoneNames: Map<string, string>,
   closureDates: Set<string>,
-  holidayDates: Set<string>,
+  holidayDates: Map<string, ResolvedHolidayInfo>,
   startDate: Date,
   endDate: Date
 ): RoomUtilization[] {
@@ -656,25 +708,51 @@ function calculateRoomUtilization(
     while (current <= endDate) {
       const dateStr = toDateStr(current)
 
-      // Skip closures and holidays
-      if (!closureDates.has(dateStr) && !holidayDates.has(dateStr)) {
-        const schedule = getRoomScheduleForDate(room.id, dateStr, roomSchedules)
+      // Skip one-off closures entirely
+      if (closureDates.has(dateStr)) {
+        current.setDate(current.getDate() + 1)
+        continue
+      }
 
-        if (schedule && schedule.availableMinutes > 0) {
+      const holiday = holidayDates.get(dateStr)
+
+      // Skip full-day holidays entirely
+      if (holiday && !holiday.isPartial) {
+        current.setDate(current.getDate() + 1)
+        continue
+      }
+
+      const schedule = getRoomScheduleForDate(room.id, dateStr, roomSchedules)
+
+      if (schedule && schedule.availableMinutes > 0) {
+        // For partial holidays, reduce available minutes to the open portion
+        let effectiveAvailableMinutes = schedule.availableMinutes
+        let effectiveCloseTime = schedule.closeTime
+        if (holiday?.isPartial && holiday.closeTime) {
+          const holidayCloseMin = timeToMinutes(holiday.closeTime)
+          const roomOpenMin = timeToMinutes(schedule.openTime)
+          const roomCloseMin = timeToMinutes(schedule.closeTime)
+          // Effective close = earlier of room close vs holiday close
+          const effectiveCloseMin = Math.min(roomCloseMin, holidayCloseMin)
+          effectiveAvailableMinutes = Math.max(0, effectiveCloseMin - roomOpenMin)
+          effectiveCloseTime = minutesToTimeStr24(effectiveCloseMin)
+        }
+
+        if (effectiveAvailableMinutes > 0) {
           const caseKey = `${room.id}|${dateStr}`
           const caseData = roomDateCases.get(caseKey)
           const blockAlloc = roomDateBlocks.get(caseKey) || 0
 
           const usedMinutes = caseData?.minutes || 0
           const caseCount = caseData?.count || 0
-          const utilizationPct = Math.round((usedMinutes / schedule.availableMinutes) * 100)
-          const idleMinutes = Math.max(0, schedule.availableMinutes - usedMinutes)
+          const utilizationPct = Math.round((usedMinutes / effectiveAvailableMinutes) * 100)
+          const idleMinutes = Math.max(0, effectiveAvailableMinutes - usedMinutes)
 
           days.push({
             date: dateStr,
             roomId: room.id,
             roomName: room.name,
-            availableMinutes: schedule.availableMinutes,
+            availableMinutes: effectiveAvailableMinutes,
             usedMinutes,
             caseCount,
             utilizationPct,
@@ -683,7 +761,7 @@ function calculateRoomUtilization(
             lastCaseEnd: caseData?.lastEnd ?? null,
             blockAllocatedMinutes: blockAlloc,
             openTime: schedule.openTime,
-            closeTime: schedule.closeTime,
+            closeTime: effectiveCloseTime,
           })
         }
       }
@@ -1414,7 +1492,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
           // 4. Holidays
           supabase
             .from('facility_holidays')
-            .select('id, name, month, day, week_of_month, day_of_week, is_active')
+            .select('id, name, month, day, week_of_month, day_of_week, is_active, is_partial, partial_close_time')
             .eq('facility_id', facilityId),
 
           // 5. Facility milestones

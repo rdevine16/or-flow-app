@@ -8,6 +8,7 @@ import { useRooms, type Room } from '@/hooks/useLookups'
 import { buildAssignmentMap, roomDateKey } from '@/types/room-scheduling'
 import type { RoomDateAssignment, RoomDateStaff } from '@/types/room-scheduling'
 import type { RoomDaySchedule } from '@/hooks/useRoomSchedules'
+import type { DateClosureInfo } from '@/hooks/useFacilityClosures'
 import { getDefaultWeekSchedule } from '@/hooks/useRoomSchedules'
 import { exportRoomSchedulePdf } from '@/lib/exportRoomSchedulePdf'
 import { RoomDayCell } from './RoomDayCell'
@@ -69,6 +70,10 @@ interface RoomScheduleGridProps {
   onToggleWeekends: () => void
   /** Facility name for PDF export header */
   facilityName?: string
+  /** Facility-level closure check (holidays + one-off closures) */
+  isFacilityDateClosed?: (date: Date) => boolean
+  /** Rich facility closure info for tooltip display */
+  getDateClosureInfo?: (date: Date) => DateClosureInfo
 }
 
 export function RoomScheduleGrid({
@@ -88,6 +93,8 @@ export function RoomScheduleGrid({
   showWeekends,
   onToggleWeekends,
   facilityName,
+  isFacilityDateClosed,
+  getDateClosureInfo,
 }: RoomScheduleGridProps) {
   const { data: rooms, loading: roomsLoading } = useRooms(facilityId)
 
@@ -260,20 +267,42 @@ export function RoomScheduleGrid({
                   const dateStr = formatDate(date)
                   const dayOfWeek = date.getDay()
                   const prevWeekSameDay = formatDate(addDays(date, -7))
+                  const facilityClosedFull = isFacilityDateClosed?.(date) ?? false
+                  const closureInfo = getDateClosureInfo?.(date)
+                  const holidayLabel = closureInfo?.holidayName
+                    ?? (closureInfo?.closureReason ? closureInfo.closureReason : null)
                   return (
                     <th
                       key={i}
                       className={`px-2 py-2 text-center text-xs border-b border-r border-slate-200 align-middle ${
-                        isToday ? 'bg-blue-50' : 'bg-slate-50'
+                        facilityClosedFull ? 'bg-slate-100' : closureInfo?.isPartialHoliday ? 'bg-amber-50' : isToday ? 'bg-blue-50' : 'bg-slate-50'
                       }`}
+                      title={
+                        closureInfo?.isPartialHoliday
+                          ? `${closureInfo.holidayName} — Partial, closes early`
+                          : facilityClosedFull && holidayLabel
+                            ? `${holidayLabel} — Full day closure`
+                            : undefined
+                      }
                     >
-                      <div className={`font-semibold ${isToday ? 'text-blue-600' : 'text-slate-500'}`}>
+                      <div className={`font-semibold ${
+                        facilityClosedFull ? 'text-slate-400' : isToday ? 'text-blue-600' : 'text-slate-500'
+                      }`}>
                         {DAY_LABELS[dayOfWeek]}
                       </div>
-                      <div className={`text-[11px] ${isToday ? 'text-blue-500' : 'text-slate-400'}`}>
+                      <div className={`text-[11px] ${
+                        facilityClosedFull ? 'text-slate-400' : isToday ? 'text-blue-500' : 'text-slate-400'
+                      }`}>
                         {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </div>
-                      {onCloneDay && (
+                      {(facilityClosedFull || closureInfo?.isPartialHoliday) && holidayLabel && (
+                        <div className={`text-[10px] mt-0.5 truncate ${
+                          closureInfo?.isPartialHoliday ? 'text-amber-500' : 'text-slate-400'
+                        }`}>
+                          {holidayLabel}
+                        </div>
+                      )}
+                      {!facilityClosedFull && onCloneDay && (
                         <button
                           onClick={() => onCloneDay(prevWeekSameDay, dateStr)}
                           className="mt-0.5 text-[10px] text-slate-400 hover:text-blue-500 transition-colors"
@@ -300,10 +329,12 @@ export function RoomScheduleGrid({
                     const key = roomDateKey(room.id, dateStr)
                     const cellData = assignmentMap[key] ?? null
                     const isToday = isSameDay(date, today)
-                    const isClosed = isRoomClosedOnDay(room.id, date.getDay())
+                    const roomClosed = isRoomClosedOnDay(room.id, date.getDay())
+                    const facilityClosed = isFacilityDateClosed?.(date) ?? false
+                    const isClosed = roomClosed || facilityClosed
 
                     return (
-                      <td key={i} className={`p-0 align-top border-b border-r border-slate-200 ${isToday ? 'bg-blue-50/50' : ''}`}>
+                      <td key={i} className={`p-0 align-top border-b border-r border-slate-200 ${isToday && !isClosed ? 'bg-blue-50/50' : ''}`}>
                         <RoomDayCell
                           cellData={cellData}
                           isToday={isToday}
