@@ -192,9 +192,9 @@ export function HolidaysTab({ facilityId }: HolidaysTabProps) {
             </Button>
           </div>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100" role="list" aria-label="Recurring holidays">
             {holidays.length === 0 ? (
-              <div className="px-6 py-12 text-center">
+              <div className="px-6 py-12 text-center" role="listitem">
                 <Calendar className="h-12 w-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-sm text-slate-500">No holidays defined yet</p>
                 <button
@@ -275,9 +275,9 @@ export function HolidaysTab({ facilityId }: HolidaysTabProps) {
             </Button>
           </div>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100" role="list" aria-label="One-off closures">
             {closures.length === 0 ? (
-              <div className="px-6 py-12 text-center">
+              <div className="px-6 py-12 text-center" role="listitem">
                 <CalendarX className="h-12 w-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-sm text-slate-500">No closures scheduled</p>
                 <button
@@ -403,7 +403,7 @@ function HolidayRow({
   inactive,
 }: HolidayRowProps) {
   return (
-    <div className={`px-6 py-4 ${inactive ? 'bg-slate-50/50' : ''}`}>
+    <div className={`px-6 py-4 ${inactive ? 'bg-slate-50/50' : ''}`} role="listitem" aria-label={`${holiday.name}${holiday.is_partial ? ', partial day' : ''}${inactive ? ', inactive' : ''}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 flex-1 min-w-0">
           {/* Toggle */}
@@ -492,7 +492,7 @@ function ClosureRow({ closure, onDelete, past }: ClosureRowProps) {
   )
 
   return (
-    <div className={`px-6 py-4 ${past ? 'bg-slate-50/50' : ''}`}>
+    <div className={`px-6 py-4 ${past ? 'bg-slate-50/50' : ''}`} role="listitem" aria-label={`Closure on ${formattedDate}${closure.reason ? `, ${closure.reason}` : ''}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 flex-1 min-w-0">
           {/* Date badge */}

@@ -392,21 +392,29 @@ export function WeekCalendar({
   const dragDuration = Math.max(dragEndHour - dragStartHour, 0.25)
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" role="region" aria-label="Surgeon block schedule">
       {/* Day Headers - Google Calendar Style */}
-      <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
-        <div className="w-[60px] flex-shrink-0" />
+      <div className="flex border-b border-slate-200 bg-white flex-shrink-0" role="row">
+        <div className="w-[60px] flex-shrink-0" role="columnheader" aria-label="Time" />
         {weekDays.map((date, i) => {
           const isToday = isSameDay(date, new Date())
           const isClosed = isDateClosed(date)
           const closureInfo = getDateClosureInfo?.(date)
           const holidayLabel = closureInfo?.holidayName
             ?? (closureInfo?.closureReason ? `Closed: ${closureInfo.closureReason}` : null)
+          const dateLabel = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+          const closureAccessibleLabel = closureInfo?.isPartialHoliday
+            ? `, ${closureInfo.holidayName}, partial closure, closes at ${formatTime12Hour(closureInfo.partialCloseTime || '')}`
+            : isClosed && holidayLabel
+              ? `, ${holidayLabel}, full day closure`
+              : ''
 
           return (
             <div
               key={i}
               className="flex-1 py-3 text-center"
+              role="columnheader"
+              aria-label={`${dateLabel}${closureAccessibleLabel}`}
               title={
                 closureInfo?.isPartialHoliday
                   ? `${closureInfo.holidayName} — Partial, closes at ${formatTime12Hour(closureInfo.partialCloseTime || '')}`
@@ -500,7 +508,7 @@ export function WeekCalendar({
 
                 {/* Full-day closed overlay */}
                 {isClosed && (
-                  <div className="absolute inset-0 bg-slate-100/50 pointer-events-none">
+                  <div className="absolute inset-0 bg-slate-100/50 pointer-events-none" role="status" aria-label={`${closureLabel} — full day closure, no blocks available`}>
                     <div className="absolute inset-0 opacity-[0.07]" style={{
                       backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, currentColor 10px, currentColor 11px)',
                     }} />
@@ -520,6 +528,8 @@ export function WeekCalendar({
                       top: `${partialCloseHour * HOUR_HEIGHT}px`,
                       bottom: 0,
                     }}
+                    role="status"
+                    aria-label={`${closureInfo?.holidayName ?? 'Holiday'} — facility closes at ${formatTime12Hour(closureInfo?.partialCloseTime || '')}`}
                   >
                     <div className="absolute inset-0 opacity-[0.05]" style={{
                       backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, currentColor 10px, currentColor 11px)',

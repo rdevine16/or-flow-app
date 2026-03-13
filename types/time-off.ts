@@ -201,8 +201,8 @@ export function resolveHolidayDatesForRange(
   holidays: FacilityHoliday[],
   startDate: string,
   endDate: string,
-): Map<string, { name: string; isPartial: boolean }> {
-  const result = new Map<string, { name: string; isPartial: boolean }>()
+): Map<string, { name: string; isPartial: boolean; partialCloseTime: string | null }> {
+  const result = new Map<string, { name: string; isPartial: boolean; partialCloseTime: string | null }>()
   const start = new Date(startDate + 'T00:00:00')
   const end = new Date(endDate + 'T00:00:00')
   const startYear = start.getFullYear()
@@ -224,7 +224,7 @@ export function resolveHolidayDatesForRange(
 
       if (resolved && resolved >= start && resolved <= end) {
         const ds = toDateStr(resolved)
-        result.set(ds, { name: h.name, isPartial: h.is_partial })
+        result.set(ds, { name: h.name, isPartial: h.is_partial, partialCloseTime: h.is_partial ? (h.partial_close_time ?? null) : null })
       }
     }
   }

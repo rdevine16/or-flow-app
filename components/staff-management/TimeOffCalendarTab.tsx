@@ -423,6 +423,7 @@ export function TimeOffCalendarTab({ facilityId, onRequestClick, refreshTrigger 
                   onRequestClick={onRequestClick}
                   holidayName={holiday?.name}
                   isPartialHoliday={holiday?.isPartial}
+                  partialCloseTime={holiday?.partialCloseTime}
                 />
               )
             })}
@@ -431,25 +432,31 @@ export function TimeOffCalendarTab({ facilityId, onRequestClick, refreshTrigger 
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500" role="legend" aria-label="Calendar legend">
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-amber-100 border border-amber-300" />
+          <div className="w-3 h-3 rounded bg-amber-100 border border-amber-300" aria-hidden="true" />
           <span>Pending</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" />
+          <div className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" aria-hidden="true" />
           <span>Approved</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-slate-100 border border-slate-300" />
+          <div className="w-3 h-3 rounded bg-slate-100 border border-slate-300" aria-hidden="true" />
           <span>Denied</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-blue-100 border border-blue-300" />
+          <div className="w-3 h-3 rounded bg-blue-100 border border-blue-300" aria-hidden="true" />
           <span>Holiday</span>
         </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded bg-blue-100 border border-blue-300 relative" aria-hidden="true">
+            <span className="absolute inset-0 flex items-center justify-center text-[7px] text-blue-500 font-bold">½</span>
+          </div>
+          <span>Partial Holiday</span>
+        </div>
         <div className="flex items-center gap-1.5 ml-2">
-          <span className="px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">
+          <span className="px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium" aria-hidden="true">
             N off
           </span>
           <span>Coverage indicator</span>

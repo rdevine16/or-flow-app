@@ -249,7 +249,7 @@ export function TimeOffReviewModal({
 
         {/* Holiday breakdown (when holidays overlap with the request) */}
         {ptoBreakdown && ptoBreakdown.holidays.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1.5">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1.5" role="region" aria-label="Holiday impact on PTO calculation">
             <p className="text-xs font-medium text-blue-800 flex items-center gap-1.5">
               <Gift className="w-3.5 h-3.5" />
               Holidays in this period

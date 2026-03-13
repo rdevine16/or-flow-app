@@ -50,7 +50,7 @@ export function UserTimeOffSummaryDisplay({ totals, variant = 'detail' }: UserTi
 
   // Detail variant — badges with day counts
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" role="group" aria-label="Time-off breakdown">
       <div className="flex items-center gap-4 flex-wrap">
         <TimeOffBadge label="PTO" days={totals.pto_days} variant="info" />
         <TimeOffBadge label="Sick" days={totals.sick_days} variant="warning" />

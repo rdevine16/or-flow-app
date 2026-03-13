@@ -271,12 +271,19 @@ export function RoomScheduleGrid({
                   const closureInfo = getDateClosureInfo?.(date)
                   const holidayLabel = closureInfo?.holidayName
                     ?? (closureInfo?.closureReason ? closureInfo.closureReason : null)
+                  const dateLabel = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+                  const closureAccessibleLabel = closureInfo?.isPartialHoliday
+                    ? `, ${closureInfo.holidayName}, partial closure`
+                    : facilityClosedFull && holidayLabel
+                      ? `, ${holidayLabel}, full day closure`
+                      : ''
                   return (
                     <th
                       key={i}
                       className={`px-2 py-2 text-center text-xs border-b border-r border-slate-200 align-middle ${
                         facilityClosedFull ? 'bg-slate-100' : closureInfo?.isPartialHoliday ? 'bg-amber-50' : isToday ? 'bg-blue-50' : 'bg-slate-50'
                       }`}
+                      aria-label={`${dateLabel}${closureAccessibleLabel}`}
                       title={
                         closureInfo?.isPartialHoliday
                           ? `${closureInfo.holidayName} — Partial, closes early`

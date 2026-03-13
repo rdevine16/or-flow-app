@@ -5,6 +5,7 @@
 
 import type { TimeOffRequest, TimeOffStatus } from '@/types/time-off'
 import { REQUEST_TYPE_LABELS } from '@/types/time-off'
+import { formatTime12Hour } from '@/types/block-scheduling'
 
 // ============================================
 // Types
@@ -22,6 +23,8 @@ interface CalendarDayCellProps {
   holidayName?: string
   /** Whether this is a partial holiday (facility closes early) */
   isPartialHoliday?: boolean
+  /** Close time for partial holidays, e.g. "12:00:00" */
+  partialCloseTime?: string | null
 }
 
 // ============================================
@@ -50,6 +53,7 @@ export function CalendarDayCell({
   onRequestClick,
   holidayName,
   isPartialHoliday,
+  partialCloseTime,
 }: CalendarDayCellProps) {
   const visible = requests.slice(0, MAX_VISIBLE_BADGES)
   const overflow = requests.length - MAX_VISIBLE_BADGES
@@ -118,18 +122,26 @@ export function CalendarDayCell({
       </div>
 
       {/* Holiday indicator */}
-      {isHoliday && isCurrentMonth && (
-        <div
-          className="w-full rounded px-1.5 py-0.5 text-[11px] leading-tight truncate bg-blue-100 border-l-2 border-l-blue-400 text-blue-700 mb-0.5"
-          title={`${holidayName}${isPartialHoliday ? ' (partial day)' : ''}`}
-          aria-label={`Holiday: ${holidayName}${isPartialHoliday ? ', partial day' : ''}`}
-        >
-          <span className="font-medium">{holidayName}</span>
-          {isPartialHoliday && (
-            <span className="opacity-70 ml-0.5">½</span>
-          )}
-        </div>
-      )}
+      {isHoliday && isCurrentMonth && (() => {
+        const closeTimeLabel = isPartialHoliday && partialCloseTime
+          ? ` — closes at ${formatTime12Hour(partialCloseTime)}`
+          : ''
+        const partialLabel = isPartialHoliday
+          ? (partialCloseTime ? `, closes at ${formatTime12Hour(partialCloseTime)}` : ', partial day')
+          : ''
+        return (
+          <div
+            className="w-full rounded px-1.5 py-0.5 text-[11px] leading-tight truncate bg-blue-100 border-l-2 border-l-blue-400 text-blue-700 mb-0.5"
+            title={`${holidayName}${isPartialHoliday ? ` (partial day${closeTimeLabel})` : ''}`}
+            aria-label={`Holiday: ${holidayName}${partialLabel}`}
+          >
+            <span className="font-medium">{holidayName}</span>
+            {isPartialHoliday && (
+              <span className="opacity-70 ml-0.5">½</span>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Request badges */}
       <div className="space-y-0.5">

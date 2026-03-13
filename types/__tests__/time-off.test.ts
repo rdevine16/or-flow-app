@@ -354,7 +354,7 @@ describe('resolveHolidayDatesForRange', () => {
     const result = resolveHolidayDatesForRange(holidays, '2026-12-20', '2026-12-31')
 
     expect(result.size).toBe(1)
-    expect(result.get('2026-12-25')).toEqual({ name: 'Christmas', isPartial: false })
+    expect(result.get('2026-12-25')).toEqual({ name: 'Christmas', isPartial: false, partialCloseTime: null })
   })
 
   it('resolves a dynamic-date holiday (4th Thu of Nov = Thanksgiving)', () => {
@@ -420,7 +420,7 @@ describe('resolveHolidayDatesForRange', () => {
     ]
     const result = resolveHolidayDatesForRange(holidays, '2026-12-20', '2026-12-31')
 
-    expect(result.get('2026-12-24')).toEqual({ name: 'Christmas Eve', isPartial: true })
+    expect(result.get('2026-12-24')).toEqual({ name: 'Christmas Eve', isPartial: true, partialCloseTime: '12:00:00' })
   })
 
   it('returns empty map when no holidays match', () => {
