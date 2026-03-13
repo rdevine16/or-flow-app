@@ -186,6 +186,99 @@ CREATE INDEX idx_tor_facility_dates ON time_off_requests(facility_id, start_date
 
 ---
 
+## Holiday Management
+
+### Overview
+Facility-level holidays configured by admins on the Staff Management page. Holidays affect block schedules (blocks hidden), room schedules (rooms closed), analytics (hours calculations), and time-off (holidays excluded from PTO counts).
+
+### Requirements
+
+#### Holiday Configuration (Staff Management → Holidays Tab)
+17. **Holidays tab** on Staff Management page — admin CRUD for facility holidays
+18. Holidays are **facility-scoped** (each facility defines its own)
+19. Holidays are **one-time** (no recurrence — admin creates each year manually)
+20. **Partial holidays supported** — e.g., "Christmas Eve — close at noon"
+    - Full-day holidays: all rooms closed, all blocks hidden
+    - Partial holidays: rooms close at specified time, blocks that fall entirely after close time are hidden
+21. Holiday fields: name, date, is_partial, partial_close_time (time rooms close on partial days)
+
+#### Block Schedule Impact
+22. **Blocks hidden on holiday dates** — surgeon blocks do not appear on full-day holidays
+23. On partial holidays, blocks that start at or after `partial_close_time` are hidden; blocks spanning the close time shown as shortened or hidden (simpler)
+24. **Rooms shown as closed** on holiday dates — same visual treatment as existing room closures
+25. Holiday dates render with a visual indicator (banner, background color, label) so admins see why blocks are absent
+
+#### Analytics / Reporting Impact
+26. **All analytics pages** (block utilization, room utilization — all tabs) must account for holidays when calculating hours for a selected period
+27. Holiday dates excluded from available hours calculations — a holiday week has fewer available hours
+28. Applies to whatever date range filters the user selects
+
+#### Time-Off ↔ Holiday Interaction
+29. **Holidays are NOT counted as PTO days.** If a time-off request spans Mon–Fri and Wednesday is a holiday, only 4 PTO days are used, not 5.
+30. **Show this detail clearly** to both:
+    - **Staff creating request:** "Your request covers 5 calendar days. 1 day is a holiday (Christmas). PTO days used: 4."
+    - **Admin reviewing request:** Same breakdown visible in review modal
+31. Time-off totals (per-user summary) must use holiday-adjusted day counts
+32. No notifications sent when admin creates a holiday
+
+### Database
+
+#### Existing Table: `facility_holidays` (already in production)
+```sql
+-- Existing schema — recurring rule-based holidays
+CREATE TABLE facility_holidays (
+  id UUID PRIMARY KEY,
+  facility_id UUID NOT NULL REFERENCES facilities(id),
+  name VARCHAR(100) NOT NULL,
+  month INTEGER,         -- 1-12
+  day INTEGER,           -- for fixed dates (e.g., Dec 25)
+  week_of_month INTEGER, -- for dynamic dates (1-5, 5=last)
+  day_of_week INTEGER,   -- for dynamic dates (0=Sun, 6=Sat)
+  is_active BOOLEAN DEFAULT true,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+-- RLS, indexes, audit logging already in place
+-- Managed via /settings/closures page + useFacilityClosures hook
+```
+
+#### Existing Table: `facility_closures` (one-off date closures)
+Already exists and is used alongside holidays for date-specific closures.
+
+#### Migration Needed: Add partial holiday support
+```sql
+ALTER TABLE facility_holidays ADD COLUMN is_partial BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE facility_holidays ADD COLUMN partial_close_time TIME;
+ALTER TABLE facility_holidays ADD CONSTRAINT partial_requires_time CHECK (
+  (is_partial = false AND partial_close_time IS NULL) OR
+  (is_partial = true AND partial_close_time IS NOT NULL)
+);
+```
+
+### Holiday Files Likely Involved
+
+#### Existing (modify)
+- `types/block-scheduling.ts` (modify — add `is_partial`, `partial_close_time` to `FacilityHoliday`)
+- `hooks/useFacilityClosures.ts` (modify — partial holiday support in CRUD + isDateClosed)
+- `app/settings/closures/PageClient.tsx` (modify — partial holiday toggle in dialog)
+- `app/analytics/block-utilization/PageClient.tsx` (verify + fix — partial holiday hours)
+- `components/block-schedule/WeekCalendar.tsx` (verify — holiday display labels)
+- `components/block-schedule/RoomScheduleGrid.tsx` (verify — rooms closed on holidays)
+
+#### New
+- `supabase/migrations/YYYYMMDD_add_partial_holidays.sql` (new — add partial columns)
+- `components/staff-management/HolidaysTab.tsx` (new — holidays + closures tab on Staff Management)
+
+#### Time-Off Integration (modify)
+- `lib/dal/time-off.ts` (modify — holiday-aware PTO calculation)
+- `components/staff-management/TimeOffReviewModal.tsx` (modify — show holiday breakdown)
+- `components/staff-management/TimeOffCalendarTab.tsx` (modify — show holidays on calendar)
+- `components/staff-management/UserTimeOffSummary.tsx` (modify — holiday-adjusted totals)
+- `hooks/useTimeOffRequests.ts` (modify — holiday-adjusted totals)
+
+---
+
 ## Out of Scope
 - Web staff dashboard (staff viewing own schedule on web)
 - Shift management / shift patterns / auto-scheduling
@@ -193,6 +286,8 @@ CREATE INDEX idx_tor_facility_dates ON time_off_requests(facility_id, start_date
 - Push notifications (in-app only)
 - Time-off accrual / PTO balance tracking
 - Coverage optimization / auto-fill suggestions
+- Recurring holidays (admin creates manually each year)
+- Holiday notifications to staff/surgeons
 
 ---
 
@@ -207,8 +302,15 @@ CREATE INDEX idx_tor_facility_dates ON time_off_requests(facility_id, start_date
 - [ ] Web admin page shows team-wide time-off calendar with color-coded requests
 - [ ] Admin can approve/deny requests with optional notes
 - [ ] Per-user time-off totals (by type, current year) visible to admin
+- [ ] Admin can create/edit/delete facility holidays from Holidays tab
+- [ ] Partial holidays supported (close at specified time)
+- [ ] Block schedule hides surgeon blocks on holiday dates
+- [ ] Room schedule shows rooms as closed on holiday dates
+- [ ] Analytics exclude holiday dates from available hours calculations
+- [ ] Time-off requests exclude holiday dates from PTO day counts
+- [ ] Holiday breakdown shown to staff on request creation and admin on review
 - [ ] All queries filter by facility_id (RLS compliance)
-- [ ] Soft delete pattern followed for time_off_requests
+- [ ] Soft delete pattern followed for facility_holidays and time_off_requests
 - [ ] No TypeScript `any` types introduced (web)
 - [ ] No force unwraps (iOS)
 - [ ] All tests pass

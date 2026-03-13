@@ -15,11 +15,16 @@
 | 7 | Web | Time-Off DAL + types + hooks | done |
 | 8 | Web | Staff Management page — Staff Directory tab | done |
 | 9 | Web | Staff Management page — Time-Off Calendar tab | done |
-| 10 | Web | Time-Off Review Modal + per-user totals + coverage indicator | pending |
-| 11 | Web | Staff Detail Drawer — tabbed slide-out (Profile / Time-Off / Actions) | pending |
-| 12 | Web | User management actions in drawer — edit, invite, deactivate + Add Staff | pending |
-| 13 | Web | Global admin features + remove /settings/users route | pending |
-| 14 | Both | Polish, edge cases, accessibility, final testing | pending |
+| 10 | Web | Time-Off Review Modal + per-user totals + coverage indicator | done |
+| 11 | Web | Staff Detail Drawer — tabbed slide-out (Profile / Time-Off / Actions) | done |
+| 12 | Web | User management actions in drawer — edit, invite, deactivate + Add Staff | done |
+| 13 | Web | Global admin features + remove /settings/users route | done |
+| 14 | Both | Polish, accessibility, and edge cases | done |
+| 15 | Both | Polish, notifications, and bug fixes | done |
+| 16 | DB + Web | Partial holidays migration + Holidays tab on Staff Management | pending |
+| 17 | Web | Time-off holiday-aware PTO calculation + review display | pending |
+| 18 | Web | Verify + fix block schedule + analytics holiday integration | pending |
+| 19 | Both | Holiday polish, edge cases, and final testing | pending |
 
 ---
 
@@ -553,3 +558,206 @@
 - Accessibility audit
 - Performance: Staff Management page loads < 2s with 50 staff
 - Performance: Calendar renders smoothly with 30+ requests per month
+
+---
+
+## Phase 15: Both — Polish, notifications, and bug fixes
+**Platform:** Both
+**Risk:** Low
+**Dependencies:** Phase 14
+**Status:** done
+
+---
+
+## Phase 16: Database + Web — Partial holidays migration + Holidays tab on Staff Management
+**Platform:** Database + Web
+**Risk:** Medium (DB migration + moving existing UI to new location)
+**Dependencies:** None (independent of iOS phases)
+
+### Existing Infrastructure (no work needed)
+The following already exists and will be **reused, not rebuilt:**
+- `facility_holidays` table — recurring rule-based (month/day or month/week_of_month/day_of_week), with RLS, audit logging
+- `facility_closures` table — one-off date closures
+- `/settings/closures` page — full CRUD for both holidays + closures
+- `useFacilityClosures` hook — CRUD + `isDateClosed()` utility
+- Types: `FacilityHoliday`, `FacilityClosure`, `CreateHolidayInput`, `CreateClosureInput` in `types/block-scheduling.ts`
+- Block schedule page already calls `isDateClosed()` to mark dates closed
+- Block utilization analytics already queries `facility_holidays` and excludes holiday dates
+
+### What This Phase Adds
+
+**Files:**
+- `supabase/migrations/YYYYMMDD_add_partial_holidays.sql` (new)
+- `components/staff-management/HolidaysTab.tsx` (new)
+- `app/staff-management/PageClient.tsx` (modify — add Holidays tab)
+- `types/block-scheduling.ts` (modify — add partial fields to FacilityHoliday)
+- `hooks/useFacilityClosures.ts` (modify — support partial fields)
+- `app/settings/closures/PageClient.tsx` (modify — support partial fields in holiday dialog)
+
+**Tasks:**
+1. **Migration — add partial holiday support to `facility_holidays`:**
+   - `ALTER TABLE facility_holidays ADD COLUMN is_partial BOOLEAN NOT NULL DEFAULT false`
+   - `ALTER TABLE facility_holidays ADD COLUMN partial_close_time TIME` (nullable)
+   - Add CHECK constraint: `partial_requires_time` — if is_partial=true then partial_close_time NOT NULL, if is_partial=false then partial_close_time IS NULL
+   - Apply migration: `supabase db push`
+2. **Update types** in `types/block-scheduling.ts`:
+   - Add `is_partial: boolean` and `partial_close_time: string | null` to `FacilityHoliday`
+   - Add same fields to `CreateHolidayInput`
+3. **Update `useFacilityClosures` hook:**
+   - `isDateClosed()` → enhance to return closure info including partial status (or add `getDateClosureInfo()`)
+   - Ensure create/update mutations include partial fields
+4. **Add "Holidays" tab to Staff Management `PageClient.tsx`:**
+   - Third tab after Staff Directory and Time-Off Calendar
+   - Tab shows combined holidays + closures (same as `/settings/closures` but embedded)
+5. **Create `HolidaysTab` component:**
+   - Reuse the holiday/closure CRUD patterns from `/settings/closures/PageClient.tsx`
+   - Two sections: "Recurring Holidays" (from `facility_holidays`) + "One-Off Closures" (from `facility_closures`)
+   - Add partial holiday toggle + close time picker to the Holiday dialog
+   - Show "Partial — closes at [time]" badge for partial holidays
+   - Include next occurrence display for recurring holidays
+6. **Update `/settings/closures` page:**
+   - Add partial holiday support to its Holiday dialog as well (keep both pages in sync)
+   - Or consider redirecting to Staff Management Holidays tab (optional cleanup)
+
+**Tests:**
+- Verify migration adds columns correctly
+- Verify partial constraint: is_partial=true requires close time, is_partial=false rejects close time
+- Unit: HolidaysTab renders with existing holidays + closures
+- Integration: Create/edit/delete holidays from Staff Management tab
+- Integration: Create partial holiday with close time
+- Workflow: Navigate to Staff Management → Holidays tab → add holiday → see in list
+
+---
+
+## Phase 17: Web — Time-off holiday-aware PTO calculation + review display
+**Platform:** Web
+**Risk:** Medium (modifying calculation logic + review UI)
+**Dependencies:** Phase 16 (partial holidays must exist)
+**Files:**
+- `lib/dal/time-off.ts` (modify — holiday-aware business day calculation)
+- `components/staff-management/TimeOffReviewModal.tsx` (modify — show holiday breakdown)
+- `hooks/useTimeOffRequests.ts` (modify — holiday-adjusted totals)
+- `components/staff-management/UserTimeOffSummary.tsx` (modify — use adjusted totals)
+- `components/staff-management/DrawerTimeOffTab.tsx` (modify — pass holidays for adjusted totals)
+- `components/staff-management/TimeOffCalendarTab.tsx` (modify — show holidays on calendar)
+
+**Tasks:**
+1. **Holiday-aware PTO calculation in `lib/dal/time-off.ts`:**
+   - Add `resolveHolidayDatesForRange(holidays: FacilityHoliday[], startDate: Date, endDate: Date): Set<string>` — resolves recurring holiday rules to actual dates in a range (reuse pattern from block utilization)
+   - Modify `calculateBusinessDays()` to accept holidays array parameter
+   - Subtract holiday dates that fall within the request's date range from PTO count
+   - Partial holiday logic: full-day holiday = -1 PTO day; partial holiday = -0.5 day (or full -1 if PTO is PM-off and holiday closes at noon, since facility is closed anyway)
+   - Return breakdown object: `{ totalCalendarDays, weekendDays, holidayDays, ptoDaysUsed, holidays: { name, date }[] }`
+2. **Time-off review modal — show holiday breakdown:**
+   - Fetch facility holidays when modal opens
+   - Calculate holiday-adjusted PTO days
+   - Display:
+     - "Date range: Mon Dec 23 – Fri Dec 27 (5 weekdays)"
+     - "Holidays in range: Christmas (Dec 25)" with holiday badge
+     - "PTO days charged: 4" (highlighted, clear)
+   - For partial holidays: "Christmas Eve (Dec 24, closes at noon) — 0.5 day"
+3. **Time-off calendar — show holidays:**
+   - Render resolved holidays on the TimeOffCalendarTab month grid
+   - Holiday cells have distinct color (e.g., blue/gray background) separate from time-off request colors
+   - Holiday name label in cell
+   - Helps admin see holidays in context when reviewing time-off patterns
+4. **User time-off summary — holiday-adjusted totals:**
+   - `UserTimeOffSummary` component must recalculate using holiday-adjusted day counts
+   - For each approved request, resolve holidays in its date range and subtract
+   - Ensure per-user totals in directory, drawer, and review modal all use adjusted counts
+5. **DrawerTimeOffTab:**
+   - Fetch holidays and pass to `UserTimeOffSummary`
+   - Show holiday-adjusted breakdown per request in recent requests list
+
+**Tests:**
+- Unit: `calculateBusinessDays` with holidays correctly subtracts holiday dates
+- Unit: `resolveHolidayDatesForRange` correctly handles fixed + dynamic holidays
+- Unit: Partial holiday + partial PTO day interactions
+- Integration: Time-off request spanning a holiday → review modal shows correct breakdown
+- Integration: User totals reflect holiday-adjusted PTO (e.g., 4 days not 5 for week with holiday)
+- Workflow: Admin reviews request overlapping holiday → sees "PTO days charged: 4" → approves → totals update correctly
+
+---
+
+## Phase 18: Web — Verify + fix block schedule + analytics holiday integration
+**Platform:** Web
+**Risk:** Low–Medium (mostly verification, fix anything broken)
+**Dependencies:** Phase 16
+
+### Context
+The block schedule page already calls `isDateClosed()` from `useFacilityClosures`, and block utilization analytics already queries `facility_holidays` and excludes those dates. This phase **verifies** both work correctly and adds partial holiday support.
+
+**Files:**
+- `app/analytics/block-utilization/PageClient.tsx` (modify if needed — partial holiday hours adjustment)
+- `components/block-schedule/WeekCalendar.tsx` (modify if needed — holiday name label)
+- `components/block-schedule/RoomScheduleGrid.tsx` (verify closed-room display on holidays)
+- `hooks/useFacilityClosures.ts` (modify if needed — partial holiday info for display)
+
+**Tasks:**
+1. **Verify block schedule (Surgeon Blocks tab):**
+   - Confirm `isDateClosed()` correctly identifies holiday dates → blocks not rendered
+   - If holiday column currently just shows no blocks with no explanation, add a holiday banner/label: "[Holiday Name]" with distinct background
+   - Verify partial holidays: if `partial_close_time` is set, blocks starting after close time should be hidden
+2. **Verify block schedule (Room Schedule tab):**
+   - Confirm room-day cells on holiday dates show as closed
+   - Verify drag-and-drop is blocked on closed cells
+   - Add holiday name to closed-cell display if not already shown
+3. **Verify block utilization analytics:**
+   - Confirm `resolveHolidayDates()` in analytics correctly resolves recurring holiday rules to actual dates
+   - Confirm holiday dates are excluded from block available hours and room available hours
+   - Test with real data: create a holiday mid-week → check that utilization stats reduce correctly
+   - **Add partial holiday support to analytics:** for partial holidays, reduce available hours by the closed portion (e.g., room open 7AM–5PM, holiday closes at noon → 5hr available instead of 10hr)
+4. **Holiday info tooltip on block schedule:**
+   - When hovering over a closed/holiday day column, show tooltip with holiday name + "Full day closure" or "Partial — closes at [time]"
+
+**Tests:**
+- Integration: Create recurring holiday (e.g., "4th Thursday of November") → view block schedule for Thanksgiving week → verify that day shows as closed
+- Integration: View block utilization for a month containing a holiday → verify reduced available hours
+- Integration: Partial holiday → analytics shows correctly reduced (not zero) hours
+- Regression: Non-holiday dates still show blocks and rooms normally
+
+---
+
+## Phase 19: Both — Holiday polish, edge cases, and final testing
+**Platform:** Both
+**Risk:** Low
+**Dependencies:** Phases 16–18
+**Files:** Various (modifications only)
+
+**Tasks:**
+1. **Edge Cases:**
+   - Holiday created after time-off was already approved → PTO totals recalculate dynamically (totals are computed, not stored), so this should "just work" — verify it does
+   - Deleting/toggling a holiday that has time-off requests overlapping it → verify totals update
+   - Holiday on a weekend — recurring holiday that lands on Sat/Sun: should have no effect on PTO or block schedule (weekends already excluded). Note: unlike US observed-date rules, facility holidays don't shift to Mon/Fri — verify this is acceptable or add observed-date logic
+   - Multiple holidays in one week (e.g., Thanksgiving Thu + day-after Fri as one-off closure)
+   - Partial holiday where close time is before room open time → effectively full closure
+   - Holiday on a day with existing `room_date_assignments` → assignments persist in DB but rooms display as closed
+2. **Time-Off Calendar polish:**
+   - Holidays visible as distinct visual elements on the calendar grid
+   - Tooltip on holiday showing name + full/partial status
+3. **Block Schedule polish:**
+   - Consistent holiday styling between Surgeon Blocks and Room Schedule tabs
+   - Holiday banner responsive to different screen sizes
+4. **iOS considerations (future):**
+   - Document how holidays should appear on iOS Staff Home when that phase is built
+   - Holiday data already accessible via existing RLS for iOS queries
+5. **Accessibility:**
+   - ARIA labels on holiday indicators in Staff Management Holidays tab
+   - Screen reader announces holiday closures on block schedule
+   - Keyboard navigation through holiday cells on time-off calendar
+6. **Final Testing:**
+   - 3-stage test gate
+   - Create holidays (both recurring + one-off closures) → verify block schedule hides blocks
+   - Verify room schedule shows closed rooms on holidays
+   - Verify analytics hours correctly reduced for holidays
+   - Create time-off spanning holidays → verify PTO count correct and breakdown shown
+   - Edit/toggle/delete holidays → verify all downstream effects update
+   - Verify `/settings/closures` page still works with partial holiday support
+
+**Tests:**
+- Full regression suite
+- Holiday CRUD regression (Staff Management tab + /settings/closures)
+- Block schedule + room schedule display regression
+- Analytics calculation regression with holidays
+- Time-off PTO calculation regression with holidays
+- Accessibility audit on holiday UI elements
