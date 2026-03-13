@@ -3,7 +3,7 @@
 // Follows the CaseDrawer pattern (Radix Dialog, right-slide, drawer-overlay/drawer-content CSS).
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import type { UserListItem } from '@/lib/dal/users'
 import type { TimeOffRequest, UserTimeOffSummary, TimeOffReviewInput } from '@/types/time-off'
@@ -33,7 +33,7 @@ interface StaffDetailDrawerProps {
 
 type DrawerTab = 'profile' | 'time-off' | 'actions'
 
-const TABS: { key: DrawerTab; label: string }[] = [
+const ALL_TABS: { key: DrawerTab; label: string }[] = [
   { key: 'profile', label: 'Profile' },
   { key: 'time-off', label: 'Time Off' },
   { key: 'actions', label: 'Actions' },
@@ -88,6 +88,11 @@ export function StaffDetailDrawer({
   if (!user) return null
 
   const roleName = getRoleName(user)
+  const isSurgeon = roleName?.toLowerCase() === 'surgeon'
+  const tabs = useMemo(
+    () => isSurgeon ? ALL_TABS.filter((t) => t.key !== 'time-off') : ALL_TABS,
+    [isSurgeon],
+  )
   const fullName = `${user.first_name} ${user.last_name}`
   const accountStatus = deriveAccountStatus(user)
   const statusCfg = STATUS_CONFIG[accountStatus]
@@ -142,7 +147,7 @@ export function StaffDetailDrawer({
 
             {/* Tab navigation */}
             <div className="flex items-center gap-1 mt-4 -mb-4 border-b-0" role="tablist" aria-label="Staff detail sections">
-              {TABS.map((tab) => {
+              {tabs.map((tab) => {
                 const isActive = activeTab === tab.key
                 return (
                   <button

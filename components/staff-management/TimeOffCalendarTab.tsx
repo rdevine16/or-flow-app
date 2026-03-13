@@ -22,6 +22,8 @@ import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
 interface TimeOffCalendarTabProps {
   facilityId: string
   onRequestClick?: (request: TimeOffRequest) => void
+  /** Increment to force data refetch (e.g. after review modal approves/denies) */
+  refreshTrigger?: number
 }
 
 // ============================================
@@ -133,7 +135,7 @@ function buildCoverageMap(
 // Component
 // ============================================
 
-export function TimeOffCalendarTab({ facilityId, onRequestClick }: TimeOffCalendarTabProps) {
+export function TimeOffCalendarTab({ facilityId, onRequestClick, refreshTrigger = 0 }: TimeOffCalendarTabProps) {
   const today = useMemo(() => new Date(), [])
 
   // Month navigation state
@@ -185,7 +187,7 @@ export function TimeOffCalendarTab({ facilityId, onRequestClick }: TimeOffCalend
         return result.data
       },
     },
-    { deps: [facilityId, dateRange.start, dateRange.end], enabled: !!facilityId },
+    { deps: [facilityId, dateRange.start, dateRange.end, refreshTrigger], enabled: !!facilityId },
   )
 
   const allRequests = data?.requests ?? []

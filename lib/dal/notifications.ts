@@ -56,6 +56,7 @@ export interface CreateNotificationParams {
   metadata?: Record<string, unknown>
   caseId?: string | null
   sentBy?: string | null
+  targetUserId?: string | null
 }
 
 // ============================================
@@ -284,6 +285,7 @@ async function createNotification(
     p_metadata: params.metadata ?? {},
     p_case_id: params.caseId ?? null,
     p_sent_by: params.sentBy ?? null,
+    p_target_user_id: params.targetUserId ?? null,
   })
 
   if (error) {

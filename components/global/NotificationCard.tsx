@@ -13,6 +13,8 @@ import {
   Ban,
   Bell,
   CheckCircle,
+  CalendarPlus,
+  XCircle,
 } from 'lucide-react'
 import type { NotificationWithReadState } from '@/lib/dal/notifications'
 
@@ -28,6 +30,9 @@ const NOTIFICATION_TYPE_CONFIG: Record<string, {
   case_auto_updated: { icon: RefreshCw, color: 'text-blue-500' },
   case_auto_cancelled: { icon: Ban, color: 'text-red-500' },
   data_quality_issue: { icon: AlertTriangle, color: 'text-amber-500' },
+  time_off_requested: { icon: CalendarPlus, color: 'text-blue-500' },
+  time_off_approved: { icon: CheckCircle, color: 'text-green-500' },
+  time_off_denied: { icon: XCircle, color: 'text-red-500' },
 }
 
 const DEFAULT_CONFIG = { icon: Bell, color: 'text-slate-400' }

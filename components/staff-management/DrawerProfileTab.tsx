@@ -15,7 +15,7 @@ interface DrawerProfileTabProps {
   facilityName: string | null
 }
 
-type AccountStatus = 'active' | 'pending' | 'inactive'
+type AccountStatus = 'active' | 'pending' | 'not_configured' | 'inactive'
 
 // ============================================
 // Helpers
@@ -30,13 +30,15 @@ const ACCESS_LEVEL_LABELS: Record<string, string> = {
 
 function deriveAccountStatus(user: UserListItem): AccountStatus {
   if (!user.is_active) return 'inactive'
+  if (!user.email) return 'not_configured'
   if (!user.last_login_at) return 'pending'
   return 'active'
 }
 
-const STATUS_CONFIG: Record<AccountStatus, { label: string; variant: 'success' | 'warning' | 'error'; icon: string }> = {
+const STATUS_CONFIG: Record<AccountStatus, { label: string; variant: 'success' | 'warning' | 'error' | 'default'; icon: string }> = {
   active: { label: 'Active', variant: 'success', icon: '✓' },
   pending: { label: 'Pending Invite', variant: 'warning', icon: '●' },
+  not_configured: { label: 'Not Configured', variant: 'default', icon: '—' },
   inactive: { label: 'Inactive', variant: 'error', icon: '○' },
 }
 

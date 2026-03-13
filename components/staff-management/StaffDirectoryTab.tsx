@@ -69,7 +69,8 @@ const ACCESS_LEVEL_LABELS: Record<string, string> = {
 const STATUS_SORT_ORDER: Record<string, number> = {
   active: 0,
   pending: 1,
-  inactive: 2,
+  not_configured: 2,
+  inactive: 3,
 }
 
 // ============================================

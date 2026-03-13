@@ -1,20 +1,18 @@
 // components/staff-management/TimeOffReviewModal.tsx
 // Admin review modal for approving/denying time-off requests.
-// Shows: staff details, request info, per-user totals, coverage impact, approve/deny actions.
+// Shows: staff details, request info, per-user totals, approve/deny actions.
 'use client'
 
 import { useState, useCallback } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import Badge from '@/components/ui/Badge'
 import { UserTimeOffSummaryDisplay } from './UserTimeOffSummary'
-import { CoverageIndicator } from './CoverageIndicator'
 import type {
   TimeOffRequest,
   TimeOffReviewInput,
   UserTimeOffSummary,
 } from '@/types/time-off'
 import { REQUEST_TYPE_LABELS, calculateBusinessDays } from '@/types/time-off'
-import type { UserListItem } from '@/lib/dal/users'
 import { CalendarDays, User, AlertCircle } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { logger } from '@/lib/logger'
@@ -36,10 +34,6 @@ interface TimeOffReviewModalProps {
   currentUserId: string
   /** Per-user time-off totals for the year */
   totals: UserTimeOffSummary[]
-  /** Full staff list for coverage calculation */
-  staffList: UserListItem[]
-  /** Approved requests for coverage calculation */
-  approvedRequests: TimeOffRequest[]
   /** Callback when the request is approved/denied */
   onReview: (
     requestId: string,
@@ -92,8 +86,6 @@ export function TimeOffReviewModal({
   onClose,
   currentUserId,
   totals,
-  staffList,
-  approvedRequests,
   onReview,
 }: TimeOffReviewModalProps) {
   const { showToast } = useToast()
@@ -257,19 +249,6 @@ export function TimeOffReviewModal({
         <p className="text-xs text-slate-500 mb-2">Time Off This Year (Approved)</p>
         <UserTimeOffSummaryDisplay totals={userTotals} variant="detail" />
       </div>
-
-      {/* Coverage impact */}
-      {isPending && (
-        <div className="pt-4 border-t border-slate-200">
-          <CoverageIndicator
-            approvedRequests={approvedRequests}
-            staffList={staffList}
-            startDate={request.start_date}
-            endDate={request.end_date}
-            includeRequestUserId={request.user_id}
-          />
-        </div>
-      )}
 
       {/* Already reviewed info */}
       {!isPending && request.reviewer && (

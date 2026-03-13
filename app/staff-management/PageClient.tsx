@@ -4,7 +4,7 @@
 // StaffDetailDrawer (Phase 11) slides out from the directory row click.
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback } from 'react'
 import { useUser } from '@/lib/UserContext'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useUserRoles } from '@/hooks/useLookups'
@@ -21,6 +21,9 @@ import { StaffDetailDrawer } from '@/components/staff-management/StaffDetailDraw
 import InviteUserModal from '@/components/InviteUserModal'
 import type { TimeOffRequest } from '@/types/time-off'
 import { Users, CalendarDays, Building2 } from 'lucide-react'
+import { logger } from '@/lib/logger'
+
+const log = logger('staff-management:page')
 
 // ============================================
 // Tab config
@@ -58,6 +61,7 @@ export default function StaffManagementPageClient() {
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [showDeactivated, setShowDeactivated] = useState(false)
+  const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0)
 
   // Global admin facility selector
   const showFacilitySelector = isGlobalAdmin && !isImpersonating
@@ -93,8 +97,8 @@ export default function StaffManagementPageClient() {
     refetch: refetchRequests,
   } = useTimeOffRequests({ facilityId })
 
-  // Fetch staff list for coverage indicator (and directory)
-  const { data: staffList, refetch: refetchStaff } = useSupabaseQuery<UserListItem[]>(
+  // Fetch staff list for directory refresh on user updates
+  const { refetch: refetchStaff } = useSupabaseQuery<UserListItem[]>(
     async (supabase) => {
       if (activeFacilityId === null) {
         // All facilities mode (global admin)
@@ -117,12 +121,6 @@ export default function StaffManagementPageClient() {
     setSelectedUser(null)
   }, [refetchStaff, refetchRequests])
 
-  // Approved requests for coverage calculation
-  const approvedRequests = useMemo(
-    () => allRequests.filter((r) => r.status === 'approved'),
-    [allRequests],
-  )
-
   // Calendar review modal handlers
   const handleRequestClick = useCallback((request: TimeOffRequest) => {
     setSelectedRequest(request)
@@ -137,10 +135,34 @@ export default function StaffManagementPageClient() {
       const result = await reviewRequest(requestId, review)
       if (result.success) {
         await refetchRequests()
+        setCalendarRefreshTrigger((n) => n + 1)
+
+        // Fire-and-forget email notification to the staff member
+        const request = allRequests.find((r) => r.id === requestId)
+        if (request?.user?.email) {
+          fetch('/api/time-off/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              facilityId,
+              status: review.status,
+              staffEmail: request.user.email,
+              staffFirstName: request.user.first_name,
+              reviewerName: `${userData.firstName ?? ''} ${userData.lastName ?? ''}`.trim() || 'Admin',
+              requestType: request.request_type,
+              startDate: request.start_date,
+              endDate: request.end_date,
+              reviewNotes: review.review_notes ?? null,
+              facilityName: userData.facilityName ?? 'Your Facility',
+            }),
+          }).catch((err) => {
+            log.error('Failed to send time-off email notification', { error: String(err) })
+          })
+        }
       }
       return result
     },
-    [reviewRequest, refetchRequests],
+    [reviewRequest, refetchRequests, allRequests, facilityId, userData],
   )
 
   // Staff detail drawer handlers
@@ -251,6 +273,7 @@ export default function StaffManagementPageClient() {
               <TimeOffCalendarTab
                 facilityId={activeFacilityId}
                 onRequestClick={handleRequestClick}
+                refreshTrigger={calendarRefreshTrigger}
               />
             ) : isAllFacilitiesMode ? (
               <div className="bg-white rounded-xl border border-slate-200 px-6 py-12 text-center">
@@ -272,8 +295,6 @@ export default function StaffManagementPageClient() {
         onClose={handleReviewClose}
         currentUserId={userData.userId ?? ''}
         totals={totals}
-        staffList={staffList ?? []}
-        approvedRequests={approvedRequests}
         onReview={handleReview}
       />
 
