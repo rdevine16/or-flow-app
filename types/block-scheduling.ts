@@ -30,6 +30,8 @@ export interface FacilityHoliday {
   day: number | null // For fixed date holidays
   week_of_month: number | null // 1-5 (5 = last)
   day_of_week: number | null // 0-6 for dynamic holidays
+  is_partial: boolean // true = facility closes at partial_close_time
+  partial_close_time: string | null // "12:00:00" — required when is_partial=true
   is_active: boolean
   created_by: string | null
   created_at: string
@@ -164,6 +166,8 @@ export interface CreateHolidayInput {
   day?: number | null
   week_of_month?: number | null
   day_of_week?: number | null
+  is_partial?: boolean
+  partial_close_time?: string | null
 }
 
 export interface CreateClosureInput {

@@ -11,6 +11,7 @@ import {
   CreateHolidayInput,
   CreateClosureInput,
   getHolidayDateDescription,
+  formatTime12Hour,
   MONTH_LABELS,
   DAY_OF_WEEK_LABELS,
 } from '@/types/block-scheduling'
@@ -21,6 +22,7 @@ import {
   Trash2,
   Edit2,
   AlertCircle,
+  Clock,
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
@@ -466,9 +468,17 @@ function HolidayRow({
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <p className={`font-medium ${inactive ? 'text-slate-500' : 'text-slate-900'}`}>
-              {holiday.name}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className={`font-medium ${inactive ? 'text-slate-500' : 'text-slate-900'}`}>
+                {holiday.name}
+              </p>
+              {holiday.is_partial && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-amber-700 bg-amber-100 rounded-full">
+                  <Clock className="w-3 h-3" />
+                  Partial — closes at {formatTime12Hour(holiday.partial_close_time!)}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-slate-500 truncate">
               {getHolidayDateDescription(holiday)}
             </p>
@@ -616,6 +626,8 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
   const [day, setDay] = useState(1)
   const [weekOfMonth, setWeekOfMonth] = useState(1)
   const [dayOfWeek, setDayOfWeek] = useState(0)
+  const [isPartial, setIsPartial] = useState(false)
+  const [partialCloseTime, setPartialCloseTime] = useState('12:00')
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -624,34 +636,42 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
     if (editingHoliday) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(editingHoliday.name)
-       
+
       setMonth(editingHoliday.month)
+      setIsPartial(editingHoliday.is_partial)
+      setPartialCloseTime(
+        editingHoliday.partial_close_time
+          ? editingHoliday.partial_close_time.slice(0, 5)
+          : '12:00',
+      )
       if (editingHoliday.day !== null) {
-         
+
         setDateType('fixed')
-         
+
         setDay(editingHoliday.day)
       } else {
-         
+
         setDateType('dynamic')
-         
+
         setWeekOfMonth(editingHoliday.week_of_month || 1)
-         
+
         setDayOfWeek(editingHoliday.day_of_week || 0)
       }
     } else {
-       
+
       setName('')
-       
+
       setDateType('fixed')
-       
+
       setMonth(1)
-       
+
       setDay(1)
-       
+
       setWeekOfMonth(1)
-       
+
       setDayOfWeek(0)
+      setIsPartial(false)
+      setPartialCloseTime('12:00')
     }
   }, [open, editingHoliday])
 
@@ -665,6 +685,8 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
       day: dateType === 'fixed' ? day : null,
       week_of_month: dateType === 'dynamic' ? weekOfMonth : null,
       day_of_week: dateType === 'dynamic' ? dayOfWeek : null,
+      is_partial: isPartial,
+      partial_close_time: isPartial ? `${partialCloseTime}:00` : null,
     }
 
     onSave(input)
@@ -798,10 +820,49 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
               </div>
             )}
 
+            {/* Partial Holiday */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">Partial Holiday</label>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Facility closes early instead of full-day closure
+                  </p>
+                </div>
+                <Toggle
+                  checked={isPartial}
+                  onChange={() => setIsPartial(!isPartial)}
+                  size="sm"
+                  aria-label="Toggle partial holiday"
+                />
+              </div>
+
+              {isPartial && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Facility closes at
+                  </label>
+                  <input
+                    type="time"
+                    value={partialCloseTime}
+                    onChange={(e) => setPartialCloseTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Rooms and blocks after this time will be treated as closed
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Preview */}
             <div className="p-3 bg-slate-50 rounded-lg">
               <p className="text-xs text-slate-500 mb-1">Preview</p>
-              <p className="text-sm font-medium text-slate-700">{previewText}</p>
+              <p className="text-sm font-medium text-slate-700">
+                {previewText}
+                {isPartial && ` — closes at ${formatTime12Hour(partialCloseTime + ':00')}`}
+              </p>
             </div>
           </div>
 

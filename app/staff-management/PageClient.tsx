@@ -20,7 +20,8 @@ import { TimeOffReviewModal } from '@/components/staff-management/TimeOffReviewM
 import { StaffDetailDrawer } from '@/components/staff-management/StaffDetailDrawer'
 import InviteUserModal from '@/components/InviteUserModal'
 import type { TimeOffRequest } from '@/types/time-off'
-import { Users, CalendarDays, Building2 } from 'lucide-react'
+import { HolidaysTab } from '@/components/staff-management/HolidaysTab'
+import { Users, CalendarDays, Calendar, Building2 } from 'lucide-react'
 import { logger } from '@/lib/logger'
 
 const log = logger('staff-management:page')
@@ -29,7 +30,7 @@ const log = logger('staff-management:page')
 // Tab config
 // ============================================
 
-type StaffManagementTab = 'directory' | 'time-off-calendar'
+type StaffManagementTab = 'directory' | 'time-off-calendar' | 'holidays'
 
 interface TabConfig {
   key: StaffManagementTab
@@ -40,6 +41,7 @@ interface TabConfig {
 const TABS: TabConfig[] = [
   { key: 'directory', label: 'Staff Directory', icon: <Users className="w-4 h-4" /> },
   { key: 'time-off-calendar', label: 'Time-Off Calendar', icon: <CalendarDays className="w-4 h-4" /> },
+  { key: 'holidays', label: 'Holidays', icon: <Calendar className="w-4 h-4" /> },
 ]
 
 // ============================================
@@ -281,6 +283,22 @@ export default function StaffManagementPageClient() {
                 <p className="text-slate-500 font-medium">Select a specific facility</p>
                 <p className="text-sm text-slate-400 mt-1">
                   The time-off calendar requires a single facility. Use the facility selector above to choose one.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {activeTab === 'holidays' && (
+          <div role="tabpanel" id="tabpanel-holidays" aria-labelledby="tab-holidays">
+            {!isAllFacilitiesMode && activeFacilityId ? (
+              <HolidaysTab facilityId={activeFacilityId} />
+            ) : isAllFacilitiesMode ? (
+              <div className="bg-white rounded-xl border border-slate-200 px-6 py-12 text-center">
+                <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium">Select a specific facility</p>
+                <p className="text-sm text-slate-400 mt-1">
+                  Holidays are facility-specific. Use the facility selector above to choose one.
                 </p>
               </div>
             ) : null}
