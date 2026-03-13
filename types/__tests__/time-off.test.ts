@@ -2,6 +2,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   calculateBusinessDays,
+  calculateBusinessDaysWithHolidays,
+  resolveHolidayDatesForRange,
   REQUEST_TYPE_LABELS,
   STATUS_LABELS,
   type TimeOffRequest,
@@ -10,6 +12,7 @@ import {
   type UserTimeOffSummary,
   type TimeOffFilterParams,
 } from '../time-off'
+import type { FacilityHoliday } from '../block-scheduling'
 
 describe('calculateBusinessDays', () => {
   it('calculates single weekday as 1 business day', () => {
@@ -321,5 +324,208 @@ describe('TimeOffFilterParams type', () => {
   it('allows empty filters object', () => {
     const filter: TimeOffFilterParams = {}
     expect(Object.keys(filter)).toHaveLength(0)
+  })
+})
+
+// =====================================================
+// Holiday-aware calculation tests
+// =====================================================
+
+function makeHoliday(overrides: Partial<FacilityHoliday> & { name: string; month: number }): FacilityHoliday {
+  return {
+    id: 'h-' + Math.random().toString(36).slice(2, 8),
+    facility_id: 'fac-1',
+    day: null,
+    week_of_month: null,
+    day_of_week: null,
+    is_partial: false,
+    partial_close_time: null,
+    is_active: true,
+    created_by: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
+describe('resolveHolidayDatesForRange', () => {
+  it('resolves a fixed-date holiday (Dec 25) within range', () => {
+    const holidays = [makeHoliday({ name: 'Christmas', month: 12, day: 25 })]
+    const result = resolveHolidayDatesForRange(holidays, '2026-12-20', '2026-12-31')
+
+    expect(result.size).toBe(1)
+    expect(result.get('2026-12-25')).toEqual({ name: 'Christmas', isPartial: false })
+  })
+
+  it('resolves a dynamic-date holiday (4th Thu of Nov = Thanksgiving)', () => {
+    const holidays = [makeHoliday({ name: 'Thanksgiving', month: 11, week_of_month: 4, day_of_week: 4 })]
+    const result = resolveHolidayDatesForRange(holidays, '2026-11-01', '2026-11-30')
+
+    expect(result.size).toBe(1)
+    // 4th Thursday of November 2026 = Nov 26
+    expect(result.has('2026-11-26')).toBe(true)
+    expect(result.get('2026-11-26')?.name).toBe('Thanksgiving')
+  })
+
+  it('resolves last-occurrence holiday (week_of_month=5)', () => {
+    // Last Monday of May 2026 = May 25
+    const holidays = [makeHoliday({ name: 'Memorial Day', month: 5, week_of_month: 5, day_of_week: 1 })]
+    const result = resolveHolidayDatesForRange(holidays, '2026-05-01', '2026-05-31')
+
+    expect(result.size).toBe(1)
+    expect(result.has('2026-05-25')).toBe(true)
+  })
+
+  it('excludes inactive holidays', () => {
+    const holidays = [makeHoliday({ name: 'Old Holiday', month: 12, day: 25, is_active: false })]
+    const result = resolveHolidayDatesForRange(holidays, '2026-12-20', '2026-12-31')
+
+    expect(result.size).toBe(0)
+  })
+
+  it('excludes holidays outside date range', () => {
+    const holidays = [makeHoliday({ name: 'Christmas', month: 12, day: 25 })]
+    const result = resolveHolidayDatesForRange(holidays, '2026-12-01', '2026-12-20')
+
+    expect(result.size).toBe(0)
+  })
+
+  it('resolves multiple holidays in range', () => {
+    const holidays = [
+      makeHoliday({ name: 'Christmas Eve', month: 12, day: 24 }),
+      makeHoliday({ name: 'Christmas', month: 12, day: 25 }),
+    ]
+    const result = resolveHolidayDatesForRange(holidays, '2026-12-20', '2026-12-31')
+
+    expect(result.size).toBe(2)
+    expect(result.has('2026-12-24')).toBe(true)
+    expect(result.has('2026-12-25')).toBe(true)
+  })
+
+  it('handles year boundary (range spanning Dec–Jan)', () => {
+    const holidays = [
+      makeHoliday({ name: 'Christmas', month: 12, day: 25 }),
+      makeHoliday({ name: "New Year's Day", month: 1, day: 1 }),
+    ]
+    const result = resolveHolidayDatesForRange(holidays, '2026-12-20', '2027-01-05')
+
+    expect(result.size).toBe(2)
+    expect(result.has('2026-12-25')).toBe(true)
+    expect(result.has('2027-01-01')).toBe(true)
+  })
+
+  it('marks partial holidays correctly', () => {
+    const holidays = [
+      makeHoliday({ name: 'Christmas Eve', month: 12, day: 24, is_partial: true, partial_close_time: '12:00:00' }),
+    ]
+    const result = resolveHolidayDatesForRange(holidays, '2026-12-20', '2026-12-31')
+
+    expect(result.get('2026-12-24')).toEqual({ name: 'Christmas Eve', isPartial: true })
+  })
+
+  it('returns empty map when no holidays match', () => {
+    const holidays = [makeHoliday({ name: 'July 4th', month: 7, day: 4 })]
+    const result = resolveHolidayDatesForRange(holidays, '2026-03-01', '2026-03-31')
+
+    expect(result.size).toBe(0)
+  })
+})
+
+describe('calculateBusinessDaysWithHolidays', () => {
+  const christmas: FacilityHoliday = makeHoliday({ name: 'Christmas', month: 12, day: 25 })
+
+  it('subtracts a weekday holiday from business days', () => {
+    // Dec 22 (Mon) to Dec 26 (Fri) 2025: 5 weekdays, Christmas (Thu) is a holiday
+    // 2025-12-25 is a Thursday
+    const holidays = [christmas]
+    const result = calculateBusinessDaysWithHolidays('2025-12-22', '2025-12-26', null, holidays)
+
+    expect(result.totalCalendarDays).toBe(5)
+    expect(result.weekendDays).toBe(0)
+    expect(result.holidayDays).toBe(1)
+    expect(result.ptoDaysCharged).toBe(4)
+    expect(result.holidays).toHaveLength(1)
+    expect(result.holidays[0].name).toBe('Christmas')
+    expect(result.holidays[0].date).toBe('2025-12-25')
+  })
+
+  it('does NOT subtract weekend holidays from business days', () => {
+    // In 2027, Dec 25 (Saturday). Mon Dec 20 to Fri Dec 24: 5 weekdays, no holiday on weekday
+    const holidays = [christmas]
+    const result = calculateBusinessDaysWithHolidays('2027-12-20', '2027-12-24', null, holidays)
+
+    expect(result.holidayDays).toBe(0)
+    expect(result.ptoDaysCharged).toBe(5)
+    expect(result.holidays).toHaveLength(0)
+  })
+
+  it('handles partial holiday as 0.5 day subtracted', () => {
+    const partialHoliday = makeHoliday({
+      name: 'Christmas Eve',
+      month: 12,
+      day: 24,
+      is_partial: true,
+      partial_close_time: '12:00:00',
+    })
+    // Dec 22 (Mon) to Dec 26 (Fri) 2025: 5 weekdays
+    // Dec 24 (Wed) is partial holiday = -0.5
+    const result = calculateBusinessDaysWithHolidays('2025-12-22', '2025-12-26', null, [partialHoliday, christmas])
+
+    expect(result.holidayDays).toBe(1.5) // 0.5 partial + 1 full
+    expect(result.ptoDaysCharged).toBe(3.5) // 5 - 1.5
+    expect(result.holidays).toHaveLength(2)
+  })
+
+  it('handles partial day PTO request (AM off)', () => {
+    // Single day, no holidays
+    const result = calculateBusinessDaysWithHolidays('2026-03-10', '2026-03-10', 'am', [])
+
+    expect(result.ptoDaysCharged).toBe(0.5)
+  })
+
+  it('returns zero PTO days when all weekdays are holidays', () => {
+    const allHolidays = [
+      makeHoliday({ name: 'H1', month: 3, day: 10 }),
+      makeHoliday({ name: 'H2', month: 3, day: 11 }),
+      makeHoliday({ name: 'H3', month: 3, day: 12 }),
+      makeHoliday({ name: 'H4', month: 3, day: 13 }),
+    ]
+    // Tue Mar 10 to Fri Mar 13, 2026: 4 weekdays, all holidays
+    const result = calculateBusinessDaysWithHolidays('2026-03-10', '2026-03-13', null, allHolidays)
+
+    expect(result.ptoDaysCharged).toBe(0)
+    expect(result.holidays).toHaveLength(4)
+  })
+
+  it('handles empty holidays array (falls back to standard calculation)', () => {
+    const result = calculateBusinessDaysWithHolidays('2026-03-09', '2026-03-13', null, [])
+
+    // Mon-Fri = 5 business days
+    expect(result.ptoDaysCharged).toBe(5)
+    expect(result.holidayDays).toBe(0)
+    expect(result.holidays).toHaveLength(0)
+  })
+
+  it('matches calculateBusinessDays when no holidays exist', () => {
+    const start = '2026-03-02'
+    const end = '2026-03-06'
+    const withHolidays = calculateBusinessDaysWithHolidays(start, end, null, [])
+    const without = calculateBusinessDays(start, end)
+
+    expect(withHolidays.ptoDaysCharged).toBe(without)
+  })
+
+  it('handles multiple holidays in one week', () => {
+    // Thanksgiving (4th Thu of Nov) + day after (Fri, as a fixed date)
+    const holidays = [
+      makeHoliday({ name: 'Thanksgiving', month: 11, week_of_month: 4, day_of_week: 4 }),
+      makeHoliday({ name: 'Day After Thanksgiving', month: 11, day: 27 }),
+    ]
+    // Nov 23 (Mon) to Nov 27 (Fri) 2026: 5 weekdays
+    // Thanksgiving = Thu Nov 26, Day after = Fri Nov 27 → 2 holidays
+    const result = calculateBusinessDaysWithHolidays('2026-11-23', '2026-11-27', null, holidays)
+
+    expect(result.holidayDays).toBe(2)
+    expect(result.ptoDaysCharged).toBe(3)
   })
 })

@@ -13,7 +13,8 @@ import type {
   TimeOffFilterParams,
   UserTimeOffSummary,
 } from '@/types/time-off'
-import { calculateBusinessDays } from '@/types/time-off'
+import { calculateBusinessDays, calculateBusinessDaysWithHolidays } from '@/types/time-off'
+import type { FacilityHoliday } from '@/types/block-scheduling'
 import { logger } from '@/lib/logger'
 
 const log = logger('dal:time-off')
@@ -126,11 +127,14 @@ export const timeOffDAL = {
   /**
    * Fetch per-user time-off totals for a facility in a given year.
    * Only counts approved requests.
+   * When holidays are provided, uses holiday-aware calculation to subtract
+   * holiday dates from PTO counts.
    */
   async fetchUserTimeOffTotals(
     supabase: AnySupabaseClient,
     facilityId: string,
     year: number,
+    holidays?: FacilityHoliday[],
   ): Promise<DALListResult<UserTimeOffSummary>> {
     const yearStart = `${year}-01-01`
     const yearEnd = `${year}-12-31`
@@ -159,7 +163,10 @@ export const timeOffDAL = {
       end_date: string
       partial_day_type: string | null
     }[]) {
-      const days = calculateBusinessDays(row.start_date, row.end_date, row.partial_day_type as 'am' | 'pm' | null)
+      const partialDay = row.partial_day_type as 'am' | 'pm' | null
+      const days = holidays && holidays.length > 0
+        ? calculateBusinessDaysWithHolidays(row.start_date, row.end_date, partialDay, holidays).ptoDaysCharged
+        : calculateBusinessDays(row.start_date, row.end_date, partialDay)
 
       let summary = summaryMap.get(row.user_id)
       if (!summary) {

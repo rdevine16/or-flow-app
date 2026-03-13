@@ -12,6 +12,7 @@ import type {
   TimeOffReviewInput,
   UserTimeOffSummary,
 } from '@/types/time-off'
+import type { FacilityHoliday } from '@/types/block-scheduling'
 import { createClient } from '@/lib/supabase'
 
 // ============================================
@@ -27,6 +28,7 @@ interface UseTimeOffRequestsOptions {
 interface UseTimeOffRequestsReturn {
   requests: TimeOffRequest[]
   totals: UserTimeOffSummary[]
+  holidays: FacilityHoliday[]
   loading: boolean
   error: string | null
   refetch: () => Promise<void>
@@ -47,6 +49,29 @@ export function useTimeOffRequests(options: UseTimeOffRequestsOptions): UseTimeO
   const { facilityId, year = new Date().getFullYear() } = options
 
   const [filters, setFilters] = useState<TimeOffFilterParams>(options.filters ?? {})
+
+  // Fetch facility holidays for holiday-aware PTO calculation
+  const {
+    data: holidays,
+    loading: holidaysLoading,
+    refetch: refetchHolidays,
+  } = useSupabaseQuery<FacilityHoliday[]>(
+    async (supabase) => {
+      if (!facilityId) return []
+      const { data, error } = await supabase
+        .from('facility_holidays')
+        .select('*')
+        .eq('facility_id', facilityId)
+        .eq('is_active', true)
+      if (error) throw error
+      return (data as FacilityHoliday[]) || []
+    },
+    {
+      deps: [facilityId],
+      enabled: !!facilityId,
+      initialData: [],
+    },
+  )
 
   // Fetch requests
   const {
@@ -72,7 +97,7 @@ export function useTimeOffRequests(options: UseTimeOffRequestsOptions): UseTimeO
     },
   )
 
-  // Fetch per-user totals
+  // Fetch per-user totals (holiday-aware when holidays are loaded)
   const {
     data: totals,
     loading: totalsLoading,
@@ -85,12 +110,13 @@ export function useTimeOffRequests(options: UseTimeOffRequestsOptions): UseTimeO
         supabase,
         facilityId,
         year,
+        holidays ?? [],
       )
       if (error) throw error
       return data
     },
     {
-      deps: [facilityId, year],
+      deps: [facilityId, year, holidays],
       enabled: !!facilityId,
       initialData: [],
     },
@@ -134,13 +160,14 @@ export function useTimeOffRequests(options: UseTimeOffRequestsOptions): UseTimeO
 
   // Combined refetch
   const refetch = useCallback(async () => {
-    await Promise.all([refetchRequests(), refetchTotals()])
-  }, [refetchRequests, refetchTotals])
+    await Promise.all([refetchRequests(), refetchTotals(), refetchHolidays()])
+  }, [refetchRequests, refetchTotals, refetchHolidays])
 
   return {
     requests: requests ?? [],
     totals: totals ?? [],
-    loading: requestsLoading || totalsLoading,
+    holidays: holidays ?? [],
+    loading: requestsLoading || totalsLoading || holidaysLoading,
     error: requestsError || totalsError,
     refetch,
     reviewRequest,

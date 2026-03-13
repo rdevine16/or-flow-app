@@ -12,8 +12,9 @@ import type {
   TimeOffReviewInput,
   UserTimeOffSummary,
 } from '@/types/time-off'
-import { REQUEST_TYPE_LABELS, calculateBusinessDays } from '@/types/time-off'
-import { CalendarDays, User, AlertCircle } from 'lucide-react'
+import { REQUEST_TYPE_LABELS, calculateBusinessDays, calculateBusinessDaysWithHolidays } from '@/types/time-off'
+import type { FacilityHoliday } from '@/types/block-scheduling'
+import { CalendarDays, User, AlertCircle, Gift } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { logger } from '@/lib/logger'
 
@@ -34,6 +35,8 @@ interface TimeOffReviewModalProps {
   currentUserId: string
   /** Per-user time-off totals for the year */
   totals: UserTimeOffSummary[]
+  /** Facility holidays for holiday-aware PTO calculation */
+  holidays?: FacilityHoliday[]
   /** Callback when the request is approved/denied */
   onReview: (
     requestId: string,
@@ -86,6 +89,7 @@ export function TimeOffReviewModal({
   onClose,
   currentUserId,
   totals,
+  holidays = [],
   onReview,
 }: TimeOffReviewModalProps) {
   const { showToast } = useToast()
@@ -152,11 +156,20 @@ export function TimeOffReviewModal({
     : 'Unknown'
   const roleName = getRoleName(request)
   const userTotals = totals.find((t) => t.user_id === request.user_id)
-  const businessDays = calculateBusinessDays(
-    request.start_date,
-    request.end_date,
-    request.partial_day_type,
-  )
+
+  // Holiday-aware PTO calculation
+  const ptoBreakdown = holidays.length > 0
+    ? calculateBusinessDaysWithHolidays(
+        request.start_date,
+        request.end_date,
+        request.partial_day_type,
+        holidays,
+      )
+    : null
+  const businessDays = ptoBreakdown
+    ? ptoBreakdown.ptoDaysCharged
+    : calculateBusinessDays(request.start_date, request.end_date, request.partial_day_type)
+
   const isPending = request.status === 'pending'
   const isSelfReview = request.user_id === currentUserId
 
@@ -233,6 +246,40 @@ export function TimeOffReviewModal({
             {formatDateRange(request.start_date, request.end_date)}
           </p>
         </div>
+
+        {/* Holiday breakdown (when holidays overlap with the request) */}
+        {ptoBreakdown && ptoBreakdown.holidays.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1.5">
+            <p className="text-xs font-medium text-blue-800 flex items-center gap-1.5">
+              <Gift className="w-3.5 h-3.5" />
+              Holidays in this period
+            </p>
+            {ptoBreakdown.holidays.map((h) => (
+              <div key={h.date} className="flex items-center justify-between text-xs text-blue-700">
+                <span>
+                  {h.name}
+                  {h.isPartial && (
+                    <span className="text-blue-500 ml-1">(partial day)</span>
+                  )}
+                </span>
+                <span className="text-blue-500">
+                  {new Date(h.date + 'T00:00:00').toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </span>
+              </div>
+            ))}
+            <p className="text-xs font-medium text-blue-900 pt-1 border-t border-blue-200">
+              PTO days charged: {businessDays}
+              {ptoBreakdown.holidayDays > 0 && (
+                <span className="font-normal text-blue-600 ml-1">
+                  ({ptoBreakdown.totalCalendarDays - ptoBreakdown.weekendDays} weekday{ptoBreakdown.totalCalendarDays - ptoBreakdown.weekendDays !== 1 ? 's' : ''} &minus; {ptoBreakdown.holidayDays} holiday{ptoBreakdown.holidayDays !== 1 ? 's' : ''})
+                </span>
+              )}
+            </p>
+          </div>
+        )}
 
         {request.reason && (
           <div>

@@ -18,6 +18,10 @@ interface CalendarDayCellProps {
   approvedOffCount: number
   totalStaff: number
   onRequestClick?: (request: TimeOffRequest) => void
+  /** Holiday name if this date is a facility holiday */
+  holidayName?: string
+  /** Whether this is a partial holiday (facility closes early) */
+  isPartialHoliday?: boolean
 }
 
 // ============================================
@@ -44,11 +48,14 @@ export function CalendarDayCell({
   approvedOffCount,
   totalStaff,
   onRequestClick,
+  holidayName,
+  isPartialHoliday,
 }: CalendarDayCellProps) {
   const visible = requests.slice(0, MAX_VISIBLE_BADGES)
   const overflow = requests.length - MAX_VISIBLE_BADGES
   const dayNum = date.getDate()
   const isWeekend = date.getDay() === 0 || date.getDay() === 6
+  const isHoliday = !!holidayName
 
   // Coverage warning threshold: red when >= 25% of staff are off
   const coverageWarning = totalStaff > 0 && approvedOffCount >= Math.ceil(totalStaff * 0.25)
@@ -63,11 +70,18 @@ export function CalendarDayCell({
     <div
       className={`
         min-h-[110px] border-b border-r border-slate-200 p-1.5 transition-colors
-        ${!isCurrentMonth ? 'bg-slate-50/50' : isWeekend ? 'bg-slate-50/30' : 'bg-white'}
+        ${isHoliday && isCurrentMonth
+          ? 'bg-blue-50/60'
+          : !isCurrentMonth
+            ? 'bg-slate-50/50'
+            : isWeekend
+              ? 'bg-slate-50/30'
+              : 'bg-white'
+        }
         ${isToday ? 'ring-2 ring-blue-400 ring-inset' : ''}
       `}
       role="gridcell"
-      aria-label={`${dateLabel}${requests.length > 0 ? `, ${requests.length} request${requests.length !== 1 ? 's' : ''}` : ''}${approvedOffCount > 0 ? `, ${approvedOffCount} staff off` : ''}`}
+      aria-label={`${dateLabel}${isHoliday ? `, holiday: ${holidayName}` : ''}${requests.length > 0 ? `, ${requests.length} request${requests.length !== 1 ? 's' : ''}` : ''}${approvedOffCount > 0 ? `, ${approvedOffCount} staff off` : ''}`}
     >
       {/* Day header: number + coverage badge */}
       <div className="flex items-center justify-between mb-1">
@@ -102,6 +116,20 @@ export function CalendarDayCell({
           </span>
         )}
       </div>
+
+      {/* Holiday indicator */}
+      {isHoliday && isCurrentMonth && (
+        <div
+          className="w-full rounded px-1.5 py-0.5 text-[11px] leading-tight truncate bg-blue-100 border-l-2 border-l-blue-400 text-blue-700 mb-0.5"
+          title={`${holidayName}${isPartialHoliday ? ' (partial day)' : ''}`}
+          aria-label={`Holiday: ${holidayName}${isPartialHoliday ? ', partial day' : ''}`}
+        >
+          <span className="font-medium">{holidayName}</span>
+          {isPartialHoliday && (
+            <span className="opacity-70 ml-0.5">½</span>
+          )}
+        </div>
+      )}
 
       {/* Request badges */}
       <div className="space-y-0.5">

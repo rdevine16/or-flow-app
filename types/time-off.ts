@@ -146,3 +146,155 @@ export function calculateBusinessDays(
 
   return count
 }
+
+// =====================================================
+// HOLIDAY-AWARE PTO CALCULATION
+// =====================================================
+
+import type { FacilityHoliday } from '@/types/block-scheduling'
+
+/** Breakdown of PTO calculation for display in review modal / summaries */
+export interface PTOBreakdown {
+  totalCalendarDays: number
+  weekendDays: number
+  holidayDays: number
+  ptoDaysCharged: number
+  holidays: { name: string; date: string; isPartial: boolean }[]
+}
+
+/** Format a Date to YYYY-MM-DD */
+function toDateStr(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/**
+ * Find the Nth occurrence of a weekday in a month (1-indexed).
+ * n=5 means "last occurrence".
+ */
+function getNthWeekdayOfMonth(year: number, month: number, dayOfWeek: number, n: number): Date | null {
+  if (n === 5) {
+    const lastDay = new Date(year, month + 1, 0)
+    const d = new Date(lastDay)
+    while (d.getDay() !== dayOfWeek) d.setDate(d.getDate() - 1)
+    return d
+  }
+  let count = 0
+  const d = new Date(year, month, 1)
+  while (d.getMonth() === month) {
+    if (d.getDay() === dayOfWeek) {
+      count++
+      if (count === n) return new Date(d)
+    }
+    d.setDate(d.getDate() + 1)
+  }
+  return null
+}
+
+/**
+ * Resolve recurring facility holiday rules to actual dates within a range.
+ * Returns a Map of dateStr → { name, isPartial }.
+ */
+export function resolveHolidayDatesForRange(
+  holidays: FacilityHoliday[],
+  startDate: string,
+  endDate: string,
+): Map<string, { name: string; isPartial: boolean }> {
+  const result = new Map<string, { name: string; isPartial: boolean }>()
+  const start = new Date(startDate + 'T00:00:00')
+  const end = new Date(endDate + 'T00:00:00')
+  const startYear = start.getFullYear()
+  const endYear = end.getFullYear()
+
+  for (let year = startYear; year <= endYear; year++) {
+    for (const h of holidays) {
+      if (!h.is_active) continue
+
+      let resolved: Date | null = null
+
+      if (h.day !== null) {
+        // Fixed date holiday (e.g., Dec 25)
+        resolved = new Date(year, h.month - 1, h.day)
+      } else if (h.week_of_month !== null && h.day_of_week !== null) {
+        // Dynamic date holiday (e.g., 4th Thursday of November)
+        resolved = getNthWeekdayOfMonth(year, h.month - 1, h.day_of_week, h.week_of_month)
+      }
+
+      if (resolved && resolved >= start && resolved <= end) {
+        const ds = toDateStr(resolved)
+        result.set(ds, { name: h.name, isPartial: h.is_partial })
+      }
+    }
+  }
+
+  return result
+}
+
+/**
+ * Calculate holiday-aware business days between two dates (inclusive).
+ * Holidays that fall on weekdays within the range are subtracted from PTO count.
+ * Returns a full breakdown for display in review modals.
+ */
+export function calculateBusinessDaysWithHolidays(
+  startDate: string,
+  endDate: string,
+  partialDayType: PartialDayType | null,
+  holidays: FacilityHoliday[],
+): PTOBreakdown {
+  const start = new Date(startDate + 'T00:00:00')
+  const end = new Date(endDate + 'T00:00:00')
+
+  // Resolve holidays in range
+  const holidayMap = resolveHolidayDatesForRange(holidays, startDate, endDate)
+
+  let totalCalendarDays = 0
+  let weekendDays = 0
+  let holidayDays = 0
+  const matchedHolidays: PTOBreakdown['holidays'] = []
+  const current = new Date(start)
+
+  while (current <= end) {
+    totalCalendarDays++
+    const dow = current.getDay()
+    const dateStr = toDateStr(current)
+
+    if (dow === 0 || dow === 6) {
+      weekendDays++
+    } else {
+      // It's a weekday — check if it's a holiday
+      const holiday = holidayMap.get(dateStr)
+      if (holiday) {
+        // Full-day holiday: subtract 1 full day
+        // Partial holiday: subtract 0.5 day
+        holidayDays += holiday.isPartial ? 0.5 : 1
+        matchedHolidays.push({
+          name: holiday.name,
+          date: dateStr,
+          isPartial: holiday.isPartial,
+        })
+      }
+    }
+
+    current.setDate(current.getDate() + 1)
+  }
+
+  let ptoDaysCharged = totalCalendarDays - weekendDays - holidayDays
+
+  // Partial day PTO: single-day request where user takes only AM or PM off
+  if (partialDayType && ptoDaysCharged > 0) {
+    ptoDaysCharged = ptoDaysCharged - 1 + 0.5
+  }
+
+  // Ensure non-negative
+  ptoDaysCharged = Math.max(0, ptoDaysCharged)
+
+  return {
+    totalCalendarDays,
+    weekendDays,
+    holidayDays,
+    ptoDaysCharged,
+    holidays: matchedHolidays,
+  }
+}

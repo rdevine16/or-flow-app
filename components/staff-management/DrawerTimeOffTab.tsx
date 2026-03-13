@@ -4,7 +4,8 @@
 
 import { useMemo, useCallback, useState } from 'react'
 import type { TimeOffRequest, UserTimeOffSummary, TimeOffReviewInput } from '@/types/time-off'
-import { REQUEST_TYPE_LABELS, calculateBusinessDays } from '@/types/time-off'
+import { REQUEST_TYPE_LABELS, calculateBusinessDays, calculateBusinessDaysWithHolidays } from '@/types/time-off'
+import type { FacilityHoliday } from '@/types/block-scheduling'
 import { UserTimeOffSummaryDisplay } from './UserTimeOffSummary'
 import Badge from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -21,6 +22,7 @@ interface DrawerTimeOffTabProps {
   userId: string
   totals: UserTimeOffSummary | undefined
   requests: TimeOffRequest[]
+  holidays?: FacilityHoliday[]
   currentUserId: string
   onReview: (
     requestId: string,
@@ -66,6 +68,7 @@ export function DrawerTimeOffTab({
   userId,
   totals,
   requests,
+  holidays = [],
   currentUserId,
   onReview,
 }: DrawerTimeOffTabProps) {
@@ -132,7 +135,9 @@ export function DrawerTimeOffTab({
         ) : (
           <div className="space-y-2">
             {userRequests.map((req) => {
-              const days = calculateBusinessDays(req.start_date, req.end_date, req.partial_day_type)
+              const days = holidays.length > 0
+                ? calculateBusinessDaysWithHolidays(req.start_date, req.end_date, req.partial_day_type, holidays).ptoDaysCharged
+                : calculateBusinessDays(req.start_date, req.end_date, req.partial_day_type)
               const isPending = req.status === 'pending'
               const isReviewing = reviewingId === req.id
 

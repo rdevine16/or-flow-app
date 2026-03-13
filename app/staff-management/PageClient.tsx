@@ -95,6 +95,7 @@ export default function StaffManagementPageClient() {
   const {
     requests: allRequests,
     totals,
+    holidays,
     reviewRequest,
     refetch: refetchRequests,
   } = useTimeOffRequests({ facilityId })
@@ -313,6 +314,7 @@ export default function StaffManagementPageClient() {
         onClose={handleReviewClose}
         currentUserId={userData.userId ?? ''}
         totals={totals}
+        holidays={holidays}
         onReview={handleReview}
       />
 
@@ -323,6 +325,7 @@ export default function StaffManagementPageClient() {
         facilityName={userData.facilityName}
         totals={totals}
         requests={allRequests}
+        holidays={holidays}
         currentUserId={userData.userId ?? ''}
         onReview={handleReview}
         onUserUpdated={handleUserUpdated}

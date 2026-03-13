@@ -10,6 +10,8 @@ import { useUserRoles } from '@/hooks/useLookups'
 import { timeOffDAL } from '@/lib/dal/time-off'
 import { usersDAL, type UserListItem } from '@/lib/dal/users'
 import type { TimeOffRequest, TimeOffStatus } from '@/types/time-off'
+import { resolveHolidayDatesForRange } from '@/types/time-off'
+import type { FacilityHoliday } from '@/types/block-scheduling'
 import { CalendarDayCell } from './CalendarDayCell'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -166,10 +168,11 @@ export function TimeOffCalendarTab({ facilityId, onRequestClick, refreshTrigger 
   // Role lookups for filter dropdown
   const { data: roles } = useUserRoles()
 
-  // Fetch all requests + staff for the visible date range
+  // Fetch all requests + staff + holidays for the visible date range
   const { data, loading, errors, refetch } = useSupabaseQueries<{
     requests: TimeOffRequest[]
     staff: UserListItem[]
+    holidays: FacilityHoliday[]
   }>(
     {
       requests: async (supabase) => {
@@ -186,13 +189,29 @@ export function TimeOffCalendarTab({ facilityId, onRequestClick, refreshTrigger 
         if (result.error) throw result.error
         return result.data
       },
+      holidays: async (supabase) => {
+        const { data, error } = await supabase
+          .from('facility_holidays')
+          .select('*')
+          .eq('facility_id', facilityId)
+          .eq('is_active', true)
+        if (error) throw error
+        return (data as FacilityHoliday[]) || []
+      },
     },
     { deps: [facilityId, dateRange.start, dateRange.end, refreshTrigger], enabled: !!facilityId },
   )
 
   const allRequests = data?.requests ?? []
   const staffList = data?.staff ?? []
+  const facilityHolidays = data?.holidays ?? []
   const totalActiveStaff = staffList.filter((s) => s.is_active).length
+
+  // Resolve holidays to actual dates for the visible calendar range
+  const holidaysByDate = useMemo(
+    () => resolveHolidayDatesForRange(facilityHolidays, dateRange.start, dateRange.end),
+    [facilityHolidays, dateRange.start, dateRange.end],
+  )
 
   // Staff lookup by user ID (for role filtering)
   const staffMap = useMemo(() => {
@@ -391,6 +410,7 @@ export function TimeOffCalendarTab({ facilityId, onRequestClick, refreshTrigger 
           >
             {calendarDays.map((day) => {
               const dateStr = formatDateStr(day)
+              const holiday = holidaysByDate.get(dateStr)
               return (
                 <CalendarDayCell
                   key={dateStr}
@@ -401,6 +421,8 @@ export function TimeOffCalendarTab({ facilityId, onRequestClick, refreshTrigger 
                   approvedOffCount={coverageMap.get(dateStr) ?? 0}
                   totalStaff={totalActiveStaff}
                   onRequestClick={onRequestClick}
+                  holidayName={holiday?.name}
+                  isPartialHoliday={holiday?.isPartial}
                 />
               )
             })}
@@ -421,6 +443,10 @@ export function TimeOffCalendarTab({ facilityId, onRequestClick, refreshTrigger 
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded bg-slate-100 border border-slate-300" />
           <span>Denied</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded bg-blue-100 border border-blue-300" />
+          <span>Holiday</span>
         </div>
         <div className="flex items-center gap-1.5 ml-2">
           <span className="px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">

@@ -7,6 +7,7 @@ import { useState, useEffect, useMemo } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import type { UserListItem } from '@/lib/dal/users'
 import type { TimeOffRequest, UserTimeOffSummary, TimeOffReviewInput } from '@/types/time-off'
+import type { FacilityHoliday } from '@/types/block-scheduling'
 import Badge from '@/components/ui/Badge'
 import { DrawerProfileTab, deriveAccountStatus, STATUS_CONFIG } from './DrawerProfileTab'
 import { DrawerTimeOffTab } from './DrawerTimeOffTab'
@@ -23,6 +24,7 @@ interface StaffDetailDrawerProps {
   facilityName: string | null
   totals: UserTimeOffSummary[]
   requests: TimeOffRequest[]
+  holidays?: FacilityHoliday[]
   currentUserId: string
   onReview: (
     requestId: string,
@@ -74,6 +76,7 @@ export function StaffDetailDrawer({
   facilityName,
   totals,
   requests,
+  holidays = [],
   currentUserId,
   onReview,
   onUserUpdated,
@@ -183,6 +186,7 @@ export function StaffDetailDrawer({
                 userId={user.id}
                 totals={userTotals}
                 requests={requests}
+                holidays={holidays}
                 currentUserId={currentUserId}
                 onReview={onReview}
               />
