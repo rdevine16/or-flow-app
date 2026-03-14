@@ -37,7 +37,7 @@ const mockRequest = (
   startDate: string,
   endDate: string,
   status: 'pending' | 'approved' | 'denied',
-  requestType: 'pto' | 'sick' | 'personal' = 'pto',
+  requestType: 'pto' | 'sick' = 'pto',
 ): TimeOffRequest => ({
   id,
   facility_id: 'fac-1',

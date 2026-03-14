@@ -85,8 +85,8 @@ const mockStaffAllFacilities = [
 ]
 
 const mockTotals = [
-  { user_id: 'user-1', pto_days: 5, sick_days: 2, personal_days: 0, total_days: 7 },
-  { user_id: 'user-3', pto_days: 3, sick_days: 0, personal_days: 1, total_days: 4 },
+  { user_id: 'user-1', pto_days: 5, sick_days: 2, total_days: 7 },
+  { user_id: 'user-3', pto_days: 3, sick_days: 0, total_days: 3 },
 ]
 
 const mockRoles = [
@@ -520,8 +520,8 @@ describe('StaffDirectoryTab', () => {
       // Jane (user-1) should show PTO: 5d | Sick: 2d
       expect(screen.getByText('PTO: 5d | Sick: 2d')).toBeDefined()
 
-      // Sarah (user-3) should show PTO: 3d | Personal: 1d
-      expect(screen.getByText('PTO: 3d | Personal: 1d')).toBeDefined()
+      // Sarah (user-3) should show PTO: 3d
+      expect(screen.getByText('PTO: 3d')).toBeDefined()
     })
 
     it('handles users with no matching totals gracefully', () => {

@@ -5,7 +5,7 @@
 // ENUMS / UNION TYPES
 // =====================================================
 
-export type TimeOffRequestType = 'pto' | 'sick' | 'personal'
+export type TimeOffRequestType = 'pto' | 'sick'
 export type TimeOffStatus = 'pending' | 'approved' | 'denied'
 export type PartialDayType = 'am' | 'pm'
 
@@ -82,7 +82,6 @@ export interface UserTimeOffSummary {
   user_id: string
   pto_days: number
   sick_days: number
-  personal_days: number
   total_days: number
 }
 
@@ -105,7 +104,6 @@ export interface TimeOffFilterParams {
 export const REQUEST_TYPE_LABELS: Record<TimeOffRequestType, string> = {
   pto: 'PTO',
   sick: 'Sick',
-  personal: 'Personal',
 }
 
 /** Label map for status values */

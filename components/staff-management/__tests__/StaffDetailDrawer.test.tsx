@@ -71,7 +71,6 @@ const mockTotals: UserTimeOffSummary[] = [
     user_id: 'user-1',
     pto_days: 5,
     sick_days: 2,
-    personal_days: 0,
     total_days: 7,
   },
 ]
@@ -313,8 +312,8 @@ describe('StaffDetailDrawer', () => {
     it('passes user totals to DrawerTimeOffTab filtered by user_id', async () => {
       const user = userEvent.setup()
       const allTotals: UserTimeOffSummary[] = [
-        { user_id: 'user-1', pto_days: 5, sick_days: 2, personal_days: 0, total_days: 7 },
-        { user_id: 'user-2', pto_days: 3, sick_days: 1, personal_days: 1, total_days: 5 },
+        { user_id: 'user-1', pto_days: 5, sick_days: 2, total_days: 7 },
+        { user_id: 'user-2', pto_days: 3, sick_days: 1, total_days: 4 },
       ]
 
       render(

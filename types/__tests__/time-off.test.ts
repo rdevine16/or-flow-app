@@ -77,11 +77,10 @@ describe('REQUEST_TYPE_LABELS', () => {
   it('maps all TimeOffRequestType values', () => {
     expect(REQUEST_TYPE_LABELS.pto).toBe('PTO')
     expect(REQUEST_TYPE_LABELS.sick).toBe('Sick')
-    expect(REQUEST_TYPE_LABELS.personal).toBe('Personal')
   })
 
-  it('contains exactly 3 entries', () => {
-    expect(Object.keys(REQUEST_TYPE_LABELS)).toHaveLength(3)
+  it('contains exactly 2 entries', () => {
+    expect(Object.keys(REQUEST_TYPE_LABELS)).toHaveLength(2)
   })
 })
 
@@ -156,7 +155,7 @@ describe('TimeOffRequest type', () => {
       id: 'req-1',
       facility_id: 'fac-1',
       user_id: 'user-1',
-      request_type: 'personal',
+      request_type: 'pto',
       start_date: '2026-03-10',
       end_date: '2026-03-10',
       partial_day_type: null,
@@ -239,12 +238,11 @@ describe('UserTimeOffSummary type', () => {
       user_id: 'user-1',
       pto_days: 5,
       sick_days: 2,
-      personal_days: 1,
-      total_days: 8,
+      total_days: 7,
     }
 
-    expect(summary.total_days).toBe(8)
-    expect(summary.pto_days + summary.sick_days + summary.personal_days).toBe(8)
+    expect(summary.total_days).toBe(7)
+    expect(summary.pto_days + summary.sick_days).toBe(7)
   })
 
   it('handles zero days for all types', () => {
@@ -252,7 +250,6 @@ describe('UserTimeOffSummary type', () => {
       user_id: 'user-2',
       pto_days: 0,
       sick_days: 0,
-      personal_days: 0,
       total_days: 0,
     }
 
@@ -264,8 +261,7 @@ describe('UserTimeOffSummary type', () => {
       user_id: 'user-3',
       pto_days: 2.5,
       sick_days: 0.5,
-      personal_days: 1,
-      total_days: 4,
+      total_days: 3,
     }
 
     expect(summary.pto_days).toBe(2.5)
