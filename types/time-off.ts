@@ -106,6 +106,22 @@ export const REQUEST_TYPE_LABELS: Record<TimeOffRequestType, string> = {
   sick: 'Sick',
 }
 
+/** Human-readable partial day labels */
+export const PARTIAL_DAY_LABELS: Record<PartialDayType, string> = {
+  am: 'Morning',
+  pm: 'Afternoon',
+}
+
+/** Format a day count using ½ fraction notation: "3", "2½", "½" */
+export function formatDaysDisplay(value: number): string {
+  const whole = Math.floor(value)
+  const hasHalf = value % 1 !== 0
+  if (hasHalf) {
+    return whole > 0 ? `${whole}½` : '½'
+  }
+  return `${whole}`
+}
+
 /** Label map for status values */
 export const STATUS_LABELS: Record<TimeOffStatus, string> = {
   pending: 'Pending',

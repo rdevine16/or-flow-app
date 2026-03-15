@@ -22,8 +22,12 @@ interface UserTimeOffSummaryProps {
 
 function formatDays(days: number): string {
   if (days === 0) return '0d'
-  if (Number.isInteger(days)) return `${days}d`
-  return `${days.toFixed(1)}d`
+  const whole = Math.floor(days)
+  const hasHalf = days % 1 !== 0
+  if (hasHalf) {
+    return whole > 0 ? `${whole}½d` : '½d'
+  }
+  return `${days}d`
 }
 
 // ============================================

@@ -4,7 +4,7 @@
 
 import { useMemo, useCallback, useState } from 'react'
 import type { TimeOffRequest, UserTimeOffSummary, TimeOffReviewInput } from '@/types/time-off'
-import { REQUEST_TYPE_LABELS, calculateBusinessDays, calculateBusinessDaysWithHolidays } from '@/types/time-off'
+import { REQUEST_TYPE_LABELS, PARTIAL_DAY_LABELS, formatDaysDisplay, calculateBusinessDays, calculateBusinessDaysWithHolidays } from '@/types/time-off'
 import type { FacilityHoliday } from '@/types/block-scheduling'
 import { UserTimeOffSummaryDisplay } from './UserTimeOffSummary'
 import Badge from '@/components/ui/Badge'
@@ -170,8 +170,8 @@ export function DrawerTimeOffTab({
                   <div className="flex items-center gap-1.5 text-xs text-slate-500">
                     <Clock className="w-3.5 h-3.5" />
                     <span>
-                      {days} day{days !== 1 ? 's' : ''}
-                      {req.partial_day_type && ` (${req.partial_day_type.toUpperCase()} only)`}
+                      {formatDaysDisplay(days)} day{days !== 1 ? 's' : ''}
+                      {req.partial_day_type && ` (${PARTIAL_DAY_LABELS[req.partial_day_type]} only)`}
                     </span>
                   </div>
 

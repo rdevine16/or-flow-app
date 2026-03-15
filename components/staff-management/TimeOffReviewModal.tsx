@@ -12,7 +12,7 @@ import type {
   TimeOffReviewInput,
   UserTimeOffSummary,
 } from '@/types/time-off'
-import { REQUEST_TYPE_LABELS, calculateBusinessDays, calculateBusinessDaysWithHolidays } from '@/types/time-off'
+import { REQUEST_TYPE_LABELS, PARTIAL_DAY_LABELS, formatDaysDisplay, calculateBusinessDays, calculateBusinessDaysWithHolidays } from '@/types/time-off'
 import type { FacilityHoliday } from '@/types/block-scheduling'
 import { CalendarDays, User, AlertCircle, Gift } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -229,10 +229,10 @@ export function TimeOffReviewModal({
           <div>
             <p className="text-xs text-slate-500 mb-1">Duration</p>
             <p className="text-sm font-medium text-slate-900">
-              {businessDays} business day{businessDays !== 1 ? 's' : ''}
+              {formatDaysDisplay(businessDays)} business day{businessDays !== 1 ? 's' : ''}
               {request.partial_day_type && (
                 <span className="text-slate-500 font-normal ml-1">
-                  ({request.partial_day_type.toUpperCase()} only)
+                  ({PARTIAL_DAY_LABELS[request.partial_day_type]} only)
                 </span>
               )}
             </p>
@@ -270,7 +270,7 @@ export function TimeOffReviewModal({
               </div>
             ))}
             <p className="text-xs font-medium text-blue-900 pt-1 border-t border-blue-200">
-              PTO days charged: {businessDays}
+              PTO days charged: {formatDaysDisplay(businessDays)}
               {ptoBreakdown.holidayDays > 0 && (
                 <span className="font-normal text-blue-600 ml-1">
                   ({ptoBreakdown.totalCalendarDays - ptoBreakdown.weekendDays} weekday{ptoBreakdown.totalCalendarDays - ptoBreakdown.weekendDays !== 1 ? 's' : ''} &minus; {ptoBreakdown.holidayDays} holiday{ptoBreakdown.holidayDays !== 1 ? 's' : ''})

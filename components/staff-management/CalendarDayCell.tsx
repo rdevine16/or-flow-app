@@ -158,14 +158,17 @@ export function CalendarDayCell({
               hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-opacity cursor-pointer
               ${req.status === 'denied' ? 'line-through' : ''}
             `}
-            aria-label={`${req.user?.first_name} ${req.user?.last_name}, ${REQUEST_TYPE_LABELS[req.request_type]}, ${req.status}. Click to review.`}
-            title={`${req.user?.first_name} ${req.user?.last_name} — ${REQUEST_TYPE_LABELS[req.request_type]} (${req.status})`}
+            aria-label={`${req.user?.first_name} ${req.user?.last_name}, ${REQUEST_TYPE_LABELS[req.request_type]}${req.partial_day_type ? ` (${req.partial_day_type === 'am' ? 'Morning' : 'Afternoon'})` : ''}, ${req.status}. Click to review.`}
+            title={`${req.user?.first_name} ${req.user?.last_name} — ${REQUEST_TYPE_LABELS[req.request_type]}${req.partial_day_type ? ` (${req.partial_day_type === 'am' ? 'Morning' : 'Afternoon'})` : ''} (${req.status})`}
           >
             <span className="font-medium">
               {req.user?.first_name?.[0]}. {req.user?.last_name}
             </span>
             {' '}
             <span className="opacity-75">{REQUEST_TYPE_LABELS[req.request_type]}</span>
+            {req.partial_day_type && (
+              <span className="opacity-60 ml-0.5">½{req.partial_day_type.toUpperCase()}</span>
+            )}
           </button>
         ))}
 
