@@ -17,6 +17,7 @@ interface UserData {
   lastName: string
   profileImageUrl: string | null
   accessLevel: 'global_admin' | 'facility_admin' | 'coordinator' | 'user'
+  roleName: string | null
   facilityId: string | null
   facilityName: string | null
   facilityTimezone: string
@@ -52,6 +53,7 @@ const defaultUserData: UserData = {
   lastName: '',
   profileImageUrl: null,
   accessLevel: 'user',
+  roleName: null,
   facilityId: null,
   facilityName: null,
   facilityTimezone: 'America/New_York',
@@ -129,7 +131,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
             profile_image_url,
             access_level,
             facility_id,
-            facilities (name, timezone)
+            facilities (name, timezone),
+            role:user_roles(name)
           `)
           .eq('id', user.id)
           .single()
@@ -147,6 +150,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
             facility = facilities
           }
 
+          // Extract role name from join
+          const roleData = userRecord.role as { name: string } | { name: string }[] | null
+          const roleName = Array.isArray(roleData)
+            ? roleData[0]?.name ?? null
+            : roleData?.name ?? null
+
           setUserData({
             userId: authUserId,
             userEmail: authUserEmail,
@@ -154,6 +163,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             lastName: userRecord.last_name || '',
             profileImageUrl: userRecord.profile_image_url || null,
             accessLevel: userRecord.access_level || 'user',
+            roleName,
             facilityId: userRecord.facility_id,
             facilityName: facility?.name || null,
             facilityTimezone: facility?.timezone || 'America/New_York',

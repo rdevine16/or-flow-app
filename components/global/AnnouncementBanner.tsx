@@ -114,10 +114,10 @@ function formatRelativeTime(dateStr: string): string {
 
 function matchesAudience(
   announcement: Announcement,
-  userAccessLevel: string
+  userRoleName: string | null
 ): boolean {
   if (announcement.audience === 'both') return true
-  const isSurgeon = userAccessLevel === 'surgeon'
+  const isSurgeon = userRoleName?.toLowerCase() === 'surgeon'
   if (announcement.audience === 'surgeons') return isSurgeon
   if (announcement.audience === 'staff') return !isSurgeon
   return true
@@ -221,7 +221,7 @@ export default function AnnouncementBanner() {
   const { userData } = useUser()
   const facilityId = userData.facilityId
   const userId = userData.userId
-  const accessLevel = userData.accessLevel
+  const roleName = userData.roleName
 
   const {
     announcements,
@@ -297,8 +297,8 @@ export default function AnnouncementBanner() {
 
   const filteredAnnouncements = useMemo(() => {
     if (!announcements || !Array.isArray(announcements)) return []
-    return announcements.filter((a) => matchesAudience(a, accessLevel))
-  }, [announcements, accessLevel])
+    return announcements.filter((a) => matchesAudience(a, roleName))
+  }, [announcements, roleName])
 
   // ============================================
   // Render
