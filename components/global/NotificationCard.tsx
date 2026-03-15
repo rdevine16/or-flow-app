@@ -15,6 +15,7 @@ import {
   CheckCircle,
   CalendarPlus,
   XCircle,
+  Megaphone,
 } from 'lucide-react'
 import type { NotificationWithReadState } from '@/lib/dal/notifications'
 
@@ -33,6 +34,7 @@ const NOTIFICATION_TYPE_CONFIG: Record<string, {
   time_off_requested: { icon: CalendarPlus, color: 'text-blue-500' },
   time_off_approved: { icon: CheckCircle, color: 'text-green-500' },
   time_off_denied: { icon: XCircle, color: 'text-red-500' },
+  announcement_created: { icon: Megaphone, color: 'text-blue-500' },
 }
 
 const DEFAULT_CONFIG = { icon: Bell, color: 'text-slate-400' }

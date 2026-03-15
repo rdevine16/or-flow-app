@@ -15,6 +15,8 @@ interface PushPayload {
   exclude_user_id?: string;
   target_user_id?: string;
   target_access_level?: string | string[];
+  target_roles?: string[];
+  exclude_roles?: string[];
   data?: Record<string, string>;
 }
 
@@ -32,6 +34,8 @@ Deno.serve(async (req) => {
       exclude_user_id,
       target_user_id,
       target_access_level,
+      target_roles,
+      exclude_roles,
       data,
     } = payload;
 
@@ -43,12 +47,16 @@ Deno.serve(async (req) => {
       ? "targeted"
       : target_access_level
         ? "role"
-        : "broadcast";
+        : target_roles || exclude_roles
+          ? "role-filter"
+          : "broadcast";
 
     console.log(
       `Push [${mode}]: "${title}" to facility ${facility_id}`,
       target_user_id ? `user=${target_user_id}` : "",
-      target_access_level ? `role=${target_access_level}` : ""
+      target_access_level ? `access_level=${target_access_level}` : "",
+      target_roles ? `target_roles=${target_roles}` : "",
+      exclude_roles ? `exclude_roles=${exclude_roles}` : ""
     );
 
     const APNS_KEY_ID = Deno.env.get("APNS_KEY_ID");
@@ -100,6 +108,81 @@ Deno.serve(async (req) => {
           .in("user_id", userIds);
         tokens = result.data;
         tokensError = result.error;
+      } else {
+        tokens = [];
+      }
+    } else if (target_roles || exclude_roles) {
+      // Role-filter: target or exclude users by role name (via user_roles table)
+      // First get role IDs matching the filter
+      let roleIds: string[] = [];
+
+      if (target_roles && target_roles.length > 0) {
+        const { data: roles, error: rolesError } = await supabase
+          .from("user_roles")
+          .select("id")
+          .in("name", target_roles);
+        if (rolesError) throw rolesError;
+        roleIds = (roles ?? []).map((r: { id: string }) => r.id);
+      }
+
+      let excludeRoleIds: string[] = [];
+      if (exclude_roles && exclude_roles.length > 0) {
+        const { data: roles, error: rolesError } = await supabase
+          .from("user_roles")
+          .select("id")
+          .in("name", exclude_roles);
+        if (rolesError) throw rolesError;
+        excludeRoleIds = (roles ?? []).map((r: { id: string }) => r.id);
+      }
+
+      // Query users with role filter
+      let userQuery = supabase
+        .from("users")
+        .select("id")
+        .eq("facility_id", facility_id)
+        .eq("is_active", true);
+
+      if (roleIds.length > 0) {
+        userQuery = userQuery.in("role_id", roleIds);
+      }
+
+      const { data: users, error: usersError } = await userQuery;
+      if (usersError) throw usersError;
+
+      if (users && users.length > 0) {
+        let userIds = users.map((u: { id: string }) => u.id);
+
+        // Exclude users with excluded roles
+        if (excludeRoleIds.length > 0 && !roleIds.length) {
+          // When only exclude_roles is set, we need to remove users with those roles
+          const { data: excludedUsers } = await supabase
+            .from("users")
+            .select("id")
+            .eq("facility_id", facility_id)
+            .eq("is_active", true)
+            .in("role_id", excludeRoleIds);
+
+          const excludedSet = new Set(
+            (excludedUsers ?? []).map((u: { id: string }) => u.id)
+          );
+          userIds = userIds.filter((id: string) => !excludedSet.has(id));
+        }
+
+        // Also exclude the sender
+        userIds = userIds.filter(
+          (id: string) => id !== (exclude_user_id || "")
+        );
+
+        if (userIds.length > 0) {
+          const result = await supabase
+            .from("device_tokens")
+            .select("token, user_id")
+            .in("user_id", userIds);
+          tokens = result.data;
+          tokensError = result.error;
+        } else {
+          tokens = [];
+        }
       } else {
         tokens = [];
       }
