@@ -1,7 +1,5 @@
--- Migration: Wire up push notification for new time-off requests
--- When staff submits a time-off request, facility admins receive a push notification
--- Uses pg_net to call the send-push-notification edge function asynchronously
--- Respects facility_notification_settings push channel toggle
+-- Fix: include global_admin in push notification recipients (parity with in-app notifications)
+-- Previously only sent push to facility_admin; in-app notifications went to both facility_admin + global_admin
 
 CREATE OR REPLACE FUNCTION public.notify_time_off_requested()
 RETURNS trigger
@@ -69,7 +67,7 @@ BEGIN
     );
   END LOOP;
 
-  -- Send push notification to facility admins via pg_net (NEW in Phase 3)
+  -- Send push notification to admins via pg_net (facility_admin + global_admin)
   IF v_push_enabled THEN
     PERFORM net.http_post(
       url := 'https://zplyoslgguxtojgnkxlt.supabase.co/functions/v1/send-push-notification',

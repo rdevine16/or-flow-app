@@ -14,7 +14,7 @@ interface PushPayload {
   body: string;
   exclude_user_id?: string;
   target_user_id?: string;
-  target_access_level?: string;
+  target_access_level?: string | string[];
   data?: Record<string, string>;
 }
 
@@ -77,12 +77,15 @@ Deno.serve(async (req) => {
       tokens = result.data;
       tokensError = result.error;
     } else if (target_access_level) {
-      // Role-based: send to all users with a specific access_level in the facility
+      // Role-based: send to all users with matching access_level(s) in the facility
+      const accessLevels = Array.isArray(target_access_level)
+        ? target_access_level
+        : [target_access_level];
       const { data: users, error: usersError } = await supabase
         .from("users")
         .select("id")
         .eq("facility_id", facility_id)
-        .eq("access_level", target_access_level)
+        .in("access_level", accessLevels)
         .eq("is_active", true);
 
       if (usersError) {
