@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useUser } from '@/lib/UserContext'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useUserRoles } from '@/hooks/useLookups'
@@ -58,7 +59,25 @@ export default function StaffManagementPageClient() {
     isImpersonating,
   } = useUser()
 
-  const [activeTab, setActiveTab] = useState<StaffManagementTab>('directory')
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const VALID_TABS: StaffManagementTab[] = ['directory', 'time-off-calendar', 'holidays']
+  const tabParam = searchParams.get('tab') as StaffManagementTab | null
+  const activeTab: StaffManagementTab = tabParam && VALID_TABS.includes(tabParam) ? tabParam : 'directory'
+
+  const setActiveTab = useCallback((tab: StaffManagementTab) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (tab === 'directory') {
+      params.delete('tab')
+    } else {
+      params.set('tab', tab)
+    }
+    const qs = params.toString()
+    router.replace(`${pathname}${qs ? `?${qs}` : ''}`)
+  }, [searchParams, router, pathname])
+
   const [selectedRequest, setSelectedRequest] = useState<TimeOffRequest | null>(null)
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null)
   const [showInviteModal, setShowInviteModal] = useState(false)
@@ -151,6 +170,7 @@ export default function StaffManagementPageClient() {
               status: review.status,
               staffEmail: request.user.email,
               staffFirstName: request.user.first_name,
+              staffUserId: request.user_id,
               reviewerName: `${userData.firstName ?? ''} ${userData.lastName ?? ''}`.trim() || 'Admin',
               requestType: request.request_type,
               startDate: request.start_date,
@@ -159,7 +179,7 @@ export default function StaffManagementPageClient() {
               facilityName: userData.facilityName ?? 'Your Facility',
             }),
           }).catch((err) => {
-            log.error('Failed to send time-off email notification', { error: String(err) })
+            log.error('Failed to send time-off notification', { error: String(err) })
           })
         }
       }
