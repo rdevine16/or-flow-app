@@ -22,7 +22,8 @@ import { StaffDetailDrawer } from '@/components/staff-management/StaffDetailDraw
 import InviteUserModal from '@/components/InviteUserModal'
 import type { TimeOffRequest } from '@/types/time-off'
 import { HolidaysTab } from '@/components/staff-management/HolidaysTab'
-import { Users, CalendarDays, Calendar, Building2 } from 'lucide-react'
+import { AnnouncementsTab } from '@/components/staff-management/AnnouncementsTab'
+import { Users, CalendarDays, Calendar, Building2, Megaphone } from 'lucide-react'
 import { logger } from '@/lib/logger'
 
 const log = logger('staff-management:page')
@@ -31,7 +32,7 @@ const log = logger('staff-management:page')
 // Tab config
 // ============================================
 
-type StaffManagementTab = 'directory' | 'time-off-calendar' | 'holidays'
+type StaffManagementTab = 'directory' | 'time-off-calendar' | 'holidays' | 'announcements'
 
 interface TabConfig {
   key: StaffManagementTab
@@ -43,6 +44,7 @@ const TABS: TabConfig[] = [
   { key: 'directory', label: 'Staff Directory', icon: <Users className="w-4 h-4" /> },
   { key: 'time-off-calendar', label: 'Time-Off Calendar', icon: <CalendarDays className="w-4 h-4" /> },
   { key: 'holidays', label: 'Holidays', icon: <Calendar className="w-4 h-4" /> },
+  { key: 'announcements', label: 'Announcements', icon: <Megaphone className="w-4 h-4" /> },
 ]
 
 // ============================================
@@ -63,7 +65,7 @@ export default function StaffManagementPageClient() {
   const router = useRouter()
   const pathname = usePathname()
 
-  const VALID_TABS: StaffManagementTab[] = ['directory', 'time-off-calendar', 'holidays']
+  const VALID_TABS: StaffManagementTab[] = ['directory', 'time-off-calendar', 'holidays', 'announcements']
   const tabParam = searchParams.get('tab') as StaffManagementTab | null
   const activeTab: StaffManagementTab = tabParam && VALID_TABS.includes(tabParam) ? tabParam : 'directory'
 
@@ -320,6 +322,22 @@ export default function StaffManagementPageClient() {
                 <p className="text-slate-500 font-medium">Select a specific facility</p>
                 <p className="text-sm text-slate-400 mt-1">
                   Holidays are facility-specific. Use the facility selector above to choose one.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {activeTab === 'announcements' && (
+          <div role="tabpanel" id="tabpanel-announcements" aria-labelledby="tab-announcements">
+            {!isAllFacilitiesMode && activeFacilityId ? (
+              <AnnouncementsTab facilityId={activeFacilityId} />
+            ) : isAllFacilitiesMode ? (
+              <div className="bg-white rounded-xl border border-slate-200 px-6 py-12 text-center">
+                <Megaphone className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium">Select a specific facility</p>
+                <p className="text-sm text-slate-400 mt-1">
+                  Announcements are facility-specific. Use the facility selector above to choose one.
                 </p>
               </div>
             ) : null}
