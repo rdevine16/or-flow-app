@@ -175,13 +175,13 @@ describe('AnnouncementHistoryTable', () => {
     it('renders search input', () => {
       renderTable()
 
-      expect(screen.getByPlaceholderText('Search by title...')).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('Search announcements...')).toBeInTheDocument()
     })
 
     it('calls onFilterChange when search input changes', () => {
       renderTable()
 
-      const searchInput = screen.getByPlaceholderText('Search by title...')
+      const searchInput = screen.getByPlaceholderText('Search announcements...')
       fireEvent.change(searchInput, { target: { value: 'safety' } })
 
       expect(mockOnFilterChange).toHaveBeenCalledWith({ search: 'safety' })
@@ -198,19 +198,19 @@ describe('AnnouncementHistoryTable', () => {
     it('shows clear filters button when filters are active', () => {
       renderTable(sampleAnnouncements, { status: 'active' })
 
-      expect(screen.getByText('Clear filters')).toBeInTheDocument()
+      expect(screen.getByText('Clear')).toBeInTheDocument()
     })
 
     it('does not show clear filters button when no filters active', () => {
       renderTable()
 
-      expect(screen.queryByText('Clear filters')).not.toBeInTheDocument()
+      expect(screen.queryByText('Clear')).not.toBeInTheDocument()
     })
 
     it('calls onClearFilters when clear button clicked', () => {
       renderTable(sampleAnnouncements, { status: 'active' })
 
-      fireEvent.click(screen.getByText('Clear filters'))
+      fireEvent.click(screen.getByText('Clear'))
 
       expect(mockOnClearFilters).toHaveBeenCalled()
     })

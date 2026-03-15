@@ -20,6 +20,7 @@ import Sidebar from './Sidebar'
 import SubNavigation, { SUBNAV_WIDTH } from './SubNavigation'
 import Header, { TrialBanner, ImpersonationBanner, BranchBanner } from './Header'
 import BlockedScreen from './BlockedScreen'
+import AnnouncementBanner from '../global/AnnouncementBanner'
 import { getFilteredNavigation, SIDEBAR_COLLAPSED, SIDEBAR_EXPANDED } from './navigation-config'
 
 interface DashboardLayoutProps {
@@ -271,6 +272,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               onEndImpersonation={handleEndImpersonation}
             />
           )}
+
+          {/* Announcement Banners */}
+          <AnnouncementBanner />
 
           {/* Header */}
           <Header

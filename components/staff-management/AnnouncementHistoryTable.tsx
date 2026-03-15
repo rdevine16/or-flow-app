@@ -15,6 +15,8 @@ import {
   Trash2,
   ArrowUpDown,
   Megaphone,
+  Filter,
+  X,
 } from 'lucide-react'
 import type {
   Announcement,
@@ -182,21 +184,25 @@ export function AnnouncementHistoryTable({
   )
 
   return (
-    <div className="space-y-4">
-      {/* Filters row */}
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-3">
+      {/* Compact filter toolbar */}
+      <div className="flex items-center gap-2">
         {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <div className="relative flex-1 min-w-[240px] max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <Input
             value={filters.search ?? ''}
             onChange={(e) => onFilterChange({ search: e.target.value || undefined })}
-            placeholder="Search by title..."
-            className="pl-9"
+            placeholder="Search announcements..."
+            className="pl-8 h-8 text-sm"
           />
         </div>
 
-        {/* Status filter */}
+        <div className="h-5 w-px bg-slate-200 shrink-0" />
+
+        <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+
+        {/* Inline filters */}
         <Select
           value={filters.status ?? ''}
           onChange={(e) =>
@@ -204,7 +210,7 @@ export function AnnouncementHistoryTable({
               status: (e.target.value as AnnouncementStatus) || undefined,
             })
           }
-          className="w-auto min-w-[130px]"
+          className="!px-2.5 !py-1.5 h-8 text-sm min-w-[120px]"
         >
           <option value="">All Statuses</option>
           {(Object.entries(STATUS_LABELS) as [AnnouncementStatus, string][]).map(
@@ -216,7 +222,6 @@ export function AnnouncementHistoryTable({
           )}
         </Select>
 
-        {/* Priority filter */}
         <Select
           value={filters.priority ?? ''}
           onChange={(e) =>
@@ -224,7 +229,7 @@ export function AnnouncementHistoryTable({
               priority: (e.target.value as AnnouncementPriority) || undefined,
             })
           }
-          className="w-auto min-w-[130px]"
+          className="!px-2.5 !py-1.5 h-8 text-sm min-w-[120px]"
         >
           <option value="">All Priorities</option>
           {(Object.entries(PRIORITY_LABELS) as [AnnouncementPriority, string][]).map(
@@ -236,7 +241,6 @@ export function AnnouncementHistoryTable({
           )}
         </Select>
 
-        {/* Category filter */}
         <Select
           value={filters.category ?? ''}
           onChange={(e) =>
@@ -244,7 +248,7 @@ export function AnnouncementHistoryTable({
               category: (e.target.value as AnnouncementCategory) || undefined,
             })
           }
-          className="w-auto min-w-[140px]"
+          className="!px-2.5 !py-1.5 h-8 text-sm min-w-[130px]"
         >
           <option value="">All Categories</option>
           {(Object.entries(CATEGORY_LABELS) as [AnnouncementCategory, string][]).map(
@@ -261,9 +265,10 @@ export function AnnouncementHistoryTable({
           <button
             type="button"
             onClick={onClearFilters}
-            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+            className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 font-medium px-1.5 py-1 rounded hover:bg-slate-100 transition-colors"
           >
-            Clear filters
+            <X className="w-3 h-3" />
+            Clear
           </button>
         )}
       </div>
