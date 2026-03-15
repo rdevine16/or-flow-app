@@ -16,6 +16,7 @@ import {
   ClipboardList,
   FileBarChart,
   FlaskConical,
+  Users,
 } from 'lucide-react'
 
 // =====================================================
@@ -39,6 +40,7 @@ interface FacilityNotification {
 
 const CATEGORIES = [
   { key: 'case_alerts', label: 'Case Alerts', description: 'Real-time notifications during surgical cases', icon: ClipboardList },
+  { key: 'staff_management', label: 'Staff Management', description: 'Time-off requests, approvals, and team updates', icon: Users },
   { key: 'schedule_alerts', label: 'Schedule Alerts', description: 'Notifications about scheduling and timing', icon: CalendarDays },
   { key: 'tray_management', label: 'Tray Management', description: 'Notifications for device rep coordination', icon: FlaskConical },
   { key: 'reports', label: 'Reports & Summaries', description: 'Scheduled report notifications', icon: FileBarChart },

@@ -1,198 +1,176 @@
-# Implementation Plan: Consolidate Time-Off Types + Relocate PTO to Profile
+# Implementation Plan: Time-Off Push Notifications
 
-## Branch: `feature/consolidate-pto-profile`
+## Branch: `feature/time-off-push-notifications`
 
 ## Summary
-Remove the redundant "Personal" time-off type (merging into PTO), leaving just **PTO** and **Sick**. Move the time-off request UI from the iOS StaffHomeView to the iOS ProfileView, giving users full CRUD (submit, view, cancel) from their profile. Keep a small nudge on the Home page for upcoming approved time off. Clean up all admin-facing web components to reflect the two-type system.
+Wire up APNs push notifications for the time-off workflow. When an admin approves/denies a request, the staff member receives a push notification on their iOS device. When staff submits a new request, facility admins receive a push notification. Respects existing `facility_notification_settings` push channel toggles.
 
 ## Interview Notes
-- **Scope:** iOS-only for the profile relocation. Web stays admin-only on Staff Management.
-- **Home nudge:** Keep a small banner/chip on iOS Home showing next upcoming approved time off.
-- **Profile actions:** Full CRUD in Profile — submit new requests, view history, cancel pending.
-- **Admin cleanup:** Remove 'personal' from all web admin views (review modal, calendar badges, user totals).
-- **Migration strategy:** Auto-migrate existing 'personal' rows to 'pto', then drop the option.
-- **Zero 'personal' rows exist in production** — migration is safe.
+- **Push scope:** Both broadcast (existing callers) and targeted (time-off) modes in edge function
+- **APNs keys:** Already configured as Supabase secrets (edge function deployed, v6, active)
+- **Notification scope:** All three — approval, denial, and new request submission
+- **Settings:** Respect `facility_notification_settings` push channel toggle per notification type
+- **Settings UI:** Push toggle already exists in both global admin and facility admin notification settings pages
+
+## Current State
+- `send-push-notification` edge function is **deployed** (v6) but **not saved locally** in repo
+- Edge function supports broadcast only (`exclude_user_id`), no targeted push, no facility scoping on token queries
+- In-app notifications for time-off already work (DB triggers: `notify_time_off_reviewed`, `notify_time_off_requested`)
+- Email notifications for time-off review already work (fire-and-forget from `/api/time-off/notify`)
+- `device_tokens` table exists with iOS tokens
+- `pg_net` extension is enabled but unused
+- Push channel option exists in notification settings UI (`CHANNEL_OPTIONS` includes `'push'`)
+
+## Architecture
+- **Review push (approval/denial → staff):** Extend existing `/api/time-off/notify` route (mirrors email pattern — fire-and-forget from web client after review)
+- **New request push (submission → admins):** Use `pg_net` from DB trigger (fires regardless of which client creates the request)
+- **Settings check:** Done in API route for review push; done in DB trigger for new request push
 
 ## Phase Overview
 
-| Phase | Platform | Description | Complexity |
-|-------|----------|-------------|------------|
-| 1 | Database | Remove 'personal' type — migrate data, update constraint + triggers | Small |
-| 2 | Web | Remove 'personal' from types, labels, admin UI, and tests | Medium |
-| 3 | iOS | Remove 'personal' from models, form, card, and tests | Small |
-| 4 | iOS | Add "My Time Off" section to ProfileView (full CRUD) | Large |
-| 5 | iOS | Slim down StaffHomeView + add upcoming PTO nudge | Medium |
-| 6 | Both | Update feature spec, verify no orphaned references, final testing | Small |
+| Phase | Description | Complexity |
+|-------|-------------|------------|
+| 1 | Update edge function — targeted push + facility scoping | Medium |
+| 2 | Seed push channel + wire up review push (web → staff) | Medium |
+| 3 | Wire up new request push (DB trigger → admins via pg_net) | Medium |
 
 ---
 
-## Phase 1: Database — Remove 'personal' type
-**Platform:** Database (migration)
-**Complexity:** Small
+## Phase 1: Update Edge Function — Targeted Push + Facility Scoping
+**Complexity:** Medium
 **Dependencies:** None
 
-**What it does:**
-- UPDATE any `request_type = 'personal'` rows to `'pto'` (currently 0 rows, but safe)
-- DROP and recreate the CHECK constraint on `time_off_requests.request_type` to only allow `('pto', 'sick')`
-- Update notification trigger functions that map 'personal' → 'Personal Day' to remove that branch
+### What it does
+Save the deployed edge function locally and update it to support:
+1. `target_user_id` — send push to a specific user (for review → staff)
+2. `target_access_level` — send push to all users with a specific role in the facility (for new request → admins)
+3. `facility_id` scoping on device token queries (currently missing — sends to ALL tokens in DB)
+4. Backward compatibility with existing broadcast callers (CallNextPatientModal, iOS patient calls)
 
-**Files touched:**
-- `supabase/migrations/YYYYMMDD_consolidate_time_off_types.sql` (new)
+### Updated PushPayload interface
+```typescript
+interface PushPayload {
+  facility_id: string;            // Required — scopes device token query
+  title: string;
+  body: string;
+  exclude_user_id?: string;       // Existing — for broadcast mode
+  target_user_id?: string;        // NEW — send to specific user only
+  target_access_level?: string;   // NEW — send to all users with this access_level
+  data?: Record<string, string>;  // NEW — custom payload data (for deep linking)
+}
+```
 
-**Commit:** `feat(time-off): phase 1 - consolidate personal into pto, update db constraint`
+### Query logic
+- If `target_user_id` set → `SELECT token FROM device_tokens WHERE user_id = $1`
+- If `target_access_level` set → `SELECT dt.token FROM device_tokens dt JOIN user_roles ur ON dt.user_id = ur.user_id WHERE ur.facility_id = $1 AND ur.access_level = $2`
+- Otherwise (broadcast) → `SELECT dt.token FROM device_tokens dt JOIN user_roles ur ON dt.user_id = ur.user_id WHERE ur.facility_id = $1 AND dt.user_id != $2`
 
-**Test gate:**
-1. **Unit:** Verify constraint rejects 'personal', accepts 'pto' and 'sick' via SQL INSERT
-2. **Integration:** Insert a new request with type 'pto' — succeeds; 'personal' — fails with constraint error
-3. **Workflow:** Existing approved 'pto' requests still queryable after migration
+### Files touched
+- `supabase/functions/send-push-notification/index.ts` (new locally — save + update)
+- `supabase/functions/send-push-notification/deno.json` (new locally — save)
+
+### Commit message
+`feat(push): phase 1 - save edge function locally, add targeted push + facility scoping`
+
+### 3-stage test gate
+1. **Unit:** Edge function handles all three modes (targeted, role-based, broadcast) with correct token queries
+2. **Integration:** Deploy to Supabase, verify existing patient call push still works (broadcast mode backward compat)
+3. **Workflow:** Call edge function with `target_user_id` → only that user's device receives push
 
 ---
 
-## Phase 2: Web — Remove 'personal' from types, labels, and admin UI
-**Platform:** Web
+## Phase 2: Seed Push Channel + Wire Up Review Push (Web → Staff)
 **Complexity:** Medium
 **Dependencies:** Phase 1
 
-**What it does:**
-- Remove `'personal'` from `TimeOffRequestType` union type
-- Remove `personal` from `REQUEST_TYPE_LABELS` and all badge variant maps
-- Remove `personal_days` from `UserTimeOffSummary` interface (merge into `pto_days`)
-- Update `fetchUserTimeOffTotals` DAL aggregation — remove 'personal' branch (any old 'personal' rows are now 'pto')
-- Update all admin components: TimeOffReviewModal, DrawerTimeOffTab, CalendarDayCell, UserTimeOffSummary, StaffDirectoryTab
-- Update web tests for types and DAL
+### What it does
+1. Migration to add `'push'` to channels array for time-off notification types in `facility_notification_settings` and `notification_settings_template`
+2. Extend `/api/time-off/notify` route to also send push notification after review
+3. Check `facility_notification_settings` for `'push'` in channels before calling edge function
 
-**Files touched:**
-- `types/time-off.ts` — remove 'personal' from union type, labels map, and `UserTimeOffSummary` interface
-- `lib/dal/time-off.ts` — remove 'personal' branch in `fetchUserTimeOffTotals` aggregation
-- `components/staff-management/TimeOffReviewModal.tsx` — remove personal from `REQUEST_TYPE_BADGE_VARIANTS`
-- `components/staff-management/DrawerTimeOffTab.tsx` — remove personal from `REQUEST_TYPE_BADGE_VARIANTS`
-- `components/staff-management/UserTimeOffSummary.tsx` — remove `personal_days` display, update inline/detail variants
-- `components/staff-management/CalendarDayCell.tsx` — no change needed (uses labels map dynamically)
-- `types/__tests__/time-off.test.ts` — update type/label tests
-- `lib/dal/__tests__/time-off.test.ts` — update aggregation tests
+### API route flow (after review)
+```
+Existing:
+1. Check facility_notification_settings for notification_type
+2. If 'email' in channels → send email via Resend
 
-**Commit:** `feat(time-off): phase 2 - remove personal type from web types and admin UI`
+New (added after email):
+3. If 'push' in channels → call send-push-notification edge function
+   - target_user_id = staff member's user_id
+   - title = "Time-Off Request Approved" (or "Denied")
+   - body = "Your PTO request for Mar 10–14 has been approved by Dr. Smith"
+```
 
-**Test gate:**
-1. **Unit:** TypeScript compiles, label map has 2 entries (pto/sick), summary only has `pto_days` + `sick_days`
-2. **Integration:** Admin review modal renders correctly with only PTO/Sick badges; UserTimeOffSummary shows 2 categories
-3. **Workflow:** Staff directory → click user → drawer time-off tab → totals show PTO and Sick only
+### Files touched
+- `supabase/migrations/YYYYMMDD_seed_push_channel_time_off.sql` (new — add push to channels)
+- `app/api/time-off/notify/route.ts` (modify — add push delivery alongside email)
+
+### Commit message
+`feat(push): phase 2 - seed push channel defaults, wire up review push notifications`
+
+### 3-stage test gate
+1. **Unit:** API route correctly checks for push channel and constructs edge function payload
+2. **Integration:** Migration applies cleanly, push channel appears in facility_notification_settings for time-off types
+3. **Workflow:** Admin approves request on web → staff member receives push on iOS device
 
 ---
 
-## Phase 3: iOS — Remove 'personal' from models and form
-**Platform:** iOS
-**Complexity:** Small
+## Phase 3: Wire Up New Request Push (DB Trigger → Admins via pg_net)
+**Complexity:** Medium
 **Dependencies:** Phase 1
 
-**What it does:**
-- Remove `.personal` case from `TimeOffRequestType` enum
-- Remove personal displayName and color mapping from `TimeOffRequestForm` and `TimeOffRequestCard`
-- Type picker now shows only PTO and Sick buttons
-- Update iOS tests
+### What it does
+1. Modify the `notify_time_off_requested()` DB trigger function to also send push to facility admins via `pg_net`
+2. Check `facility_notification_settings` for push channel before sending
+3. Call edge function with `target_access_level = 'facility_admin'`
 
-**Files touched:**
-- `Models/TimeOffRequest.swift` — remove `.personal` case from enum + `displayName` switch
-- `Features/StaffHome/Components/TimeOffRequestForm.swift` — remove personal from `typeColor()` function
-- `Features/StaffHome/Components/TimeOffRequestCard.swift` — remove personal from `typeColor` computed property
-- `ORbitTests/Models/TimeOffRequestTests.swift` — update enum count, allCases, displayName, rawValue tests
-- `ORbitTests/Features/StaffHome/StaffHomeViewModelTests.swift` — update personal displayName assertion
+### Trigger flow (after INSERT on time_off_requests)
+```
+Existing:
+1. Create in-app notifications for each admin (unchanged)
 
-**Commit:** `feat(time-off): phase 3 - remove personal type from iOS models and form`
+New (added after in-app):
+2. Check facility_notification_settings for 'time_off_requested' type
+3. If 'push' in channels → call send-push-notification via pg_net:
+   - facility_id = NEW.facility_id
+   - target_access_level = 'facility_admin'
+   - title = "New Time-Off Request"
+   - body = "Jane Doe requested PTO for Mar 10–14"
+```
 
-**Test gate:**
-1. **Unit:** Enum has 2 cases (pto, sick), displayNames match, raw values match DB
-2. **Integration:** TimeOffRequestForm renders 2 type buttons, default is .pto, form submits correctly
-3. **Workflow:** iOS build succeeds clean, type picker works
+### pg_net call
+```sql
+PERFORM net.http_post(
+  url := '<supabase-url>/functions/v1/send-push-notification',
+  body := jsonb_build_object(
+    'facility_id', NEW.facility_id,
+    'target_access_level', 'facility_admin',
+    'title', 'New Time-Off Request',
+    'body', format('%s requested %s for %s to %s', v_user_name, v_type_label, ...)
+  )::text,
+  headers := jsonb_build_object('Content-Type', 'application/json')
+);
+```
 
----
+### Files touched
+- `supabase/migrations/YYYYMMDD_time_off_request_push_trigger.sql` (new — update trigger function)
 
-## Phase 4: iOS — Add "My Time Off" section to ProfileView
-**Platform:** iOS
-**Complexity:** Large
-**Dependencies:** Phase 3
+### Commit message
+`feat(push): phase 3 - wire up new request push notification to admins via pg_net`
 
-**What it does:**
-- Create a new "TIME OFF" section in ProfileView between Information and Appearance
-- Show YTD PTO summary: approved days used (PTO count, Sick count)
-- List recent requests with status badges (reuse existing `TimeOffRequestCard`)
-- Add "Request Time Off" button that opens `TimeOffRequestForm` sheet
-- Add cancel functionality for pending requests (reuse existing cancel logic)
-- Create `ProfileTimeOffViewModel` to manage state independently from StaffHomeViewModel
-
-**Files touched:**
-- `Features/Profile/ProfileView.swift` — add TIME OFF section between Information and Appearance
-- `Features/Profile/ProfileTimeOffSection.swift` (new) — extracted section component with summary + request list + submit button
-- `Features/Profile/ProfileTimeOffViewModel.swift` (new) — manages time-off data (load requests, submit, cancel, compute YTD totals)
-- `Repositories/TimeOffRepository.swift` — add `fetchYearTotals(userId:facilityId:year:)` method for YTD summary
-
-**Commit:** `feat(time-off): phase 4 - add My Time Off section to iOS Profile`
-
-**Test gate:**
-1. **Unit:** ProfileTimeOffViewModel loads requests, computes YTD totals (pto_days, sick_days), submit returns success
-2. **Integration:** ProfileView renders TIME OFF section with summary card, request list, and submit button; cancel sets is_active=false
-3. **Workflow:** Open Profile → see PTO summary → tap "Request Time Off" → fill form → submit → see new pending request in list
-
----
-
-## Phase 5: iOS — Slim down StaffHomeView + add PTO nudge
-**Platform:** iOS
-**Complexity:** Medium
-**Dependencies:** Phase 4
-
-**What it does:**
-- Remove "Request Time Off" button from StaffHomeView
-- Remove "My Requests" section from StaffHomeView
-- Remove time-off related state/methods from StaffHomeViewModel (`recentRequests`, `isLoadingRequests`, `showTimeOffForm`, `loadRecentRequests()`, `submitRequest()`, `cancelRequest()`)
-- Add a small nudge banner: if user has upcoming approved time off, show compact chip like "PTO: Mar 20–21"
-- The nudge queries next upcoming approved request where `start_date >= today`, limited to 1
-
-**Files touched:**
-- `Features/StaffHome/StaffHomeView.swift` — remove request button, My Requests section, cancel confirm dialog, sheet; add nudge banner
-- `Features/StaffHome/StaffHomeViewModel.swift` — remove time-off CRUD methods and state; add `upcomingTimeOff: TimeOffRequest?` property + lightweight load
-- `Features/StaffHome/Components/TimeOffNudgeBanner.swift` (new) — small chip/banner component showing next PTO date range
-- `Features/StaffHome/Components/TimeOffRequestForm.swift` — no changes (still used by Profile)
-- `Features/StaffHome/Components/TimeOffRequestCard.swift` — no changes (still used by Profile)
-
-**Commit:** `feat(time-off): phase 5 - slim down Home page, add upcoming PTO nudge`
-
-**Test gate:**
-1. **Unit:** StaffHomeViewModel no longer exposes `recentRequests`/`submitRequest`; `upcomingTimeOff` returns next approved request or nil
-2. **Integration:** Home page renders without request section; nudge banner appears when approved PTO exists, hidden when none
-3. **Workflow:** User with approved PTO → sees nudge on Home → taps avatar → Profile → sees full time-off section with all requests
-
----
-
-## Phase 6: Both — Update docs + verify no orphaned references
-**Platform:** Both
-**Complexity:** Small
-**Dependencies:** Phases 2–5
-
-**What it does:**
-- Update `active-feature.md` to reflect PTO/Sick only (remove all 'personal' references from spec)
-- Update request_type CHECK constraint references in spec
-- Grep across entire codebase for any remaining 'personal' type references
-- Final cross-platform build verification
-
-**Files touched:**
-- `docs/active-feature.md` — update request_type references, remove 'Personal' from all lists
-
-**Commit:** `docs: phase 6 - update feature spec for pto/sick consolidation`
-
-**Test gate:**
-1. **Unit:** `grep -r "personal" --include="*.ts" --include="*.tsx" --include="*.swift"` returns zero time-off-related hits
-2. **Integration:** Full iOS build succeeds; web `npm run typecheck` passes clean
-3. **Workflow:** End-to-end — staff submits PTO from Profile on iOS → admin reviews on web with PTO/Sick only → notification delivered
+### 3-stage test gate
+1. **Unit:** Trigger function correctly builds pg_net payload with facility scoping
+2. **Integration:** Insert a time_off_request → verify pg_net queues the HTTP call to edge function
+3. **Workflow:** Staff submits time-off request on iOS → facility admin receives push notification
 
 ---
 
 ## Dependency Graph
 ```
-Phase 1 (DB) ──→ Phase 2 (Web cleanup) ──────────────→ Phase 6 (Docs)
-             ──→ Phase 3 (iOS cleanup) → Phase 4 (Profile) → Phase 5 (Home slim) → Phase 6
+Phase 1 (edge function) ──► Phase 2 (review push - web → staff)
+                         ──► Phase 3 (new request push - trigger → admins)
 ```
-
-Phases 2 and 3 can run in parallel after Phase 1. Phase 4 depends on Phase 3. Phase 5 depends on Phase 4. Phase 6 is last.
+Phases 2 and 3 are independent of each other but both depend on Phase 1.
 
 ---
 

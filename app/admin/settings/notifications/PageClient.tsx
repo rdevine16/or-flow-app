@@ -28,6 +28,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Users,
 } from 'lucide-react'
 
 // =====================================================
@@ -55,6 +56,7 @@ interface NotificationTemplate {
 
 const CATEGORIES = [
   { key: 'case_alerts', label: 'Case Alerts', icon: ClipboardList },
+  { key: 'staff_management', label: 'Staff Management', icon: Users },
   { key: 'schedule_alerts', label: 'Schedule Alerts', icon: CalendarDays },
   { key: 'tray_management', label: 'Tray Management', icon: FlaskConical },
   { key: 'reports', label: 'Reports & Summaries', icon: FileBarChart },
