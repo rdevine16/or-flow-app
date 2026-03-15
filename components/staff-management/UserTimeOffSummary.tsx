@@ -44,7 +44,6 @@ export function UserTimeOffSummaryDisplay({ totals, variant = 'detail' }: UserTi
     const parts: string[] = []
     if (totals.pto_days > 0) parts.push(`PTO: ${formatDays(totals.pto_days)}`)
     if (totals.sick_days > 0) parts.push(`Sick: ${formatDays(totals.sick_days)}`)
-    if (totals.personal_days > 0) parts.push(`Personal: ${formatDays(totals.personal_days)}`)
     return <span className="text-sm text-slate-600">{parts.join(' | ') || '0d'}</span>
   }
 
@@ -54,7 +53,6 @@ export function UserTimeOffSummaryDisplay({ totals, variant = 'detail' }: UserTi
       <div className="flex items-center gap-4 flex-wrap">
         <TimeOffBadge label="PTO" days={totals.pto_days} variant="info" />
         <TimeOffBadge label="Sick" days={totals.sick_days} variant="warning" />
-        <TimeOffBadge label="Personal" days={totals.personal_days} variant="purple" />
       </div>
       <p className="text-sm font-medium text-slate-700">
         Total: {formatDays(totals.total_days)}

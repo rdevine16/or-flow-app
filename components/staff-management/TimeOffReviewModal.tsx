@@ -48,10 +48,9 @@ interface TimeOffReviewModalProps {
 // Constants
 // ============================================
 
-const REQUEST_TYPE_BADGE_VARIANTS: Record<string, 'info' | 'warning' | 'purple'> = {
+const REQUEST_TYPE_BADGE_VARIANTS: Record<string, 'info' | 'warning'> = {
   pto: 'info',
   sick: 'warning',
-  personal: 'purple',
 }
 
 const STATUS_BADGE_VARIANTS: Record<string, 'warning' | 'success' | 'error' | 'default'> = {

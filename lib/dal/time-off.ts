@@ -170,13 +170,12 @@ export const timeOffDAL = {
 
       let summary = summaryMap.get(row.user_id)
       if (!summary) {
-        summary = { user_id: row.user_id, pto_days: 0, sick_days: 0, personal_days: 0, total_days: 0 }
+        summary = { user_id: row.user_id, pto_days: 0, sick_days: 0, total_days: 0 }
         summaryMap.set(row.user_id, summary)
       }
 
       if (row.request_type === 'pto') summary.pto_days += days
       else if (row.request_type === 'sick') summary.sick_days += days
-      else if (row.request_type === 'personal') summary.personal_days += days
 
       summary.total_days += days
     }

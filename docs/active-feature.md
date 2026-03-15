@@ -56,7 +56,7 @@ Today's Schedule
 
 ### Time-Off Request System
 
-8. **Request form (iOS):** Type picker (PTO/Sick/Personal), start date, end date, partial day toggle (Full Day/AM Off/PM Off — only when single day), optional reason text
+8. **Request form (iOS):** Type picker (PTO/Sick), start date, end date, partial day toggle (Full Day/AM Off/PM Off — only when single day), optional reason text
 9. **Workflow:** Staff submits → status = `pending` → Admin reviews on web → approves or denies
 10. **My Requests section** on iOS home: shows recent requests with status badges (Pending=yellow, Approved=green, Denied=red)
 11. **Notifications:** When admin approves/denies → notification in staff's Alerts tab (reuse existing notification system)
@@ -66,7 +66,7 @@ Today's Schedule
 12. New page at `/staff-management`, sidebar nav, admin-only access
 13. **Tab 1 — Staff Directory:** Table of active staff, columns: Name, Role, Email, Phone, Status. Search + role filter. Click row for detail.
 14. **Tab 2 — Time-Off Calendar:** Team-wide month calendar, requests color-coded by status. Click request → review modal (approve/deny with optional notes). Filter by role/status/staff.
-15. **Per-user time-off totals:** Admin can see total days taken per user, broken down by type (PTO/Sick/Personal), for the current year. Displayed in both the directory view (column) and as a summary when reviewing individual requests.
+15. **Per-user time-off totals:** Admin can see total days taken per user, broken down by type (PTO/Sick), for the current year. Displayed in both the directory view (column) and as a summary when reviewing individual requests.
 16. **Coverage indicator:** Count of available staff per role per day on the calendar.
 
 ---
@@ -79,7 +79,7 @@ CREATE TABLE time_off_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   facility_id UUID NOT NULL REFERENCES facilities(id),
   user_id UUID NOT NULL REFERENCES users(id),
-  request_type TEXT NOT NULL CHECK (request_type IN ('pto', 'sick', 'personal')),
+  request_type TEXT NOT NULL CHECK (request_type IN ('pto', 'sick')),
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
   partial_day_type TEXT CHECK (partial_day_type IN ('am', 'pm')),

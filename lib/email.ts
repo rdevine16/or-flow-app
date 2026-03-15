@@ -538,7 +538,6 @@ export async function sendTimeOffReviewedEmail(
   const typeLabel =
     requestType === 'pto' ? 'PTO' :
     requestType === 'sick' ? 'Sick Leave' :
-    requestType === 'personal' ? 'Personal Day' :
     requestType
 
   const fmtDate = (d: string) => {

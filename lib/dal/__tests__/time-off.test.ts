@@ -344,7 +344,6 @@ describe('timeOffDAL.fetchUserTimeOffTotals', () => {
     const user1Summary = result.data.find((s) => s.user_id === 'user-1')
     expect(user1Summary?.pto_days).toBe(5) // Mon-Fri (Mar 2-6)
     expect(user1Summary?.sick_days).toBe(0.5) // Half day (Apr 1 is Wed, partial AM)
-    expect(user1Summary?.personal_days).toBe(0)
     expect(user1Summary?.total_days).toBe(5.5)
 
     const user2Summary = result.data.find((s) => s.user_id === 'user-2')
@@ -357,7 +356,7 @@ describe('timeOffDAL.fetchUserTimeOffTotals', () => {
       data: [
         { user_id: 'user-1', request_type: 'pto', start_date: '2026-03-02', end_date: '2026-03-04', partial_day_type: null },
         { user_id: 'user-1', request_type: 'sick', start_date: '2026-04-15', end_date: '2026-04-15', partial_day_type: null },
-        { user_id: 'user-1', request_type: 'personal', start_date: '2026-05-20', end_date: '2026-05-20', partial_day_type: 'pm' },
+        { user_id: 'user-1', request_type: 'pto', start_date: '2026-05-20', end_date: '2026-05-20', partial_day_type: 'pm' },
       ],
       error: null,
     })
@@ -370,9 +369,8 @@ describe('timeOffDAL.fetchUserTimeOffTotals', () => {
 
     expect(result.data).toHaveLength(1)
     const summary = result.data[0]
-    expect(summary.pto_days).toBe(3) // Mon-Wed (Mar 2-4)
+    expect(summary.pto_days).toBe(3.5) // Mon-Wed (Mar 2-4) + Half day (Wed May 20, partial PM)
     expect(summary.sick_days).toBe(1) // Wed (Apr 15)
-    expect(summary.personal_days).toBe(0.5) // Half day (Wed May 20, partial PM)
     expect(summary.total_days).toBe(4.5)
   })
 
