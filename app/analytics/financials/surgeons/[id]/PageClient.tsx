@@ -209,7 +209,7 @@ export default function SurgeonDetailPage() {
   const surgeonCases = caseStats.filter(c => c.surgeon_id === surgeonId)
 
   // Permission guard
-  if (!userLoading && !can('financials.view')) {
+  if (!userLoading && (!can('analytics.view') || !can('financials.view'))) {
     return (
       <DashboardLayout>
         <AccessDenied />

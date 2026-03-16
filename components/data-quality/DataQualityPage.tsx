@@ -8,6 +8,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { dataQualityAudit } from '@/lib/audit-logger'
 import { logger } from '@/lib/logger'
 import { useUser } from '@/lib/UserContext'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { AlertTriangle, Check, Clock, RefreshCw, X } from 'lucide-react'
 import SummaryRow from './SummaryRow'
@@ -76,7 +77,7 @@ const log = logger('DataQualityPage')
 
 export default function DataQualityPage() {
   const supabase = createClient()
-  const { loading: userLoading, effectiveFacilityId } = useUser()
+  const { loading: userLoading, effectiveFacilityId, can } = useUser()
   const searchParams = useSearchParams()
   const router = useRouter()
 
@@ -995,6 +996,15 @@ export default function DataQualityPage() {
   // ============================================
   // RENDER
   // ============================================
+
+  // Permission guard
+  if (!userLoading && !can('data_quality.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>

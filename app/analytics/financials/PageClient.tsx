@@ -256,7 +256,7 @@ if (facilityStatsRes.error) {
   }
 
   // Permission + tier guard (enterprise only)
-  if (!userLoading && (!can('financials.view') || !isTierAtLeast('enterprise'))) {
+  if (!userLoading && (!can('analytics.view') || !can('financials.view') || !isTierAtLeast('enterprise'))) {
     return (
       <DashboardLayout>
         <AccessDenied />

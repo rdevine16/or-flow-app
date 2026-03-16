@@ -56,9 +56,9 @@ export default function StaffManagementPageClient() {
     loading: userLoading,
     userData,
     effectiveFacilityId,
-    isAdmin,
     isGlobalAdmin,
     isImpersonating,
+    can,
   } = useUser()
 
   const searchParams = useSearchParams()
@@ -200,7 +200,7 @@ export default function StaffManagementPageClient() {
   }, [])
 
   if (userLoading) return <PageLoader />
-  if (!isAdmin) return <AccessDenied />
+  if (!can('staff_management.view')) return <AccessDenied />
   if (!showFacilitySelector && !facilityId) return <AccessDenied />
 
   const isAllFacilitiesMode = activeFacilityId === null

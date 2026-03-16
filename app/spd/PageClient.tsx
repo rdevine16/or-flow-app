@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { AlertTriangle, ArrowRight, Bell, Box, Building2, Eye, MessageSquare, Minus, X } from 'lucide-react'
 
 // =====================================================
@@ -467,7 +468,7 @@ function SlideoutPanel({ caseData, isOpen, onClose, activities, loadingActivitie
 export default function SPDDashboardPage() {
   const supabase = createClient()
   const { showToast } = useToast()
-  const { loading: userLoading, isGlobalAdmin, effectiveFacilityId } = useUser()
+  const { loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
   // State
   const [cases, setCases] = useState<SPDCase[]>([])
   const [loading, setLoading] = useState(true)
@@ -621,6 +622,15 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
   // =====================================================
   // RENDER
   // =====================================================
+
+  // Permission guard
+  if (!userLoading && !can('spd.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
 
   // No facility selected (global admin without impersonation)
   if (!effectiveFacilityId && isGlobalAdmin && !userLoading) {

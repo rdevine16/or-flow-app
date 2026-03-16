@@ -193,7 +193,7 @@ export default function ProcedureDetailPage() {
   const procedureCases = caseStats.filter(c => c.procedure_type_id === procedureId)
 
   // Permission guard
-  if (!userLoading && !can('financials.view')) {
+  if (!userLoading && (!can('analytics.view') || !can('financials.view'))) {
     return (
       <DashboardLayout>
         <AccessDenied />
