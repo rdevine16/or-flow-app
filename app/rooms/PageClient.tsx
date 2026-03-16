@@ -69,7 +69,6 @@ export default function DashboardPage() {
     effectiveFacilityId,
     isGlobalAdmin,
     isImpersonating,
-    isAdmin,
     can,
   } = useUser()
 
@@ -102,8 +101,8 @@ export default function DashboardPage() {
   const [showStaffPanel, setShowStaffPanel] = useState(false)
   const [activeDragData, setActiveDragData] = useState<DragData | null>(null)
   
-  // Check if user can manage staff
-  const canManageStaff = isAdmin
+  // Check if user can manage staff (permission-based, not role-based)
+  const canManageStaff = can('staff_management.view')
   
   // Get all case IDs for the staff assignment hook
   const allCaseIds = useMemo(() => cases.map(c => c.id), [cases])
@@ -667,7 +666,7 @@ export default function DashboardPage() {
               </div>
               
               {/* Reorder Button - Admin Only */}
-              {isAdmin && !roomsCollapsed && (
+              {can('settings.rooms') && !roomsCollapsed && (
                 <button
                   onClick={() => setShowRoomOrderModal(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"

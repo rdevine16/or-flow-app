@@ -1,8 +1,8 @@
-# RBAC Audit — ORbit Web App
+# RBAC Audit — ORbit Web App (Final State)
 
-## Executive Summary
+## Status: COMPLETE (Phases 1–10)
 
-The current permission system has **30 permissions** across 7 categories with a template + facility-override architecture. This audit identifies **gaps between current state and desired behavior** based on user interviews.
+All 10 phases of the RBAC overhaul have been implemented. This document reflects the **final state** of the permission system.
 
 ---
 
@@ -18,173 +18,142 @@ The current permission system has **30 permissions** across 7 categories with a 
 
 ---
 
-## Critical Gaps Found
+## Architecture
 
-### Gap 1: Admin Bypass (HIGH PRIORITY)
-**Current:** `facility_admin` and `global_admin` bypass ALL permission checks — hardcoded in `usePermissions` hook and `get_user_permissions()` RPC.
-**Desired:** No hardcoded bypasses. All permissions configurable through the permissions page. Admins get all permissions granted by default via templates, but facilities can customize.
-**Files affected:**
-- `lib/hooks/usePermissions.ts` — remove bypass logic
-- `get_user_permissions()` RPC — remove bypass, return actual permission values
-- `permission_templates` seed data — ensure admin levels have all permissions granted
+### Permission Resolution
+1. **Admin bypass**: `facility_admin` and `global_admin` always have ALL permissions (both in `usePermissions` hook and `get_user_permissions()` RPC)
+2. **Configurable roles**: `user` and `coordinator` permissions are configurable per-facility via `facility_permissions`
+3. **Templates**: `permission_templates` provide defaults that seed new facilities via `copy_permission_template_to_facility()`
+4. **63 total permissions** across 14 categories
 
-### Gap 2: User Can Create Cases (MEDIUM)
-**Current:** `cases.create` is granted to `user` by default.
-**Desired:** Users can only view and edit existing cases, not create new ones.
-**Fix:** Update `permission_templates` default for `user` + `cases.create` to `false`.
-
-### Gap 3: Coordinator Has Financial Access (MEDIUM)
-**Current:** `financials.view` and `tab.case_financials` are granted to `coordinator`.
-**Desired:** Coordinators cannot view financials by default.
-**Fix:** Update `permission_templates` defaults for coordinator on `financials.view` and `tab.case_financials` to `false`.
-
-### Gap 4: Missing Page-Level Permissions (HIGH)
-**Current:** Several pages use hardcoded role checks (`isAdmin`) instead of permissions.
-**Desired:** Every page gated by a permission key, configurable per facility.
-
-New permissions needed:
-| Key | Label | Category | Default: user | Default: coord | Default: admin |
-|---|---|---|---|---|---|
-| `rooms.view` | View Rooms | Rooms | true | true | true |
-| `rooms.manage` | Manage Rooms | Rooms | false | true | true |
-| `spd.view` | View SPD | SPD | false | false | true |
-| `spd.manage` | Manage SPD | SPD | false | false | true |
-| `data_quality.view` | View Data Quality | Data Quality | false | false | true |
-| `staff_management.view` | View Staff Mgmt | Staff Management | false | false | true |
-| `staff_management.manage` | Manage Staff | Staff Management | false | false | true |
-| `integrations.view` | View Integrations | Integrations | false | false | true |
-| `integrations.manage` | Manage Integrations | Integrations | false | false | true |
-| `flags.financial` | View Financial Flags | Case Operations | false | false | true |
-
-### Gap 5: Granular Settings Permissions (HIGH)
-**Current:** Two broad permissions: `settings.view` and `settings.manage`.
-**Desired:** Each settings sub-page has its own permission.
-
-New settings permissions:
-| Key | Label | Default: user | Default: coord | Default: admin |
-|---|---|---|---|---|
-| `settings.general` | Manage General Settings | false | false | true |
-| `settings.rooms` | Manage Room Settings | false | true | true |
-| `settings.procedures` | Manage Procedures | false | true | true |
-| `settings.milestones` | Manage Milestones | false | true | true |
-| `settings.flags` | Manage Flag Rules | false | true | true |
-| `settings.delays` | Manage Delay Types | false | true | true |
-| `settings.complexities` | Manage Complexities | false | false | true |
-| `settings.implant_companies` | Manage Implant Companies | false | false | true |
-| `settings.cancellation_reasons` | Manage Cancellation Reasons | false | true | true |
-| `settings.closures` | Manage Closures | false | true | true |
-| `settings.checklist` | Manage Checklists | false | true | true |
-| `settings.surgeon_preferences` | Manage Surgeon Prefs | false | true | true |
-| `settings.voice_commands` | Manage Voice Commands | false | false | true |
-| `settings.notifications` | Manage Notifications | false | true | true |
-| `settings.device_reps` | Manage Device Reps | false | false | true |
-| `settings.analytics` | Manage Analytics Settings | false | false | true |
-| `settings.permissions` | Manage Permissions | false | false | true |
-| `settings.subscription` | Manage Subscription | false | false | true |
-| `settings.financials.cost_categories` | Manage Cost Categories | false | false | true |
-| `settings.financials.payers` | Manage Payers | false | false | true |
-| `settings.financials.procedure_pricing` | Manage Procedure Pricing | false | false | true |
-| `settings.financials.surgeon_variance` | Manage Surgeon Variance | false | false | true |
-| `settings.financials.targets` | Manage Financial Targets | false | false | true |
-
-### Gap 6: Mixed Gating Systems (MEDIUM)
-**Current:** Navigation uses both `allowedRoles` arrays and `permission` keys. Some pages check `isAdmin`, some check `can()`, some check neither.
-**Desired:** Unified system — everything uses `can()` permission checks. Remove all `allowedRoles` from nav config. Remove all `isAdmin` checks from page guards.
-
-### Gap 7: Dashboard Role Views (LOW)
-**Current:** Dashboard shows different content based on access level.
-**Desired:** Role-specific dashboard views. Financial widgets hidden based on `financials.view` permission.
-
-### Gap 8: No Middleware-Level Enforcement (LOW)
-**Current:** All permission checks are client-side only. Middleware only checks auth.
-**Desired:** Consider adding server-side permission checks for sensitive routes (financials, admin).
+### Key Design Decisions
+- Admin bypass is **intentional** — admins always have full access, simplifies management
+- `/admin/*` pages use `isGlobalAdmin` access level check (exception to permission-based gating)
+- `isGlobalAdmin` in non-admin pages is used for UX (facility selector, redirect when no facility selected) — not page guards
+- `settings.manage` has been **deleted** — replaced by 23 granular `settings.*` keys
+- `allowedRoles` has been **removed** from `NavItem` type — all navigation uses `permission` keys
 
 ---
 
-## Complete Target Permission Matrix
+## Complete Permission Matrix (63 Permissions)
 
-### Existing Permissions (with corrected defaults)
+### Cases (4)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `cases.view` | ✅ | ✅ | ✅ (bypass) | ✅ (bypass) |
+| `cases.create` | ❌ | ✅ | ✅ | ✅ |
+| `cases.edit` | ✅ | ✅ | ✅ | ✅ |
+| `cases.delete` | ❌ | ✅ | ✅ | ✅ |
 
-| # | Key | Category | User | Coord | Fac Admin | Global Admin |
-|---|---|---|---|---|---|---|
-| 1 | `cases.view` | Cases | ✅ | ✅ | ✅ | ✅ |
-| 2 | `cases.create` | Cases | **❌** | ✅ | ✅ | ✅ |
-| 3 | `cases.edit` | Cases | ✅ | ✅ | ✅ | ✅ |
-| 4 | `cases.delete` | Cases | ❌ | ✅ | ✅ | ✅ |
-| 5 | `milestones.view` | Case Ops | ✅ | ✅ | ✅ | ✅ |
-| 6 | `milestones.manage` | Case Ops | ✅ | ✅ | ✅ | ✅ |
-| 7 | `flags.view` | Case Ops | ✅ | ✅ | ✅ | ✅ |
-| 8 | `flags.create` | Case Ops | ✅ | ✅ | ✅ | ✅ |
-| 9 | `flags.delete` | Case Ops | ❌ | ✅ | ✅ | ✅ |
-| 10 | `staff.view` | Case Ops | ✅ | ✅ | ✅ | ✅ |
-| 11 | `staff.create` | Case Ops | ❌ | ✅ | ✅ | ✅ |
-| 12 | `staff.delete` | Case Ops | ❌ | ✅ | ✅ | ✅ |
-| 13 | `implants.view` | Case Ops | ✅ | ✅ | ✅ | ✅ |
-| 14 | `implants.edit` | Case Ops | ❌ | ✅ | ✅ | ✅ |
-| 15 | `tab.case_financials` | Case Tabs | ❌ | **❌** | ✅ | ✅ |
-| 16 | `tab.case_milestones` | Case Tabs | ✅ | ✅ | ✅ | ✅ |
-| 17 | `tab.case_flags` | Case Tabs | ✅ | ✅ | ✅ | ✅ |
-| 18 | `tab.case_validation` | Case Tabs | ✅ | ✅ | ✅ | ✅ |
-| 19 | `financials.view` | Financials | ❌ | **❌** | ✅ | ✅ |
-| 20 | `analytics.view` | Analytics | ❌ | **❌** | ✅ | ✅ |
-| 21 | `scores.view` | Analytics | ❌ | **❌** | ✅ | ✅ |
-| 22 | `scheduling.view` | Scheduling | ❌ | ✅ | ✅ | ✅ |
-| 23 | `scheduling.create` | Scheduling | ❌ | ✅ | ✅ | ✅ |
-| 24 | `scheduling.edit` | Scheduling | ❌ | ✅ | ✅ | ✅ |
-| 25 | `scheduling.delete` | Scheduling | ❌ | ✅ | ✅ | ✅ |
-| 26 | `settings.view` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 27 | `settings.manage` | Settings | ❌ | ❌ | ✅ | ✅ |
-| 28 | `users.view` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 29 | `users.manage` | Settings | ❌ | ❌ | ✅ | ✅ |
-| 30 | `audit.view` | Admin | ❌ | ❌ | ✅ | ✅ |
+### Case Operations (8)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `milestones.view` | ✅ | ✅ | ✅ | ✅ |
+| `milestones.manage` | ✅ | ✅ | ✅ | ✅ |
+| `flags.view` | ✅ | ✅ | ✅ | ✅ |
+| `flags.create` | ✅ | ✅ | ✅ | ✅ |
+| `flags.delete` | ❌ | ✅ | ✅ | ✅ |
+| `flags.financial` | ❌ | ❌ | ✅ | ✅ |
+| `staff.view` | ✅ | ✅ | ✅ | ✅ |
+| `staff.create` | ❌ | ✅ | ✅ | ✅ |
+| `staff.delete` | ❌ | ✅ | ✅ | ✅ |
+| `implants.view` | ✅ | ✅ | ✅ | ✅ |
+| `implants.edit` | ❌ | ✅ | ✅ | ✅ |
 
-**Bold** = changed from current default.
+### Case Tabs (4)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `tab.case_financials` | ❌ | ❌ | ✅ | ✅ |
+| `tab.case_milestones` | ✅ | ✅ | ✅ | ✅ |
+| `tab.case_flags` | ✅ | ✅ | ✅ | ✅ |
+| `tab.case_validation` | ✅ | ✅ | ✅ | ✅ |
 
-### New Permissions to Add (33 new)
+### Rooms (2)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `rooms.view` | ✅ | ✅ | ✅ | ✅ |
+| `rooms.manage` | ❌ | ✅ | ✅ | ✅ |
 
-| # | Key | Category | User | Coord | Fac Admin | Global Admin |
-|---|---|---|---|---|---|---|
-| 31 | `rooms.view` | Rooms | ✅ | ✅ | ✅ | ✅ |
-| 32 | `rooms.manage` | Rooms | ❌ | ✅ | ✅ | ✅ |
-| 33 | `spd.view` | SPD | ❌ | ❌ | ✅ | ✅ |
-| 34 | `spd.manage` | SPD | ❌ | ❌ | ✅ | ✅ |
-| 35 | `data_quality.view` | Data Quality | ❌ | ❌ | ✅ | ✅ |
-| 36 | `staff_management.view` | Staff Mgmt | ❌ | ❌ | ✅ | ✅ |
-| 37 | `staff_management.manage` | Staff Mgmt | ❌ | ❌ | ✅ | ✅ |
-| 38 | `integrations.view` | Integrations | ❌ | ❌ | ✅ | ✅ |
-| 39 | `integrations.manage` | Integrations | ❌ | ❌ | ✅ | ✅ |
-| 40 | `flags.financial` | Case Ops | ❌ | ❌ | ✅ | ✅ |
-| 41 | `settings.general` | Settings | ❌ | ❌ | ✅ | ✅ |
-| 42 | `settings.rooms` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 43 | `settings.procedures` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 44 | `settings.milestones` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 45 | `settings.flags` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 46 | `settings.delays` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 47 | `settings.complexities` | Settings | ❌ | ❌ | ✅ | ✅ |
-| 48 | `settings.implant_companies` | Settings | ❌ | ❌ | ✅ | ✅ |
-| 49 | `settings.cancellation_reasons` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 50 | `settings.closures` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 51 | `settings.checklist` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 52 | `settings.surgeon_preferences` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 53 | `settings.voice_commands` | Settings | ❌ | ❌ | ✅ | ✅ |
-| 54 | `settings.notifications` | Settings | ❌ | ✅ | ✅ | ✅ |
-| 55 | `settings.device_reps` | Settings | ❌ | ❌ | ✅ | ✅ |
-| 56 | `settings.analytics` | Settings | ❌ | ❌ | ✅ | ✅ |
-| 57 | `settings.permissions` | Settings | ❌ | ❌ | ✅ | ✅ |
-| 58 | `settings.subscription` | Settings | ❌ | ❌ | ✅ | ✅ |
-| 59 | `settings.financials.cost_categories` | Financial Settings | ❌ | ❌ | ✅ | ✅ |
-| 60 | `settings.financials.payers` | Financial Settings | ❌ | ❌ | ✅ | ✅ |
-| 61 | `settings.financials.procedure_pricing` | Financial Settings | ❌ | ❌ | ✅ | ✅ |
-| 62 | `settings.financials.surgeon_variance` | Financial Settings | ❌ | ❌ | ✅ | ✅ |
-| 63 | `settings.financials.targets` | Financial Settings | ❌ | ❌ | ✅ | ✅ |
+### Scheduling (4)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `scheduling.view` | ❌ | ✅ | ✅ | ✅ |
+| `scheduling.create` | ❌ | ✅ | ✅ | ✅ |
+| `scheduling.edit` | ❌ | ✅ | ✅ | ✅ |
+| `scheduling.delete` | ❌ | ✅ | ✅ | ✅ |
 
-**Total: 63 permissions** (30 existing + 33 new)
+### Financials (1)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `financials.view` | ❌ | ❌ | ✅ | ✅ |
+
+### Analytics (2)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `analytics.view` | ❌ | ❌ | ✅ | ✅ |
+| `scores.view` | ❌ | ❌ | ✅ | ✅ |
+
+### SPD (2)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `spd.view` | ❌ | ❌ | ✅ | ✅ |
+| `spd.manage` | ❌ | ❌ | ✅ | ✅ |
+
+### Data Quality (1)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `data_quality.view` | ❌ | ❌ | ✅ | ✅ |
+
+### Staff Management (2)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `staff_management.view` | ❌ | ❌ | ✅ | ✅ |
+| `staff_management.manage` | ❌ | ❌ | ✅ | ✅ |
+
+### Integrations (2)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `integrations.view` | ❌ | ❌ | ✅ | ✅ |
+| `integrations.manage` | ❌ | ❌ | ✅ | ✅ |
+
+### Settings (18)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `settings.view` | ❌ | ✅ | ✅ | ✅ |
+| `settings.general` | ❌ | ❌ | ✅ | ✅ |
+| `settings.rooms` | ❌ | ✅ | ✅ | ✅ |
+| `settings.procedures` | ❌ | ✅ | ✅ | ✅ |
+| `settings.milestones` | ❌ | ✅ | ✅ | ✅ |
+| `settings.flags` | ❌ | ✅ | ✅ | ✅ |
+| `settings.delays` | ❌ | ✅ | ✅ | ✅ |
+| `settings.complexities` | ❌ | ❌ | ✅ | ✅ |
+| `settings.implant_companies` | ❌ | ❌ | ✅ | ✅ |
+| `settings.cancellation_reasons` | ❌ | ✅ | ✅ | ✅ |
+| `settings.closures` | ❌ | ✅ | ✅ | ✅ |
+| `settings.checklist` | ❌ | ✅ | ✅ | ✅ |
+| `settings.surgeon_preferences` | ❌ | ✅ | ✅ | ✅ |
+| `settings.voice_commands` | ❌ | ❌ | ✅ | ✅ |
+| `settings.notifications` | ❌ | ✅ | ✅ | ✅ |
+| `settings.device_reps` | ❌ | ❌ | ✅ | ✅ |
+| `settings.analytics` | ❌ | ❌ | ✅ | ✅ |
+| `settings.permissions` | ❌ | ❌ | ✅ | ✅ |
+| `settings.subscription` | ❌ | ❌ | ✅ | ✅ |
+| `users.view` | ❌ | ✅ | ✅ | ✅ |
+| `users.manage` | ❌ | ❌ | ✅ | ✅ |
+| `audit.view` | ❌ | ❌ | ✅ | ✅ |
+
+### Financial Settings (5)
+| Key | User | Coordinator | Facility Admin | Global Admin |
+|---|---|---|---|---|
+| `settings.financials.cost_categories` | ❌ | ❌ | ✅ | ✅ |
+| `settings.financials.payers` | ❌ | ❌ | ✅ | ✅ |
+| `settings.financials.procedure_pricing` | ❌ | ❌ | ✅ | ✅ |
+| `settings.financials.surgeon_variance` | ❌ | ❌ | ✅ | ✅ |
+| `settings.financials.targets` | ❌ | ❌ | ✅ | ✅ |
 
 ---
 
 ## Page-by-Page Access Map
-
-### Pages Accessible by Role (Default)
 
 | Page | Permission Gate | User | Coord | Fac Admin | Global Admin |
 |---|---|---|---|---|---|
@@ -233,49 +202,81 @@ New settings permissions:
 
 ---
 
-## UI Changes Needed
+## What Was Completed (Phases 1–10)
 
-### 1. Permissions Settings Page → Two-Column Layout
-Current permissions page needs redesign with:
-- **Left panel:** Category list (Cases, Case Operations, Scheduling, Settings, Financials, etc.)
-- **Right panel:** Permission toggles for the selected category, grouped by access level
-- Follow the pattern from voice-commands settings page
+### Phase 1: Database Migration
+- Added `coordinator` to `valid_access_level` CHECK constraint
+- Inserted 33 new permissions (63 total)
+- Deleted `settings.manage` permission with cascade
+- Fixed incorrect defaults for `user` and `coordinator`
+- Backfilled `facility_permissions` for all existing facilities
 
-### 2. Dashboard → Role-Specific Views
-- Financial widgets gated by `financials.view`
-- Scheduling widgets gated by `scheduling.view`
-- Analytics summary gated by `analytics.view`
+### Phase 2: Type Safety + settings.manage Removal
+- Created `PERMISSION_KEYS` constant in `lib/permissions.ts` for IDE autocomplete
+- Replaced all code references to `settings.manage` with granular `settings.*` keys
+- Updated `PermissionMatrix` component for expanded permission set
 
-### 3. Navigation → Pure Permission-Based
-- Remove all `allowedRoles` from navigation config
-- Every nav item uses `permission` key
-- Financial nav items/sub-items hidden when `financials.view` is false
+### Phase 3: Navigation Config
+- Replaced all `allowedRoles` arrays with `permission` keys in `navigation-config.tsx`
+- Removed `allowedRoles` from `NavItem` type definition
+- Updated `getFilteredNavigation()` to use only `can()`
 
-### 4. Financial Flags → Category Permission
-- Flag rules have categories; financial flags filtered by `flags.financial` permission
-- Users without `flags.financial` never see financial-category flags in lists or analytics
+### Phase 4: Page Guards — Cases, Rooms, Block Schedule
+- Added `can()` permission guards to all case pages, rooms, and block schedule
+- Used consistent `<AccessDenied />` pattern
+
+### Phase 5: Page Guards — Analytics, SPD, Data Quality, Staff
+- Replaced `isAdmin` page guards with `can()` on analytics, SPD, data quality, staff management
+- Financial analytics pages additionally check `financials.view`
+
+### Phase 6: Page Guards — Settings Sub-Pages
+- Added granular `settings.*` permission guards to all 20+ settings pages
+- Updated settings hub to filter visible cards by permissions
+
+### Phase 7: Financial Data Gating
+- Gated financial tab in case drawer with `tab.case_financials`
+- Hidden financial KPI widgets on dashboard for users without `financials.view`
+- Gated financial columns in case list tables
+
+### Phase 8: Financial Flag Gating
+- Added `is_financial` boolean to `flag_rules` table
+- Filtered financial flags from case views when `flags.financial` is false
+- Updated flag creation UI with financial flag toggle (admin only)
+
+### Phase 9: Permissions Settings Page Redesign
+- Two-column layout for `/settings/permissions` (facility-level) and `/admin/permission-templates` (global)
+- Tabs for User | Coordinator, searchable category list, toggle panel
+- Category counts and search filtering
+
+### Phase 10: Cleanup + Final Verification
+- Replaced remaining `isAdmin` role checks in rooms page with `can()` permission calls
+- Removed commented-out `settings.manage` code from settings nav config
+- Verified: no `allowedRoles` remain in nav config
+- Verified: no RBAC-related TODOs remain
+- Updated this audit document to final state
 
 ---
 
-## Deprecations
+## Remaining `isGlobalAdmin`/`isAdmin` Usage (Intentional)
 
-After this work is complete, the following can be removed:
-- `allowedRoles` arrays in navigation config
-- `isAdmin` / `isGlobalAdmin` checks in page guards (replace with `can()`)
-- Admin bypass logic in `usePermissions` hook
-- Admin bypass logic in `get_user_permissions()` RPC
-- The broad `settings.manage` permission (replaced by granular settings.* keys)
+These uses are **correct and should remain**:
 
-**Note:** `settings.view` is kept as the gate for the Settings hub page itself. Individual settings pages use their own `settings.*` permission.
+### `/admin/*` pages
+All admin pages use `isGlobalAdmin` — this is the intended access pattern for the admin panel.
 
----
+### Non-admin pages — Facility Selection UX
+- `app/analytics/*/PageClient.tsx` — Show "Select a Facility" when global admin has no facility
+- `app/cases/PageClient.tsx` — Show `<NoFacilitySelected />` for global admin
+- `app/rooms/PageClient.tsx` — Redirect global admin to admin page
+- `app/spd/PageClient.tsx` — Show facility selection prompt
+- `app/staff-management/PageClient.tsx` — Show facility selector dropdown
 
-## Implementation Scope Estimate
+### `app/settings/general/PageClient.tsx`
+- "Danger Zone" (Delete Facility) is `isGlobalAdmin`-only — inherently a platform-level action
 
-- **Migration:** Add 33 new permissions, update 5 default grants, modify RPC
-- **Navigation config:** Replace all `allowedRoles` with `permission` keys
-- **Page guards:** ~40 page files need permission checks added/updated
-- **Permissions UI:** Redesign with two-column layout
-- **Dashboard:** Add permission-based widget filtering
-- **Flag filtering:** Add `flags.financial` category gating
-- **Testing:** Each page needs verification for each role
+### `app/settings/permissions/PageClient.tsx`
+- `isAdmin` used for query `enabled` flags (RLS requires admin-level access to `facility_permissions`)
+- Page guard itself uses `can('settings.permissions')`
+
+### `app/invite/user/[token]/PageClient.tsx`
+- `isAdmin` checks `invite?.accessLevel`, not the current user — display logic only

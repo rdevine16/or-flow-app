@@ -96,30 +96,6 @@ export const settingsCategories: SettingsCategory[] = [
       },
     ],
   },
-  // Patient Check-In hidden — not production-ready
-  // {
-  //   id: 'checkin',
-  //   label: 'Patient Check-In',
-  //   tabLabel: 'Check-In',
-  //   items: [
-  //     {
-  //       id: 'checkin-settings',
-  //       label: 'Arrival Settings',
-  //       href: '/settings/checkin',
-  //       icon: ClipboardCheck,
-  //       description: 'Configure arrival times',
-  //       permission: 'settings.manage',
-  //     },
-  //     {
-  //       id: 'checklist-builder',
-  //       label: 'Checklist Builder',
-  //       href: '/settings/checklist-builder',
-  //       icon: ClipboardCheck,
-  //       description: 'Customize pre-op checklist',
-  //       permission: 'settings.manage',
-  //     },
-  //   ],
-  // },
   {
     id: 'organization',
     label: 'Organization',
