@@ -11,6 +11,7 @@ const PUBLIC_ROUTES = [
   '/auth/',       // Auth callbacks, password reset, etc.
   '/invite/',     // Device rep signup flow
   '/login',       // Login page
+  '/privacy',     // Privacy policy (public, required for App Store)
   '/status/',     // Public case status pages
 ]
 
