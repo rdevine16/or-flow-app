@@ -4,6 +4,7 @@
 import { ReactNode } from 'react'
 import { AlertTriangle, Ban, BarChart3, Bell, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, CreditCard, Database, FileText, Flag, FlaskConical, Home, KeyRound, LayoutGrid, Package, Plug, Settings, ShieldCheck, User, UserCog } from 'lucide-react'
 import type { TierSlug } from '@/lib/tier-config'
+import type { PermissionKey } from '@/lib/permissions'
 
 // ============================================
 // Types
@@ -13,9 +14,8 @@ export interface NavItem {
   name: string
   href: string
   icon: ReactNode
-  allowedRoles: string[]
-  /** Permission key for can() gating. When set, takes precedence over allowedRoles. */
-  permission?: string
+  /** Permission key for can() gating. Items without a permission key are always visible. */
+  permission?: PermissionKey
   /** Minimum subscription tier required. Item shows as locked if user's tier is lower. */
   requiredTier?: TierSlug
 }
@@ -91,7 +91,6 @@ export const adminNavGroups: NavGroup[] = [
         name: 'Dashboard',
         href: '/admin',
         icon: navIcons.dashboard,
-        allowedRoles: ['global_admin'],
       },
     ],
   },
@@ -103,19 +102,16 @@ export const adminNavGroups: NavGroup[] = [
         name: 'Facilities',
         href: '/admin/facilities',
         icon: navIcons.facilities,
-        allowedRoles: ['global_admin'],
       },
       {
         name: 'Demo Generator',
         href: '/admin/demo',
         icon: navIcons.demoGenerator,
-        allowedRoles: ['global_admin'],
       },
       {
         name: 'HL7v2 Test Harness',
         href: '/admin/settings/hl7v2-test-harness',
         icon: navIcons.integrations,
-        allowedRoles: ['global_admin'],
       },
     ],
   },
@@ -127,7 +123,6 @@ export const adminNavGroups: NavGroup[] = [
         name: 'Configuration',
         href: '/admin/configuration',
         icon: navIcons.settings,
-        allowedRoles: ['global_admin'],
       },
     ],
   },
@@ -139,13 +134,11 @@ export const adminNavGroups: NavGroup[] = [
         name: 'Audit Log',
         href: '/admin/audit-log',
         icon: navIcons.auditLog,
-        allowedRoles: ['global_admin'],
       },
-           {
-        name: 'Global Security',        // ← ADD THIS
+      {
+        name: 'Global Security',
         href: '/admin/global-security',
         icon: navIcons.security,
-        allowedRoles: ['global_admin'],
       },
     ],
   },
@@ -160,13 +153,13 @@ export const facilityNavigation: NavItem[] = [
     name: 'Dashboard',
     href: '/dashboard',
     icon: navIcons.home,
-    allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
+    // No permission — always visible to all facility users
   },
   {
     name: 'Rooms',
     href: '/rooms',
     icon: navIcons.dashboard,
-    allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
+    permission: 'rooms.view',
     requiredTier: 'essential',
   },
   // Check-In hidden — not production-ready
@@ -174,20 +167,17 @@ export const facilityNavigation: NavItem[] = [
   //   name: 'Check-In',
   //   href: '/checkin',
   //   icon: navIcons.checklist,
-  //   allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
   // },
   {
     name: 'Block Schedule',
     href: '/block-schedule',
     icon: navIcons.calendar,
-    allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
     permission: 'scheduling.view',
   },
   {
     name: 'Cases',
     href: '/cases',
     icon: navIcons.cases,
-    allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
     permission: 'cases.view',
     requiredTier: 'essential',
   },
@@ -195,14 +185,13 @@ export const facilityNavigation: NavItem[] = [
     name: 'SPD',
     href: '/spd',
     icon: navIcons.spd,
-    allowedRoles: ['global_admin', 'facility_admin'],
+    permission: 'spd.view',
     requiredTier: 'professional',
   },
   {
     name: 'Analytics',
     href: '/analytics',
     icon: navIcons.analytics,
-    allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
     permission: 'analytics.view',
     requiredTier: 'professional',
   },
@@ -210,20 +199,19 @@ export const facilityNavigation: NavItem[] = [
     name: 'Data Quality',
     href: '/data-quality',
     icon: navIcons.dataQuality,
-    allowedRoles: ['global_admin', 'facility_admin'],
+    permission: 'data_quality.view',
     requiredTier: 'professional',
   },
   {
     name: 'Staff Management',
     href: '/staff-management',
     icon: navIcons.staffManagement,
-    allowedRoles: ['global_admin', 'facility_admin'],
+    permission: 'staff_management.view',
   },
   {
     name: 'Settings',
     href: '/settings',
     icon: navIcons.settings,
-    allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
     permission: 'settings.view',
   },
 ]
@@ -233,14 +221,13 @@ export const facilityNavigation: NavItem[] = [
 // ============================================
 
 export function getFilteredNavigation(
-  accessLevel: string,
-  can?: (key: string) => boolean,
+  can: (key: string) => boolean,
 ): NavItem[] {
   return facilityNavigation.filter(item => {
-    // If a permission key is set and can() is provided, use permission gating
-    if (item.permission && can) return can(item.permission)
-    // Fallback to role-based filtering
-    return item.allowedRoles.includes(accessLevel)
+    // Items with a permission key are gated by can()
+    if (item.permission) return can(item.permission)
+    // Items without a permission key (e.g., Dashboard) are always visible
+    return true
   })
   // Note: tier-locked items are NOT filtered out here.
   // They remain in the list and are rendered as locked in the Sidebar.

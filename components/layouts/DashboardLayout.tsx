@@ -108,7 +108,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Derived state
   const effectiveIsGlobalAdmin = userAccessLevel === 'global_admin' || isGlobalAdmin
   const isAdminMode = effectiveIsGlobalAdmin && !impersonation
-  const navigation = isAdminMode ? [] : getFilteredNavigation(userData.accessLevel, can)
+  const navigation = isAdminMode ? [] : getFilteredNavigation(can)
   const sidebarWidth = sidebarExpanded ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED
   const contentMarginLeft = sidebarWidth + (hasSubNav ? SUBNAV_WIDTH : 0)
   // ============================================

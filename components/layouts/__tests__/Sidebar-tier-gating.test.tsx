@@ -2,9 +2,12 @@
 // Integration tests for Sidebar rendering locked items based on tier
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render } from '@testing-library/react'
 import Sidebar from '@/components/layouts/Sidebar'
-import { facilityNavigation } from '@/components/layouts/navigation-config'
+import { facilityNavigation, getFilteredNavigation } from '@/components/layouts/navigation-config'
+
+// Pre-filter navigation with all permissions granted (simulates admin/full-access user)
+const allPermissionsNav = getFilteredNavigation(() => true)
 
 // ============================================
 // MOCKS
@@ -57,7 +60,7 @@ describe('Sidebar - tier gating', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
         onExpandChange={() => {}}
       />
     )
@@ -83,7 +86,7 @@ describe('Sidebar - tier gating', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
@@ -108,7 +111,7 @@ describe('Sidebar - tier gating', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
@@ -136,7 +139,7 @@ describe('Sidebar - tier gating', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
@@ -157,7 +160,7 @@ describe('Sidebar - tier gating', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
@@ -174,7 +177,7 @@ describe('Sidebar - tier gating', () => {
       <Sidebar
         pathname="/spd" // User is on SPD page
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
@@ -220,7 +223,8 @@ describe('Navigation filtering - tier does not affect visibility', () => {
     const navigationConfig = await import('@/components/layouts/navigation-config')
     const { getFilteredNavigation } = navigationConfig
 
-    const items = getFilteredNavigation('global_admin') // Admin can see all items
+    const canAllowAll = () => true
+    const items = getFilteredNavigation(canAllowAll)
 
     // SPD, Analytics, Data Quality should all be present (not filtered out)
     const spd = items.find((item: { name: string }) => item.name === 'SPD')
@@ -228,7 +232,7 @@ describe('Navigation filtering - tier does not affect visibility', () => {
     const dataQuality = items.find((item: { name: string }) => item.name === 'Data Quality')
 
     // Items with requiredTier should still be in the filtered list
-    // (getFilteredNavigation only filters by role/permission, NOT tier)
+    // (getFilteredNavigation only filters by permission, NOT tier)
     expect(spd).toBeDefined()
     expect(analytics).toBeDefined()
     expect(dataQuality).toBeDefined()

@@ -6,7 +6,10 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Sidebar from '@/components/layouts/Sidebar'
 import { FeatureGate } from '@/components/FeatureGate'
-import { facilityNavigation } from '@/components/layouts/navigation-config'
+import { facilityNavigation, getFilteredNavigation } from '@/components/layouts/navigation-config'
+
+// Pre-filter navigation with all permissions granted (simulates admin/full-access user)
+const allPermissionsNav = getFilteredNavigation(() => true)
 
 // ============================================
 // MOCKS
@@ -62,7 +65,7 @@ describe('Tier gating workflow', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
@@ -94,7 +97,7 @@ describe('Tier gating workflow', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
@@ -123,7 +126,7 @@ describe('Tier gating workflow', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
@@ -150,7 +153,7 @@ describe('Tier gating workflow', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
@@ -177,7 +180,7 @@ describe('Tier gating workflow', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
@@ -200,7 +203,7 @@ describe('Tier gating workflow', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
@@ -243,7 +246,7 @@ describe('Tier consistency - Sidebar and FeatureGate', () => {
       <Sidebar
         pathname="/dashboard"
         isAdminMode={false}
-        navigation={facilityNavigation}
+        navigation={allPermissionsNav}
       />
     )
 
