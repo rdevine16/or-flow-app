@@ -11,6 +11,7 @@ import SearchableDropdown from '@/components/ui/SearchableDropdown'
 import ImplantCompanySelect from '@/components/cases/ImplantCompanySelect'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { LeaveConfirm } from '@/components/ui/ConfirmDialog'
 import { bulkCaseRowSchema } from '@/lib/validation/schemas'
 import { caseAudit } from '@/lib/audit-logger'
@@ -112,13 +113,6 @@ function BulkCreateContent() {
     }
     fetchStatusId()
   }, [effectiveFacilityId, supabase])
-
-  // Redirect unauthorized users
-  useEffect(() => {
-    if (!userLoading && !canCreateCases) {
-      router.replace('/cases')
-    }
-  }, [userLoading, canCreateCases, router])
 
   // Track dirty state
   useEffect(() => {
@@ -389,7 +383,7 @@ function BulkCreateContent() {
   if (!canCreateCases) {
     return (
       <DashboardLayout>
-        <PageLoader />
+        <AccessDenied />
       </DashboardLayout>
     )
   }

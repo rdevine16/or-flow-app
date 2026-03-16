@@ -17,6 +17,7 @@ import CallNextPatientModal from '@/components/CallNextPatientModal'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ArrowUpDown, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { getLocalDateString, formatDateWithWeekday } from '@/lib/date-utils'
 import { extractName } from '@/lib/formatters'
 import RoomOrderModal from '@/components/dashboard/RoomOrderModal'
@@ -69,6 +70,7 @@ export default function DashboardPage() {
     isGlobalAdmin,
     isImpersonating,
     isAdmin,
+    can,
   } = useUser()
 
   // Redirect global admins (not impersonating) to admin page
@@ -472,6 +474,18 @@ export default function DashboardPage() {
   const goToToday = () => setSelectedDate(todayDate)
 
   const isToday = selectedDate === todayDate
+
+  // ============================================================================
+  // PERMISSION GUARD
+  // ============================================================================
+
+  if (!userLoading && !can('rooms.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
 
   // ============================================================================
   // LOADING STATE

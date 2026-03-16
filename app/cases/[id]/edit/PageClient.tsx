@@ -2,14 +2,34 @@
 
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
+import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
 import CaseForm from '@/components/cases/CaseForm'
+import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { ChevronLeft } from 'lucide-react'
 
 export default function EditCasePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const { can, loading } = useUser()
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <PageLoader />
+      </DashboardLayout>
+    )
+  }
+
+  if (!can('cases.edit')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>

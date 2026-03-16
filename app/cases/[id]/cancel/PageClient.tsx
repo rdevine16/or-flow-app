@@ -11,6 +11,7 @@ import Container from '@/components/ui/Container'
 import { caseAudit } from '@/lib/audit-logger'
 import { extractName } from '@/lib/formatters'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { AlertCircle, AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react'
 import { getLocalDateString } from '@/lib/date-utils'
 
@@ -90,7 +91,7 @@ export default function CancelCasePage() {
   const params = useParams()
   const caseId = params.id as string
   const supabase = createClient()
-  const { loading: userLoading } = useUser()
+  const { loading: userLoading, can } = useUser()
   const { showToast } = useToast()
   // Data state
   const [caseData, setCaseData] = useState<CaseData | null>(null)
@@ -315,6 +316,18 @@ export default function CancelCasePage() {
   const procedureName = caseData ? extractName(caseData.procedure_types) : null
   const roomName = caseData ? extractName(caseData.or_rooms) : null
   const surgeon = caseData ? getSurgeon(caseData.surgeon) : { name: 'Unassigned', fullName: 'Unassigned' }
+
+  // ============================================================================
+  // PERMISSION GUARD
+  // ============================================================================
+
+  if (!userLoading && !can('cases.delete')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
 
   // ============================================================================
   // RENDER - LOADING

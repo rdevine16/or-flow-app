@@ -13,6 +13,7 @@ import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
 import { NoFacilitySelected } from '@/components/ui/NoFacilitySelected'
 import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { useCasesPage } from '@/lib/hooks/useCasesPage'
 import { Plus, ChevronDown, List, Download } from 'lucide-react'
 import type { CaseListItem } from '@/lib/dal/cases'
@@ -174,6 +175,15 @@ function CasesPageContent() {
     return (
       <DashboardLayout>
         <NoFacilitySelected />
+      </DashboardLayout>
+    )
+  }
+
+  // --- Permission Guard ---
+  if (!userLoading && !can('cases.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
       </DashboardLayout>
     )
   }

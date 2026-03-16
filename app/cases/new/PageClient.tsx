@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
@@ -8,19 +7,12 @@ import Card from '@/components/ui/Card'
 import CaseForm from '@/components/cases/CaseForm'
 import { useUser } from '@/lib/UserContext'
 import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { ChevronLeft } from 'lucide-react'
 
 export default function NewCasePage() {
   const router = useRouter()
   const { can, loading } = useUser()
-  const canCreate = can('cases.create')
-
-  // Redirect unauthorized users
-  useEffect(() => {
-    if (!loading && !canCreate) {
-      router.replace('/cases')
-    }
-  }, [loading, canCreate, router])
 
   if (loading) {
     return (
@@ -30,10 +22,10 @@ export default function NewCasePage() {
     )
   }
 
-  if (!canCreate) {
+  if (!can('cases.create')) {
     return (
       <DashboardLayout>
-        <PageLoader />
+        <AccessDenied />
       </DashboardLayout>
     )
   }

@@ -41,6 +41,7 @@ import { checkMilestoneOrder } from '@/lib/milestone-order'
 import { useFlipRoom } from '@/lib/hooks/useFlipRoom'
 import FlipRoomCard from '@/components/cases/FlipRoomCard'
 import { resolveTemplateForCase } from '@/lib/dal/phase-resolver'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 // ============================================================================
 // TYPES
@@ -1144,6 +1145,18 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     implants.cup_size_final, implants.stem_size_final, implants.head_size_final, implants.liner_size_final,
     implants.femur_size_final, implants.tibia_size_final, implants.poly_size_final, implants.patella_size_final,
   ].filter(Boolean).length : 0
+
+  // ============================================================================
+  // PERMISSION GUARD
+  // ============================================================================
+
+  if (!userLoading && !can('cases.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
 
   // ============================================================================
   // LOADING / ERROR / NOT FOUND
