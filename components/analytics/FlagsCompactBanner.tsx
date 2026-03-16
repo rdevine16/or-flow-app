@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Flag } from 'lucide-react'
 import { useFlagCounts } from '@/lib/hooks/useFlagCounts'
+import { useUser } from '@/lib/UserContext'
 
 interface FlagsCompactBannerProps {
   facilityId: string
@@ -11,7 +12,9 @@ interface FlagsCompactBannerProps {
 }
 
 export default function FlagsCompactBanner({ facilityId, startDate, endDate }: FlagsCompactBannerProps) {
-  const { data, loading } = useFlagCounts(facilityId, startDate, endDate)
+  const { can } = useUser()
+  const canSeeFinancialFlags = can('flags.financial')
+  const { data, loading } = useFlagCounts(facilityId, startDate, endDate, canSeeFinancialFlags)
 
   if (loading) {
     return (

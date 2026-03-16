@@ -65,6 +65,7 @@ export interface FlagRuleBreakdownItem {
   name: string
   count: number
   severity: 'info' | 'warning' | 'critical'
+  category: string
   pct: number
 }
 
@@ -117,6 +118,7 @@ export interface RecentFlaggedCaseFlag {
   type: 'threshold' | 'delay'
   name: string
   severity: 'info' | 'warning' | 'critical'
+  category: string
 }
 
 export interface RecentFlaggedCase {

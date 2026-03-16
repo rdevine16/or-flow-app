@@ -11,6 +11,8 @@ import { AlertTriangle, Info, AlertOctagon, ShieldCheck } from 'lucide-react'
 
 interface CaseDrawerFlagsProps {
   flags: CaseFlag[]
+  /** When false, hides flags whose flag_rule.category is 'financial' */
+  canSeeFinancialFlags: boolean
 }
 
 const SEVERITY_ICONS = {
@@ -31,8 +33,13 @@ function formatMetricValue(value: number | null): string {
   return value % 1 === 0 ? String(value) : value.toFixed(1)
 }
 
-export default function CaseDrawerFlags({ flags }: CaseDrawerFlagsProps) {
-  if (flags.length === 0) {
+export default function CaseDrawerFlags({ flags, canSeeFinancialFlags }: CaseDrawerFlagsProps) {
+  // Filter out financial flags when user lacks flags.financial permission
+  const visibleFlags = canSeeFinancialFlags
+    ? flags
+    : flags.filter((f) => f.flag_rule?.category !== 'financial')
+
+  if (visibleFlags.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mb-3">
@@ -46,7 +53,7 @@ export default function CaseDrawerFlags({ flags }: CaseDrawerFlagsProps) {
 
   return (
     <div className="space-y-3">
-      {flags.map((flag) => {
+      {visibleFlags.map((flag) => {
         const severityKey = flag.severity ? getSeverityKey(flag.severity) : getSeverityKey(flag.flag_type)
         const colors = severityColors[severityKey]
         const Icon = SEVERITY_ICONS[severityKey] ?? Info

@@ -108,6 +108,7 @@ function FlagsEmptyState() {
 
 export default function CaseFlagsAnalyticsPage() {
   const { loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
+  const canSeeFinancialFlags = can('flags.financial')
 
   // Date range state — default to last 30 days per Q15
   const [dateRange, setDateRange] = useState('last_30')
@@ -164,7 +165,24 @@ export default function CaseFlagsAnalyticsPage() {
     enabled: !!effectiveFacilityId,
   })
 
-  const summary = data?.summary
+  // Filter financial flags from analytics data when user lacks permission
+  const filteredData = useMemo(() => {
+    if (!data || canSeeFinancialFlags) return data
+    return {
+      ...data,
+      // Remove financial rules from breakdown
+      flagRuleBreakdown: data.flagRuleBreakdown.filter((r) => r.category !== 'financial'),
+      // Zero out financial column in heatmap
+      dayOfWeekHeatmap: data.dayOfWeekHeatmap.map((row) => ({ ...row, financial: 0 })),
+      // Filter financial flags from recent cases
+      recentFlaggedCases: data.recentFlaggedCases.map((c) => ({
+        ...c,
+        flags: c.flags.filter((f) => f.category !== 'financial'),
+      })).filter((c) => c.flags.length > 0),
+    }
+  }, [data, canSeeFinancialFlags])
+
+  const summary = filteredData?.summary
 
   // ========== Render guards ==========
 
@@ -263,7 +281,7 @@ export default function CaseFlagsAnalyticsPage() {
               unit="%"
               trend={summary.flagRateTrend}
               trendInverse
-              sparkData={data.sparklineData.flagRate}
+              sparkData={filteredData.sparklineData.flagRate}
               sparkColor={flagChartColors.critical}
               status={getFlagRateStatus(summary.flagRate)}
               detail={`${summary.flaggedCases} of ${summary.totalCases} cases`}
@@ -274,7 +292,7 @@ export default function CaseFlagsAnalyticsPage() {
               unit="%"
               trend={summary.delayRateTrend}
               trendInverse
-              sparkData={data.sparklineData.delayRate}
+              sparkData={filteredData.sparklineData.delayRate}
               sparkColor={flagChartColors.warning}
               status={getDelayRateStatus(summary.delayRate)}
               detail={`${summary.delayedCases} user-reported delays`}
@@ -311,7 +329,7 @@ export default function CaseFlagsAnalyticsPage() {
                   accentColor="violet"
                 />
                 <div className="mt-4">
-                  <FlagTrendChart data={data.weeklyTrend} />
+                  <FlagTrendChart data={filteredData.weeklyTrend} />
                 </div>
               </Card.Content>
             </Card>
@@ -325,7 +343,7 @@ export default function CaseFlagsAnalyticsPage() {
                   accentColor="amber"
                 />
                 <div className="mt-4">
-                  <DayHeatmap data={data.dayOfWeekHeatmap} />
+                  <DayHeatmap data={filteredData.dayOfWeekHeatmap} />
                 </div>
               </Card.Content>
             </Card>
@@ -337,12 +355,12 @@ export default function CaseFlagsAnalyticsPage() {
               <Card.Content>
                 <SectionHeader
                   title="Auto-Detected Flags"
-                  subtitle={`${data.flagRuleBreakdown.reduce((a, b) => a + b.count, 0)} threshold flags by rule`}
+                  subtitle={`${filteredData.flagRuleBreakdown.reduce((a, b) => a + b.count, 0)} threshold flags by rule`}
                   icon={<Shield className="w-4 h-4" />}
                   accentColor="red"
                 />
                 <div className="mt-4">
-                  <HorizontalBarList items={data.flagRuleBreakdown} />
+                  <HorizontalBarList items={filteredData.flagRuleBreakdown} />
                 </div>
               </Card.Content>
             </Card>
@@ -351,13 +369,13 @@ export default function CaseFlagsAnalyticsPage() {
               <Card.Content>
                 <SectionHeader
                   title="Reported Delays"
-                  subtitle={`${data.delayTypeBreakdown.reduce((a, b) => a + b.count, 0)} delays by category`}
+                  subtitle={`${filteredData.delayTypeBreakdown.reduce((a, b) => a + b.count, 0)} delays by category`}
                   icon={<Clock className="w-4 h-4" />}
                   accentColor="amber"
                 />
                 <div className="mt-4">
                   <HorizontalBarList
-                    items={data.delayTypeBreakdown.map((d, i) => ({
+                    items={filteredData.delayTypeBreakdown.map((d, i) => ({
                       ...d,
                       color: DELAY_TYPE_COLORS[i % DELAY_TYPE_COLORS.length],
                     }))}
@@ -377,7 +395,7 @@ export default function CaseFlagsAnalyticsPage() {
                 accentColor="violet"
               />
             </div>
-            <SurgeonFlagTable data={data.surgeonFlags} onSurgeonClick={handleSurgeonClick} />
+            <SurgeonFlagTable data={filteredData.surgeonFlags} onSurgeonClick={handleSurgeonClick} />
           </Card>
 
           {/* Room analysis */}
@@ -390,18 +408,18 @@ export default function CaseFlagsAnalyticsPage() {
                 accentColor="blue"
               />
             </div>
-            <RoomAnalysisCards data={data.roomFlags} onRoomClick={handleRoomClick} />
+            <RoomAnalysisCards data={filteredData.roomFlags} onRoomClick={handleRoomClick} />
           </div>
 
           {/* Detected patterns */}
-          {data.patterns.length > 0 && (
+          {filteredData.patterns.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
               <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="text-[15px] font-bold text-slate-900">Detected Patterns</h3>
                 <p className="text-xs text-slate-500 mt-0.5">Auto-analyzed trends and correlations from your flag data</p>
               </div>
               <div className="p-4">
-                <PatternInsightCards patterns={data.patterns} />
+                <PatternInsightCards patterns={filteredData.patterns} />
               </div>
             </div>
           )}
@@ -410,7 +428,7 @@ export default function CaseFlagsAnalyticsPage() {
           <Card padding="none">
             <Card.Content className="!p-0">
               <RecentFlaggedCases
-                cases={data.recentFlaggedCases}
+                cases={filteredData.recentFlaggedCases}
                 onCaseClick={handleCaseClick}
               />
             </Card.Content>
@@ -419,13 +437,13 @@ export default function CaseFlagsAnalyticsPage() {
       )}
 
       {/* Drill-through slide-over */}
-      {data && (
+      {filteredData && (
         <FlagDrillThrough
           target={drillTarget}
           onClose={handleDrillClose}
-          surgeonFlags={data.surgeonFlags}
-          roomFlags={data.roomFlags}
-          recentFlaggedCases={data.recentFlaggedCases}
+          surgeonFlags={filteredData.surgeonFlags}
+          roomFlags={filteredData.roomFlags}
+          recentFlaggedCases={filteredData.recentFlaggedCases}
           onCaseClick={handleCaseClick}
         />
       )}

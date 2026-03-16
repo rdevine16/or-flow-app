@@ -193,9 +193,17 @@ export default function CaseFlagsSection({
   // FILTERED FLAGS
   // =====================================================
 
+  // Permission check for financial flags
+  const canSeeFinancialFlags = can('flags.financial')
+
   // During in-progress: show only delay flags
   // After completion: show all flags
+  // Financial flags hidden when user lacks flags.financial permission
   const visibleFlags = flags.filter(f => {
+    // Hide financial threshold flags when permission is missing
+    if (!canSeeFinancialFlags && f.flag_type === 'threshold' && f.flag_rules?.category === 'financial') {
+      return false
+    }
     if (isCompleted) return true
     return f.flag_type === 'delay'
   })

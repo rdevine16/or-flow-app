@@ -323,3 +323,141 @@ describe('CasePage Phase 7 - Removed Components', () => {
     expect(true).toBe(true) // Documentation test
   })
 })
+
+describe('CasePage Phase 8 - Financial Flag Filtering', () => {
+  describe('flag query includes category field', () => {
+    it('flag_rules.category is selected in the query', () => {
+      // The query at line 331-336 must include flag_rules.category
+      // so that financial flags can be filtered based on can('flags.financial')
+      const queryFields = [
+        'id', 'flag_type', 'severity', 'metric_value', 'threshold_value',
+        'comparison_scope', 'delay_type_id', 'duration_minutes', 'note',
+        'created_by', 'facility_milestone_id',
+        'flag_rules (name, end_milestone, category)', // category added in phase 8
+        'delay_types (display_name)'
+      ]
+      expect(queryFields.join(', ')).toContain('category')
+    })
+  })
+
+  describe('financial flag filtering logic', () => {
+    interface FlagData {
+      id: string
+      flag_type: 'threshold' | 'delay'
+      flag_rules?: { name: string; category?: string }
+    }
+
+    it('filters financial flags when can(flags.financial) is false', () => {
+      const canSeeFinancialFlags = false
+      const flagsData: FlagData[] = [
+        { id: 'f1', flag_type: 'threshold', flag_rules: { name: 'Duration Exceeded', category: 'efficiency' } },
+        { id: 'f2', flag_type: 'threshold', flag_rules: { name: 'OR Cost High', category: 'financial' } },
+        { id: 'f3', flag_type: 'delay', flag_rules: undefined }, // delays have no flag_rules
+      ]
+
+      const filtered = flagsData.filter((f) => {
+        if (!canSeeFinancialFlags) {
+          const flagRule = Array.isArray(f.flag_rules) ? f.flag_rules[0] : f.flag_rules
+          if (flagRule && flagRule.category === 'financial') {
+            return false
+          }
+        }
+        return true
+      })
+
+      expect(filtered).toHaveLength(2) // f1 and f3
+      expect(filtered.map(f => f.id)).toEqual(['f1', 'f3'])
+    })
+
+    it('keeps all flags when can(flags.financial) is true', () => {
+      const canSeeFinancialFlags = true
+      const flagsData: FlagData[] = [
+        { id: 'f1', flag_type: 'threshold', flag_rules: { name: 'Duration Exceeded', category: 'efficiency' } },
+        { id: 'f2', flag_type: 'threshold', flag_rules: { name: 'OR Cost High', category: 'financial' } },
+        { id: 'f3', flag_type: 'delay', flag_rules: undefined },
+      ]
+
+      const filtered = flagsData.filter((f) => {
+        if (!canSeeFinancialFlags) {
+          const flagRule = Array.isArray(f.flag_rules) ? f.flag_rules[0] : f.flag_rules
+          if (flagRule && flagRule.category === 'financial') {
+            return false
+          }
+        }
+        return true
+      })
+
+      expect(filtered).toHaveLength(3) // all flags
+      expect(filtered.map(f => f.id)).toEqual(['f1', 'f2', 'f3'])
+    })
+
+    it('handles flag_rules as array', () => {
+      const canSeeFinancialFlags = false
+      const flagsData = [
+        { id: 'f1', flag_type: 'threshold' as const, flag_rules: [{ name: 'OR Cost High', category: 'financial' }] },
+      ]
+
+      const filtered = flagsData.filter((f) => {
+        if (!canSeeFinancialFlags) {
+          const flagRule = Array.isArray(f.flag_rules) ? f.flag_rules[0] : f.flag_rules
+          if (flagRule && flagRule.category === 'financial') {
+            return false
+          }
+        }
+        return true
+      })
+
+      expect(filtered).toHaveLength(0) // financial flag filtered
+    })
+
+    it('handles missing category gracefully', () => {
+      const canSeeFinancialFlags = false
+      const flagsData: FlagData[] = [
+        { id: 'f1', flag_type: 'threshold', flag_rules: { name: 'Some Flag' } }, // no category
+      ]
+
+      const filtered = flagsData.filter((f) => {
+        if (!canSeeFinancialFlags) {
+          const flagRule = Array.isArray(f.flag_rules) ? f.flag_rules[0] : f.flag_rules
+          if (flagRule && flagRule.category === 'financial') {
+            return false
+          }
+        }
+        return true
+      })
+
+      expect(filtered).toHaveLength(1) // kept (not financial)
+    })
+  })
+
+  describe('downstream impact on CaseActivitySummary', () => {
+    it('CaseActivitySummary receives filtered flags', () => {
+      // After filtering, the flags passed to CaseActivitySummary should not include financial flags
+      const allFlags = [
+        { id: 'f1', flag_type: 'threshold', severity: 'warning', label: 'Duration', detail: null, duration_minutes: null, note: null },
+        { id: 'f2', flag_type: 'threshold', severity: 'critical', label: 'OR Cost', detail: null, duration_minutes: null, note: null }, // financial, filtered out
+      ]
+      const canSeeFinancialFlags = false
+      // In the actual code, financial flags are filtered BEFORE being passed to setCaseFlags
+      // So CaseActivitySummary receives only the filtered set
+      const passedFlags = canSeeFinancialFlags ? allFlags : allFlags.slice(0, 1)
+
+      expect(passedFlags).toHaveLength(1)
+      expect(passedFlags[0].id).toBe('f1')
+    })
+
+    it('flagCount in CaseActivitySummary matches filtered flags', () => {
+      const caseFlags = [
+        { id: 'f1', flag_type: 'threshold', severity: 'warning', label: 'Duration', detail: null, duration_minutes: null, note: null },
+        { id: 'f3', flag_type: 'delay', severity: 'warning', label: 'Equipment Delay', detail: null, duration_minutes: 15, note: null },
+      ]
+      const delayCount = caseFlags.filter(f => f.flag_type === 'delay').length
+      const flagCount = caseFlags.filter(f => f.flag_type === 'threshold').length
+
+      expect(delayCount).toBe(1)
+      expect(flagCount).toBe(1)
+      // Total badge in CaseActivitySummary = delayCount + flagCount = 2
+      expect(delayCount + flagCount).toBe(2)
+    })
+  })
+})

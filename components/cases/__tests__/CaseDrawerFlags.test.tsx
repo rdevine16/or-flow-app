@@ -29,7 +29,7 @@ function makeFlag(overrides: Partial<CaseFlag> = {}): CaseFlag {
 
 describe('CaseDrawerFlags — unit', () => {
   it('renders empty state when no flags', () => {
-    render(<CaseDrawerFlags flags={[]} />)
+    render(<CaseDrawerFlags flags={[]} canSeeFinancialFlags={true} />)
     expect(screen.getByText('No flags')).toBeDefined()
     expect(screen.getByText('This case is clean')).toBeDefined()
   })
@@ -39,7 +39,7 @@ describe('CaseDrawerFlags — unit', () => {
       makeFlag({ id: 'f1', flag_type: 'critical', severity: 'critical', note: 'Exceeded max time' }),
       makeFlag({ id: 'f2', flag_type: 'warning', severity: 'warning', note: 'Late start' }),
     ]
-    render(<CaseDrawerFlags flags={flags} />)
+    render(<CaseDrawerFlags flags={flags} canSeeFinancialFlags={true} />)
     expect(screen.getByText('Exceeded max time')).toBeDefined()
     expect(screen.getByText('Late start')).toBeDefined()
   })
@@ -50,7 +50,7 @@ describe('CaseDrawerFlags — unit', () => {
       makeFlag({ id: 'f2', flag_type: 'warning', severity: 'warning' }),
       makeFlag({ id: 'f3', flag_type: 'info', severity: 'info' }),
     ]
-    render(<CaseDrawerFlags flags={flags} />)
+    render(<CaseDrawerFlags flags={flags} canSeeFinancialFlags={true} />)
     expect(screen.getByText('critical')).toBeDefined()
     expect(screen.getByText('warning')).toBeDefined()
     expect(screen.getByText('info')).toBeDefined()
@@ -60,19 +60,19 @@ describe('CaseDrawerFlags — unit', () => {
     const flags = [
       makeFlag({ id: 'f1', delay_type_id: 'dt-1', delay_type: { name: 'Equipment Delay', display_name: null } }),
     ]
-    render(<CaseDrawerFlags flags={flags} />)
+    render(<CaseDrawerFlags flags={flags} canSeeFinancialFlags={true} />)
     expect(screen.getByText('Equipment Delay')).toBeDefined()
   })
 
   it('shows delay minutes when present and > 0', () => {
     const flags = [makeFlag({ id: 'f1', duration_minutes: 15, note: 'Waited for implants' })]
-    render(<CaseDrawerFlags flags={flags} />)
+    render(<CaseDrawerFlags flags={flags} canSeeFinancialFlags={true} />)
     expect(screen.getByText('15 min delay')).toBeDefined()
   })
 
   it('does not show delay minutes when 0', () => {
     const flags = [makeFlag({ id: 'f1', duration_minutes: 0, note: 'No delay' })]
-    render(<CaseDrawerFlags flags={flags} />)
+    render(<CaseDrawerFlags flags={flags} canSeeFinancialFlags={true} />)
     expect(screen.queryByText(/min delay/)).toBeNull()
   })
 })

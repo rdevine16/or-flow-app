@@ -331,53 +331,65 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         .select(`
           id, flag_type, severity, metric_value, threshold_value, comparison_scope,
           delay_type_id, duration_minutes, note, created_by, facility_milestone_id,
-          flag_rules (name, end_milestone),
+          flag_rules (name, end_milestone, category),
           delay_types (display_name)
         `)
         .eq('case_id', id)
         .order('created_at', { ascending: true })
 
       if (flagsData) {
-        const mapped: CaseFlagForTimeline[] = flagsData.map((f: Record<string, unknown>) => {
-          const flagRule = Array.isArray(f.flag_rules) ? f.flag_rules[0] : f.flag_rules
-          const delayType = Array.isArray(f.delay_types) ? f.delay_types[0] : f.delay_types
-
-          // Resolve milestone: direct for delays, derived from flag_rules.end_milestone for threshold
-          let resolvedMilestoneId = f.facility_milestone_id as string | null
-          if (!resolvedMilestoneId && flagRule?.end_milestone) {
-            const match = milestoneTypesResult.find(mt => mt.name === flagRule.end_milestone)
-            if (match) resolvedMilestoneId = match.id
-          }
-
-          // Label
-          const label = f.flag_type === 'threshold'
-            ? (flagRule?.name || 'Threshold Flag')
-            : ((delayType as { display_name?: string })?.display_name || 'Delay')
-
-          // Detail
-          let detail: string | null = null
-          if (f.flag_type === 'threshold') {
-            const actual = f.metric_value !== null ? Math.round(f.metric_value as number) : null
-            const threshold = f.threshold_value !== null ? Math.round(f.threshold_value as number) : null
-            if (actual !== null && threshold !== null) {
-              detail = `${actual} min (threshold: ${threshold} min)`
+        const canSeeFinancialFlags = can('flags.financial')
+        const mapped: CaseFlagForTimeline[] = flagsData
+          .filter((f: Record<string, unknown>) => {
+            // Filter financial flags if user doesn't have permission
+            if (!canSeeFinancialFlags) {
+              const flagRule = Array.isArray(f.flag_rules) ? f.flag_rules[0] : f.flag_rules
+              if (flagRule && (flagRule as { category?: string }).category === 'financial') {
+                return false
+              }
             }
-          } else if (f.duration_minutes) {
-            detail = `${f.duration_minutes} min`
-          }
+            return true
+          })
+          .map((f: Record<string, unknown>) => {
+            const flagRule = Array.isArray(f.flag_rules) ? f.flag_rules[0] : f.flag_rules
+            const delayType = Array.isArray(f.delay_types) ? f.delay_types[0] : f.delay_types
 
-          return {
-            id: f.id as string,
-            flag_type: f.flag_type as 'threshold' | 'delay',
-            severity: (f.severity as 'critical' | 'warning' | 'info') || 'info',
-            label,
-            detail,
-            facility_milestone_id: resolvedMilestoneId,
-            duration_minutes: f.duration_minutes as number | null,
-            note: f.note as string | null,
-            created_by: f.created_by as string | null,
-          }
-        })
+            // Resolve milestone: direct for delays, derived from flag_rules.end_milestone for threshold
+            let resolvedMilestoneId = f.facility_milestone_id as string | null
+            if (!resolvedMilestoneId && flagRule?.end_milestone) {
+              const match = milestoneTypesResult.find(mt => mt.name === flagRule.end_milestone)
+              if (match) resolvedMilestoneId = match.id
+            }
+
+            // Label
+            const label = f.flag_type === 'threshold'
+              ? (flagRule?.name || 'Threshold Flag')
+              : ((delayType as { display_name?: string })?.display_name || 'Delay')
+
+            // Detail
+            let detail: string | null = null
+            if (f.flag_type === 'threshold') {
+              const actual = f.metric_value !== null ? Math.round(f.metric_value as number) : null
+              const threshold = f.threshold_value !== null ? Math.round(f.threshold_value as number) : null
+              if (actual !== null && threshold !== null) {
+                detail = `${actual} min (threshold: ${threshold} min)`
+              }
+            } else if (f.duration_minutes) {
+              detail = `${f.duration_minutes} min`
+            }
+
+            return {
+              id: f.id as string,
+              flag_type: f.flag_type as 'threshold' | 'delay',
+              severity: (f.severity as 'critical' | 'warning' | 'info') || 'info',
+              label,
+              detail,
+              facility_milestone_id: resolvedMilestoneId,
+              duration_minutes: f.duration_minutes as number | null,
+              note: f.note as string | null,
+              created_by: f.created_by as string | null,
+            }
+          })
         setCaseFlags(mapped)
       }
 

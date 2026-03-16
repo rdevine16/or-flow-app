@@ -260,8 +260,8 @@ describe('normalizeRPCResponse: fully populated RPC response', () => {
   ]
 
   const mockFlagRules: FlagRuleBreakdownItem[] = [
-    { name: 'Surgeon Readiness Gap', count: 22, severity: 'warning', pct: 32.8 },
-    { name: 'FCOTS Breach', count: 15, severity: 'critical', pct: 22.4 },
+    { name: 'Surgeon Readiness Gap', count: 22, severity: 'warning', category: 'timing', pct: 32.8 },
+    { name: 'FCOTS Breach', count: 15, severity: 'critical', category: 'timing', pct: 22.4 },
   ]
 
   const mockDelayTypes: DelayTypeBreakdownItem[] = [
@@ -285,7 +285,7 @@ describe('normalizeRPCResponse: fully populated RPC response', () => {
       surgeon: 'Dr. Smith',
       roomId: 'room-3',
       procedure: 'Total Knee Replacement',
-      flags: [{ type: 'threshold', name: 'FCOTS Breach', severity: 'critical' }],
+      flags: [{ type: 'threshold', name: 'FCOTS Breach', severity: 'critical', category: 'timing' }],
     },
   ]
 
@@ -417,6 +417,7 @@ describe('FlagAnalyticsData type contracts', () => {
       name: 'Test Rule',
       count: 5,
       severity: 'info',
+      category: 'timing',
       pct: 10,
     }
     expect(item.severity).toBe('info')

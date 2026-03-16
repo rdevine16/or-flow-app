@@ -98,7 +98,7 @@ export interface CaseFlag {
   threshold_value: number | null
   duration_minutes: number | null
   delay_type?: { name: string; display_name: string | null }
-  flag_rule?: { name: string; metric: string | null; description: string | null }
+  flag_rule?: { name: string; metric: string | null; description: string | null; category: string | null }
 }
 
 export interface CaseStaffMember {
@@ -161,7 +161,7 @@ const CASE_DETAIL_SELECT = `
   ),
   case_flags(id, case_id, delay_type_id, flag_type, severity, note, metric_value, threshold_value, duration_minutes,
     delay_type:delay_types(name, display_name),
-    flag_rule:flag_rules(name, metric, description)
+    flag_rule:flag_rules(name, metric, description, category)
   ),
   case_staff(id, case_id, user_id, role_id,
     user:users!case_staff_user_id_fkey(first_name, last_name),

@@ -127,6 +127,7 @@ export default function CaseDrawer({
 
   // Determine default tab based on permissions + tier — financials only when user has both permissions + enterprise tier
   const canSeeFinancials = can('financials.view') && can('tab.case_financials') && isTierAtLeast('enterprise')
+  const canSeeFinancialFlags = can('flags.financial')
   const defaultTab: DrawerTab = canSeeFinancials ? 'financials' : 'milestones'
 
   // Reset to default tab when switching cases
@@ -344,11 +345,16 @@ export default function CaseDrawer({
                         }`}
                       >
                         {tab.label}
-                        {tab.key === 'flags' && caseDetail.case_flags.length > 0 && (
-                          <span className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-600 text-[10px] font-bold">
-                            {caseDetail.case_flags.length}
-                          </span>
-                        )}
+                        {tab.key === 'flags' && caseDetail.case_flags.length > 0 && (() => {
+                          const visibleCount = canSeeFinancialFlags
+                            ? caseDetail.case_flags.length
+                            : caseDetail.case_flags.filter((f) => f.flag_rule?.category !== 'financial').length
+                          return visibleCount > 0 ? (
+                            <span className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-600 text-[10px] font-bold">
+                              {visibleCount}
+                            </span>
+                          ) : null
+                        })()}
                         {tab.key === 'validation' && (
                           <span className="ml-1 inline-flex items-center justify-center w-2 h-2 rounded-full bg-amber-400" />
                         )}
@@ -362,7 +368,7 @@ export default function CaseDrawer({
               <div className="flex-1 overflow-y-auto px-5 pb-5 pt-4">
                 {activeTab === 'flags' && (
                   <div className="animate-fade-in">
-                    <CaseDrawerFlags flags={caseDetail.case_flags} />
+                    <CaseDrawerFlags flags={caseDetail.case_flags} canSeeFinancialFlags={canSeeFinancialFlags} />
                   </div>
                 )}
 

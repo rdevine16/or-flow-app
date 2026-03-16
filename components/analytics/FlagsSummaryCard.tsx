@@ -12,6 +12,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
 import { Flag, ArrowRight, AlertTriangle, AlertCircle, Info } from 'lucide-react'
 
 // =====================================================
@@ -90,8 +91,16 @@ const SEVERITY = {
 
 export default function FlagsSummaryCard({ facilityId, startDate, endDate, onCaseClick }: FlagsSummaryCardProps) {
   const supabase = createClient()
-  const [flags, setFlags] = useState<CaseFlag[]>([])
+  const { can } = useUser()
+  const canSeeFinancialFlags = can('flags.financial')
+  const [rawFlags, setRawFlags] = useState<CaseFlag[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Filter out financial flags when user lacks permission
+  const flags = useMemo(
+    () => canSeeFinancialFlags ? rawFlags : rawFlags.filter((f) => f.flag_rules?.category !== 'financial'),
+    [rawFlags, canSeeFinancialFlags]
+  )
 
   useEffect(() => {
     if (!facilityId) return
@@ -129,7 +138,7 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate, onCas
       if (endDate) query = query.lte('created_at', `${endDate}T23:59:59`)
 
       const { data } = await query
-      setFlags((data as unknown as CaseFlag[]) || [])
+      setRawFlags((data as unknown as CaseFlag[]) || [])
       setLoading(false)
     }
 
