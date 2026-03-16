@@ -13,6 +13,7 @@ import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { AlertTriangle, Archive, ChevronDown, Pencil, Plus } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 interface Complexity {
   id: string
@@ -248,6 +249,16 @@ export default function FacilityComplexitiesPage() {
   const getCategoryNames = (complexity: Complexity) => {
     const cats = (procedureCategories || []).filter(c => complexity.procedure_category_ids?.includes(c.id))
     return cats
+  }
+
+  if (!userLoading && !can('settings.complexities')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Case Complexities</h1>
+        <p className="text-slate-500 mb-6">Complexity factors that can be tagged on cases</p>
+        <AccessDenied />
+      </>
+    )
   }
 
   return (

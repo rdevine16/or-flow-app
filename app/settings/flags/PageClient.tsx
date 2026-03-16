@@ -17,6 +17,7 @@ import { FlagRuleTable } from '@/components/settings/flags/FlagRuleTable'
 import { FlagRuleRow } from '@/components/settings/flags/FlagRuleRow'
 import { MetricSearchBuilder } from '@/components/settings/flags/MetricSearchBuilder'
 import { Plus, Info } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { flagRuleAudit } from '@/lib/audit-logger'
 import { THRESHOLD_TYPES } from '@/lib/constants/metrics-catalog'
 import * as flagRulesDal from '@/lib/dal/flag-rules'
@@ -48,7 +49,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 export default function FlagsSettingsPage() {
   const supabase = createClient()
   const { showToast } = useToast()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
 
   // Category filter state
   const [filterCategory, setFilterCategory] = useState<string>('all')
@@ -549,6 +550,16 @@ export default function FlagsSettingsPage() {
         <div className="text-center py-12 text-slate-500">
           No facility found. Please contact support.
         </div>
+      </>
+    )
+  }
+
+  if (!can('settings.flags')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Flag Rules</h1>
+        <p className="text-slate-500 mb-6">Configure auto-detection rules for your facility.</p>
+        <AccessDenied />
       </>
     )
   }

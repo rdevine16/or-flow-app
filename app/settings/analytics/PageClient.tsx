@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 interface AnalyticsSettings {
   id: string
@@ -133,7 +134,7 @@ function SectionHeader({ title, description }: { title: string; description: str
 
 export default function AnalyticsSettingsPage() {
   const supabase = createClient()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
   const { showToast } = useToast()
 
   const { data: settings, loading, refetch: refetchSettings } = useSupabaseQuery<AnalyticsSettings | null>(
@@ -366,6 +367,16 @@ export default function AnalyticsSettingsPage() {
         <div className="text-center py-16 text-slate-500">
           <p>No facility selected. Please select a facility to configure analytics settings.</p>
         </div>
+      </>
+    )
+  }
+
+  if (!can('settings.analytics')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Analytics Settings</h1>
+        <p className="text-slate-500 mb-6">Configure how your facility&apos;s OR metrics are calculated and what targets to measure against.</p>
+        <AccessDenied />
       </>
     )
   }

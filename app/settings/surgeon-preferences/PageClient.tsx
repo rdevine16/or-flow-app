@@ -12,6 +12,7 @@ import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Modal } from '@/components/ui/Modal'
 import { Check, Pencil, Plus, Trash2, Zap } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 
 
@@ -38,7 +39,7 @@ export default function SurgeonPreferencesPage() {
   const supabase = createClient()
   const { showToast } = useToast()
   // Use the context - this automatically handles impersonation!
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
   
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
   const { data: surgeons, loading: surgeonsLoading } = useSurgeons(effectiveFacilityId)
@@ -253,6 +254,16 @@ export default function SurgeonPreferencesPage() {
 
   const globalCompanies = implantCompanies.filter(c => c.facility_id === null)
   const facilityCompanies = implantCompanies.filter(c => c.facility_id !== null)
+
+  if (!userLoading && !can('settings.surgeon_preferences')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Surgeon Preferences</h1>
+        <p className="text-slate-500 mb-6">Create quick-fill templates for surgeon + procedure combinations</p>
+        <AccessDenied />
+      </>
+    )
+  }
 
   return (
     <>

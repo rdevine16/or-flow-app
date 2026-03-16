@@ -22,6 +22,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Input, Label } from '@/components/ui/Input'
 import { Toggle } from '@/components/ui/Toggle'
 import { Plus, Pencil, Trash2, Building2, AlertTriangle, ChevronRight } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 // ============================================
 // TYPES
@@ -453,6 +454,16 @@ export default function RoomsSettingsPage() {
   // Separate active vs deleted rooms
   const activeRooms = (rooms || []).filter(r => !r.deleted_at)
   const deletedRooms = (rooms || []).filter(r => r.deleted_at)
+
+  if (!userLoading && !can('settings.rooms')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">OR Rooms</h1>
+        <p className="text-slate-500 mb-6">Manage the operating rooms and their daily schedules at your facility.</p>
+        <AccessDenied />
+      </>
+    )
+  }
 
   return (
     <>

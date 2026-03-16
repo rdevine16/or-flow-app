@@ -11,6 +11,7 @@ import { voiceCommandsDAL } from '@/lib/dal/voice-commands'
 import type { VoiceCommandAlias } from '@/lib/dal/voice-commands'
 import { AliasGroupSection } from '@/components/settings/voice-commands/AliasGroupSection'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 // ============================================
 // TYPES
@@ -234,6 +235,11 @@ export default function VoiceCommandsPageClient() {
   // Loading / error states
   const loading = userLoading || milestonesLoading
   if (loading) return <PageLoader />
+
+  if (!can('settings.voice_commands')) {
+    return <AccessDenied />
+  }
+
   if (milestonesError) return <ErrorBanner message={milestonesError} />
   if (!effectiveFacilityId) return <ErrorBanner message="No facility selected" />
 

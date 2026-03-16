@@ -21,6 +21,8 @@ import { useCurrentUser } from '@/hooks'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { ehrDAL } from '@/lib/dal/ehr'
 import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import AccessDenied from '@/components/ui/AccessDenied'
 import type {
   EhrIntegration,
   EhrEntityMapping,
@@ -87,6 +89,7 @@ function FilterTabButton({
 export default function EntityMappingsPage() {
   const router = useRouter()
   const { data: currentUser } = useCurrentUser()
+  const { can, loading: permLoading } = useUser()
   const facilityId = currentUser?.facilityId
 
   const [activeTab, setActiveTab] = useState<EhrEntityType>('surgeon')
@@ -166,6 +169,16 @@ export default function EntityMappingsPage() {
           ))}
         </div>
       </div>
+    )
+  }
+
+  if (!can('integrations.view')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Entity Mappings</h1>
+        <p className="text-slate-500 mb-6">Map HL7v2 entities to ORbit</p>
+        <AccessDenied />
+      </>
     )
   }
 

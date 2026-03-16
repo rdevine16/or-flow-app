@@ -15,6 +15,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { AlertTriangle, Archive, Info, PenLine, Plus, RotateCcw } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 // =====================================================
 // TYPES
@@ -206,6 +207,16 @@ export default function DelayTypesPage() {
   // =====================================================
   // RENDER
   // =====================================================
+
+  if (!userLoading && !can('settings.delays')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Delay Types</h1>
+        <p className="text-slate-500 mb-6">Categorize surgical delays for tracking and reporting.</p>
+        <AccessDenied />
+      </>
+    )
+  }
 
   return (
     <>

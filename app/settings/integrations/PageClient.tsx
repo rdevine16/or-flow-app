@@ -13,6 +13,8 @@ import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast'
 import { logger } from '@/lib/logger'
 import SwitchIntegrationDialog from '@/components/integrations/SwitchIntegrationDialog'
+import AccessDenied from '@/components/ui/AccessDenied'
+import { useUser } from '@/lib/UserContext'
 import {
   HL7V2_INTEGRATION_TYPES,
   EHR_SYSTEM_DISPLAY_NAMES,
@@ -259,6 +261,7 @@ function IntegrationStatusBadge({ integration }: { integration: EhrIntegration |
 export default function IntegrationsPage() {
   const router = useRouter()
   const { data: currentUser } = useCurrentUser()
+  const { can, loading: permLoading } = useUser()
   const { showToast } = useToast()
   const facilityId = currentUser?.facilityId
 
@@ -359,6 +362,16 @@ export default function IntegrationsPage() {
     },
     [activeHl7v2, router]
   )
+
+  if (!can('integrations.view')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Integrations</h1>
+        <p className="text-slate-500 mb-6">Connect ORbit to your existing systems</p>
+        <AccessDenied />
+      </>
+    )
+  }
 
   return (
     <>

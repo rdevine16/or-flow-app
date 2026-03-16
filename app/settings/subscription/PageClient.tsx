@@ -9,6 +9,7 @@ import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Check, X, ArrowRight, Mail } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { getLocalDateString } from '@/lib/date-utils'
 import {
   type TierSlug,
@@ -96,6 +97,7 @@ export default function SubscriptionPage() {
     tierName,
     tierLoading,
     isTierAtLeast,
+    can,
   } = useUser()
   const { showToast } = useToast()
   const [stats, setStats] = useState<UsageStats | null>(null)
@@ -158,6 +160,16 @@ export default function SubscriptionPage() {
   }, [userLoading, effectiveFacilityId, fetchUsageStats])
 
   const isLoading = loading || tierLoading
+
+  if (!userLoading && !can('settings.subscription')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Subscription</h1>
+        <p className="text-slate-500 mb-6">View your current plan, compare features, and request upgrades</p>
+        <AccessDenied />
+      </>
+    )
+  }
 
   return (
     <>

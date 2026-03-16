@@ -17,6 +17,8 @@ import { useCurrentUser, useSurgeons, useRooms, useProcedureTypes } from '@/hook
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useIntegrationRealtime } from '@/hooks/useIntegrationRealtime'
 import { usePhiAudit } from '@/hooks/usePhiAudit'
+import { useUser } from '@/lib/UserContext'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { ehrDAL } from '@/lib/dal/ehr'
 import { ehrAudit } from '@/lib/audit-logger'
 import { createClient } from '@/lib/supabase'
@@ -75,6 +77,7 @@ export default function MeditechHL7v2IntegrationPage() {
   const router = useRouter()
   const { showToast } = useToast()
   const { data: currentUser } = useCurrentUser()
+  const { can, loading: permLoading } = useUser()
   const facilityId = currentUser?.facilityId
   const userId = currentUser?.userId
 
@@ -677,6 +680,16 @@ export default function MeditechHL7v2IntegrationPage() {
           <div className="h-32 bg-slate-100 rounded-xl" />
         </div>
       </div>
+    )
+  }
+
+  if (!can('integrations.view')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">{systemConfig.pageTitle}</h1>
+        <p className="text-slate-500 mb-6">{systemConfig.pageSubtitle}</p>
+        <AccessDenied />
+      </>
     )
   }
 

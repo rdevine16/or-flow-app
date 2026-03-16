@@ -23,7 +23,7 @@ vi.mock('@/components/ui/Toast/ToastProvider', () => ({
 }))
 
 vi.mock('@/lib/UserContext', () => ({
-  useUser: () => ({ effectiveFacilityId: 'fac-1', loading: false }),
+  useUser: () => ({ effectiveFacilityId: 'fac-1', loading: false, can: () => true }),
 }))
 
 interface MockMilestone {

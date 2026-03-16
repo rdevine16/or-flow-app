@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { Building2, Calculator, Check, ChevronRight, ClipboardCheck, Clock, PenLine, Plus, Tag, Target, User } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { genericAuditLog } from '@/lib/audit-logger'
 import Link from 'next/link'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -89,7 +90,7 @@ interface AuditEntry {
 
 export default function FinancialsOverviewPage() {
   const supabase = createClient()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
   const { showToast } = useToast() 
 
   // Fetch all financial stats + recent activity
@@ -277,6 +278,16 @@ showToast({
         <div className="text-center py-12">
           <p className="text-slate-500">No facility selected</p>
         </div>
+      </>
+    )
+  }
+
+  if (!can('financials.view')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Financials</h1>
+        <p className="text-slate-500 mb-6">Configure financial tracking and cost analysis</p>
+        <AccessDenied />
       </>
     )
   }

@@ -31,6 +31,8 @@ import { Toggle } from '@/components/ui/Toggle'
 import { Button } from '@/components/ui/Button'
 import { logger } from '@/lib/logger'
 import { getLocalDateString } from '@/lib/date-utils'
+import AccessDenied from '@/components/ui/AccessDenied'
+import { useUser } from '@/lib/UserContext'
 
 const log = logger('page')
 
@@ -46,6 +48,7 @@ const WEEK_OPTIONS = [
 export default function FacilityClosuresPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { can, loading: permLoading } = useUser()
 
   // Auth & facility
   const [facilityId, setFacilityId] = useState<string | null>(null)
@@ -208,6 +211,18 @@ export default function FacilityClosuresPage() {
 
   if (pageLoading) {
     return <PageLoader message="Loading closures..." />
+  }
+
+  if (!permLoading && !can('settings.closures')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Facility Closures</h1>
+        <p className="text-slate-500 mb-6">
+          Manage recurring holidays and one-off closures for {facilityName}
+        </p>
+        <AccessDenied />
+      </>
+    )
   }
 
   return (

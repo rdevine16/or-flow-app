@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ChevronDown, Download, FileText, Info, Loader2, Search } from 'lucide-react'
 import { getLocalDateString } from '@/lib/date-utils'
+import AccessDenied from '@/components/ui/AccessDenied'
+import { useUser } from '@/lib/UserContext'
 
 interface AuditLogEntry {
   id: string
@@ -77,6 +79,7 @@ const formatTime = (dateString: string): string => {
 
 export default function AuditLogPage() {
   const supabase = createClient()
+  const { can, loading: permLoading } = useUser()
   const [logs, setLogs] = useState<AuditLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -218,6 +221,16 @@ export default function AuditLogPage() {
         log.action.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : logs
+
+  if (!permLoading && !can('audit.view')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Audit Log</h1>
+        <p className="text-slate-500 mb-6">View a history of all actions taken in the system.</p>
+        <AccessDenied />
+      </>
+    )
+  }
 
   return (
     <>

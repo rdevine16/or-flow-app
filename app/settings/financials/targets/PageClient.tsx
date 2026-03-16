@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ChevronLeft, ChevronRight, Check, Pencil, Target, X } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -25,7 +26,7 @@ interface TargetRow {
 
 export default function FinancialTargetsPage() {
   const supabase = createClient()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
   const { showToast } = useToast()
 
   const currentYear = new Date().getFullYear()
@@ -180,6 +181,16 @@ export default function FinancialTargetsPage() {
         <div className="text-center py-12">
           <p className="text-slate-500">No facility selected</p>
         </div>
+      </>
+    )
+  }
+
+  if (!can('financials.view')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Monthly Profit Targets</h1>
+        <p className="text-slate-500 mb-6">Set monthly profit targets shown on the financial analytics overview</p>
+        <AccessDenied />
       </>
     )
   }

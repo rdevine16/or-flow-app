@@ -13,6 +13,7 @@ import { SearchInput } from '@/components/ui/SearchInput'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { inferPhaseGroup } from '@/lib/utils/inferPhaseGroup'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { MilestoneFormModal } from '@/components/settings/milestones/MilestoneFormModal'
 import { ArchivedMilestonesSection } from '@/components/settings/milestones/ArchivedMilestonesSection'
 import { PhaseLibrary } from '@/components/settings/milestones/PhaseLibrary'
@@ -101,6 +102,7 @@ function MilestonesSettingsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
+  const { loading: userLoading, can, effectiveFacilityId } = useUser()
 
   const activeTab: TabKey = useMemo(() => {
     const tabParam = searchParams.get('tab')
@@ -117,6 +119,16 @@ function MilestonesSettingsContent() {
     const qs = params.toString()
     router.push(qs ? `${pathname}?${qs}` : pathname)
   }, [router, pathname, searchParams])
+
+  if (!userLoading && !can('settings.milestones')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Milestones</h1>
+        <p className="text-slate-500 mb-4">Configure milestone definitions, phases, templates, and assignments.</p>
+        <AccessDenied />
+      </>
+    )
+  }
 
   return (
     <>
@@ -172,7 +184,7 @@ function FacilityTemplateBuilderTab() {
 
 function MilestonesTab() {
   const supabase = createClient()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
   const { showToast } = useToast()
   const { data: currentUserData } = useCurrentUser()
   const currentUserId = currentUserData?.userId || null

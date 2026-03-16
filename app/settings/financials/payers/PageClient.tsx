@@ -14,6 +14,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Archive, Building2, ExternalLink, Info, Pencil, Plus } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 interface Payer {
   id: string
@@ -24,7 +25,7 @@ interface Payer {
 }
 export default function PayersPage() {
   const supabase = createClient()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
   const { showToast } = useToast()
   const [payers, setPayers] = useState<Payer[]>([])
   const [loading, setLoading] = useState(true)
@@ -280,6 +281,17 @@ await genericAuditLog(supabase, 'payer.restored', {
       </>
     )
   }
+
+  if (!can('financials.view')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Payers</h1>
+        <p className="text-slate-500 mb-6">Manage insurance companies and payer contracts</p>
+        <AccessDenied />
+      </>
+    )
+  }
+
   return (
     <>
       <h1 className="text-2xl font-semibold text-slate-900 mb-1">Payers</h1>

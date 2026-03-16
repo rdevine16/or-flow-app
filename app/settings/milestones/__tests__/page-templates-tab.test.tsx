@@ -21,6 +21,7 @@ vi.mock('@/lib/UserContext', () => ({
   useUser: () => ({
     effectiveFacilityId: 'facility-1',
     loading: false,
+    can: () => true,
   }),
 }))
 

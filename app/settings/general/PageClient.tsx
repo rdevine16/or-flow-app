@@ -12,6 +12,7 @@ import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { Building2, CalendarDays, Check, ClipboardList, Copy, LayoutDashboard, Lock, Pencil, UsersRound } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { getLocalDateString } from '@/lib/date-utils'
 
 // =====================================================
@@ -331,6 +332,16 @@ showToast({
   // =====================================================
   // RENDER
   // =====================================================
+
+  if (!userLoading && !can('settings.general')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">General</h1>
+        <p className="text-slate-500 mb-6">Manage your facility&apos;s basic information and settings</p>
+        <AccessDenied />
+      </>
+    )
+  }
 
   return (
     <>

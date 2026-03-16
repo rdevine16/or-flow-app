@@ -16,6 +16,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Check, ClipboardCheck, Eye, EyeOff, GripHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 // =====================================================
 // TYPES
@@ -347,7 +348,7 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
 export default function ChecklistBuilderPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { userData, loading: userLoading } = useUser()
+  const { userData, loading: userLoading, can } = useUser()
   const { isEnabled, isLoading: featureLoading } = useFeature(FEATURES.PATIENT_CHECKIN)
   const { showToast } = useToast()
   const { data: currentUserData } = useCurrentUser()
@@ -499,6 +500,16 @@ export default function ChecklistBuilderPage() {
         f.id === field.id ? { ...f, is_active: newIsActive } : f
       ))
     }
+  }
+
+  if (!userLoading && !can('settings.checklist')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Checklist Builder</h1>
+        <p className="text-slate-500 mb-6">Customize pre-op checklist fields</p>
+        <AccessDenied />
+      </>
+    )
   }
 
   // Feature not enabled

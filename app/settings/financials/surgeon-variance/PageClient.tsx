@@ -19,6 +19,7 @@ import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { Calculator, ExternalLink, Info, Pencil, Plus, Trash2, X } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { getLocalDateString } from '@/lib/date-utils'
 import { zIndex as zTokens } from '@/lib/design-tokens'
 
@@ -78,7 +79,7 @@ const getYesterdayDate = () => {
 
 export default function SurgeonVariancePage() {
   const supabase = createClient()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
   const { showToast } = useToast()
 
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
@@ -402,6 +403,16 @@ export default function SurgeonVariancePage() {
   const groupedOverrides = getGroupedOverrides()
   const selectedSurgeon = surgeons.find(s => s.id === selectedSurgeonId)
   const selectedProcedure = procedures.find(p => p.id === selectedProcedureId)
+
+  if (!can('financials.view')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Surgeon Variance</h1>
+        <p className="text-slate-500 mb-6">Configure surgeon-specific cost overrides</p>
+        <AccessDenied />
+      </>
+    )
+  }
 
   return (
     <>

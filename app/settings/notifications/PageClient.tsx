@@ -18,6 +18,7 @@ import {
   FlaskConical,
   Users,
 } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 // =====================================================
 // TYPES
@@ -58,7 +59,7 @@ const CHANNEL_OPTIONS = [
 
 export default function NotificationsPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading } = useUser()
+  const { userData, loading: userLoading, can } = useUser()
   const { showToast } = useToast()
   const facilityId = userData.facilityId
 
@@ -148,6 +149,16 @@ export default function NotificationsPage() {
         <h1 className="text-2xl font-semibold text-slate-900 mb-1">Notifications</h1>
         <p className="text-slate-500 mb-6">Configure how your facility receives alerts and updates</p>
         <PageLoader message="Loading notifications..." />
+      </>
+    )
+  }
+
+  if (!can('settings.notifications')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Notifications</h1>
+        <p className="text-slate-500 mb-6">Configure how your facility receives alerts and updates</p>
+        <AccessDenied />
       </>
     )
   }

@@ -16,6 +16,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { AlertTriangle, Archive, Calculator, CheckCircle2, ChevronRight, ExternalLink, Info, Loader2, Pencil, Plus } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 interface CostCategory {
   id: string
@@ -42,7 +43,7 @@ interface DeleteModalState {
 
 export default function CostCategoriesPage() {
   const supabase = createClient()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
   const { showToast } = useToast() 
   const [categories, setCategories] = useState<CostCategory[]>([])
   const [loading, setLoading] = useState(true)
@@ -479,6 +480,16 @@ await genericAuditLog(supabase, 'cost_category.restored', {
         <div className="text-center py-12 text-slate-500">
           No facility selected
         </div>
+      </>
+    )
+  }
+
+  if (!can('financials.view')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Cost Categories</h1>
+        <p className="text-slate-500 mb-6">Manage debit and credit categories for financial tracking</p>
+        <AccessDenied />
       </>
     )
   }

@@ -11,6 +11,8 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Ban, Check, CheckCircle2, Mail, Plus, Users, X } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
+import { useUser } from '@/lib/UserContext'
 
 interface DeviceRep {
   id: string
@@ -58,6 +60,7 @@ export default function DeviceRepsPage() {
   const supabase = createClient()
   const { showToast } = useToast()
   const { data: currentUser, loading: userLoading } = useCurrentUser()
+  const { can, loading: permLoading } = useUser()
   const facilityId = currentUser?.facilityId || null
 
   // Facility name
@@ -331,6 +334,16 @@ export default function DeviceRepsPage() {
 
   const activeCount = activeReps.length
   const pendingCount = (pendingInvites || []).length
+
+  if (!permLoading && !can('settings.device_reps')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Device Rep Access</h1>
+        <p className="text-slate-500 mb-6">Manage implant company representative access to your cases.</p>
+        <AccessDenied />
+      </>
+    )
+  }
 
   return (
     <>

@@ -12,6 +12,8 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Archive, Building2, Pencil, Plus, Search } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
+import { useUser } from '@/lib/UserContext'
 
 interface ImplantCompany {
   id: string
@@ -32,6 +34,7 @@ export default function ImplantCompaniesPage() {
   const supabase = createClient()
   const { showToast } = useToast()
   const { data: currentUserData } = useCurrentUser()
+  const { can, loading: permLoading } = useUser()
   const currentUserId = currentUserData?.userId || null
   const facilityId = currentUserData?.facilityId || null
 
@@ -209,6 +212,16 @@ const handleDelete = async (id: string) => {
     } catch (err) {
       showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to restore company' })
     }
+  }
+
+  if (!permLoading && !can('settings.implant_companies')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Implant Companies</h1>
+        <p className="text-slate-500 mb-6">Manage surgical implant vendors for case assignments.</p>
+        <AccessDenied />
+      </>
+    )
   }
 
   return (

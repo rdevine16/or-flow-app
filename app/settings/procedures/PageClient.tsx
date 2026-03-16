@@ -8,6 +8,7 @@ import { useSurgeons } from '@/hooks/useLookups'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Plus, Search, Archive, Clock, User } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { ProcedureDetailPanel } from '@/components/settings/procedures/ProcedureDetailPanel'
 import type { ProcedureType } from '@/components/settings/procedures/ProcedureDetailPanel'
 import type { SurgeonOverride } from '@/components/settings/procedures/SurgeonOverrideList'
@@ -280,6 +281,16 @@ export default function ProceduresSettingsPage() {
   // =====================================================
   // RENDER
   // =====================================================
+
+  if (!userLoading && !can('settings.procedures')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Procedure Types</h1>
+        <p className="text-slate-500 mb-6">Manage the procedure types available at your facility.</p>
+        <AccessDenied />
+      </>
+    )
+  }
 
   return (
     <>

@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { Button } from '@/components/ui/Button'
 import { Check, ChevronRight, ClipboardCheck, Lock, X } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 // =====================================================
 // TYPES
@@ -37,7 +38,7 @@ interface ProcedureType {
 
 export default function CheckInSettingsPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading } = useUser()
+  const { userData, loading: userLoading, can } = useUser()
   const { isEnabled, isLoading: featureLoading } = useFeature(FEATURES.PATIENT_CHECKIN)
   const { showToast } = useToast()
 
@@ -166,6 +167,16 @@ export default function CheckInSettingsPage() {
   // Clear procedure override
   const handleClearOverride = async (procedureId: string) => {
     await handleSaveProcedureOverride(procedureId, null)
+  }
+
+  if (!userLoading && !can('settings.checkin')) {
+    return (
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Patient Check-In</h1>
+        <p className="text-slate-500 mb-6">Configure arrival times and pre-op checklists</p>
+        <AccessDenied />
+      </>
+    )
   }
 
   // Feature not enabled
