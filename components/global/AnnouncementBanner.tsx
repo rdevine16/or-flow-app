@@ -218,8 +218,8 @@ function BannerItem({ announcement, onDismiss, dismissing }: BannerItemProps) {
 // ============================================
 
 export default function AnnouncementBanner() {
-  const { userData } = useUser()
-  const facilityId = userData.facilityId
+  const { userData, effectiveFacilityId, isGlobalAdmin } = useUser()
+  const facilityId = effectiveFacilityId
   const userId = userData.userId
   const roleName = userData.roleName
 
@@ -303,6 +303,9 @@ export default function AnnouncementBanner() {
   // ============================================
   // Render
   // ============================================
+
+  // Global admins manage announcements — they don't need to see banners
+  if (isGlobalAdmin) return null
 
   if (loading || filteredAnnouncements.length === 0) {
     return null

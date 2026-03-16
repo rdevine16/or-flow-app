@@ -137,6 +137,7 @@ export const settingsCategories: SettingsCategory[] = [
     id: 'case-management',
     label: 'Case Management',
     tabLabel: 'Case Mgmt',
+    requiredTier: 'essential',
     items: [
       {
         id: 'procedures',
@@ -206,6 +207,7 @@ export const settingsCategories: SettingsCategory[] = [
         icon: Clock,
         description: 'Scheduled room closures',
         permission: 'settings.manage',
+        requiredTier: 'essential',
       },
       {
         id: 'analytics',
@@ -234,6 +236,7 @@ export const settingsCategories: SettingsCategory[] = [
         icon: Mic,
         description: 'Manage voice command aliases for Room Mode',
         permission: 'settings.manage',
+        requiredTier: 'essential',
       },
       {
         id: 'integrations',
@@ -250,6 +253,7 @@ export const settingsCategories: SettingsCategory[] = [
     id: 'device-reps',
     label: 'Device Reps',
     tabLabel: 'Reps',
+    requiredTier: 'essential',
     items: [
       {
         id: 'device-reps',

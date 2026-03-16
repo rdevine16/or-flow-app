@@ -211,6 +211,7 @@ export default function FacilitiesListPage() {
 
     const tier = TIER_DEFINITIONS[slug]
     const styles: Record<TierSlug, string> = {
+      coordinator: 'bg-teal-100 text-teal-700',
       essential: 'bg-slate-100 text-slate-700',
       professional: 'bg-blue-100 text-blue-700',
       enterprise: 'bg-purple-100 text-purple-700',

@@ -15,6 +15,7 @@ import {
   type TierFeatureKey,
   TIER_DEFINITIONS,
   TIER_SLUGS,
+  isTierAtLeast as isTierAtLeastUtil,
 } from '@/lib/tier-config'
 
 // =====================================================
@@ -34,14 +35,18 @@ interface UsageStats {
 interface FeatureRow {
   label: string
   key: TierFeatureKey | 'basic_flow' | 'dashboard' | 'case_management'
-  /** If true, feature is available on all tiers */
+  /** If true, feature is available on all tiers at or above requiredTier */
   allTiers?: boolean
+  /** Minimum tier for this "allTiers" row (e.g. essential = not available on coordinator) */
+  requiredTier?: TierSlug
 }
 
 const FEATURE_ROWS: FeatureRow[] = [
-  { label: 'Day-of Surgical Flow', key: 'basic_flow', allTiers: true },
-  { label: 'Dashboard & Room Status', key: 'dashboard', allTiers: true },
-  { label: 'Case Management', key: 'case_management', allTiers: true },
+  { label: 'Block Scheduling', key: 'block_scheduling' },
+  { label: 'Staff Management', key: 'staff_management' },
+  { label: 'Day-of Surgical Flow', key: 'basic_flow', allTiers: true, requiredTier: 'essential' },
+  { label: 'Dashboard & Room Status', key: 'dashboard', allTiers: true, requiredTier: 'essential' },
+  { label: 'Case Management', key: 'case_management', allTiers: true, requiredTier: 'essential' },
   { label: 'Advanced Analytics', key: 'analytics' },
   { label: 'ORbit Score', key: 'orbit_score' },
   { label: 'Flag Detection', key: 'flags' },
@@ -52,7 +57,10 @@ const FEATURE_ROWS: FeatureRow[] = [
 ]
 
 function isFeatureEnabled(tier: TierSlug, row: FeatureRow): boolean {
-  if (row.allTiers) return true
+  if (row.allTiers) {
+    if (row.requiredTier) return isTierAtLeastUtil(tier, row.requiredTier)
+    return true
+  }
   return TIER_DEFINITIONS[tier].features[row.key as TierFeatureKey] ?? false
 }
 
@@ -163,18 +171,10 @@ export default function SubscriptionPage() {
         <div className="space-y-6">
           {/* Current Plan Card */}
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 text-white">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <p className="text-slate-400 text-sm mb-1">Current Plan</p>
-                <h2 className="text-2xl font-semibold">{tierName}</h2>
-                <p className="text-slate-400 mt-1">{currentPlanDef.description}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold">
-                  ${currentPlanDef.priceMonthly.toLocaleString()}
-                </p>
-                <p className="text-slate-400 text-sm">per month</p>
-              </div>
+            <div className="mb-6">
+              <p className="text-slate-400 text-sm mb-1">Current Plan</p>
+              <h2 className="text-2xl font-semibold">{tierName}</h2>
+              <p className="text-slate-400 mt-1">{currentPlanDef.description}</p>
             </div>
 
             <div className="flex items-center gap-4 pt-4 border-t border-slate-700">
@@ -219,10 +219,10 @@ export default function SubscriptionPage() {
                 <div className="p-4 bg-slate-50 rounded-xl">
                   <p className="text-sm text-slate-500 mb-1">Features Enabled</p>
                   <p className="text-2xl font-bold text-slate-900">
-                    {Object.values(currentPlanDef.features).filter(Boolean).length} / {Object.keys(currentPlanDef.features).length}
+                    {FEATURE_ROWS.filter(row => isFeatureEnabled(tier, row)).length} / {FEATURE_ROWS.length}
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Premium feature categories
+                    Feature categories
                   </p>
                 </div>
               </div>
@@ -239,7 +239,7 @@ export default function SubscriptionPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200">
-                    <th className="text-left text-sm font-medium text-slate-500 px-6 py-3 w-1/3">
+                    <th className="text-left text-sm font-medium text-slate-500 px-6 py-3 w-1/4">
                       Feature
                     </th>
                     {TIER_SLUGS.map((slug) => {
@@ -253,9 +253,6 @@ export default function SubscriptionPage() {
                           }`}
                         >
                           <div>{def.name}</div>
-                          <div className="text-xs font-normal text-slate-400 mt-0.5">
-                            ${def.priceMonthly.toLocaleString()}/mo
-                          </div>
                           {isCurrent && (
                             <span className="inline-block mt-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">
                               Current

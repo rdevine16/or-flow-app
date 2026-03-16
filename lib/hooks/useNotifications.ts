@@ -55,7 +55,10 @@ export function useNotifications(): UseNotificationsReturn {
 
   // Fetch notifications (initial or refresh)
   const fetchNotifications = useCallback(async (reset = true) => {
-    if (!facilityId || !userId) return
+    if (!facilityId || !userId) {
+      setLoading(false)
+      return
+    }
 
     if (reset) setLoading(true)
     setError(null)
@@ -191,9 +194,12 @@ export function useNotifications(): UseNotificationsReturn {
         table: 'notifications',
         filter: `facility_id=eq.${facilityId}`,
       }, (payload) => {
-        const newNotification = payload.new as NotificationWithReadState & { type: string }
+        const newNotification = payload.new as NotificationWithReadState & { type: string; target_user_id: string | null }
         // Skip patient_call notifications
         if (newNotification.type === 'patient_call') return
+
+        // Skip targeted notifications meant for other users
+        if (newNotification.target_user_id && newNotification.target_user_id !== userId) return
 
         log.info('Realtime: new notification received', { id: newNotification.id })
 

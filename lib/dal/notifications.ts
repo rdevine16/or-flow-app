@@ -96,9 +96,9 @@ async function getNotifications(
   // Exclude patient_call — those are handled by CallNextPatientModal
   query = query.neq('type', 'patient_call')
 
-  // For persistent notifications, expires_at is NULL.
-  // RLS already filters expired ones, but we need to handle NULL correctly.
-  // The RLS policy handles this, so no additional filter needed here.
+  // Only show broadcast notifications or ones targeted at this user
+  // (defense-in-depth — RLS also enforces this)
+  query = query.or(`target_user_id.is.null,target_user_id.eq.${userId}`)
 
   const { data: notifications, error, count } = await query
 
@@ -154,11 +154,13 @@ async function getUnreadCount(
   userId: string
 ): Promise<DALResult<number>> {
   // Count all non-patient_call notifications minus those the user has read
+  // Only count broadcast or user-targeted notifications (defense-in-depth)
   const { count: totalCount, error: totalError } = await supabase
     .from('notifications')
     .select('id', { count: 'exact', head: true })
     .eq('facility_id', facilityId)
     .neq('type', 'patient_call')
+    .or(`target_user_id.is.null,target_user_id.eq.${userId}`)
 
   if (totalError) {
     return { data: null, error: totalError }
@@ -217,11 +219,13 @@ async function markAllAsRead(
   userId: string
 ): Promise<{ success: boolean; error: { message: string } | null }> {
   // Get all notification IDs for this facility that the user hasn't read
+  // Only include broadcast or user-targeted notifications (defense-in-depth)
   const { data: notifications, error: fetchError } = await supabase
     .from('notifications')
     .select('id')
     .eq('facility_id', facilityId)
     .neq('type', 'patient_call')
+    .or(`target_user_id.is.null,target_user_id.eq.${userId}`)
 
   if (fetchError) {
     return { success: false, error: { message: fetchError.message } }

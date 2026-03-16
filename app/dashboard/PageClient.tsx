@@ -25,6 +25,7 @@ import { useScheduleTimeline } from '@/lib/hooks/useScheduleTimeline'
 import CaseDrawer from '@/components/cases/CaseDrawer'
 import { useProcedureCategories } from '@/hooks/useLookups'
 import { FeatureGate } from '@/components/FeatureGate'
+import { CoordinatorDashboard } from '@/components/dashboard/CoordinatorDashboard'
 
 const TIME_RANGE_OPTIONS: { label: string; value: TimeRange }[] = [
   { label: 'Today', value: 'today' },
@@ -72,7 +73,7 @@ export default function DashboardPage() {
   const { data: alerts, loading: alertsLoading } = useDashboardAlerts()
   const { data: todayStatus, loading: todayStatusLoading } = useTodayStatus()
   const { data: timeline, loading: timelineLoading } = useScheduleTimeline()
-  const { userData, isTierAtLeast } = useUser()
+  const { userData, isTierAtLeast, tier } = useUser()
   const [drawerCaseId, setDrawerCaseId] = useState<string | null>(null)
   const { data: procedureCategories } = useProcedureCategories()
 
@@ -98,10 +99,12 @@ export default function DashboardPage() {
   const greeting = useMemo(() => getGreeting(), [])
   const todayDate = useMemo(() => formatTodayDate(), [])
 
+  const isCoordinator = tier === 'coordinator'
+
   return (
     <DashboardLayout>
       <div>
-        {/* Header + Time toggle */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">
@@ -114,23 +117,30 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
-            {TIME_RANGE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setTimeRange(option.value)}
-                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors duration-150 ${
-                  timeRange === option.value
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          {!isCoordinator && (
+            <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
+              {TIME_RANGE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setTimeRange(option.value)}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors duration-150 ${
+                    timeRange === option.value
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
+        {/* Coordinator tier: scheduling-focused dashboard */}
+        {isCoordinator ? (
+          <CoordinatorDashboard />
+        ) : (
+        <>
         {/* Error banner */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
@@ -252,6 +262,8 @@ export default function DashboardPage() {
         <div className="mt-6">
           <QuickAccessCards />
         </div>
+        </>
+        )}
       </div>
 
       <CaseDrawer

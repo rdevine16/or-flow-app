@@ -115,6 +115,7 @@ function TierBadge({ slug }: { slug: TierSlug | null }) {
 
   const tier = TIER_DEFINITIONS[slug]
   const styles: Record<TierSlug, string> = {
+    coordinator: 'bg-teal-100 text-teal-700',
     essential: 'bg-slate-100 text-slate-700',
     professional: 'bg-blue-100 text-blue-700',
     enterprise: 'bg-purple-100 text-purple-700',
@@ -1450,6 +1451,7 @@ export default function FacilityDetailPage() {
                   const isSelected = editPlanId === plan.id
                   const tierDef = TIER_DEFINITIONS[plan.slug]
                   const tierStyles: Record<TierSlug, { border: string; bg: string }> = {
+                    coordinator: { border: 'border-teal-300', bg: 'bg-teal-50' },
                     essential: { border: 'border-slate-300', bg: 'bg-slate-50' },
                     professional: { border: 'border-blue-400', bg: 'bg-blue-50' },
                     enterprise: { border: 'border-purple-400', bg: 'bg-purple-50' },

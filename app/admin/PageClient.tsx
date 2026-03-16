@@ -24,6 +24,7 @@ interface FacilityMetrics {
 }
 
 interface TierMetrics {
+  coordinator: number
   essential: number
   professional: number
   enterprise: number
@@ -65,7 +66,7 @@ const { showToast } = useToast()
   })
   const [userMetrics, setUserMetrics] = useState<UserMetrics>({ total: 0 })
   const [caseMetrics, setCaseMetrics] = useState<CaseMetrics>({ thisMonth: 0 })
-  const [tierMetrics, setTierMetrics] = useState<TierMetrics>({ essential: 0, professional: 0, enterprise: 0, unassigned: 0 })
+  const [tierMetrics, setTierMetrics] = useState<TierMetrics>({ coordinator: 0, essential: 0, professional: 0, enterprise: 0, unassigned: 0 })
   const [recentActivity, setRecentActivity] = useState<AuditEntry[]>([])
 
   // Redirect non-admins
@@ -98,7 +99,7 @@ const { showToast } = useToast()
           })
 
           // Tier distribution
-          const tierCounts: TierMetrics = { essential: 0, professional: 0, enterprise: 0, unassigned: 0 }
+          const tierCounts: TierMetrics = { coordinator: 0, essential: 0, professional: 0, enterprise: 0, unassigned: 0 }
           for (const f of facilities) {
             const planData = f.subscription_plans as unknown as { slug: string } | null
             const slug = planData?.slug as TierSlug | undefined
@@ -277,8 +278,9 @@ const { showToast } = useToast()
           <Crown className="w-4 h-4 text-purple-600" />
           <h3 className="text-sm font-semibold text-slate-900">Plan Distribution</h3>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {([
+            { slug: 'coordinator' as TierSlug, count: tierMetrics.coordinator, color: 'bg-teal-100 text-teal-700' },
             { slug: 'essential' as TierSlug, count: tierMetrics.essential, color: 'bg-slate-100 text-slate-700' },
             { slug: 'professional' as TierSlug, count: tierMetrics.professional, color: 'bg-blue-100 text-blue-700' },
             { slug: 'enterprise' as TierSlug, count: tierMetrics.enterprise, color: 'bg-purple-100 text-purple-700' },

@@ -31,7 +31,10 @@ export function useUnreadCount() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchCount = useCallback(async () => {
-    if (!facilityId || !userId) return
+    if (!facilityId || !userId) {
+      setLoading(false)
+      return
+    }
 
     try {
       const result = await notificationsDAL.getUnreadCount(
@@ -74,8 +77,11 @@ export function useUnreadCount() {
         table: 'notifications',
         filter: `facility_id=eq.${facilityId}`,
       }, (payload) => {
-        const newRow = payload.new as { type: string }
+        const newRow = payload.new as { type: string; target_user_id: string | null }
         if (newRow.type === 'patient_call') return
+
+        // Skip targeted notifications meant for other users
+        if (newRow.target_user_id && newRow.target_user_id !== userId) return
 
         log.info('Realtime: incrementing unread count')
         setCount(prev => prev + 1)

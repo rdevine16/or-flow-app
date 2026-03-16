@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
@@ -40,13 +40,16 @@ const ACCESS_LEVELS: { value: AccessLevel; label: string }[] = [
   { value: 'coordinator', label: 'Coordinator' },
 ]
 
+/** Permission categories visible to the coordinator subscription tier */
+const COORDINATOR_TIER_CATEGORIES = new Set(['Scheduling', 'Settings', 'Admin'])
+
 // =====================================================
 // COMPONENT
 // =====================================================
 
 export default function FacilityPermissionsPage() {
   const supabase = createClient()
-  const { isAdmin, loading: userLoading, userData, effectiveFacilityId, can } = useUser()
+  const { isAdmin, loading: userLoading, userData, effectiveFacilityId, can, isTierAtLeast } = useUser()
   const { showToast } = useToast()
 
   const [selectedLevel, setSelectedLevel] = useState<AccessLevel>('user')
@@ -99,6 +102,13 @@ export default function FacilityPermissionsPage() {
       grants[fp.permission_key] = fp.granted
     }
   }
+
+  // Filter permissions by tier — coordinator tier only sees scheduling/settings/admin categories
+  const visiblePermissions = useMemo(() => {
+    if (!permissions) return []
+    if (isTierAtLeast('essential')) return permissions
+    return permissions.filter(p => COORDINATOR_TIER_CATEGORIES.has(p.category))
+  }, [permissions, isTierAtLeast])
 
   // Handle toggle
   const handleToggle = useCallback(
@@ -200,9 +210,9 @@ export default function FacilityPermissionsPage() {
             {/* Matrix */}
             {loading ? (
               <PermissionMatrixSkeleton />
-            ) : permissions ? (
+            ) : visiblePermissions.length > 0 ? (
               <PermissionMatrix
-                permissions={permissions}
+                permissions={visiblePermissions}
                 grants={grants}
                 onToggle={handleToggle}
               />

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { getRoleColors } from '@/lib/design-tokens'
 
@@ -28,10 +28,10 @@ interface StaffMultiSelectProps {
 }
 
 /** Role display config — order determines section order */
-const ROLE_SECTIONS: { key: string; label: string }[] = [
-  { key: 'nurse', label: 'Nurses' },
-  { key: 'tech', label: 'Techs' },
-  { key: 'anesthesiologist', label: 'Anesthesiologists' },
+const ROLE_SECTIONS: { key: string; label: string; icon: string }[] = [
+  { key: 'nurse', label: 'Nurses', icon: 'N' },
+  { key: 'tech', label: 'Techs', icon: 'T' },
+  { key: 'anesthesiologist', label: 'Anesthesiologists', icon: 'A' },
 ]
 
 export default function StaffMultiSelect({
@@ -44,9 +44,7 @@ export default function StaffMultiSelect({
   const supabase = createClient()
   const [staff, setStaff] = useState<StaffUser[]>([])
   const [loading, setLoading] = useState(true)
-  const [isOpen, setIsOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const containerRef = useRef<HTMLDivElement>(null)
+  const [activeRole, setActiveRole] = useState<string>(ROLE_SECTIONS[0].key)
 
   const fetchStaff = useCallback(async () => {
     const { data } = await supabase
@@ -71,24 +69,13 @@ export default function StaffMultiSelect({
   }, [facilityId, supabase])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStaff()
   }, [fetchStaff])
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
 
   const selectedIds = selectedStaff.map(s => s.user_id)
 
   const toggleStaff = (user: StaffUser) => {
+    if (disabled) return
     if (selectedIds.includes(user.id)) {
       onChange(selectedStaff.filter(s => s.user_id !== user.id))
     } else {
@@ -96,33 +83,41 @@ export default function StaffMultiSelect({
     }
   }
 
-  const removeStaff = (userId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
+  const removeStaff = (userId: string) => {
+    if (disabled) return
     onChange(selectedStaff.filter(s => s.user_id !== userId))
   }
 
-  // Filter out excluded users (e.g., selected surgeon) and apply search
+  // Filter out excluded users and surgeons
   const availableStaff = staff.filter(s => {
     if (excludeUserIds.includes(s.id)) return false
-    // Exclude surgeons — primary surgeon is a dedicated form field
     if (s.role_name === 'surgeon') return false
-    if (!searchQuery) return true
-    const fullName = `${s.first_name} ${s.last_name}`.toLowerCase()
-    return fullName.includes(searchQuery.toLowerCase())
+    return true
   })
 
-  // Group by role section
-  const groupedStaff: Record<string, StaffUser[]> = {}
-  for (const section of ROLE_SECTIONS) {
-    groupedStaff[section.key] = availableStaff.filter(s => s.role_name === section.key)
-  }
-  // Catch-all for roles not in ROLE_SECTIONS
+  // Build role sections with counts
   const knownRoles = ROLE_SECTIONS.map(s => s.key)
   const otherStaff = availableStaff.filter(s => !knownRoles.includes(s.role_name))
-  if (otherStaff.length > 0) {
-    groupedStaff['other'] = otherStaff
-  }
 
+  const allSections = [
+    ...ROLE_SECTIONS.map(section => ({
+      ...section,
+      staff: availableStaff.filter(s => s.role_name === section.key),
+      selectedCount: availableStaff.filter(s => s.role_name === section.key && selectedIds.includes(s.id)).length,
+    })),
+    ...(otherStaff.length > 0 ? [{
+      key: 'other',
+      label: 'Other',
+      icon: 'O',
+      staff: otherStaff,
+      selectedCount: otherStaff.filter(s => selectedIds.includes(s.id)).length,
+    }] : []),
+  ].filter(s => s.staff.length > 0)
+
+  // Staff in the active role
+  const activeStaff = allSections.find(s => s.key === activeRole)?.staff || []
+
+  // All selected users for the right column
   const selectedUsers = staff.filter(s => selectedIds.includes(s.id))
 
   const getRoleBadge = (roleName: string) => {
@@ -132,180 +127,165 @@ export default function StaffMultiSelect({
 
   if (loading) {
     return (
-      <div className="w-full h-11 bg-slate-100 rounded-lg animate-pulse" />
+      <div className="w-full h-48 bg-slate-100 rounded-xl animate-pulse" />
     )
   }
 
   return (
-    <div ref={containerRef} className="relative">
-      {/* Selected Items Display / Trigger */}
-      <div
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`min-h-[44px] w-full px-3 py-2 border rounded-lg transition-colors cursor-pointer ${
-          disabled
-            ? 'bg-slate-50 border-slate-200 cursor-not-allowed'
-            : isOpen
-            ? 'border-blue-500 ring-2 ring-blue-500/20'
-            : 'border-slate-200 hover:border-slate-300'
-        }`}
-      >
-        {selectedUsers.length === 0 ? (
-          <span className="text-slate-400">Select staff members...</span>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {selectedUsers.map(user => {
-              const isFromRoomSchedule = selectedStaff.find(s => s.user_id === user.id)?.fromRoomSchedule
+    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+      <div className="grid grid-cols-1 md:grid-cols-3 min-h-[240px]">
+        {/* Column 1: Role Types */}
+        <div className="border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50/50">
+          <div className="px-3 py-2 border-b border-slate-200">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Type</span>
+          </div>
+          <div className="py-1">
+            {allSections.map(section => {
+              const isActive = activeRole === section.key
+              const roleColors = getRoleColors(section.key)
               return (
-              <span
-                key={user.id}
-                className={`inline-flex items-center gap-1 px-2 py-1 text-sm rounded-md ${getRoleBadge(user.role_name)}`}
-              >
-                {user.first_name} {user.last_name}
-                {isFromRoomSchedule && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded ml-0.5">
-                    Room schedule
-                  </span>
-                )}
-                {!disabled && (
-                  <button
-                    type="button"
-                    onClick={(e) => removeStaff(user.id, e)}
-                    className="hover:opacity-70 rounded p-0.5"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </span>
+                <button
+                  key={section.key}
+                  type="button"
+                  onClick={() => setActiveRole(section.key)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors ${
+                    isActive
+                      ? 'bg-blue-50 border-l-2 border-blue-600'
+                      : 'hover:bg-slate-100 border-l-2 border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold ${roleColors.bg} ${roleColors.text}`}>
+                      {section.icon}
+                    </span>
+                    <span className={`text-sm font-medium ${isActive ? 'text-blue-700' : 'text-slate-700'}`}>
+                      {section.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {section.selectedCount > 0 && (
+                      <span className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold bg-blue-600 text-white rounded-full">
+                        {section.selectedCount}
+                      </span>
+                    )}
+                    <span className="text-xs text-slate-400">{section.staff.length}</span>
+                  </div>
+                </button>
               )
             })}
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Dropdown */}
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
-          {/* Search */}
-          <div className="p-2 border-b border-slate-100">
-            <div className="relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search staff..."
-                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                autoFocus
-              />
-            </div>
+        {/* Column 2: Staff Members for Active Role */}
+        <div className="border-b md:border-b-0 md:border-r border-slate-200">
+          <div className="px-3 py-2 border-b border-slate-200">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              {allSections.find(s => s.key === activeRole)?.label || 'Staff'}
+            </span>
           </div>
-
-          {/* Options grouped by role */}
-          <div className="max-h-60 overflow-y-auto">
-            {availableStaff.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-slate-500 text-center">
-                No staff found
+          <div className="max-h-[240px] overflow-y-auto">
+            {activeStaff.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-slate-400 text-center">
+                No staff in this role
               </div>
             ) : (
-              <>
-                {ROLE_SECTIONS.map(section => {
-                  const sectionStaff = groupedStaff[section.key]
-                  if (!sectionStaff || sectionStaff.length === 0) return null
-
-                  return (
-                    <div key={section.key}>
-                      <div className="px-3 py-1.5 bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        {section.label}
-                      </div>
-                      {sectionStaff.map(user => (
-                        <div
-                          key={user.id}
-                          onClick={() => toggleStaff(user)}
-                          className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
-                            selectedIds.includes(user.id)
-                              ? 'bg-blue-50'
-                              : 'hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                            selectedIds.includes(user.id)
-                              ? 'bg-blue-600 border-blue-600'
-                              : 'border-slate-300'
-                          }`}>
-                            {selectedIds.includes(user.id) && (
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </div>
-                          <span className="text-sm text-slate-900">
-                            {user.first_name} {user.last_name}
-                          </span>
-                        </div>
-                      ))}
+              activeStaff.map(user => {
+                const isSelected = selectedIds.includes(user.id)
+                return (
+                  <div
+                    key={user.id}
+                    onClick={() => toggleStaff(user)}
+                    className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
+                      isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'
+                    } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+                  >
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                      isSelected
+                        ? 'bg-blue-600 border-blue-600'
+                        : 'border-slate-300 bg-white'
+                    }`}>
+                      {isSelected && (
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
                     </div>
-                  )
-                })}
-
-                {/* Other roles */}
-                {groupedStaff['other'] && groupedStaff['other'].length > 0 && (
-                  <div>
-                    <div className="px-3 py-1.5 bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Other
-                    </div>
-                    {groupedStaff['other'].map(user => (
-                      <div
-                        key={user.id}
-                        onClick={() => toggleStaff(user)}
-                        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
-                          selectedIds.includes(user.id)
-                            ? 'bg-blue-50'
-                            : 'hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                          selectedIds.includes(user.id)
-                            ? 'bg-blue-600 border-blue-600'
-                            : 'border-slate-300'
-                        }`}>
-                          {selectedIds.includes(user.id) && (
-                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </div>
-                        <span className="text-sm text-slate-900">
-                          {user.first_name} {user.last_name}
-                        </span>
-                      </div>
-                    ))}
+                    <span className={`text-sm ${isSelected ? 'text-blue-900 font-medium' : 'text-slate-700'}`}>
+                      {user.first_name} {user.last_name}
+                    </span>
                   </div>
-                )}
-              </>
+                )
+              })
             )}
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="px-3 py-2 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-            <span className="text-xs text-slate-500">
-              {selectedStaff.length} selected
+        {/* Column 3: Selected Staff */}
+        <div>
+          <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Selected ({selectedUsers.length})
             </span>
-            {selectedStaff.length > 0 && (
+            {selectedUsers.length > 0 && !disabled && (
               <button
                 type="button"
                 onClick={() => onChange([])}
-                className="text-xs text-slate-600 hover:text-slate-900"
+                className="text-xs text-slate-500 hover:text-red-600 transition-colors"
               >
                 Clear all
               </button>
             )}
           </div>
+          <div className="max-h-[240px] overflow-y-auto">
+            {selectedUsers.length === 0 ? (
+              <div className="px-4 py-6 text-center">
+                <svg className="w-8 h-8 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <p className="text-xs text-slate-400">No staff selected</p>
+                <p className="text-xs text-slate-400 mt-0.5">Pick a role and check names</p>
+              </div>
+            ) : (
+              <div className="py-1">
+                {selectedUsers.map(user => {
+                  const isFromRoomSchedule = selectedStaff.find(s => s.user_id === user.id)?.fromRoomSchedule
+                  return (
+                    <div
+                      key={user.id}
+                      className="flex items-center justify-between px-3 py-2 group hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold rounded ${getRoleBadge(user.role_name)}`}>
+                          {user.role_name.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="text-sm text-slate-800 truncate">
+                          {user.first_name} {user.last_name}
+                        </span>
+                        {isFromRoomSchedule && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded flex-shrink-0">
+                            Sched
+                          </span>
+                        )}
+                      </div>
+                      {!disabled && (
+                        <button
+                          type="button"
+                          onClick={() => removeStaff(user.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all flex-shrink-0"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

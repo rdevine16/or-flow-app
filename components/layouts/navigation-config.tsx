@@ -167,6 +167,7 @@ export const facilityNavigation: NavItem[] = [
     href: '/rooms',
     icon: navIcons.dashboard,
     allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
+    requiredTier: 'essential',
   },
   // Check-In hidden — not production-ready
   // {
@@ -188,6 +189,7 @@ export const facilityNavigation: NavItem[] = [
     icon: navIcons.cases,
     allowedRoles: ['global_admin', 'facility_admin', 'coordinator', 'user'],
     permission: 'cases.view',
+    requiredTier: 'essential',
   },
   {
     name: 'SPD',

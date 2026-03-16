@@ -213,7 +213,12 @@ function FacilityNavigation({
 
 /** Short badge label for each tier */
 function getTierBadgeLabel(tier: TierSlug): string {
-  return tier === 'enterprise' ? 'Ent' : 'Pro'
+  switch (tier) {
+    case 'enterprise': return 'Ent'
+    case 'professional': return 'Pro'
+    case 'essential': return 'Ess'
+    default: return 'Pro'
+  }
 }
 
 function NavLink({
@@ -231,9 +236,8 @@ function NavLink({
 }) {
   if (isLocked) {
     return (
-      <Link
-        href={item.href}
-        className="flex items-center h-10 rounded-xl text-sm font-medium transition-colors duration-200 text-slate-600 hover:text-slate-500 hover:bg-slate-800/50"
+      <div
+        className="flex items-center h-10 rounded-xl text-sm font-medium text-slate-600 cursor-not-allowed opacity-50"
         title={!isExpanded ? `${item.name} (${getTierName(requiredTier!)} required)` : undefined}
       >
         {/* Icon with lock overlay */}
@@ -250,7 +254,7 @@ function NavLink({
             </span>
           </div>
         )}
-      </Link>
+      </div>
     )
   }
 

@@ -243,12 +243,15 @@ export default function RunningStep({
   }, [wizardState, parseSSEEvent, handleEvent])
 
   // Auto-start on mount
+  // Reset hasStarted in cleanup so React strict mode double-mount works correctly:
+  // Mount 1 starts fetch → cleanup aborts it and resets ref → Mount 2 restarts fetch
   useEffect(() => {
     if (!hasStarted.current) {
       hasStarted.current = true
       startGeneration()
     }
     return () => {
+      hasStarted.current = false
       abortRef.current?.abort()
     }
   }, [startGeneration])

@@ -872,7 +872,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       p_notes: formData.notes || null,
       p_rep_required_override: repRequiredOverride,
       p_is_draft: true,
-      p_staff_assignments: selectedStaff.length > 0 ? JSON.stringify(selectedStaff.map(({ user_id, role_id }) => ({ user_id, role_id }))) : null,
+      p_staff_assignments: selectedStaff.length > 0 ? selectedStaff.map(({ user_id, role_id }) => ({ user_id, role_id })) : null,
     })
 
     if (rpcError) {
@@ -1021,7 +1021,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         p_payer_id: formData.payer_id || null,
         p_notes: formData.notes || null,
         p_rep_required_override: repRequiredOverride,
-        p_staff_assignments: selectedStaff.length > 0 ? JSON.stringify(selectedStaff.map(({ user_id, role_id }) => ({ user_id, role_id }))) : null,
+        p_staff_assignments: selectedStaff.length > 0 ? selectedStaff.map(({ user_id, role_id }) => ({ user_id, role_id })) : null,
         p_patient_id: resolvedPatientId,
         p_source: 'manual',
       })
@@ -1389,8 +1389,46 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       )}
 
-      {/* 1. Date & Time */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* 1. Case Number, Date & Time */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Case Number <span className="text-red-600">*</span>
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              value={formData.case_number}
+              onChange={(e) => {
+                setFormData({ ...formData, case_number: e.target.value })
+                clearFieldError('case_number')
+                checkCaseNumberUniqueness(e.target.value)
+              }}
+              onBlur={() => handleFieldBlur('case_number')}
+              className={`w-full px-4 py-3 pr-10 rounded-xl border ${fieldErrors.case_number ? 'border-red-400 ring-2 ring-red-500/20' : caseNumberUnique === true ? 'border-green-400 ring-2 ring-green-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
+              placeholder="e.g., C-2025-001"
+            />
+            {/* Uniqueness indicator */}
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              {checkingCaseNumber && (
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              )}
+              {!checkingCaseNumber && caseNumberUnique === true && !fieldErrors.case_number && (
+                <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+              {!checkingCaseNumber && caseNumberUnique === false && (
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
+            </div>
+          </div>
+          {fieldErrors.case_number && (
+            <p className="text-red-600 text-xs mt-1">{fieldErrors.case_number}</p>
+          )}
+        </div>
         <DatePickerCalendar
           variant="form"
           label="Scheduled Date"
@@ -1416,39 +1454,39 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         />
       </div>
 
-      {/* 2. Surgeon — with preference quick-fill below */}
-      <div>
+      {/* 2. Surgeon, Room & Procedure Type */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div>
+          <SearchableDropdown
+            label="Surgeon *"
+            placeholder="Select Surgeon"
+            value={formData.surgeon_id}
+            onChange={(id) => {
+              handleSurgeonChange(id)
+              clearFieldError('surgeon_id')
+            }}
+            options={surgeons.map(s => ({ id: s.id, label: `Dr. ${s.first_name} ${s.last_name}` }))}
+            error={fieldErrors.surgeon_id}
+          />
+          {surgeonFromRoomSchedule && formData.surgeon_id && (
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+                From room schedule
+              </span>
+            </div>
+          )}
+        </div>
         <SearchableDropdown
-          label="Surgeon *"
-          placeholder="Select Surgeon"
-          value={formData.surgeon_id}
+          label="OR Room *"
+          placeholder="Select Room"
+          value={formData.or_room_id}
           onChange={(id) => {
-            handleSurgeonChange(id)
-            clearFieldError('surgeon_id')
+            setFormData({ ...formData, or_room_id: id })
+            clearFieldError('or_room_id')
           }}
-          options={surgeons.map(s => ({ id: s.id, label: `Dr. ${s.first_name} ${s.last_name}` }))}
-          error={fieldErrors.surgeon_id}
+          options={orRooms.map(r => ({ id: r.id, label: r.name }))}
+          error={fieldErrors.or_room_id}
         />
-        {surgeonFromRoomSchedule && formData.surgeon_id && (
-          <div className="flex items-center gap-1.5 mt-1.5">
-            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
-              From room schedule
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Surgeon Preference Quick Fill - Only show in create mode after surgeon selected */}
-      {mode === 'create' && formData.surgeon_id && userFacilityId && (
-        <SurgeonPreferenceSelect
-          surgeonId={formData.surgeon_id}
-          facilityId={userFacilityId}
-          onSelect={handlePreferenceSelect}
-        />
-      )}
-
-      {/* 3. Procedure & Operative Side */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <SearchableDropdown
             label="Procedure Type *"
@@ -1470,39 +1508,37 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             error={fieldErrors.procedure_type_id}
           />
         </div>
-        {selectedProcedure?.requires_operative_side && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Operative Side
-            </label>
-            <select
-              value={formData.operative_side}
-              onChange={(e) => setFormData({ ...formData, operative_side: e.target.value })}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-            >
-              <option value="">Select Side</option>
-              {OPERATIVE_SIDE_OPTIONS.map(option => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
-      {/* 4. Room */}
-      <SearchableDropdown
-        label="OR Room *"
-        placeholder="Select Room"
-        value={formData.or_room_id}
-        onChange={(id) => {
-          setFormData({ ...formData, or_room_id: id })
-          clearFieldError('or_room_id')
-        }}
-        options={orRooms.map(r => ({ id: r.id, label: r.name }))}
-        error={fieldErrors.or_room_id}
-      />
+      {/* Surgeon Preference Quick Fill - Only show in create mode after surgeon selected */}
+      {mode === 'create' && formData.surgeon_id && userFacilityId && (
+        <SurgeonPreferenceSelect
+          surgeonId={formData.surgeon_id}
+          facilityId={userFacilityId}
+          onSelect={handlePreferenceSelect}
+        />
+      )}
+
+      {/* Operative Side - shown when procedure requires it */}
+      {selectedProcedure?.requires_operative_side && (
+        <div className="max-w-xs">
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Operative Side
+          </label>
+          <select
+            value={formData.operative_side}
+            onChange={(e) => setFormData({ ...formData, operative_side: e.target.value })}
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          >
+            <option value="">Select Side</option>
+            {OPERATIVE_SIDE_OPTIONS.map(option => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Room conflict warning — only shown for time-overlapping cases */}
       {roomConflicts.length > 0 && (
@@ -1663,46 +1699,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       )}
 
-      {/* 6. Case Number — with real-time uniqueness check */}
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">
-          Case Number <span className="text-red-600">*</span>
-        </label>
-        <div className="relative">
-          <input
-            type="text"
-            value={formData.case_number}
-            onChange={(e) => {
-              setFormData({ ...formData, case_number: e.target.value })
-              clearFieldError('case_number')
-              checkCaseNumberUniqueness(e.target.value)
-            }}
-            onBlur={() => handleFieldBlur('case_number')}
-            className={`w-full px-4 py-3 pr-10 rounded-xl border ${fieldErrors.case_number ? 'border-red-400 ring-2 ring-red-500/20' : caseNumberUnique === true ? 'border-green-400 ring-2 ring-green-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
-            placeholder="e.g., C-2025-001"
-          />
-          {/* Uniqueness indicator */}
-          <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            {checkingCaseNumber && (
-              <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-            )}
-            {!checkingCaseNumber && caseNumberUnique === true && !fieldErrors.case_number && (
-              <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            )}
-            {!checkingCaseNumber && caseNumberUnique === false && (
-              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            )}
-          </div>
-        </div>
-        {fieldErrors.case_number && (
-          <p className="text-red-600 text-xs mt-1">{fieldErrors.case_number}</p>
-        )}
-      </div>
-
       {/* 6. Device Rep & Implant Companies Section */}
       {userFacilityId && (
         <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-4">
@@ -1802,23 +1798,9 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           <StaffMultiSelect
             facilityId={userFacilityId}
             selectedStaff={selectedStaff}
-            onChange={(staff) => {
-              // Preserve fromRoomSchedule on items that were pre-filled;
-              // new manually-added items won't have the flag
-              setSelectedStaff(staff)
-            }}
+            onChange={(staff) => setSelectedStaff(staff)}
             excludeUserIds={formData.surgeon_id ? [formData.surgeon_id] : []}
           />
-          {selectedStaff.some(s => s.fromRoomSchedule) && (
-            <div className="flex items-center gap-1.5 mt-1.5">
-              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
-                Pre-filled from room schedule
-              </span>
-            </div>
-          )}
-          <p className="text-xs text-slate-500 mt-1.5">
-            Assign nurses, techs, anesthesiologists, and other staff to this case
-          </p>
           {/* Missing anesthesiologist warning */}
           {anesthRoleId && !selectedStaff.some(s => s.role_id === anesthRoleId) && (
             <div className="flex items-start gap-2 p-3 mt-2 bg-amber-50 border border-amber-200 rounded-lg" data-testid="missing-anesthesia-warning">

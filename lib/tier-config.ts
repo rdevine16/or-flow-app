@@ -10,9 +10,11 @@
 // Types
 // ============================================
 
-export type TierSlug = 'essential' | 'professional' | 'enterprise'
+export type TierSlug = 'coordinator' | 'essential' | 'professional' | 'enterprise'
 
 export type TierFeatureKey =
+  | 'block_scheduling'
+  | 'staff_management'
   | 'analytics'
   | 'financials'
   | 'flags'
@@ -35,6 +37,7 @@ export interface TierDefinition {
 // ============================================
 
 const TIER_ORDER: Record<TierSlug, number> = {
+  coordinator: 0,
   essential: 1,
   professional: 2,
   enterprise: 3,
@@ -56,6 +59,24 @@ export function isTierAtLeast(currentTier: TierSlug, requiredTier: TierSlug): bo
 // ============================================
 
 export const TIER_DEFINITIONS: Record<TierSlug, TierDefinition> = {
+  coordinator: {
+    slug: 'coordinator',
+    name: 'Coordinator',
+    description: 'Staff management, block scheduling, and staff scheduling.',
+    priceMonthly: 0,
+    sortOrder: 0,
+    features: {
+      block_scheduling: true,
+      staff_management: true,
+      analytics: false,
+      financials: false,
+      flags: false,
+      orbit_score: false,
+      data_quality: false,
+      spd: false,
+      integrations: false,
+    },
+  },
   essential: {
     slug: 'essential',
     name: 'Essential',
@@ -63,6 +84,8 @@ export const TIER_DEFINITIONS: Record<TierSlug, TierDefinition> = {
     priceMonthly: 750,
     sortOrder: 1,
     features: {
+      block_scheduling: true,
+      staff_management: true,
       analytics: false,
       financials: false,
       flags: false,
@@ -79,6 +102,8 @@ export const TIER_DEFINITIONS: Record<TierSlug, TierDefinition> = {
     priceMonthly: 1500,
     sortOrder: 2,
     features: {
+      block_scheduling: true,
+      staff_management: true,
       analytics: true,
       financials: false,
       flags: true,
@@ -95,6 +120,8 @@ export const TIER_DEFINITIONS: Record<TierSlug, TierDefinition> = {
     priceMonthly: 2500,
     sortOrder: 3,
     features: {
+      block_scheduling: true,
+      staff_management: true,
       analytics: true,
       financials: true,
       flags: true,
@@ -109,7 +136,7 @@ export const TIER_DEFINITIONS: Record<TierSlug, TierDefinition> = {
 /**
  * All tier slugs in ascending order.
  */
-export const TIER_SLUGS: TierSlug[] = ['essential', 'professional', 'enterprise']
+export const TIER_SLUGS: TierSlug[] = ['coordinator', 'essential', 'professional', 'enterprise']
 
 /**
  * Get the display name for a tier (e.g. "Professional").

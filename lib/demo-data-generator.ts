@@ -766,11 +766,21 @@ export async function generateDemoData(
       log.debug('Sample milestone', { sample: allMilestones[0] })
       log.debug('fmToMtMap', { size: fmToMtMap.size })
     }
+    let milestoneInsertFailures = 0
     for (let i = 0; i < allMilestones.length; i += BATCH_SIZE) {
       const batch = allMilestones.slice(i, i + BATCH_SIZE)
       const { error, data } = await supabase.from('case_milestones').insert(batch).select('id')
-      if (error) { log.error('Milestone batch insert failed', error, { batch: i, code: error.code }); }
-      else { log.debug('Milestone batch inserted', { batch: i, rows: data?.length ?? 0 }) }
+      if (error) {
+        log.error('Milestone batch insert failed, retrying individually', error, { batch: i, code: error.code })
+        // Retry: insert one-by-one to salvage as many milestones as possible
+        for (const ms of batch) {
+          const { error: singleErr } = await supabase.from('case_milestones').insert(ms)
+          if (singleErr) { milestoneInsertFailures++; log.error('Single milestone insert failed', { case_id: ms.case_id, fm_id: ms.facility_milestone_id, error: singleErr.message }) }
+        }
+      } else { log.debug('Milestone batch inserted', { batch: i, rows: data?.length ?? 0 }) }
+    }
+    if (milestoneInsertFailures > 0) {
+      log.warn('Milestone insert completed with failures', { failures: milestoneInsertFailures, total: allMilestones.length })
     }
 
     // ── Build case_milestone_stats (bypasses triggers we disabled) ──

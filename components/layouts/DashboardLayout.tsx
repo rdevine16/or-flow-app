@@ -22,6 +22,51 @@ import Header, { TrialBanner, ImpersonationBanner, BranchBanner } from './Header
 import BlockedScreen from './BlockedScreen'
 import AnnouncementBanner from '../global/AnnouncementBanner'
 import { getFilteredNavigation, SIDEBAR_COLLAPSED, SIDEBAR_EXPANDED } from './navigation-config'
+import { UpgradePrompt } from '@/components/ui/UpgradePrompt'
+import type { TierSlug } from '@/lib/tier-config'
+
+// ============================================
+// Route-Level Tier Requirements
+// ============================================
+// If the user's tier doesn't meet the route requirement,
+// show an upgrade prompt instead of the page content.
+// Order matters — first match wins.
+
+const ROUTE_TIER_REQUIREMENTS: { prefix: string; tier: TierSlug }[] = [
+  // Essential-tier routes (blocked for coordinator)
+  { prefix: '/rooms', tier: 'essential' },
+  { prefix: '/cases', tier: 'essential' },
+  { prefix: '/checkin', tier: 'essential' },
+  { prefix: '/settings/procedures', tier: 'essential' },
+  { prefix: '/settings/milestones', tier: 'essential' },
+  { prefix: '/settings/surgeon-preferences', tier: 'essential' },
+  { prefix: '/settings/delay-types', tier: 'essential' },
+  { prefix: '/settings/cancellation-reasons', tier: 'essential' },
+  { prefix: '/settings/complexities', tier: 'essential' },
+  { prefix: '/settings/closures', tier: 'essential' },
+  { prefix: '/settings/voice-commands', tier: 'essential' },
+  { prefix: '/settings/device-reps', tier: 'essential' },
+  { prefix: '/settings/implant-companies', tier: 'essential' },
+  // Professional-tier routes
+  { prefix: '/spd', tier: 'professional' },
+  { prefix: '/analytics', tier: 'professional' },
+  { prefix: '/data-quality', tier: 'professional' },
+  { prefix: '/settings/analytics', tier: 'professional' },
+  { prefix: '/settings/flags', tier: 'professional' },
+  // Enterprise-tier routes
+  { prefix: '/settings/integrations', tier: 'enterprise' },
+  { prefix: '/settings/financials', tier: 'enterprise' },
+]
+
+/** Check if the current route requires a higher tier than the user has */
+function getRouteRequiredTier(pathname: string): TierSlug | null {
+  for (const { prefix, tier } of ROUTE_TIER_REQUIREMENTS) {
+    if (pathname === prefix || pathname.startsWith(prefix + '/')) {
+      return tier
+    }
+  }
+  return null
+}
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -47,7 +92,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const supabase = createClient()
 
   // User data from context
-  const { userData, loading, isGlobalAdmin, isAdmin, can } = useUser()
+  const { userData, loading, isGlobalAdmin, isAdmin, can, isTierAtLeast } = useUser()
 
   // Sub-nav from context
   const { items: subNavItems, title: subNavTitle, isVisible: hasSubNav } = useSubNav()
@@ -292,7 +337,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           {/* Page Content */}
           <main className="flex-1 p-6">
             <ErrorBoundary>
-              {children}
+              {(() => {
+                // Route-level tier guard — block access to pages above the user's tier
+                if (!effectiveIsGlobalAdmin && !impersonation) {
+                  const requiredTier = getRouteRequiredTier(pathname)
+                  if (requiredTier && !isTierAtLeast(requiredTier)) {
+                    return (
+                      <div className="flex items-center justify-center min-h-[60vh]">
+                        <UpgradePrompt requiredTier={requiredTier} />
+                      </div>
+                    )
+                  }
+                }
+                return children
+              })()}
             </ErrorBoundary>
           </main>
         </div>

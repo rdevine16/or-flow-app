@@ -1142,7 +1142,7 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
         expect(mockSupabase.rpc).toHaveBeenCalledWith(
           'create_case_with_milestones',
           expect.objectContaining({
-            p_staff_assignments: JSON.stringify([{ user_id: 'nurse-1', role_id: 'role-nurse' }]),
+            p_staff_assignments: [{ user_id: 'nurse-1', role_id: 'role-nurse' }],
           })
         )
       })
@@ -1188,7 +1188,7 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
           'create_case_with_milestones',
           expect.objectContaining({
             p_is_draft: true,
-            p_staff_assignments: JSON.stringify([{ user_id: 'nurse-1', role_id: 'role-nurse' }]),
+            p_staff_assignments: [{ user_id: 'nurse-1', role_id: 'role-nurse' }],
           })
         )
       })
