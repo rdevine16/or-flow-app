@@ -27,6 +27,8 @@ interface QuickAccessItem {
   href: string
   icon: ReactNode
   requiredTier?: TierSlug
+  /** RBAC permission key — hides the card entirely when user lacks this permission */
+  permission?: string
 }
 
 // ============================================
@@ -54,6 +56,7 @@ const QUICK_ACCESS_ITEMS: QuickAccessItem[] = [
     href: '/analytics/financials',
     icon: <DollarSign className="w-5 h-5" />,
     requiredTier: 'enterprise',
+    permission: 'financials.view',
   },
   {
     title: 'KPI Analytics',
@@ -75,13 +78,15 @@ const QUICK_ACCESS_ITEMS: QuickAccessItem[] = [
 // ============================================
 
 export function QuickAccessCards() {
-  const { isTierAtLeast } = useUser()
+  const { isTierAtLeast, can } = useUser()
 
   return (
     <div>
       <h2 className="text-base font-semibold text-slate-900 mb-4">Quick Access</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {QUICK_ACCESS_ITEMS.map((item) => {
+          // Hide entirely when user lacks the required RBAC permission
+          if (item.permission && !can(item.permission)) return null
           const isLocked = item.requiredTier ? !isTierAtLeast(item.requiredTier) : false
 
           if (isLocked) {

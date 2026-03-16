@@ -214,6 +214,39 @@ describe('InsightCard: PILLAR_MAP — all InsightCategory values are mapped', ()
 })
 
 // ============================================
+// showFinancials prop (Phase 7 — RBAC financial gating)
+// ============================================
+
+describe('InsightCard: showFinancials prop', () => {
+  it('hides financialImpact when showFinancials=false, even when insight has financial data', () => {
+    const insight = makeInsight({ financialImpact: 'Estimated $12K annual impact.' })
+    render(
+      <InsightCard insight={insight} rank={1} expanded={true} onToggle={vi.fn()} showFinancials={false} />
+    )
+
+    expect(screen.queryByText('Estimated $12K annual impact.')).toBeNull()
+  })
+
+  it('shows financialImpact when showFinancials=true (default)', () => {
+    const insight = makeInsight({ financialImpact: 'Estimated $12K annual impact.' })
+    render(
+      <InsightCard insight={insight} rank={1} expanded={true} onToggle={vi.fn()} showFinancials={true} />
+    )
+
+    expect(screen.getByText('Estimated $12K annual impact.')).toBeTruthy()
+  })
+
+  it('defaults to showing financialImpact when showFinancials is not specified', () => {
+    const insight = makeInsight({ financialImpact: 'Estimated $12K annual impact.' })
+    render(
+      <InsightCard insight={insight} rank={1} expanded={true} onToggle={vi.fn()} />
+    )
+
+    expect(screen.getByText('Estimated $12K annual impact.')).toBeTruthy()
+  })
+})
+
+// ============================================
 // Rank display
 // ============================================
 

@@ -125,10 +125,9 @@ export default function CaseDrawer({
   const { can, isTierAtLeast } = useUser()
   const { caseDetail, loading, error } = useCaseDrawer(caseId)
 
-  // Determine default tab based on tier — financials only for enterprise
-  const defaultTab: DrawerTab = (can('tab.case_financials') && isTierAtLeast('enterprise'))
-    ? 'financials'
-    : 'milestones'
+  // Determine default tab based on permissions + tier — financials only when user has both permissions + enterprise tier
+  const canSeeFinancials = can('financials.view') && can('tab.case_financials') && isTierAtLeast('enterprise')
+  const defaultTab: DrawerTab = canSeeFinancials ? 'financials' : 'milestones'
 
   // Reset to default tab when switching cases
   useEffect(() => {
@@ -144,7 +143,7 @@ export default function CaseDrawer({
   // History tab is always last and visible to all users (no permission gate)
   const tabs = useMemo(() => {
     const visible = BASE_TABS.filter((tab) => {
-      if (tab.key === 'financials') return can('tab.case_financials') && isTierAtLeast('enterprise')
+      if (tab.key === 'financials') return can('financials.view') && can('tab.case_financials') && isTierAtLeast('enterprise')
       if (tab.key === 'milestones') return can('tab.case_milestones')
       if (tab.key === 'flags') return can('tab.case_flags') && isTierAtLeast('professional')
       return true

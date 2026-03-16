@@ -29,6 +29,8 @@ interface FeatureGateProps {
   feature?: FeatureName
   /** Minimum subscription tier required */
   requires?: TierSlug
+  /** RBAC permission key — user must have this permission via can() */
+  permission?: string
   /** How to render when access is denied (default: 'hide') */
   mode?: GateMode
   /** Content to show if feature is disabled (only used when mode='hide') */
@@ -65,6 +67,7 @@ export function FeatureGate({
   children,
   feature,
   requires,
+  permission,
   mode = 'hide',
   fallback = null,
   upgradeMessage,
@@ -74,7 +77,7 @@ export function FeatureGate({
   const featureCheck = useFeatureCheck(feature)
 
   // --- Tier-level check ---
-  const { isTierAtLeast, tierLoading } = useUser()
+  const { isTierAtLeast, tierLoading, can } = useUser()
 
   // Loading state
   if (featureCheck.isLoading || (requires && tierLoading)) {
@@ -84,7 +87,8 @@ export function FeatureGate({
   // Determine access
   const featureAllowed = feature ? featureCheck.isEnabled : true
   const tierAllowed = requires ? isTierAtLeast(requires) : true
-  const isAllowed = featureAllowed && tierAllowed
+  const permissionAllowed = permission ? can(permission) : true
+  const isAllowed = featureAllowed && tierAllowed && permissionAllowed
 
   if (isAllowed) {
     return <>{children}</>

@@ -38,9 +38,11 @@ interface InsightCardProps {
   rank: number
   expanded: boolean
   onToggle: () => void
+  /** When false, hides financial impact text from insight details */
+  showFinancials?: boolean
 }
 
-export function InsightCard({ insight, rank, expanded, onToggle }: InsightCardProps) {
+export function InsightCard({ insight, rank, expanded, onToggle, showFinancials = true }: InsightCardProps) {
   const pillar = PILLAR_MAP[insight.category]
   const severityColor = SEVERITY_COLORS[insight.severity]
 
@@ -85,7 +87,7 @@ export function InsightCard({ insight, rank, expanded, onToggle }: InsightCardPr
               <p className="text-xs text-slate-600 leading-relaxed">
                 {insight.body}
               </p>
-              {insight.financialImpact && (
+              {showFinancials && insight.financialImpact && (
                 <p className="text-xs font-medium text-slate-700">
                   {insight.financialImpact}
                 </p>

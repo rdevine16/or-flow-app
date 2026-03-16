@@ -17,6 +17,14 @@ import type { Insight } from '@/lib/insightsEngine'
 // Mocks
 // ============================================
 
+let mockCan: (key: string) => boolean = () => true
+
+vi.mock('@/lib/UserContext', () => ({
+  useUser: () => ({
+    can: mockCan,
+  }),
+}))
+
 vi.mock('@/lib/hooks/useDashboardInsights', () => ({
   useDashboardInsights: vi.fn(),
 }))
@@ -68,6 +76,7 @@ function mockReturn(overrides: { data: unknown; loading: boolean; error: string 
 
 beforeEach(() => {
   lastObserverCallback = null
+  mockCan = () => true
   vi.stubGlobal('IntersectionObserver', MockIntersectionObserver)
   // Default state: not loading, no data (component just mounted, not scrolled into view)
   mockUseDashboardInsights.mockReturnValue(mockReturn({ data: null, loading: false, error: null }))
@@ -338,5 +347,73 @@ describe('InsightsSection: lazy loading gate (enabled flag)', () => {
   it('passes enabled=false for timeRange="today" too', () => {
     render(<InsightsSection timeRange="today" />)
     expect(mockUseDashboardInsights).toHaveBeenCalledWith('today', false)
+  })
+})
+
+// ============================================
+// Financial gating (Phase 7 — RBAC financial data gating)
+// ============================================
+
+describe('InsightsSection: financial gating', () => {
+  const insightWithFinancials = makeInsight({
+    id: 'fin-1',
+    financialImpact: '$48K estimated annual impact.',
+  })
+
+  it('hides financialImpact when can(financials.view) returns false', async () => {
+    const user = (await import('@testing-library/user-event')).default.setup()
+    mockCan = () => false
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
+      data: { insights: [insightWithFinancials] },
+      loading: false,
+      error: null,
+    }))
+    render(<InsightsSection timeRange="week" />)
+
+    // Expand the card to check for financial impact
+    const buttons = screen.getAllByRole('button')
+    await user.click(buttons[0])
+
+    expect(screen.queryByText('$48K estimated annual impact.')).toBeNull()
+  })
+
+  it('shows financialImpact when can(financials.view) returns true', async () => {
+    const user = (await import('@testing-library/user-event')).default.setup()
+    mockCan = () => true
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
+      data: { insights: [insightWithFinancials] },
+      loading: false,
+      error: null,
+    }))
+    render(<InsightsSection timeRange="week" />)
+
+    const buttons = screen.getAllByRole('button')
+    await user.click(buttons[0])
+
+    expect(screen.getByText('$48K estimated annual impact.')).toBeTruthy()
+  })
+
+  it('hides default financials notice when can(financials.view) returns false', () => {
+    mockCan = () => false
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
+      data: { insights: [insightWithFinancials], usingDefaultFinancials: true },
+      loading: false,
+      error: null,
+    }))
+    render(<InsightsSection timeRange="week" />)
+
+    expect(screen.queryByText(/Financial estimates use industry defaults/)).toBeNull()
+  })
+
+  it('shows default financials notice when can(financials.view) returns true and usingDefaultFinancials is true', () => {
+    mockCan = () => true
+    mockUseDashboardInsights.mockReturnValue(mockReturn({
+      data: { insights: [insightWithFinancials], usingDefaultFinancials: true },
+      loading: false,
+      error: null,
+    }))
+    render(<InsightsSection timeRange="week" />)
+
+    expect(screen.getByText(/Financial estimates use industry defaults/)).toBeTruthy()
   })
 })

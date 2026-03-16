@@ -9,14 +9,16 @@ import { FeatureGate, FEATURES } from '@/components/FeatureGate'
 // Mocks
 // ============================================
 
-// Mock useUser with controllable tier state
+// Mock useUser with controllable tier state + permission state
 let mockIsTierAtLeast: (requiredTier: string) => boolean = () => true
 let mockTierLoading = false
+let mockCan: (key: string) => boolean = () => true
 
 vi.mock('@/lib/UserContext', () => ({
   useUser: () => ({
     isTierAtLeast: mockIsTierAtLeast,
     tierLoading: mockTierLoading,
+    can: mockCan,
   }),
 }))
 
@@ -52,6 +54,7 @@ describe('FeatureGate', () => {
     mockTierLoading = false
     mockIsEnabled = true
     mockIsLoading = false
+    mockCan = () => true
   })
 
   // ============================================
@@ -380,6 +383,95 @@ describe('FeatureGate', () => {
       // Should show tier upgrade prompt, NOT feature upgrade prompt
       expect(screen.getByText('Upgrade to Professional')).toBeDefined()
       expect(screen.queryByText('Patient Check-In')).toBeNull()
+    })
+  })
+
+  // ============================================
+  // UNIT TESTS: Permission-based gating (RBAC)
+  // ============================================
+
+  describe('Permission-based gating (RBAC)', () => {
+    it('renders children when permission check passes', () => {
+      mockCan = (key) => key === 'financials.view'
+
+      render(
+        <FeatureGate permission="financials.view">
+          <div>Financial Content</div>
+        </FeatureGate>
+      )
+
+      expect(screen.getByText('Financial Content')).toBeDefined()
+    })
+
+    it('hides children when permission check fails (mode="hide")', () => {
+      mockCan = () => false
+
+      render(
+        <FeatureGate permission="financials.view">
+          <div>Financial Content</div>
+        </FeatureGate>
+      )
+
+      expect(screen.queryByText('Financial Content')).toBeNull()
+    })
+
+    it('shows fallback when permission is denied and fallback is provided', () => {
+      mockCan = () => false
+
+      render(
+        <FeatureGate permission="financials.view" fallback={<div>No financial access</div>}>
+          <div>Financial Content</div>
+        </FeatureGate>
+      )
+
+      expect(screen.queryByText('Financial Content')).toBeNull()
+      expect(screen.getByText('No financial access')).toBeDefined()
+    })
+  })
+
+  // ============================================
+  // INTEGRATION TESTS: Combined tier + permission gating
+  // ============================================
+
+  describe('Combined tier + permission gating', () => {
+    it('requires both tier AND permission to pass', () => {
+      mockIsTierAtLeast = () => true
+      mockCan = (key) => key === 'financials.view'
+
+      render(
+        <FeatureGate requires="enterprise" permission="financials.view">
+          <div>Financial Analytics</div>
+        </FeatureGate>
+      )
+
+      expect(screen.getByText('Financial Analytics')).toBeDefined()
+    })
+
+    it('blocks when permission is denied even if tier passes', () => {
+      mockIsTierAtLeast = () => true
+      mockCan = () => false
+
+      render(
+        <FeatureGate requires="enterprise" permission="financials.view">
+          <div>Financial Analytics</div>
+        </FeatureGate>
+      )
+
+      expect(screen.queryByText('Financial Analytics')).toBeNull()
+    })
+
+    it('blocks when tier is insufficient even if permission passes', () => {
+      mockIsTierAtLeast = () => false
+      mockCan = () => true
+
+      render(
+        <FeatureGate requires="enterprise" permission="financials.view" mode="blur">
+          <div>Financial Analytics</div>
+        </FeatureGate>
+      )
+
+      // Content is blurred (tier denial)
+      expect(screen.getByText('Upgrade to Enterprise')).toBeDefined()
     })
   })
 
