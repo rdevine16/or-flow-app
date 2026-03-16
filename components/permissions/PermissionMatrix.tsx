@@ -42,12 +42,13 @@ interface PermissionMatrixProps {
 // CONSTANTS
 // =====================================================
 
-const ACTION_COLUMNS = ['view', 'create', 'edit', 'delete'] as const
+const ACTION_COLUMNS = ['view', 'create', 'edit', 'delete', 'manage'] as const
 const ACTION_LABELS: Record<string, string> = {
   view: 'View',
   create: 'Create',
   edit: 'Edit',
   delete: 'Delete',
+  manage: 'Manage',
 }
 
 // =====================================================

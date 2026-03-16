@@ -157,7 +157,7 @@ vi.mock('@/lib/UserContext', () => ({
   useUser: () => ({
     effectiveFacilityId: 'facility-1',
     loading: false,
-    can: (key: string) => key === 'settings.manage',
+    can: (key: string) => key === 'settings.procedures',
     userData: { userId: 'user-1' },
     permissionsLoading: false,
     isGlobalAdmin: false,
@@ -441,7 +441,7 @@ describe('ProceduresSettingsPage', () => {
 
   it('[FACILITY SCOPING] Add Procedure button is hidden when canManage is false', () => {
     // Simulate a non-admin user by patching useUser
-    // The mock returns can('settings.manage') = true, so Add Procedure is shown.
+    // The mock returns can('settings.procedures') = true, so Add Procedure is shown.
     // This test verifies the presence of Add Procedure for the happy path.
     // (Full RBAC tests live in permissions tests)
     render(<ProceduresSettingsPage />)

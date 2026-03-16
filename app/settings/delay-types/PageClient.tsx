@@ -71,7 +71,7 @@ export default function DelayTypesPage() {
   const [formData, setFormData] = useState({ display_name: '', display_order: 0 })
   const [archiveTarget, setArchiveTarget] = useState<DelayType | null>(null)
 
-  const canEdit = can('settings.manage')
+  const canEdit = can('settings.delays')
 
   // =====================================================
   // MODAL HANDLERS

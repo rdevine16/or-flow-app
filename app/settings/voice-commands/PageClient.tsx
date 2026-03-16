@@ -85,7 +85,7 @@ const UTILITY_ACTIONS: UtilityAction[] = [
 
 export default function VoiceCommandsPageClient() {
   const { effectiveFacilityId, loading: userLoading, can } = useUser()
-  const canManage = can('settings.manage')
+  const canManage = can('settings.voice_commands')
   const { showToast } = useToast()
 
   // UI state

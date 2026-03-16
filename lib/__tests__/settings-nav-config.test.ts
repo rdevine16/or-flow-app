@@ -152,15 +152,14 @@ describe('getVisibleCategories - permission filtering', () => {
 
     const visible = getVisibleCategories(canNone, isTierEnterprise)
 
-    // General category should only have "Overview" (no permission required)
-    const general = visible.find(c => c.id === 'general')
-    expect(general?.items.length).toBe(1)
-    expect(general?.items[0].id).toBe('overview')
+    // General category should be empty (all items now have permission keys)
+    expect(visible.find(c => c.id === 'general')).toBeUndefined()
 
-    // Operations category should only have "OR Rooms" (no permission required)
-    const operations = visible.find(c => c.id === 'operations')
-    expect(operations?.items.length).toBe(1)
-    expect(operations?.items[0].id).toBe('rooms')
+    // Operations category should be empty (all items now have permission keys)
+    expect(visible.find(c => c.id === 'operations')).toBeUndefined()
+
+    // Case management should be empty (all items now have permission keys)
+    expect(visible.find(c => c.id === 'case-management')).toBeUndefined()
   })
 
   it('shows all items when user has all permissions', () => {
@@ -182,11 +181,9 @@ describe('getVisibleCategories - permission filtering', () => {
 
     const visible = getVisibleCategories(canNone, isTierEnterprise)
 
-    // Check-In category requires settings.manage for all items — should be filtered out
-    expect(visible.find(c => c.id === 'checkin')).toBeUndefined()
-
-    // Security category requires audit.view — should be filtered out
-    expect(visible.find(c => c.id === 'security')).toBeUndefined()
+    // All categories should be filtered out when no permissions are granted
+    // (every settings item now has a granular permission key)
+    expect(visible.length).toBe(0)
   })
 })
 
@@ -198,9 +195,13 @@ describe('getVisibleCategories - tier + permission filtering', () => {
     const isTierProfessional = (requiredTier: TierSlug) => {
       return requiredTier === 'professional' || requiredTier === 'essential'
     }
+    // Coordinator-like: has operational settings but not financials
     const canSome = (permission: string) => {
-      // Has settings.manage but not financials.view
-      return permission === 'settings.manage'
+      return [
+        'settings.rooms', 'settings.delays', 'settings.complexities',
+        'settings.cancellation_reasons', 'settings.closures',
+        'settings.voice_commands', 'settings.analytics', 'settings.flags',
+      ].includes(permission)
     }
 
     const visible = getVisibleCategories(canSome, isTierProfessional)

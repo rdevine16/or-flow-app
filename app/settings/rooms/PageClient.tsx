@@ -220,7 +220,7 @@ export default function RoomsSettingsPage() {
   const supabase = createClient()
   const { showToast } = useToast()
   const { effectiveFacilityId, loading: userLoading, can } = useUser()
-  const canManage = can('settings.manage')
+  const canManage = can('settings.rooms')
 
   const { data: currentUserData } = useCurrentUser()
   const currentUserId = currentUserData?.userId || null

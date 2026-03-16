@@ -114,7 +114,7 @@ vi.mock('@/lib/UserContext', () => ({
   useUser: () => ({
     effectiveFacilityId: 'fac-1',
     loading: false,
-    can: (key: string) => key === 'settings.manage' ? mockCanManage : false,
+    can: (key: string) => key === 'settings.voice_commands' ? mockCanManage : false,
     userData: { userId: 'user-1' },
     permissionsLoading: false,
     isGlobalAdmin: false,
@@ -299,7 +299,7 @@ describe('VoiceCommandsPageClient', () => {
   // ------------------------------------------
 
   describe('Integration: Permission gating', () => {
-    it('passes readOnly=false when user has settings.manage permission', async () => {
+    it('passes readOnly=false when user has settings.voice_commands permission', async () => {
       mockCanManage = true
       const user = userEvent.setup()
       render(<VoiceCommandsPageClient />)
@@ -310,7 +310,7 @@ describe('VoiceCommandsPageClient', () => {
       expect(recordGroup).toHaveTextContent('readOnly=false')
     })
 
-    it('passes readOnly=true when user lacks settings.manage permission', async () => {
+    it('passes readOnly=true when user lacks settings.voice_commands permission', async () => {
       mockCanManage = false
       const user = userEvent.setup()
       render(<VoiceCommandsPageClient />)

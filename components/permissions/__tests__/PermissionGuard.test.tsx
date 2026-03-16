@@ -36,9 +36,9 @@ describe('PermissionGuard', () => {
   })
 
   it('renders children when any permission matches', () => {
-    mockPermissions = { 'settings.view': false, 'settings.manage': true }
+    mockPermissions = { 'settings.view': false, 'settings.general': true }
     render(
-      <PermissionGuard anyPermission={['settings.view', 'settings.manage']}>
+      <PermissionGuard anyPermission={['settings.view', 'settings.general']}>
         <div>Settings Content</div>
       </PermissionGuard>
     )
@@ -46,9 +46,9 @@ describe('PermissionGuard', () => {
   })
 
   it('renders AccessDenied when no permissions match', () => {
-    mockPermissions = { 'settings.view': false, 'settings.manage': false }
+    mockPermissions = { 'settings.view': false, 'settings.general': false }
     render(
-      <PermissionGuard anyPermission={['settings.view', 'settings.manage']}>
+      <PermissionGuard anyPermission={['settings.view', 'settings.general']}>
         <div>Settings Content</div>
       </PermissionGuard>
     )

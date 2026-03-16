@@ -219,7 +219,7 @@ export default function GeneralOverviewPage() {
     }
   }, [facility])
 
-  const canEdit = can('settings.manage')
+  const canEdit = can('settings.general')
 
   // =====================================================
   // HANDLERS

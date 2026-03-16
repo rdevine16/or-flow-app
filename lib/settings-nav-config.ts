@@ -25,6 +25,7 @@ import {
   User,
   Zap,
 } from 'lucide-react'
+import { PERMISSION_KEYS } from '@/lib/permissions'
 import type { TierSlug } from '@/lib/tier-config'
 
 // =====================================================
@@ -74,6 +75,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/general',
         icon: Building2,
         description: 'Facility details and account info',
+        permission: PERMISSION_KEYS.SETTINGS_GENERAL,
       },
       {
         id: 'notifications',
@@ -82,7 +84,7 @@ export const settingsCategories: SettingsCategory[] = [
         icon: Bell,
         description: 'Configure alert preferences',
         badge: 'soon',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_NOTIFICATIONS,
       },
       {
         id: 'subscription',
@@ -90,7 +92,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/subscription',
         icon: CreditCard,
         description: 'Plan, usage, and billing',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_SUBSCRIPTION,
       },
     ],
   },
@@ -145,6 +147,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/procedures',
         icon: ClipboardList,
         description: 'Surgical procedures for case creation',
+        permission: PERMISSION_KEYS.SETTINGS_PROCEDURES,
       },
       {
         id: 'milestones',
@@ -152,6 +155,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/milestones',
         icon: Clock,
         description: 'Tracking points during cases',
+        permission: PERMISSION_KEYS.SETTINGS_MILESTONES,
       },
       {
         id: 'surgeon-preferences',
@@ -160,7 +164,7 @@ export const settingsCategories: SettingsCategory[] = [
         icon: Zap,
         description: 'Quick-fill templates for surgeons',
         badge: 'new',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_SURGEON_PREFERENCES,
       },
       {
         id: 'delay-types',
@@ -168,7 +172,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/delay-types',
         icon: AlertTriangle,
         description: 'Categorize surgical delays',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_DELAYS,
       },
       {
         id: 'cancellation-reasons',
@@ -176,7 +180,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/cancellation-reasons',
         icon: Ban,
         description: 'Track why cases are cancelled',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_CANCELLATION_REASONS,
       },
       {
         id: 'complexities',
@@ -184,7 +188,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/complexities',
         icon: AlertTriangle,
         description: 'Complexity factors for cases',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_COMPLEXITIES,
       },
     ],
   },
@@ -199,6 +203,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/rooms',
         icon: LayoutGrid,
         description: 'Operating rooms for scheduling',
+        permission: PERMISSION_KEYS.SETTINGS_ROOMS,
       },
       {
         id: 'closures',
@@ -206,7 +211,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/closures',
         icon: Clock,
         description: 'Scheduled room closures',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_CLOSURES,
         requiredTier: 'essential',
       },
       {
@@ -216,7 +221,7 @@ export const settingsCategories: SettingsCategory[] = [
         icon: BarChart3,
         description: 'FCOTS, utilization & metric targets',
         badge: 'new',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_ANALYTICS,
         requiredTier: 'professional',
       },
       {
@@ -226,7 +231,7 @@ export const settingsCategories: SettingsCategory[] = [
         icon: Flag,
         description: 'Auto-detection rules & delay types',
         badge: 'new',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_FLAGS,
         requiredTier: 'professional',
       },
       {
@@ -235,7 +240,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/voice-commands',
         icon: Mic,
         description: 'Manage voice command aliases for Room Mode',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_VOICE_COMMANDS,
         requiredTier: 'essential',
       },
       {
@@ -244,7 +249,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/integrations',
         icon: Puzzle,
         description: 'Connect external systems',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_INTEGRATIONS,
         requiredTier: 'enterprise',
       },
     ],
@@ -261,6 +266,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/device-reps',
         icon: User,
         description: 'Manage implant company rep access',
+        permission: PERMISSION_KEYS.SETTINGS_DEVICE_REPS,
       },
       {
         id: 'implant-companies',
@@ -269,7 +275,7 @@ export const settingsCategories: SettingsCategory[] = [
         icon: FlaskConical,
         description: 'Surgical implant vendors',
         badge: 'new',
-        permission: 'settings.manage',
+        permission: PERMISSION_KEYS.SETTINGS_IMPLANT_COMPANIES,
       },
     ],
   },

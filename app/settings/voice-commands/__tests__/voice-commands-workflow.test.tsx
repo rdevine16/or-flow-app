@@ -91,7 +91,7 @@ vi.mock('@/lib/UserContext', () => ({
   useUser: () => ({
     effectiveFacilityId: 'fac-1',
     loading: false,
-    can: (key: string) => key === 'settings.manage' ? mockCanManage : false,
+    can: (key: string) => key === 'settings.voice_commands' ? mockCanManage : false,
     userData: { userId: 'user-1' },
     permissionsLoading: false,
     isGlobalAdmin: false,

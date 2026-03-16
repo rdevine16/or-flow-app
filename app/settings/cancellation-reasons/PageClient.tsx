@@ -82,7 +82,7 @@ export default function CancellationReasonsSettingsPage() {
   const [formData, setFormData] = useState({ display_name: '', category: 'patient' })
   const [archiveTarget, setArchiveTarget] = useState<CancellationReason | null>(null)
 
-  const canEdit = can('settings.manage')
+  const canEdit = can('settings.cancellation_reasons')
 
   // ============================================================================
   // MODAL HANDLERS

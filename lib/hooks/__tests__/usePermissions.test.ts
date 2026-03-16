@@ -53,7 +53,7 @@ describe('usePermissions', () => {
     it('returns true for any permission when accessLevel is facility_admin', () => {
       const { result } = renderHook(() => usePermissions('facility_admin', true))
       expect(result.current.can('cases.view')).toBe(true)
-      expect(result.current.can('settings.manage')).toBe(true)
+      expect(result.current.can('settings.general')).toBe(true)
     })
   })
 

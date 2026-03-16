@@ -42,7 +42,7 @@ const PROCEDURE_SELECT = `
 
 export default function ProceduresSettingsPage() {
   const { effectiveFacilityId, loading: userLoading, can } = useUser()
-  const canManage = can('settings.manage')
+  const canManage = can('settings.procedures')
 
   const { data: currentUserData } = useCurrentUser()
   const currentUserId = currentUserData?.userId || null

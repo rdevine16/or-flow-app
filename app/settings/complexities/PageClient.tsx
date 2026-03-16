@@ -75,7 +75,7 @@ export default function FacilityComplexitiesPage() {
   const [archiveConfirm, setArchiveConfirm] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [archivedComplexities, setArchivedComplexities] = useState<Complexity[]>([])
-  const canEdit = can('settings.manage')
+  const canEdit = can('settings.complexities')
   const { data: archivedData } = useSupabaseQuery<Complexity[]>(
     async (sb) => {
       const { data, error } = await sb
