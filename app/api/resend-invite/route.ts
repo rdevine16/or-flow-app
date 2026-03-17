@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { withErrorHandler, handleSupabaseError, ValidationError } from '@/lib/errorHandling'
 import { validate } from '@/lib/validation/schemas'
 import { createClient } from '@/lib/supabase-server'
-import { Resend } from 'resend'
+import { sendUserInviteEmail } from '@/lib/email'
 
 // Validation schema
 const resendInviteSchema = z.object({
@@ -17,8 +17,8 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
 
   // Get invite details
   const { data: invite, error: inviteError } = await supabase
-    .from('invites')
-    .select('id, email, facility_id, role, token, facilities(name)')
+    .from('user_invites')
+    .select('id, email, first_name, facility_id, access_level, invite_token, facilities(name)')
     .eq('id', validated.inviteId)
     .is('accepted_at', null)
     .single()
@@ -29,24 +29,34 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
     throw new ValidationError('Invite not found or already accepted')
   }
 
-  // Send email
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invite/accept/${invite.token}`
+  // Get current user's name for the email
+  const { data: { user } } = await supabase.auth.getUser()
+  let inviterName = 'An administrator'
+  if (user) {
+    const { data: inviter } = await supabase
+      .from('users')
+      .select('first_name, last_name')
+      .eq('id', user.id)
+      .single()
+    if (inviter) inviterName = `${inviter.first_name} ${inviter.last_name}`
+  }
 
-  try {
-    await resend.emails.send({
-      from: 'ORbit <noreply@yourdomain.com>',
-      to: invite.email,
-      subject: `Invitation to join ${invite.facilities?.[0]?.name || 'ORbit'}`,
-      html: `
-        <h2>You've been invited!</h2>
-        <p>Click the link below to accept your invitation:</p>
-        <a href="${inviteUrl}">${inviteUrl}</a>
-      `,
-    })
-  } catch (emailError: unknown) {
-    const message = emailError instanceof Error ? emailError.message : 'Unknown error'
-    throw new Error(`Failed to send email: ${message}`)
+  const facilityName = (invite.facilities as unknown as { name: string }[] | null)?.[0]?.name || 'ORbit'
+  const accessLevel = (invite.access_level === 'facility_admin' || invite.access_level === 'user')
+    ? invite.access_level
+    : 'user' as const
+
+  const emailResult = await sendUserInviteEmail(
+    invite.email,
+    invite.first_name,
+    facilityName,
+    inviterName,
+    invite.invite_token,
+    accessLevel,
+  )
+
+  if (!emailResult.success) {
+    throw new Error(`Failed to send email: ${emailResult.error}`)
   }
 
   return NextResponse.json({

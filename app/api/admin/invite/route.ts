@@ -4,7 +4,7 @@ import { withErrorHandler, handleSupabaseError, AuthorizationError } from '@/lib
 import { validate } from '@/lib/validation/schemas'
 import { createClient } from '@/lib/supabase-server'
 import { nowUTC } from '@/lib/dateFactory'
-import { Resend } from 'resend'
+import { sendUserInviteEmail } from '@/lib/email'
 
 // Validation schema
 const createInviteSchema = z.object({
@@ -82,26 +82,28 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
 
   if (inviteError) handleSupabaseError(inviteError)
 
-  // Send email
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invite/accept/${token}`
+  // Send email via shared utility (uses verified noreply@orbitsurgical.com)
+  const facilityName = (invite.facilities as unknown as { name: string }[] | null)?.[0]?.name || 'ORbit'
 
-  try {
-    await resend.emails.send({
-      from: 'ORbit <noreply@yourdomain.com>',
-      to: validated.email,
-      subject: `Invitation to join ${invite.facilities?.[0]?.name || 'ORbit'}`,
-      html: `
-        <h2>You've been invited to ORbit</h2>
-        <p>You've been invited as a ${validated.accessLevel.replace('_', ' ')}.</p>
-        <p>Click the link below to accept your invitation:</p>
-        <a href="${inviteUrl}">${inviteUrl}</a>
-        <p>This invitation expires in 7 days.</p>
-      `,
-    })
-  } catch (emailError: unknown) {
-    const message = emailError instanceof Error ? emailError.message : 'Unknown error'
-    throw new Error(`Failed to send email: ${message}`)
+  // Get inviter's name for the email
+  const { data: inviter } = await supabase
+    .from('users')
+    .select('first_name, last_name')
+    .eq('id', user.id)
+    .single()
+  const inviterName = inviter ? `${inviter.first_name} ${inviter.last_name}` : 'An administrator'
+
+  const emailResult = await sendUserInviteEmail(
+    validated.email,
+    validated.firstName,
+    facilityName,
+    inviterName,
+    token,
+    validated.accessLevel === 'global_admin' ? 'facility_admin' : validated.accessLevel,
+  )
+
+  if (!emailResult.success) {
+    throw new Error(`Failed to send email: ${emailResult.error}`)
   }
 
   return NextResponse.json({

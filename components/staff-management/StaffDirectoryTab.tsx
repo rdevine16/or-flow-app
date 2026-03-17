@@ -6,7 +6,7 @@
 import { useMemo, useState } from 'react'
 import { useSupabaseQueries } from '@/hooks/useSupabaseQuery'
 import { useUserRoles } from '@/hooks/useLookups'
-import { usersDAL, type UserListItem } from '@/lib/dal/users'
+import { usersDAL, type UserListItem, type PendingInvite } from '@/lib/dal/users'
 import { timeOffDAL } from '@/lib/dal/time-off'
 import type { UserTimeOffSummary } from '@/types/time-off'
 import Badge from '@/components/ui/Badge'
@@ -98,9 +98,10 @@ export function StaffDirectoryTab({
   // Lookups
   const { data: roles } = useUserRoles()
 
-  // Data fetch: staff list + time-off totals in parallel
+  // Data fetch: staff list + pending invites + time-off totals in parallel
   const { data, loading, errors, refetch } = useSupabaseQueries<{
     staff: UserListItem[]
+    pendingInvites: PendingInvite[]
     totals: UserTimeOffSummary[]
   }>(
     {
@@ -115,6 +116,19 @@ export function StaffDirectoryTab({
         if (result.error) throw result.error
         return result.data
       },
+      pendingInvites: async (supabase) => {
+        // Only fetch pending invites in active (non-deactivated) view
+        if (showDeactivated) return []
+        if (isAllFacilitiesMode) {
+          const result = await usersDAL.listAllPendingInvites(supabase)
+          if (result.error) throw result.error
+          return result.data
+        }
+        if (!facilityId) return []
+        const result = await usersDAL.listPendingInvites(supabase, facilityId)
+        if (result.error) throw result.error
+        return result.data
+      },
       totals: async (supabase) => {
         // Time-off totals require a specific facility
         if (!facilityId) return []
@@ -125,6 +139,26 @@ export function StaffDirectoryTab({
     },
     { deps: [facilityId, currentYear, showDeactivated, isAllFacilitiesMode], enabled: !!facilityId || isAllFacilitiesMode }
   )
+
+  // Convert pending invites to UserListItem shape so they appear in the staff table
+  const pendingAsUsers: UserListItem[] = useMemo(() => {
+    if (!data?.pendingInvites) return []
+    return data.pendingInvites.map((inv): UserListItem => ({
+      id: `invite-${inv.id}`,
+      email: inv.email,
+      first_name: inv.first_name,
+      last_name: inv.last_name,
+      role_id: inv.role_id,
+      facility_id: inv.facility_id,
+      is_active: true,
+      access_level: inv.access_level,
+      last_login_at: null,
+      created_at: inv.created_at,
+      role: inv.role_name ? { name: inv.role_name } : null,
+      facility: inv.facility_name ? { name: inv.facility_name } : null,
+      _isPendingInvite: true,
+    }))
+  }, [data?.pendingInvites])
 
   // Build totals lookup map
   const totalsMap = useMemo(() => {
@@ -137,11 +171,11 @@ export function StaffDirectoryTab({
     return map
   }, [data?.totals])
 
-  // Filter + sort staff
+  // Filter + sort staff (includes pending invites merged in)
   const filteredStaff = useMemo(() => {
     if (!data?.staff) return []
 
-    let items = data.staff
+    let items = [...data.staff, ...pendingAsUsers]
 
     // When showDeactivated, only show inactive; otherwise only active
     if (showDeactivated) {
@@ -204,7 +238,7 @@ export function StaffDirectoryTab({
     })
 
     return items
-  }, [data?.staff, searchQuery, roleFilter, sortField, sortDirection, totalsMap, showDeactivated])
+  }, [data?.staff, pendingAsUsers, searchQuery, roleFilter, sortField, sortDirection, totalsMap, showDeactivated])
 
   // Column sort toggle
   function toggleSort(field: SortField) {
@@ -354,22 +388,23 @@ export function StaffDirectoryTab({
               {filteredStaff.map((user) => {
                 const roleName = getRoleName(user)
                 const totals = totalsMap.get(user.id)
-                const accountStatus = deriveAccountStatus(user)
+                const isPending = user._isPendingInvite
+                const accountStatus = isPending ? 'pending' as const : deriveAccountStatus(user)
                 const statusCfg = STATUS_CONFIG[accountStatus]
 
                 return (
                   <div
                     key={user.id}
-                    className={`grid items-center px-4 py-3 cursor-pointer hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 transition-colors min-w-[600px] ${!user.is_active ? 'opacity-60' : ''}`}
+                    className={`grid items-center px-4 py-3 transition-colors min-w-[600px] ${!user.is_active ? 'opacity-60' : ''} ${isPending ? 'bg-amber-50/40' : 'cursor-pointer hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500'}`}
                     style={{
                       gridTemplateColumns: isAllFacilitiesMode
                         ? '1fr 140px 140px 100px 100px'
                         : '1fr 140px 180px 100px 100px',
                     }}
                     role="row"
-                    tabIndex={0}
-                    onClick={() => onSelectUser(user)}
-                    onKeyDown={(e) => {
+                    tabIndex={isPending ? undefined : 0}
+                    onClick={isPending ? undefined : () => onSelectUser(user)}
+                    onKeyDown={isPending ? undefined : (e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
                         onSelectUser(user)

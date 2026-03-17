@@ -50,6 +50,24 @@ export interface UserListItem {
   created_at: string
   role?: { name: string } | null
   facility?: { name: string } | null
+  /** Set to true for rows sourced from pending_user_invites (not yet accepted) */
+  _isPendingInvite?: boolean
+}
+
+/** Row from the pending_user_invites view */
+export interface PendingInvite {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  facility_id: string
+  facility_name: string | null
+  role_id: string | null
+  role_name: string | null
+  access_level: string
+  expires_at: string
+  created_at: string
+  status: 'pending' | 'expired'
 }
 
 // ============================================
@@ -297,6 +315,36 @@ export const usersDAL = {
       .single()
 
     return { data: data as { id: string } | null, error }
+  },
+
+  /**
+   * List pending invites for a facility (not yet accepted)
+   */
+  async listPendingInvites(
+    supabase: AnySupabaseClient,
+    facilityId: string,
+  ): Promise<DALListResult<PendingInvite>> {
+    const { data, error } = await supabase
+      .from('pending_user_invites')
+      .select('id, email, first_name, last_name, facility_id, facility_name, role_id, role_name, access_level, expires_at, created_at, status')
+      .eq('facility_id', facilityId)
+      .eq('status', 'pending')
+
+    return { data: (data as unknown as PendingInvite[]) || [], error }
+  },
+
+  /**
+   * List all pending invites across facilities (global admin)
+   */
+  async listAllPendingInvites(
+    supabase: AnySupabaseClient,
+  ): Promise<DALListResult<PendingInvite>> {
+    const { data, error } = await supabase
+      .from('pending_user_invites')
+      .select('id, email, first_name, last_name, facility_id, facility_name, role_id, role_name, access_level, expires_at, created_at, status')
+      .eq('status', 'pending')
+
+    return { data: (data as unknown as PendingInvite[]) || [], error }
   },
 
   /**

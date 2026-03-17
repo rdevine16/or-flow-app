@@ -117,6 +117,7 @@ function setupMocks(overrides?: {
   vi.mocked(useSupabaseQueries).mockReturnValue({
     data: {
       staff: overrides?.staff ?? mockStaff,
+      pendingInvites: [],
       totals: overrides?.totals ?? mockTotals,
     },
     loading: overrides?.loading ?? false,
