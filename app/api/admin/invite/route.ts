@@ -9,8 +9,11 @@ import { Resend } from 'resend'
 // Validation schema
 const createInviteSchema = z.object({
   email: z.string().email('Invalid email'),
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
   facilityId: z.string().uuid('Invalid facility ID'),
-  role: z.enum(['user', 'facility_admin', 'global_admin']),
+  accessLevel: z.enum(['user', 'facility_admin', 'global_admin']),
+  roleId: z.string().uuid('Invalid role ID').optional(),
 })
 
 export const POST = withErrorHandler(async (req: NextRequest) => {
@@ -56,17 +59,24 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
   expiresAt.setDate(expiresAt.getDate() + 7)
 
   // Create invite
+  const insertData: Record<string, unknown> = {
+    email: validated.email,
+    first_name: validated.firstName,
+    last_name: validated.lastName,
+    facility_id: validated.facilityId,
+    access_level: validated.accessLevel,
+    invite_token: token,
+    invited_by: user.id,
+    expires_at: expiresAt.toISOString(),
+    created_at: nowUTC(),
+  }
+  if (validated.roleId) {
+    insertData.role_id = validated.roleId
+  }
+
   const { data: invite, error: inviteError } = await supabase
-    .from('invites')
-    .insert({
-      email: validated.email,
-      facility_id: validated.facilityId,
-      role: validated.role,
-      token,
-      invited_by: user.id,
-      expires_at: expiresAt.toISOString(),
-      created_at: nowUTC(),
-    })
+    .from('user_invites')
+    .insert(insertData)
     .select('id, facilities(name)')
     .single()
 
@@ -83,7 +93,7 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
       subject: `Invitation to join ${invite.facilities?.[0]?.name || 'ORbit'}`,
       html: `
         <h2>You've been invited to ORbit</h2>
-        <p>You've been invited as a ${validated.role.replace('_', ' ')}.</p>
+        <p>You've been invited as a ${validated.accessLevel.replace('_', ' ')}.</p>
         <p>Click the link below to accept your invitation:</p>
         <a href="${inviteUrl}">${inviteUrl}</a>
         <p>This invitation expires in 7 days.</p>
