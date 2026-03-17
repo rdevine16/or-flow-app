@@ -55,15 +55,19 @@ export const PERMISSION_KEYS = {
 
   // ── Rooms ──────────────────────────────────────────
   ROOMS_VIEW: 'rooms.view',
+  ROOMS_MANAGE: 'rooms.manage',
 
   // ── SPD ────────────────────────────────────────────
   SPD_VIEW: 'spd.view',
+  SPD_MANAGE: 'spd.manage',
 
   // ── Data Quality ───────────────────────────────────
   DATA_QUALITY_VIEW: 'data_quality.view',
+  DATA_QUALITY_MANAGE: 'data_quality.manage',
 
   // ── Staff Management ───────────────────────────────
   STAFF_MANAGEMENT_VIEW: 'staff_management.view',
+  STAFF_MANAGEMENT_MANAGE: 'staff_management.manage',
 
   // ── Integrations ───────────────────────────────────
   INTEGRATIONS_VIEW: 'integrations.view',

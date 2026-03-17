@@ -25,7 +25,7 @@ interface StaffDirectoryTabProps {
   onSelectUser: (user: UserListItem) => void
   showDeactivated: boolean
   onToggleDeactivated: () => void
-  onAddStaff: () => void
+  onAddStaff?: () => void
   isAllFacilitiesMode?: boolean
 }
 
@@ -292,8 +292,8 @@ export function StaffDirectoryTab({
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Add Staff */}
-        {!showDeactivated && (
+        {/* Add Staff (only when manage permission granted) */}
+        {!showDeactivated && onAddStaff && (
           <button
             onClick={onAddStaff}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"

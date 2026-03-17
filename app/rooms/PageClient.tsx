@@ -101,8 +101,8 @@ export default function DashboardPage() {
   const [showStaffPanel, setShowStaffPanel] = useState(false)
   const [activeDragData, setActiveDragData] = useState<DragData | null>(null)
   
-  // Check if user can manage staff (permission-based, not role-based)
-  const canManageStaff = can('staff_management.view')
+  // Check if user can manage room operations (staff assignment, call next patient)
+  const canManageStaff = can('rooms.manage')
   
   // Get all case IDs for the staff assignment hook
   const allCaseIds = useMemo(() => cases.map(c => c.id), [cases])
@@ -711,8 +711,8 @@ export default function DashboardPage() {
 
       </DndContext>
 
-      {/* Floating Action Button */}
-      {effectiveFacilityId && (
+      {/* Floating Action Button (manage permission required) */}
+      {effectiveFacilityId && can('rooms.manage') && (
         <FloatingActionButton 
           actions={[
             {
@@ -725,8 +725,8 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Call Next Patient Modal */}
-      {effectiveFacilityId && userData.userId && userData.userEmail && (
+      {/* Call Next Patient Modal (manage permission required) */}
+      {effectiveFacilityId && can('rooms.manage') && userData.userId && userData.userEmail && (
         <CallNextPatientModal
           isOpen={showCallNextPatient}
           onClose={() => setShowCallNextPatient(false)}

@@ -893,8 +893,8 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
                         <Eye className="w-4 h-4" />
                       </button>
 
-                      {/* Remind Rep (only for pending) */}
-                      {trayStatus === 'awaiting_response' && deviceCompanies.length > 0 && (
+                      {/* Remind Rep (only for pending, requires manage permission) */}
+                      {trayStatus === 'awaiting_response' && deviceCompanies.length > 0 && can('spd.manage') && (
                         <button
                           onClick={(e) => handleRemindRep(c.id, deviceCompanies[0].implant_company_id, e)}
                           className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all duration-200"

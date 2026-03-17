@@ -1,8 +1,8 @@
 # RBAC Audit — ORbit Web App (Final State)
 
-## Status: COMPLETE (Phases 1–10)
+## Status: COMPLETE (Phases 1–10 + View/Manage Separation)
 
-All 10 phases of the RBAC overhaul have been implemented. This document reflects the **final state** of the permission system.
+All 10 phases of the RBAC overhaul have been implemented, plus a follow-up to add proper view vs manage separation. This document reflects the **final state** of the permission system.
 
 ---
 
@@ -24,7 +24,7 @@ All 10 phases of the RBAC overhaul have been implemented. This document reflects
 1. **Admin bypass**: `facility_admin` and `global_admin` always have ALL permissions (both in `usePermissions` hook and `get_user_permissions()` RPC)
 2. **Configurable roles**: `user` and `coordinator` permissions are configurable per-facility via `facility_permissions`
 3. **Templates**: `permission_templates` provide defaults that seed new facilities via `copy_permission_template_to_facility()`
-4. **63 total permissions** across 14 categories
+4. **67 total permissions** across 14 categories
 
 ### Key Design Decisions
 - Admin bypass is **intentional** — admins always have full access, simplifies management
@@ -68,7 +68,7 @@ All 10 phases of the RBAC overhaul have been implemented. This document reflects
 | `tab.case_flags` | ✅ | ✅ | ✅ | ✅ |
 | `tab.case_validation` | ✅ | ✅ | ✅ | ✅ |
 
-### Rooms (2)
+### Rooms (2) — View = see page, Manage = staff assignment, call next patient
 | Key | User | Coordinator | Facility Admin | Global Admin |
 |---|---|---|---|---|
 | `rooms.view` | ✅ | ✅ | ✅ | ✅ |
@@ -93,24 +93,25 @@ All 10 phases of the RBAC overhaul have been implemented. This document reflects
 | `analytics.view` | ❌ | ❌ | ✅ | ✅ |
 | `scores.view` | ❌ | ❌ | ✅ | ✅ |
 
-### SPD (2)
+### SPD (2) — View = see tray status, Manage = remind reps
 | Key | User | Coordinator | Facility Admin | Global Admin |
 |---|---|---|---|---|
-| `spd.view` | ❌ | ❌ | ✅ | ✅ |
+| `spd.view` | ❌ | ✅ | ✅ | ✅ |
 | `spd.manage` | ❌ | ❌ | ✅ | ✅ |
 
-### Data Quality (1)
+### Data Quality (2) — View = see issues, Manage = resolve/scan/expire
 | Key | User | Coordinator | Facility Admin | Global Admin |
 |---|---|---|---|---|
 | `data_quality.view` | ❌ | ❌ | ✅ | ✅ |
+| `data_quality.manage` | ❌ | ❌ | ✅ | ✅ |
 
-### Staff Management (2)
+### Staff Management (2) — View = see directory, Manage = invite/edit/deactivate/time-off
 | Key | User | Coordinator | Facility Admin | Global Admin |
 |---|---|---|---|---|
 | `staff_management.view` | ❌ | ❌ | ✅ | ✅ |
 | `staff_management.manage` | ❌ | ❌ | ✅ | ✅ |
 
-### Integrations (2)
+### Integrations (2) — View = see status, Manage = setup/configure/switch
 | Key | User | Coordinator | Facility Admin | Global Admin |
 |---|---|---|---|---|
 | `integrations.view` | ❌ | ❌ | ✅ | ✅ |
@@ -254,6 +255,13 @@ All 10 phases of the RBAC overhaul have been implemented. This document reflects
 - Verified: no `allowedRoles` remain in nav config
 - Verified: no RBAC-related TODOs remain
 - Updated this audit document to final state
+
+### Post-Phase: View vs Manage Separation
+- Added 4 new `.manage` permissions: `rooms.manage`, `spd.manage`, `data_quality.manage`, `staff_management.manage`
+- Wired up `integrations.manage` (existed but was unused)
+- **View** = see the nav item + page content (read-only)
+- **Manage** = interact with edit/create/delete actions on the page
+- Total permissions: 63 → 67
 
 ---
 
