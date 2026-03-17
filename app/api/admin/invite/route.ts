@@ -85,19 +85,10 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
   // Send email via shared utility (uses verified noreply@orbitsurgical.com)
   const facilityName = (invite.facilities as unknown as { name: string }[] | null)?.[0]?.name || 'ORbit'
 
-  // Get inviter's name for the email
-  const { data: inviter } = await supabase
-    .from('users')
-    .select('first_name, last_name')
-    .eq('id', user.id)
-    .single()
-  const inviterName = inviter ? `${inviter.first_name} ${inviter.last_name}` : 'An administrator'
-
   const emailResult = await sendUserInviteEmail(
     validated.email,
     validated.firstName,
     facilityName,
-    inviterName,
     token,
     validated.accessLevel === 'global_admin' ? 'facility_admin' : validated.accessLevel,
   )

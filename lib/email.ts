@@ -141,18 +141,13 @@ Questions? Reply to this email and we'll help you get started.
   }
 }
 
-// REPLACE the sendUserInviteEmail function in lib/email.ts with this version
-// Find the function starting at "export async function sendUserInviteEmail"
-// and replace it entirely with this code:
-
 /**
  * Send invitation email to new facility user (admin or staff)
  * Uses token-based flow - user clicks link to set their password
- * 
+ *
  * @param to - Email address
  * @param firstName - User's first name
  * @param facilityName - Name of the facility
- * @param invitedByName - Name of person who sent invite
  * @param invitationToken - Unique token for the invite
  * @param accessLevel - 'facility_admin' or 'user' (optional, for customizing email content)
  */
@@ -160,7 +155,6 @@ export async function sendUserInviteEmail(
   to: string,
   firstName: string,
   facilityName: string,
-  invitedByName: string,
   invitationToken: string,
   accessLevel: 'facility_admin' | 'user' = 'user'
 ): Promise<EmailResult> {
@@ -190,29 +184,27 @@ export async function sendUserInviteEmail(
                   <!-- Logo Header -->
                   <tr>
                     <td style="padding-bottom: 32px; text-align: center;">
-                      <div style="display: inline-block; width: 48px; height: 48px; background: #2563eb; border-radius: 12px; line-height: 48px;">
-                        <span style="color: white; font-size: 24px; font-weight: 700;">O</span>
-                      </div>
+                      <img src="${APP_URL}/images/orbit_black.png" alt="ORbit" width="120" style="display: inline-block; width: 120px; height: auto;" />
                     </td>
                   </tr>
-                  
+
                   <!-- Main Card -->
                   <tr>
                     <td style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
                       <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                        
+
                         <!-- Card Content -->
                         <tr>
                           <td style="padding: 40px;">
-                            
+
                             <!-- Greeting -->
                             <p style="margin: 0 0 24px; font-size: 15px; color: #334155; line-height: 1.6;">
                               Hi ${firstName},
                             </p>
-                            
+
                             <!-- Main Message -->
                             <p style="margin: 0 0 24px; font-size: 15px; color: #334155; line-height: 1.6;">
-                              <strong style="color: #0f172a;">${invitedByName}</strong> has invited you to join <strong style="color: #0f172a;">${facilityName}</strong> on ORbit, the surgical case management platform.
+                              You've been invited to join <strong style="color: #0f172a;">${facilityName}</strong> on ORbit, the surgical case management platform.
                             </p>
                             
                             <!-- Role Info -->
@@ -303,7 +295,7 @@ export async function sendUserInviteEmail(
       text: `
 Hi ${firstName},
 
-${invitedByName} has invited you to join ${facilityName} on ORbit, the surgical case management platform.
+You've been invited to join ${facilityName} on ORbit, the surgical case management platform.
 
 Your Role: ${isAdmin ? 'Facility Administrator' : 'Staff Member'}
 
@@ -352,11 +344,11 @@ export async function sendInvitationEmail(
   to: string,
   firstName: string,
   facilityName: string,
-  invitedByName: string,
+  _invitedByName: string,
   invitationToken: string
 ): Promise<EmailResult> {
   // Forward to new function for backwards compatibility
-  return sendUserInviteEmail(to, firstName, facilityName, invitedByName, invitationToken, 'user')
+  return sendUserInviteEmail(to, firstName, facilityName, invitationToken, 'user')
 }
 
 /**

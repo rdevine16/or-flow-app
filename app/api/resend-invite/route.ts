@@ -29,18 +29,6 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
     throw new ValidationError('Invite not found or already accepted')
   }
 
-  // Get current user's name for the email
-  const { data: { user } } = await supabase.auth.getUser()
-  let inviterName = 'An administrator'
-  if (user) {
-    const { data: inviter } = await supabase
-      .from('users')
-      .select('first_name, last_name')
-      .eq('id', user.id)
-      .single()
-    if (inviter) inviterName = `${inviter.first_name} ${inviter.last_name}`
-  }
-
   const facilityName = (invite.facilities as unknown as { name: string }[] | null)?.[0]?.name || 'ORbit'
   const accessLevel = (invite.access_level === 'facility_admin' || invite.access_level === 'user')
     ? invite.access_level
@@ -50,7 +38,6 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
     invite.email,
     invite.first_name,
     facilityName,
-    inviterName,
     invite.invite_token,
     accessLevel,
   )
