@@ -66,6 +66,19 @@ interface User {
   user_roles?: { name: string }
 }
 
+interface PendingInvite {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  facility_id: string
+  role_name: string | null
+  access_level: string
+  expires_at: string
+  created_at: string
+  status: string
+}
+
 interface Room {
   id: string
   name: string
@@ -268,6 +281,7 @@ export default function FacilityDetailPage() {
   const [saving, setSaving] = useState(false)
   const [facility, setFacility] = useState<Facility | null>(null)
   const [users, setUsers] = useState<User[]>([])
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([])
@@ -454,6 +468,15 @@ export default function FacilityDetailPage() {
           .order('created_at', { ascending: false })
 
         if (usersData) setUsers(usersData)
+
+        // Fetch pending invites
+        const { data: invitesData } = await supabase
+          .from('pending_user_invites')
+          .select('id, email, first_name, last_name, facility_id, role_name, access_level, expires_at, created_at, status')
+          .eq('facility_id', facilityId)
+          .eq('status', 'pending')
+
+        if (invitesData) setPendingInvites(invitesData as PendingInvite[])
 
         // Fetch rooms
         const { data: roomsData } = await supabase
@@ -1216,7 +1239,11 @@ export default function FacilityDetailPage() {
             <div className="p-4 border-b border-slate-200 flex justify-between items-center">
               <div>
                 <h2 className="font-semibold text-slate-900">Users</h2>
-                <p className="text-sm text-slate-500">{users.filter(u => u.is_active).length} active of {users.length} total</p>
+                <p className="text-sm text-slate-500">
+                  {users.filter(u => u.is_active).length} active
+                  {pendingInvites.length > 0 && `, ${pendingInvites.length} pending`}
+                  {' '}of {users.length + pendingInvites.length} total
+                </p>
               </div>
               <button
                 onClick={() => setShowInviteModal(true)}
@@ -1239,6 +1266,49 @@ export default function FacilityDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
+                  {/* Pending invites */}
+                  {pendingInvites.map((invite) => (
+                    <tr key={`invite-${invite.id}`} className="bg-amber-50/40">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 bg-gradient-to-br from-amber-400 to-amber-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                            {invite.first_name[0]}{invite.last_name[0]}
+                          </div>
+                          <div>
+                            <p className="font-medium text-slate-900">{invite.first_name} {invite.last_name}</p>
+                            <p className="text-sm text-slate-500">{invite.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-700">{invite.role_name || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                          invite.access_level === 'facility_admin'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {invite.access_level === 'facility_admin' ? 'Admin' : 'User'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                          <Clock className="w-3 h-3" />
+                          Pending Invite
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-500">
+                        Invited {new Date(invite.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-xs text-slate-400">
+                          Expires {new Date(invite.expires_at).toLocaleDateString()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Active/inactive users */}
                   {users.map((user) => (
                     <tr
                       key={user.id}
@@ -1304,7 +1374,7 @@ export default function FacilityDetailPage() {
                 </tbody>
               </table>
             </div>
-            {users.length === 0 && (
+            {users.length === 0 && pendingInvites.length === 0 && (
               <EmptyState
                 icon={EmptyStateIcons.Users}
                 title="No users yet"
