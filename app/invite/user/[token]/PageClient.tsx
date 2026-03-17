@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Building2, Check, Circle, Eye, EyeOff, X } from 'lucide-react'
 
@@ -354,9 +355,13 @@ export default function AcceptUserInvitePage() {
       <div className="bg-white rounded-xl shadow-xl p-8 max-w-md w-full">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-xl mb-4">
-            <span className="text-2xl font-bold text-white">O</span>
-          </div>
+          <Image
+            src="/images/orbit_black.png"
+            alt="ORbit"
+            width={120}
+            height={40}
+            className="mx-auto mb-4"
+          />
           <h1 className="text-2xl font-semibold text-slate-900">Welcome to ORbit</h1>
           <p className="text-slate-500 mt-1">Create your account to get started</p>
         </div>

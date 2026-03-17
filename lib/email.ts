@@ -58,9 +58,7 @@ export async function sendWelcomeEmail(
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 32px;">
-            <div style="display: inline-block; width: 48px; height: 48px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 12px; margin-bottom: 16px;">
-              <span style="color: white; font-size: 24px; line-height: 48px;">⏱</span>
-            </div>
+            <img src="${APP_URL}/images/orbit_black.png" alt="ORbit" width="120" style="display: inline-block; width: 120px; height: auto; margin-bottom: 16px;" />
             <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #0f172a;">Welcome to ORbit</h1>
           </div>
           
@@ -374,9 +372,7 @@ export async function sendTrialWarningEmail(
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 32px;">
-            <div style="display: inline-block; width: 48px; height: 48px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 12px; margin-bottom: 16px;">
-              <span style="color: white; font-size: 24px; line-height: 48px;">⏰</span>
-            </div>
+            <img src="${APP_URL}/images/orbit_black.png" alt="ORbit" width="120" style="display: inline-block; width: 120px; height: auto; margin-bottom: 16px;" />
             <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #0f172a;">Trial Expiring Soon</h1>
           </div>
           
@@ -453,9 +449,7 @@ export async function sendPasswordResetEmail(
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 32px;">
-            <div style="display: inline-block; width: 48px; height: 48px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 12px; margin-bottom: 16px;">
-              <span style="color: white; font-size: 24px; line-height: 48px;">🔐</span>
-            </div>
+            <img src="${APP_URL}/images/orbit_black.png" alt="ORbit" width="120" style="display: inline-block; width: 120px; height: auto; margin-bottom: 16px;" />
             <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #0f172a;">Reset Your Password</h1>
           </div>
           
@@ -562,9 +556,7 @@ export async function sendTimeOffReviewedEmail(
                   <!-- Logo Header -->
                   <tr>
                     <td style="padding-bottom: 32px; text-align: center;">
-                      <div style="display: inline-block; width: 48px; height: 48px; background: #2563eb; border-radius: 12px; line-height: 48px;">
-                        <span style="color: white; font-size: 24px; font-weight: 700;">O</span>
-                      </div>
+                      <img src="${APP_URL}/images/orbit_black.png" alt="ORbit" width="120" style="display: inline-block; width: 120px; height: auto;" />
                     </td>
                   </tr>
 
