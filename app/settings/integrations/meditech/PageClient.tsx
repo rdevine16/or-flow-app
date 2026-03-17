@@ -683,7 +683,7 @@ export default function MeditechHL7v2IntegrationPage() {
     )
   }
 
-  if (!can('integrations.view')) {
+  if (!can('integrations.manage')) {
     return (
       <>
         <h1 className="text-2xl font-semibold text-slate-900 mb-1">{systemConfig.pageTitle}</h1>

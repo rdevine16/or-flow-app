@@ -60,7 +60,6 @@ export default function StaffManagementPageClient() {
     isImpersonating,
     can,
   } = useUser()
-  const canManage = can('staff_management.manage')
 
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -201,7 +200,7 @@ export default function StaffManagementPageClient() {
   }, [])
 
   if (userLoading) return <PageLoader />
-  if (!can('staff_management.view')) return <AccessDenied />
+  if (!can('staff_management.manage')) return <AccessDenied />
   if (!showFacilitySelector && !facilityId) return <AccessDenied />
 
   const isAllFacilitiesMode = activeFacilityId === null
@@ -287,7 +286,7 @@ export default function StaffManagementPageClient() {
               onSelectUser={handleSelectUser}
               showDeactivated={showDeactivated}
               onToggleDeactivated={() => setShowDeactivated((v) => !v)}
-              onAddStaff={canManage ? () => setShowInviteModal(true) : undefined}
+              onAddStaff={() => setShowInviteModal(true)}
               isAllFacilitiesMode={isAllFacilitiesMode}
             />
           </div>
@@ -346,19 +345,16 @@ export default function StaffManagementPageClient() {
         )}
       </div>
 
-      {/* Review modal — shared across tabs (calendar click) */}
-      {/* Review modal — only renders with manage permission */}
-      {canManage && (
-        <TimeOffReviewModal
-          request={selectedRequest}
-          open={selectedRequest !== null}
-          onClose={handleReviewClose}
-          currentUserId={userData.userId ?? ''}
-          totals={totals}
-          holidays={holidays}
-          onReview={handleReview}
-        />
-      )}
+      {/* Review modal */}
+      <TimeOffReviewModal
+        request={selectedRequest}
+        open={selectedRequest !== null}
+        onClose={handleReviewClose}
+        currentUserId={userData.userId ?? ''}
+        totals={totals}
+        holidays={holidays}
+        onReview={handleReview}
+      />
 
       {/* Staff detail drawer — opens from directory row click */}
       <StaffDetailDrawer
@@ -370,11 +366,11 @@ export default function StaffManagementPageClient() {
         holidays={holidays}
         currentUserId={userData.userId ?? ''}
         onReview={handleReview}
-        onUserUpdated={canManage ? handleUserUpdated : undefined}
+        onUserUpdated={handleUserUpdated}
       />
 
-      {/* Invite modal — triggered from Add Staff button (manage permission required) */}
-      {canManage && <InviteUserModal
+      {/* Invite modal */}
+      <InviteUserModal
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         onSuccess={() => {
@@ -383,7 +379,7 @@ export default function StaffManagementPageClient() {
         }}
         facilityId={activeFacilityId ?? effectiveFacilityId}
         roles={roles ?? []}
-      />}
+      />
     </DashboardLayout>
   )
 }

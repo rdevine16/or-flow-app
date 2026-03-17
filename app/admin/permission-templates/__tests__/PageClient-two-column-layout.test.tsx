@@ -52,7 +52,7 @@ vi.mock('@/hooks/useSupabaseQuery', () => ({
           { id: '1', key: 'cases.view', label: 'View Cases', category: 'Cases', resource: 'cases', action: 'view', sort_order: 1, is_active: true },
           { id: '2', key: 'cases.create', label: 'Create Cases', category: 'Cases', resource: 'cases', action: 'create', sort_order: 2, is_active: true },
           // Scheduling category
-          { id: '3', key: 'scheduling.view', label: 'View Schedule', category: 'Scheduling', resource: 'scheduling', action: 'view', sort_order: 10, is_active: true },
+          { id: '3', key: 'scheduling.manage', label: 'Manage Scheduling', category: 'Scheduling', resource: 'scheduling', action: 'manage', sort_order: 10, is_active: true },
           // Settings category
           { id: '4', key: 'settings.milestones', label: 'Manage Milestones', category: 'Settings', resource: 'settings_milestones', action: 'edit', sort_order: 30, is_active: true },
         ],

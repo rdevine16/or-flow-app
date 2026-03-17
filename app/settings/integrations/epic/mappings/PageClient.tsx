@@ -172,7 +172,7 @@ export default function EntityMappingsPage() {
     )
   }
 
-  if (!can('integrations.view')) {
+  if (!can('integrations.manage')) {
     return (
       <>
         <h1 className="text-2xl font-semibold text-slate-900 mb-1">Entity Mappings</h1>

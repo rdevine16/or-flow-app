@@ -624,7 +624,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
   // =====================================================
 
   // Permission guard
-  if (!userLoading && !can('spd.view')) {
+  if (!userLoading && !can('spd.manage')) {
     return (
       <DashboardLayout>
         <AccessDenied />
@@ -894,7 +894,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
                       </button>
 
                       {/* Remind Rep (only for pending, requires manage permission) */}
-                      {trayStatus === 'awaiting_response' && deviceCompanies.length > 0 && can('spd.manage') && (
+                      {trayStatus === 'awaiting_response' && deviceCompanies.length > 0 && (
                         <button
                           onClick={(e) => handleRemindRep(c.id, deviceCompanies[0].implant_company_id, e)}
                           className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all duration-200"

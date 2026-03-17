@@ -244,12 +244,11 @@ export default function BlockSchedulePage() {
 
   // Handle "Create" button
   const handleAddBlockButton = useCallback(() => {
-    if (!can('scheduling.create')) return
     setEditingBlock(null)
     setDragSelection(null)
     setClickPosition({ x: 300, y: 150 })
     setPopoverOpen(true)
-  }, [can])
+  }, [])
 
   // FIX #9: Keyboard shortcuts
   useEffect(() => {
@@ -271,7 +270,7 @@ export default function BlockSchedulePage() {
           setCurrentWeekStart(prev => addDays(prev, 7))
           break
         case 'n':
-          if (!popoverOpen && can('scheduling.create')) { e.preventDefault(); handleAddBlockButton() }
+          if (!popoverOpen) { e.preventDefault(); handleAddBlockButton() }
           break
       }
     }
@@ -311,7 +310,6 @@ export default function BlockSchedulePage() {
     endTime: string,
     position?: { x: number; y: number }
   ) => {
-    if (!can('scheduling.create')) return
     setDragSelection({ dayOfWeek, startTime, endTime })
     setEditingBlock(null)
     setClickPosition(position)
@@ -320,7 +318,6 @@ export default function BlockSchedulePage() {
 
   // Handle block click (edit)
   const handleBlockClick = async (block: ExpandedBlock, position?: { x: number; y: number }) => {
-    if (!can('scheduling.edit')) return
     try {
       const { data, error: fetchError } = await supabase
         .from('block_schedules')
@@ -729,7 +726,7 @@ export default function BlockSchedulePage() {
   // =====================================================
   // RENDER
   // =====================================================
-  if (!userLoading && !can('scheduling.view')) {
+  if (!userLoading && !can('scheduling.manage')) {
     return (
       <DashboardLayout>
         <AccessDenied />
@@ -770,7 +767,7 @@ export default function BlockSchedulePage() {
                 onDeselectAll={deselectAllSurgeons}
                 currentWeekStart={currentWeekStart}
                 onDateSelect={(date) => setCurrentWeekStart(getWeekStart(date))}
-                onAddBlock={can('scheduling.create') ? handleAddBlockButton : undefined}
+                onAddBlock={handleAddBlockButton}
                 showHolidays={showHolidays}
                 onToggleHolidays={() => setShowHolidays(!showHolidays)}
                 onColorChange={handleColorChange}

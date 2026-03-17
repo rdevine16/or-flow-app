@@ -262,7 +262,6 @@ export default function IntegrationsPage() {
   const router = useRouter()
   const { data: currentUser } = useCurrentUser()
   const { can, loading: permLoading } = useUser()
-  const canManage = can('integrations.manage')
   const { showToast } = useToast()
   const facilityId = currentUser?.facilityId
 
@@ -364,7 +363,7 @@ export default function IntegrationsPage() {
     [activeHl7v2, router]
   )
 
-  if (!can('integrations.view')) {
+  if (!can('integrations.manage')) {
     return (
       <>
         <h1 className="text-2xl font-semibold text-slate-900 mb-1">Integrations</h1>
@@ -435,9 +434,9 @@ export default function IntegrationsPage() {
                     </div>
                   </div>
 
-                  {/* Action button (manage permission required for setup/switch) */}
+                  {/* Action button */}
                   <div className="flex-shrink-0 ml-4">
-                    {canManage && hasOtherActive ? (
+                    {hasOtherActive ? (
                       <button
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
                         onClick={(e) => {
@@ -448,7 +447,7 @@ export default function IntegrationsPage() {
                         Switch
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
-                    ) : canManage ? (
+                    ) : (
                       <button
                         className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium ${card.buttonColor} ${card.buttonBg} rounded-lg ${card.buttonHover} transition-colors`}
                         onClick={(e) => {
@@ -459,7 +458,7 @@ export default function IntegrationsPage() {
                         {isActive ? 'Manage' : 'Set Up'}
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
-                    ) : null}
+                    )}
                   </div>
                 </div>
 

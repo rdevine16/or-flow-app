@@ -92,16 +92,16 @@ describe('SPD Page — Permission Guards', () => {
   })
 
   describe('Unit: Permission key checks', () => {
-    it('checks can(spd.view) when user is loaded', async () => {
-      mockCan = vi.fn((key: string) => key === 'spd.view')
+    it('checks can(spd.manage) when user is loaded', async () => {
+      mockCan = vi.fn((key: string) => key === 'spd.manage')
       render(<SPDDashboardPage />)
 
       await waitFor(() => {
-        expect(mockCan).toHaveBeenCalledWith('spd.view')
+        expect(mockCan).toHaveBeenCalledWith('spd.manage')
       })
     })
 
-    it('renders AccessDenied when can(spd.view) returns false', async () => {
+    it('renders AccessDenied when can(spd.manage) returns false', async () => {
       mockCan = vi.fn().mockReturnValue(false)
       render(<SPDDashboardPage />)
 
@@ -132,7 +132,7 @@ describe('SPD Page — Permission Guards', () => {
   })
 
   describe('Workflow: User journey with denied permissions', () => {
-    it('user navigates to SPD → denied spd.view → sees AccessDenied → no data', async () => {
+    it('user navigates to SPD → denied spd.manage → sees AccessDenied → no data', async () => {
       mockCan = vi.fn().mockReturnValue(false)
       render(<SPDDashboardPage />)
 
@@ -142,8 +142,8 @@ describe('SPD Page — Permission Guards', () => {
       expect(screen.queryByText('SPD Dashboard')).not.toBeInTheDocument()
     })
 
-    it('user with spd.view → sees SPD dashboard content', async () => {
-      mockCan = vi.fn((key: string) => key === 'spd.view')
+    it('user with spd.manage → sees SPD dashboard content', async () => {
+      mockCan = vi.fn((key: string) => key === 'spd.manage')
       render(<SPDDashboardPage />)
 
       await waitFor(() => {

@@ -101,12 +101,12 @@ describe('facilityNavigation', () => {
   it('has correct permission keys for each item', () => {
     const expectedKeys: Record<string, string> = {
       Rooms: 'rooms.view',
-      'Block Schedule': 'scheduling.view',
+      'Block Schedule': 'scheduling.manage',
       Cases: 'cases.view',
-      SPD: 'spd.view',
+      SPD: 'spd.manage',
       Analytics: 'analytics.view',
-      'Data Quality': 'data_quality.view',
-      'Staff Management': 'staff_management.view',
+      'Data Quality': 'data_quality.manage',
+      'Staff Management': 'staff_management.manage',
       Settings: 'settings.view',
     }
 
@@ -226,7 +226,7 @@ describe('getFilteredNavigation — role scenarios', () => {
 
   it('coordinator sees Dashboard, Rooms, Block Schedule, Cases, Settings', () => {
     const coordinatorCan = (key: string) =>
-      ['rooms.view', 'scheduling.view', 'cases.view', 'settings.view'].includes(key)
+      ['rooms.view', 'scheduling.manage', 'cases.view', 'settings.view'].includes(key)
     const items = getFilteredNavigation(coordinatorCan)
     const names = items.map(i => i.name)
     expect(names).toContain('Dashboard')

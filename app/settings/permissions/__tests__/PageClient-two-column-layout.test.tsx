@@ -46,8 +46,7 @@ vi.mock('@/hooks/useSupabaseQuery', () => ({
           { id: '1', key: 'cases.view', label: 'View Cases', category: 'Cases', resource: 'cases', action: 'view', sort_order: 1, is_active: true },
           { id: '2', key: 'cases.create', label: 'Create Cases', category: 'Cases', resource: 'cases', action: 'create', sort_order: 2, is_active: true },
           // Scheduling category
-          { id: '3', key: 'scheduling.view', label: 'View Schedule', category: 'Scheduling', resource: 'scheduling', action: 'view', sort_order: 10, is_active: true },
-          { id: '4', key: 'scheduling.edit', label: 'Edit Schedule', category: 'Scheduling', resource: 'scheduling', action: 'edit', sort_order: 11, is_active: true },
+          { id: '3', key: 'scheduling.manage', label: 'Manage Scheduling', category: 'Scheduling', resource: 'scheduling', action: 'manage', sort_order: 10, is_active: true },
           // Analytics category
           { id: '5', key: 'analytics.view', label: 'View Analytics', category: 'Analytics', resource: 'analytics', action: 'view', sort_order: 20, is_active: true },
           // Settings category
@@ -330,7 +329,7 @@ describe('FacilityPermissionsPage — Two-Column Layout', () => {
   // =====================================================
 
   describe('Workflow: Search → select category → toggle permission', () => {
-    it('full workflow: search "sched" → click Scheduling → toggle scheduling.edit → verify onToggle called', async () => {
+    it('full workflow: search "sched" → click Scheduling → toggle scheduling.manage → verify onToggle called', async () => {
       const user = userEvent.setup()
       render(<FacilityPermissionsPage />)
 
@@ -350,16 +349,16 @@ describe('FacilityPermissionsPage — Two-Column Layout', () => {
 
       // Step 3: Matrix should show Scheduling permissions
       expect(screen.getByTestId('permission-matrix')).toHaveAttribute('data-category','Scheduling')
-      expect(screen.getByTestId('permission-matrix')).toHaveAttribute('data-count','2')
+      expect(screen.getByTestId('permission-matrix')).toHaveAttribute('data-count','1')
 
-      // Step 4: Toggle a permission (scheduling.edit)
-      const editToggle = screen.getByTestId('toggle-scheduling.edit')
-      await user.click(editToggle)
+      // Step 4: Toggle a permission (scheduling.manage)
+      const manageToggle = screen.getByTestId('toggle-scheduling.manage')
+      await user.click(manageToggle)
 
       // onToggle is called in the mock — we can't easily assert it here
       // without more sophisticated mocking, but the fact that the button renders
       // and the component doesn't crash is a good smoke test.
-      expect(editToggle).toBeInTheDocument()
+      expect(manageToggle).toBeInTheDocument()
     })
   })
 

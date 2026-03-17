@@ -78,7 +78,6 @@ const log = logger('DataQualityPage')
 export default function DataQualityPage() {
   const supabase = createClient()
   const { loading: userLoading, effectiveFacilityId, can } = useUser()
-  const canManage = can('data_quality.manage')
   const searchParams = useSearchParams()
   const router = useRouter()
 
@@ -999,7 +998,7 @@ export default function DataQualityPage() {
   // ============================================
 
   // Permission guard
-  if (!userLoading && !can('data_quality.view')) {
+  if (!userLoading && !can('data_quality.manage')) {
     return (
       <DashboardLayout>
         <AccessDenied />
@@ -1041,8 +1040,8 @@ export default function DataQualityPage() {
               )
             })()}
 
-            {/* Run Detection button (manage permission required) */}
-            {canManage && <button
+            {/* Run Detection button */}
+            <button
               onClick={handleRunDetection}
               disabled={runningDetection}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all disabled:opacity-60 disabled:cursor-default text-white shadow-md hover:shadow-lg"
@@ -1065,7 +1064,7 @@ export default function DataQualityPage() {
                   Run Detection
                 </>
               )}
-            </button>}
+            </button>
           </div>
         </div>
 
@@ -1133,7 +1132,7 @@ export default function DataQualityPage() {
                 showResolved={showResolved}
                 onShowResolvedChange={setShowResolved}
                 issueTypes={issueTypes}
-                selectedCount={canManage ? selectedIds.size : 0}
+                selectedCount={selectedIds.size}
                 onBulkExclude={() => openBulkModal(Array.from(selectedIds))}
                 caseCount={new Set(issues.map(i => i.case_id)).size}
                 issueCount={issues.length}
@@ -1155,8 +1154,8 @@ export default function DataQualityPage() {
               <IssuesTable
                 issues={issues}
                 issueTypes={issueTypes}
-                selectedIds={canManage ? selectedIds : new Set<string>()}
-                onSelectionChange={canManage ? setSelectedIds : () => {}}
+                selectedIds={selectedIds}
+                onSelectionChange={setSelectedIds}
                 onReview={openModal}
                 activeCaseId={modalState.isOpen && modalState.issue ? modalState.issue.case_id : null}
               />
@@ -1181,7 +1180,7 @@ export default function DataQualityPage() {
                   Open Case
                 </button>
                 <div className="flex items-center gap-2">
-                  {!canManage ? null : isStaleCase() ? (
+                  {isStaleCase() ? (
                     <>
                       <button
                         onClick={handleMarkCancelled}

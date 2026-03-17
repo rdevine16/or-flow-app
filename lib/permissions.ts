@@ -48,29 +48,22 @@ export const PERMISSION_KEYS = {
   SCORES_VIEW: 'scores.view',
 
   // ── Scheduling ─────────────────────────────────────
-  SCHEDULING_VIEW: 'scheduling.view',
-  SCHEDULING_CREATE: 'scheduling.create',
-  SCHEDULING_EDIT: 'scheduling.edit',
-  SCHEDULING_DELETE: 'scheduling.delete',
+  SCHEDULING_MANAGE: 'scheduling.manage',
 
   // ── Rooms ──────────────────────────────────────────
   ROOMS_VIEW: 'rooms.view',
   ROOMS_MANAGE: 'rooms.manage',
 
   // ── SPD ────────────────────────────────────────────
-  SPD_VIEW: 'spd.view',
   SPD_MANAGE: 'spd.manage',
 
   // ── Data Quality ───────────────────────────────────
-  DATA_QUALITY_VIEW: 'data_quality.view',
   DATA_QUALITY_MANAGE: 'data_quality.manage',
 
   // ── Staff Management ───────────────────────────────
-  STAFF_MANAGEMENT_VIEW: 'staff_management.view',
   STAFF_MANAGEMENT_MANAGE: 'staff_management.manage',
 
   // ── Integrations ───────────────────────────────────
-  INTEGRATIONS_VIEW: 'integrations.view',
   INTEGRATIONS_MANAGE: 'integrations.manage',
 
   // ── Settings (view) ────────────────────────────────
@@ -105,10 +98,6 @@ export const PERMISSION_KEYS = {
   SETTINGS_FINANCIALS_PRICING: 'settings.financials_pricing',
   SETTINGS_FINANCIALS_TARGETS: 'settings.financials_targets',
   SETTINGS_FINANCIALS_SURGEON_VARIANCE: 'settings.financials_surgeon_variance',
-
-  // ── Users ──────────────────────────────────────────
-  USERS_VIEW: 'users.view',
-  USERS_MANAGE: 'users.manage',
 
   // ── Admin ──────────────────────────────────────────
   AUDIT_VIEW: 'audit.view',

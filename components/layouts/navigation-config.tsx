@@ -172,7 +172,7 @@ export const facilityNavigation: NavItem[] = [
     name: 'Block Schedule',
     href: '/block-schedule',
     icon: navIcons.calendar,
-    permission: 'scheduling.view',
+    permission: 'scheduling.manage',
   },
   {
     name: 'Cases',
@@ -185,7 +185,7 @@ export const facilityNavigation: NavItem[] = [
     name: 'SPD',
     href: '/spd',
     icon: navIcons.spd,
-    permission: 'spd.view',
+    permission: 'spd.manage',
     requiredTier: 'professional',
   },
   {
@@ -199,14 +199,14 @@ export const facilityNavigation: NavItem[] = [
     name: 'Data Quality',
     href: '/data-quality',
     icon: navIcons.dataQuality,
-    permission: 'data_quality.view',
+    permission: 'data_quality.manage',
     requiredTier: 'professional',
   },
   {
     name: 'Staff Management',
     href: '/staff-management',
     icon: navIcons.staffManagement,
-    permission: 'staff_management.view',
+    permission: 'staff_management.manage',
   },
   {
     name: 'Settings',

@@ -104,16 +104,16 @@ describe('Data Quality Page — Permission Guards', () => {
   })
 
   describe('Unit: Permission key checks', () => {
-    it('checks can(data_quality.view) when user is loaded', async () => {
-      mockCan = vi.fn((key: string) => key === 'data_quality.view')
+    it('checks can(data_quality.manage) when user is loaded', async () => {
+      mockCan = vi.fn((key: string) => key === 'data_quality.manage')
       render(<DataQualityPage />)
 
       await waitFor(() => {
-        expect(mockCan).toHaveBeenCalledWith('data_quality.view')
+        expect(mockCan).toHaveBeenCalledWith('data_quality.manage')
       })
     })
 
-    it('renders AccessDenied when can(data_quality.view) returns false', async () => {
+    it('renders AccessDenied when can(data_quality.manage) returns false', async () => {
       mockCan = vi.fn().mockReturnValue(false)
       render(<DataQualityPage />)
 
@@ -154,8 +154,8 @@ describe('Data Quality Page — Permission Guards', () => {
       expect(screen.queryByText('Data Quality')).not.toBeInTheDocument()
     })
 
-    it('user with data_quality.view → sees Data Quality content', async () => {
-      mockCan = vi.fn((key: string) => key === 'data_quality.view')
+    it('user with data_quality.manage → sees Data Quality content', async () => {
+      mockCan = vi.fn((key: string) => key === 'data_quality.manage')
       render(<DataQualityPage />)
 
       await waitFor(() => {

@@ -107,7 +107,7 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/permissions',
         icon: KeyRound,
         description: 'Configure access per role',
-        permission: 'users.manage',
+        permission: 'settings.permissions',
       },
     ],
   },

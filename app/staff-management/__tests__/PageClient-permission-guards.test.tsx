@@ -117,16 +117,16 @@ describe('Staff Management Page — Permission Guards', () => {
   })
 
   describe('Unit: Permission key checks', () => {
-    it('checks can(staff_management.view) when user is loaded', async () => {
-      mockCan = vi.fn((key: string) => key === 'staff_management.view')
+    it('checks can(staff_management.manage) when user is loaded', async () => {
+      mockCan = vi.fn((key: string) => key === 'staff_management.manage')
       render(<StaffManagementPageClient />)
 
       await waitFor(() => {
-        expect(mockCan).toHaveBeenCalledWith('staff_management.view')
+        expect(mockCan).toHaveBeenCalledWith('staff_management.manage')
       })
     })
 
-    it('renders AccessDenied when can(staff_management.view) returns false', async () => {
+    it('renders AccessDenied when can(staff_management.manage) returns false', async () => {
       mockCan = vi.fn().mockReturnValue(false)
       render(<StaffManagementPageClient />)
 
@@ -169,8 +169,8 @@ describe('Staff Management Page — Permission Guards', () => {
       expect(screen.queryByTestId('staff-directory')).not.toBeInTheDocument()
     })
 
-    it('user with staff_management.view → sees staff directory', async () => {
-      mockCan = vi.fn((key: string) => key === 'staff_management.view')
+    it('user with staff_management.manage → sees staff directory', async () => {
+      mockCan = vi.fn((key: string) => key === 'staff_management.manage')
       render(<StaffManagementPageClient />)
 
       await waitFor(() => {

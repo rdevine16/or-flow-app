@@ -58,6 +58,7 @@ const ACTION_LABELS: Record<string, string> = {
 interface ResourceGroup {
   resource: string
   label: string
+  description: string | null
   actionMap: Record<string, Permission>
 }
 
@@ -66,24 +67,28 @@ interface CategoryGroup {
   resources: ResourceGroup[]
 }
 
-function getResourceLabel(perms: Permission[]): string {
+function getResourceInfo(perms: Permission[]): { label: string; description: string | null } {
   const viewPerm = perms.find(p => p.action === 'view')
   if (viewPerm) {
     const label = viewPerm.label
     // Tab labels: "Case Financials Tab" → "Financials"
     if (label.endsWith(' Tab')) {
-      return label.replace(/^Case\s+/, '').replace(/\s+Tab$/, '')
+      return { label: label.replace(/^Case\s+/, '').replace(/\s+Tab$/, ''), description: viewPerm.description }
     }
     // Regular labels: "View Cases" → "Cases"
-    return label.replace(/^View\s+/, '')
+    return { label: label.replace(/^View\s+/, ''), description: viewPerm.description }
   }
-  // Fallback: strip action prefix from any permission label
-  const anyPerm = perms[0]
-  if (anyPerm) {
-    return anyPerm.label
-      .replace(/^(Create|Edit|Delete|Record|Set|Assign|Remove|Add|Manage)\s+/, '')
+  // Fallback: use manage or first available permission
+  const managePerm = perms.find(p => p.action === 'manage')
+  const representativePerm = managePerm ?? perms[0]
+  if (representativePerm) {
+    return {
+      label: representativePerm.label
+        .replace(/^(Create|Edit|Delete|Record|Set|Assign|Remove|Add|Manage)\s+/, ''),
+      description: representativePerm.description,
+    }
   }
-  return 'Unknown'
+  return { label: 'Unknown', description: null }
 }
 
 function buildMatrixData(permissions: Permission[]): CategoryGroup[] {
@@ -121,9 +126,11 @@ function buildMatrixData(permissions: Permission[]): CategoryGroup[] {
       for (const p of perms) {
         actionMap[p.action] = p
       }
+      const { label, description } = getResourceInfo(perms)
       return {
         resource,
-        label: getResourceLabel(perms),
+        label,
+        description,
         actionMap,
       }
     })
@@ -171,7 +178,7 @@ export function PermissionMatrix({
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-48">
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[240px]">
                     Resource
                   </th>
                   {ACTION_COLUMNS.map(action => (
@@ -185,12 +192,19 @@ export function PermissionMatrix({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {resources.map(({ resource, label, actionMap }) => (
+                {resources.map(({ resource, label, description, actionMap }) => (
                   <tr key={resource} className="hover:bg-slate-50/50">
                     <td className="px-6 py-3">
-                      <span className="text-sm font-medium text-slate-900">
-                        {label}
-                      </span>
+                      <div>
+                        <span className="text-sm font-medium text-slate-900">
+                          {label}
+                        </span>
+                        {description && (
+                          <p className="text-xs text-slate-500 mt-0.5 leading-snug">
+                            {description}
+                          </p>
+                        )}
+                      </div>
                     </td>
                     {ACTION_COLUMNS.map(action => {
                       const perm = actionMap[action]
