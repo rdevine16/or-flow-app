@@ -15,7 +15,6 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Building2, Check, Circle, Eye, EyeOff, X } from 'lucide-react'
 
@@ -37,7 +36,6 @@ function AcceptInviteContent() {
   const router = useRouter()
   const params = useParams()
   const token = params.token as string
-  const supabase = createClient()
   const { showToast } = useToast()
   const [invite, setInvite] = useState<InviteData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -50,58 +48,24 @@ function AcceptInviteContent() {
   const [showPassword, setShowPassword] = useState(false)
 
   const fetchInvite = useCallback(async () => {
-    // Fetch invite details from user_invites table
-    const { data, error } = await supabase
-      .from('user_invites')
-      .select(`
-        id,
-        email,
-        first_name,
-        last_name,
-        facility_id,
-        access_level,
-        role_id,
-        expires_at,
-        facilities (name, address),
-        user_roles (name)
-      `)
-      .eq('invite_token', token)
-      .is('accepted_at', null)
-      .single()
+    // Fetch invite details via API route (bypasses RLS for unauthenticated visitors)
+    try {
+      const response = await fetch(`/api/invite/accept?token=${encodeURIComponent(token)}`)
+      const result = await response.json()
 
-    if (error || !data) {
-      setError('This invite link is invalid or has already been used.')
+      if (!response.ok || !result.success) {
+        setError(result.error || 'This invite link is invalid or has already been used.')
+        setLoading(false)
+        return
+      }
+
+      setInvite(result.invite)
       setLoading(false)
-      return
-    }
-
-    // Check if expired
-    if (new Date(data.expires_at) < new Date()) {
-      setError('This invite has expired. Please contact your administrator for a new invite.')
+    } catch {
+      setError('Failed to load invite details. Please try again.')
       setLoading(false)
-      return
     }
-
-    // Transform data - Supabase returns joined tables as arrays sometimes
-    const facility = Array.isArray(data.facilities) ? data.facilities[0] : data.facilities
-    const role = Array.isArray(data.user_roles) ? data.user_roles[0] : data.user_roles
-
-    setInvite({
-      id: data.id,
-      email: data.email,
-      firstName: data.first_name,
-      lastName: data.last_name,
-      facilityId: data.facility_id,
-      facilityName: facility?.name || 'Unknown Facility',
-      facilityAddress: facility?.address || null,
-      accessLevel: data.access_level,
-      roleId: data.role_id,
-      roleName: role?.name || 'Staff',
-      expiresAt: data.expires_at,
-    })
-
-    setLoading(false)
-  }, [token, supabase])
+  }, [token])
 
   useEffect(() => {
     if (token) {

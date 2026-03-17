@@ -29,6 +29,74 @@ interface AcceptInviteRequest {
   password: string
 }
 
+/**
+ * GET /api/invite/accept?token=xxx
+ * Fetches invite details for the acceptance page.
+ * Uses service role key to bypass RLS (visitor is unauthenticated).
+ */
+export async function GET(request: NextRequest) {
+  const token = request.nextUrl.searchParams.get('token')
+
+  if (!token) {
+    return NextResponse.json(
+      { success: false, error: 'Token is required' },
+      { status: 400 }
+    )
+  }
+
+  const { data: invite, error: inviteError } = await supabaseAdmin
+    .from('user_invites')
+    .select(`
+      id,
+      email,
+      first_name,
+      last_name,
+      facility_id,
+      access_level,
+      role_id,
+      expires_at,
+      facilities (name, address),
+      user_roles (name)
+    `)
+    .eq('invite_token', token)
+    .is('accepted_at', null)
+    .single()
+
+  if (inviteError || !invite) {
+    return NextResponse.json(
+      { success: false, error: 'This invite link is invalid or has already been used.' },
+      { status: 404 }
+    )
+  }
+
+  if (new Date(invite.expires_at) < new Date()) {
+    return NextResponse.json(
+      { success: false, error: 'This invite has expired. Please contact your administrator for a new invite.' },
+      { status: 410 }
+    )
+  }
+
+  const facility = Array.isArray(invite.facilities) ? invite.facilities[0] : invite.facilities
+  const role = Array.isArray(invite.user_roles) ? invite.user_roles[0] : invite.user_roles
+
+  return NextResponse.json({
+    success: true,
+    invite: {
+      id: invite.id,
+      email: invite.email,
+      firstName: invite.first_name,
+      lastName: invite.last_name,
+      facilityId: invite.facility_id,
+      facilityName: facility?.name || 'Unknown Facility',
+      facilityAddress: facility?.address || null,
+      accessLevel: invite.access_level,
+      roleId: invite.role_id,
+      roleName: role?.name || 'Staff',
+      expiresAt: invite.expires_at,
+    },
+  })
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: AcceptInviteRequest = await request.json()
