@@ -12,7 +12,7 @@ import AdminConfigTabLayout from '@/components/admin/AdminConfigTabLayout'
 import Container from '@/components/ui/Container'
 import { costCategoryAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -39,10 +39,9 @@ interface DeleteModalState {
 export default function DefaultCostCategoriesPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { isGlobalAdmin, loading: userLoading } = useUser()
+  const { isGlobalAdmin, loading: userLoading, userData } = useUser()
   const { showToast } = useToast()
-  const { data: currentUserData } = useCurrentUser()
-  const currentUserId = currentUserData?.userId || null
+  const currentUserId = userData.userId
 
   const [saving, setSaving] = useState(false)
 
