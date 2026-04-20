@@ -529,30 +529,61 @@ export interface SwimlaneSectionData {
 
 /**
  * Calculate proportional widths for horizontal swimlane timeline segments.
- * Each segment width = its duration / total case time.
+ *
+ * For each interval (except the last terminal node), uses:
+ *  - actual elapsed minutes when both this and the next milestone are recorded
+ *  - the comparison median (surgeon or facility) when either is unrecorded
+ *
+ * This projects expected durations for pending intervals so a partially
+ * recorded case's timeline spans the full bar width rather than compressing
+ * the recorded segment to 100% and overflowing pending nodes past the edge.
  */
 export function calculateSwimlaneSections(
   intervals: MilestoneInterval[],
-  totalMinutes: number | null,
+  comparisonSource: 'surgeon' | 'facility' = 'surgeon',
 ): SwimlaneSectionData[] {
-  if (!totalMinutes || totalMinutes <= 0) {
-    // Equal-width fallback when no timing data
+  if (intervals.length === 0) return []
+
+  const getMedian = (iv: MilestoneInterval) =>
+    comparisonSource === 'surgeon' ? iv.surgeon_median_minutes : iv.facility_median_minutes
+
+  const knownMinutes: (number | null)[] = intervals.map((iv, idx) => {
+    if (idx === intervals.length - 1) return 0
+    const next = intervals[idx + 1]
+    if (iv.recorded_at && next.recorded_at) {
+      const diff = (new Date(next.recorded_at).getTime() - new Date(iv.recorded_at).getTime()) / 60000
+      return diff > 0 ? diff : null
+    }
+    const median = getMedian(iv)
+    return median != null && median > 0 ? median : null
+  })
+
+  // Impute unknown intervals (no actual, no median) with the average of known
+  // durations so the bar widths always sum to 100% rather than overflowing.
+  const knowns = knownMinutes.filter((m, idx) => m != null && idx !== intervals.length - 1) as number[]
+  const avgKnown = knowns.length > 0 ? knowns.reduce((s, m) => s + m, 0) / knowns.length : 0
+  const imputed: number[] = knownMinutes.map((m, idx) => {
+    if (idx === intervals.length - 1) return 0
+    return m != null ? m : avgKnown
+  })
+
+  const projectedTotal = imputed.reduce<number>((s, m) => s + m, 0)
+
+  if (projectedTotal <= 0) {
     return intervals.map((iv) => ({
       facility_milestone_id: iv.facility_milestone_id,
       milestone_name: iv.milestone_name,
-      width_percent: intervals.length > 0 ? 100 / intervals.length : 0,
+      width_percent: 100 / intervals.length,
       interval_minutes: iv.interval_minutes,
       is_recorded: !!iv.recorded_at,
       is_missing: !iv.recorded_at && iv.interval_minutes == null,
     }))
   }
 
-  return intervals.map((iv) => ({
+  return intervals.map((iv, idx) => ({
     facility_milestone_id: iv.facility_milestone_id,
     milestone_name: iv.milestone_name,
-    width_percent: iv.interval_minutes != null && iv.interval_minutes > 0
-      ? (iv.interval_minutes / totalMinutes) * 100
-      : intervals.length > 0 ? 100 / intervals.length / 3 : 0, // minimal width for unrecorded
+    width_percent: (imputed[idx] / projectedTotal) * 100,
     interval_minutes: iv.interval_minutes,
     is_recorded: !!iv.recorded_at,
     is_missing: !iv.recorded_at && iv.interval_minutes == null,

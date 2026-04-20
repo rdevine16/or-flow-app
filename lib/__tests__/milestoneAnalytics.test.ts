@@ -342,26 +342,54 @@ describe('identifyMissingMilestones', () => {
 // ============================================
 
 describe('calculateSwimlaneSections', () => {
-  it('produces proportional widths based on durations', () => {
+  it('produces proportional widths from actual durations when fully recorded', () => {
     const milestones = buildCompleteCaseMilestones()
     const intervals = calculateIntervals(milestones, buildCompleteMedians(), 'surgeon')
 
-    const sections = calculateSwimlaneSections(intervals, 70) // 70 min total
+    const sections = calculateSwimlaneSections(intervals, 'surgeon')
 
     expect(sections).toHaveLength(5)
-    // patient_in: 5/70 ≈ 7.14% (duration at patient_in milestone)
+    // patient_in → anes_start: 5/70
     expect(sections[0].width_percent).toBeCloseTo(5 / 70 * 100, 1)
-    // incision: 40/70 ≈ 57.14% (duration at incision milestone)
+    // incision → closing: 40/70
     expect(sections[2].width_percent).toBeCloseTo(40 / 70 * 100, 1)
+    // Last node has no outgoing segment
+    expect(sections[4].width_percent).toBe(0)
   })
 
-  it('uses equal widths when totalMinutes is null', () => {
+  it('projects medians for pending intervals so partial recording spans full bar', () => {
+    // Only first 2 of 5 milestones recorded (intraop scenario)
+    const milestones = [
+      makeCaseMilestone({ name: 'patient_in', order: 1, facility_milestone_id: 'fm-1', recorded_at: BASE_TIME }),
+      makeCaseMilestone({ name: 'anes_start', order: 2, facility_milestone_id: 'fm-2', recorded_at: minutesAfter(BASE_TIME, 5) }),
+      makeCaseMilestone({ name: 'incision', order: 3, facility_milestone_id: 'fm-3', recorded_at: null }),
+      makeCaseMilestone({ name: 'closing', order: 4, facility_milestone_id: 'fm-4', recorded_at: null }),
+      makeCaseMilestone({ name: 'patient_out', order: 5, facility_milestone_id: 'fm-5', recorded_at: null }),
+    ]
+    const intervals = calculateIntervals(milestones, buildCompleteMedians(), 'surgeon')
+
+    const sections = calculateSwimlaneSections(intervals, 'surgeon')
+
+    // Projected total: 5 actual + 8 + 38 + 14 medians = 65
+    const expectedTotal = 5 + 8 + 38 + 14
+    expect(sections[0].width_percent).toBeCloseTo(5 / expectedTotal * 100, 1)
+    expect(sections[1].width_percent).toBeCloseTo(8 / expectedTotal * 100, 1)
+    expect(sections[2].width_percent).toBeCloseTo(38 / expectedTotal * 100, 1)
+    expect(sections[3].width_percent).toBeCloseTo(14 / expectedTotal * 100, 1)
+    expect(sections[4].width_percent).toBe(0)
+
+    // Widths of first 4 must sum to ~100% (last is 0)
+    const total = sections.slice(0, 4).reduce((s, x) => s + x.width_percent, 0)
+    expect(total).toBeCloseTo(100, 1)
+  })
+
+  it('uses equal widths when no timing data is available', () => {
     const milestones = [
       makeCaseMilestone({ name: 'a', order: 1, recorded_at: null }),
       makeCaseMilestone({ name: 'b', order: 2, recorded_at: null }),
     ]
     const intervals = calculateIntervals(milestones, [], 'surgeon')
-    const sections = calculateSwimlaneSections(intervals, null)
+    const sections = calculateSwimlaneSections(intervals, 'surgeon')
 
     expect(sections).toHaveLength(2)
     expect(sections[0].width_percent).toBe(50)
@@ -374,7 +402,7 @@ describe('calculateSwimlaneSections', () => {
       makeCaseMilestone({ name: 'b', order: 2, recorded_at: null }),
     ]
     const intervals = calculateIntervals(milestones, [], 'surgeon')
-    const sections = calculateSwimlaneSections(intervals, 10)
+    const sections = calculateSwimlaneSections(intervals, 'surgeon')
 
     expect(sections[0].is_recorded).toBe(true)
     expect(sections[1].is_recorded).toBe(false)

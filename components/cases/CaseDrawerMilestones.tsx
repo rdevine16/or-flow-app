@@ -174,7 +174,6 @@ export default function CaseDrawerMilestones({
       {/* Horizontal swimlane timeline */}
       <MilestoneTimeline
         intervals={data.intervals}
-        totalCaseMinutes={data.total_case_minutes}
         comparisonSource={comparisonSource}
       />
 

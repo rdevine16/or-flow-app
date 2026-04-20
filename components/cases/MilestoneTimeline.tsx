@@ -15,7 +15,6 @@ import {
 
 interface MilestoneTimelineProps {
   intervals: MilestoneInterval[]
-  totalCaseMinutes: number | null
   comparisonSource: 'surgeon' | 'facility'
 }
 
@@ -30,14 +29,13 @@ const NODE_STYLES: Record<NodeState, string> = {
 
 export default function MilestoneTimeline({
   intervals,
-  totalCaseMinutes,
   comparisonSource,
 }: MilestoneTimelineProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
 
   const sections = useMemo(
-    () => calculateSwimlaneSections(intervals, totalCaseMinutes),
-    [intervals, totalCaseMinutes],
+    () => calculateSwimlaneSections(intervals, comparisonSource),
+    [intervals, comparisonSource],
   )
 
   // Determine node states — if a later milestone is recorded but this one isn't, mark as missing
